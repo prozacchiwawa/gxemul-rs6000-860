@@ -1,6 +1,7 @@
 *~
 *.o
 gxemul
+config.h
 tmp_*.cc
 autodev.cc
 automachine.cc

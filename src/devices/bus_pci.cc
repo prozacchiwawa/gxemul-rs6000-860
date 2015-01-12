@@ -1430,3 +1430,5 @@ PCIINIT(ati_radeon_9200_2)
 	allocate_device_space(pd, 0x1000, 0x400000, &port, &memaddr);
 }
 
+
+

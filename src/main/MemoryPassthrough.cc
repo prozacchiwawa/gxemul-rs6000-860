@@ -1,3 +1,4 @@
+#include "misc.h"
 #include "mem_passthrough.h"
 #include <sstream>
 #include <boost/asio.hpp>
@@ -8,6 +9,8 @@
 #include <boost/thread.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+
+extern int verbose;
 
 // Implementation based on
 // https://gist.github.com/yoggy/3323808
@@ -58,6 +61,13 @@ public:
         };
         for (i = 0; flow_control_map[i].flow_name && flow_control_map[i].flow_name != flow_str; i++) { }
         flow_control = flow_control_map[i].flow_val;
+        debug
+            ("[ MP Open port=%s baud=%d bits=%d parity=%s flow=%s ]\n",
+             port_file.c_str(),
+             port_baud,
+             char_size,
+             parity_str.c_str(),
+             flow_str.c_str());
         serial_port->open(port_file, ec);
         if (ec) {
             serial_port.reset();
@@ -75,12 +85,16 @@ public:
         return true;
     }
     void write(uint64_t paddr, const unsigned char *data, size_t len) {
-        if (!serial_port || !len) {
+        if (!serial_port || !len || paddr < 0x80000000) {
             return;
         }
+        size_t i;
         std::ostringstream oss;
         const char *len_char = "!wV!W";
-        oss << len_char[len] << std::hex << std::setw(8) << (int)paddr;
+        oss << len_char[len] << std::setfill('0') << std::hex << std::setw(8) << (int)paddr;
+        for (i = 0; i < len; i++) {
+            oss << std::hex << std::setw(2) << (int)(data[i] & 0xff);
+        }
         std::string cmd_str = oss.str();
         boost::asio::async_write
             (*serial_port, 
@@ -93,16 +107,13 @@ public:
         read_line();
     }
     void read(uint64_t paddr, unsigned char *data, size_t len) {
-        if (!serial_port || !len) {
+        if (!serial_port || !len || paddr < 0x80000000) {
             return;
         }
         size_t i;
         std::ostringstream oss;
         const char *len_char = "!rB!R";
-        oss << len_char[len] << std::hex << std::setw(8) << (unsigned int)paddr;
-        for (i = 0; i < len; i++) {
-            oss << std::hex << std::setw(2) << (unsigned int)data[i];
-        }
+        oss << len_char[len] << std::setfill('0') << std::hex << std::setw(8) << (unsigned int)paddr;
         std::string cmd_str = oss.str();
         boost::asio::async_write
             (*serial_port, 
@@ -112,13 +123,16 @@ public:
               this,
               boost::asio::placeholders::error,
               boost::asio::placeholders::bytes_transferred));
-        std::istringstream iss(read_line());
+        std::string res = read_line();
+        std::istringstream iss(res);
         iss.width(2);
         for (i = 0; i < len; i++) {
             std::string bytebuf;
             iss >> bytebuf;
             std::istringstream byteread(bytebuf);
-            byteread >> std::hex >> data[i];
+            int recv;
+            byteread >> std::hex >> recv;
+            data[i] = recv;
         }
     }
 
@@ -126,18 +140,20 @@ private:
     bool read_buf_not_empty() const { return !read_buf.empty(); }
     std::string read_line() {
         std::string line;
-        while (!line.empty()) {
+        bool got_eol = false;
+        while (!got_eol) {
             boost::unique_lock<boost::mutex> _l(mutex);
             event.wait(_l, boost::bind(&SerialMemoryHolePassthrough::read_buf_not_empty, this));
             size_t found_eol = read_buf.find('\n');
             if (found_eol != std::string::npos) {
+                got_eol = true;
                 line = read_buf.substr(0, found_eol);
-                read_buf = read_buf.substr(found_eol);
+                read_buf = read_buf.substr(found_eol+1);
                 while (found_eol && isspace(read_buf[found_eol-1])) {
                     found_eol--;
                 }
                 size_t prompt = 0;
-                while (prompt < line.size() && line[prompt] == '<') {
+                while (prompt < line.size() && line[prompt] == '>') {
                     prompt++;
                 }
                 line = line.substr(prompt,found_eol);
@@ -153,6 +169,7 @@ private:
         boost::unique_lock<boost::mutex> _l(mutex);
         read_buf += std::string(read_buf_raw, bytes);
         event.notify_all();
+        async_read_perform();
     }
 
     void async_read_perform() {

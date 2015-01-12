@@ -30,6 +30,9 @@
  *  The main point of this device is to be a "PC style wrapper" for accessing
  *  the MC146818 (the RTC). In most other respects, this device is bogus, and
  *  just acts as a 256-byte RAM device.
+ *
+ *  Added the 0x74-0x76 io space used by IBM NVRAM, as it's conveniently
+ *  contiguous.
  */
 
 #include <stdio.h>

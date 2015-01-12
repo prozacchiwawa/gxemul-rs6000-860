@@ -25,7 +25,7 @@ OBJS=device.o bus_isa.o bus_pci.o lk201.o \
 	dev_sgi_ip22.o dev_sgi_ip30.o dev_sgi_ip32.o dev_sgi_mardigras.o \
 	dev_sh4.o dev_sii.o dev_sn.o dev_ssc.o dev_turbochannel.o \
 	dev_uninorth.o dev_unreadable.o dev_v3.o dev_vga.o dev_vme.o \
-	dev_vr41xx.o dev_wdc.o dev_z8530.o dev_zero.o
+	dev_vr41xx.o dev_wdc.o dev_z8530.o dev_zero.o dev_ibm_isa.o
 
 all: fonts_done
 	$(MAKE) objs

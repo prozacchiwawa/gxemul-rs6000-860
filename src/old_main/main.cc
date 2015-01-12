@@ -594,6 +594,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 			msopts = 1;
 			break;
         case '@':
+            if (verbose) {
+                debug("Create memory hole '%s'\n", optarg);
+            }
             m->hole = create_memory_hole_handler(optarg);
             break;
 		default:

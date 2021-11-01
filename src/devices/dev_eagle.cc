@@ -46,6 +46,8 @@ struct eagle_data {
 	struct interrupt irq;
 
 	struct pci_data	*pci_data;
+
+	int stage;
 };
 
 
@@ -79,6 +81,68 @@ DEVICE_ACCESS(eagle)
 		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 
 	return 1;
+}
+
+
+DEVICE_ACCESS(eagle_800)
+{
+    struct eagle_data *d = (struct eagle_data *) extra;
+    uint64_t idata = 0, odata = 0;
+
+	if (writeflag == MEM_WRITE)
+		odata = idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+
+    switch (relative_addr)
+    {
+    case 0x00:
+	if (writeflag == MEM_READ) odata = 6;
+	break;
+
+	// 9.10.2 Equipment Presence Register
+	// MSB | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | LSB
+	//       |    |    |    |    |    |    |    |
+	//       |    |    |    |    +----+----+----+---- Reserved
+	//       |    |    |    +------------------------ PCI Presence Detect 1 (0 means present)
+	//       |    |    +----------------------------- PCI Presence Detect 2 (0 means present)
+	//       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
+	//       +--------------------------------------- Reserved
+    case 0x0c:
+        if (writeflag == MEM_READ) odata = 0x70;
+        break;
+    }
+
+    debug("[ unknown-800 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
+    
+	if (writeflag == MEM_READ)
+		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+
+    return 1;
+}
+
+
+DEVICE_ACCESS(eagle_680)
+{
+    uint64_t idata = 0;
+
+	if (writeflag == MEM_WRITE)
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+
+    debug("[ unknown-680 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    
+    return 1;
+}
+
+
+DEVICE_ACCESS(eagle_4d0)
+{
+    uint64_t idata = 0;
+
+	if (writeflag == MEM_WRITE)
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+
+    debug("[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    
+    return 1;
 }
 
 
@@ -154,6 +218,42 @@ DEVINIT(eagle)
 	    isa_portbase + BUS_PCI_ADDR, 8, dev_eagle_access, d,
 	    DM_DEFAULT, NULL);
 
+    memory_device_register(devinit->machine->memory, "eagle feature control",
+        isa_portbase + 0x800, 0x30, dev_eagle_800_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "eagle feature control",
+        isa_portbase + 0x680, 0x10, dev_eagle_680_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "8259 ELCR",
+        isa_portbase + 0x4d0, 2, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "legacy DMA 1 (floppy)",
+        isa_portbase + 0, 0x20, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "DMA 2",
+        isa_portbase + 0xc0, 0x20, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "8a0",
+        isa_portbase + 0x8a0, 0x20, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);                           
+
+    memory_device_register(devinit->machine->memory, "398",
+        isa_portbase + 0x398, 8, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);                           
+
+    memory_device_register(devinit->machine->memory, "audio",
+        isa_portbase + 0x830, 4, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);                           
+
+    memory_device_register(devinit->machine->memory, "834",
+        isa_portbase + 0x834, 4, dev_eagle_4d0_access, d, 
+        DM_DEFAULT, NULL);                           
+
 	switch (devinit->machine->machine_type) {
 
 	/* case MACHINE_BEBOX:
@@ -165,8 +265,8 @@ DEVINIT(eagle)
 
 	case MACHINE_PREP:
         bus_pci_add(devinit->machine, d->pci_data,
-                    devinit->machine->memory, 0, 11, 0, "ibm_isa");
-		break;
+            devinit->machine->memory, 0, 11, 0, "i82378zb");
+        break;
 
 	case MACHINE_MVMEPPC:
 		bus_isa_init(devinit->machine, isa_irq_base,

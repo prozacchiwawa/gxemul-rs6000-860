@@ -43,7 +43,7 @@
 #include "memory.h"
 #include "misc.h"
 
-DEVICE_ACCESS(ibm_isa) {
+DEVICE_ACCESS(ibm_carerra) {
     unsigned char b = 0;
     uint64_t idata = 0, odata = 0;
 
@@ -51,9 +51,13 @@ DEVICE_ACCESS(ibm_isa) {
 		b = idata = memory_readmax64(cpu, data, len);
     }
 
-    if (writeflag != MEM_WRITE) {
-        odata = 0;
+    switch (relative_addr)
+    {
+    case 1:
+        odata = 6;
+        break;
     }
+
     debug("[ carerra %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
 	if (writeflag == MEM_READ) {
@@ -63,12 +67,37 @@ DEVICE_ACCESS(ibm_isa) {
     return 1;
 }
 
-DEVINIT(ibm_isa) {
+DEVICE_ACCESS(ibm_carerra_83e) {
+    unsigned char b = 0;
+    uint64_t idata = 0, odata = 0;
+
+	if (writeflag == MEM_WRITE) {
+		b = idata = memory_readmax64(cpu, data, len);
+    }
+
+    debug("[ carerra-83e %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
+
+	if (writeflag == MEM_READ) {
+		memory_writemax64(cpu, data, len, odata);
+    }
+
+    return 1;
+}
+
+DEVINIT(ibm_carerra) {
     memory_device_register
         (devinit->machine->memory, devinit->name,
          devinit->addr, 
          2,
-         dev_ibm_isa_access, 
+         dev_ibm_carerra_access, 
+         NULL, // Device own data ptr
+         DM_DEFAULT,
+         NULL);
+    memory_device_register
+        (devinit->machine->memory, devinit->name,
+         0x8000083e,
+         1,
+         dev_ibm_carerra_83e_access, 
          NULL, // Device own data ptr
          DM_DEFAULT,
          NULL);

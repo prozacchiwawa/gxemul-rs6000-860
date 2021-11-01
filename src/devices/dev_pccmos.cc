@@ -85,8 +85,10 @@ DEVICE_ACCESS(pccmos)
 	unsigned char b = 0;
 	int r = 1;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		b = idata = memory_readmax64(cpu, data, len);
+		fprintf(stderr, "pccmos: write at relative addr %08x: %08x\n", relative_addr, idata);
+	}
 
 	/*
 	 *  Accesses to CMOS register 0 .. 0xd are rerouted to the
@@ -107,6 +109,9 @@ DEVICE_ACCESS(pccmos)
     // IBM machines have an extra 16k nvram (which appears in 4 copies)
     // in the 64k address space.  These will only be alive if we initialized
     // the size of the CMOS ISA device at 8 ports.
+    if (relative_addr == 0) {
+	    d->select = idata;
+    }
     if (relative_addr == 4) {
         if (writeflag == MEM_WRITE) {
             d->extended_select = (d->extended_select & 0xff00) | idata;
@@ -173,8 +178,13 @@ DEVICE_ACCESS(pccmos)
 	if (r == 0)
 		fatal("[ pccmos: memory_rw() error! ]\n");
 
-	if (writeflag == MEM_READ)
+	if (writeflag == MEM_READ) {
+		if (d->select == 10) {
+			odata = 0x40;
+		}
 		memory_writemax64(cpu, data, len, odata);
+		fprintf(stderr, "pccmos: read at relative addr %08x (dselect %08x): %08x\n", relative_addr, d->select, odata);
+	}
 
 	return 1;
 }

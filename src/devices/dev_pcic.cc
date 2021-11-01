@@ -225,21 +225,24 @@ DEVINIT(pcic)
 	    devinit->addr, DEV_PCIC_LENGTH,
 	    dev_pcic_access, (void *)d, DM_DEFAULT, NULL);
 
-	/*  TODO: this shouldn't be hardcoded for hpcmips here!  */
-	memory_device_register(devinit->machine->memory, "pcic_cis",
-	    0x10070000, 0x1000, dev_pcic_cis_access, (void *)d,
-	    DM_DEFAULT, NULL);
+    if (devinit->machine->machine_type != MACHINE_PREP)
+    {
+        /*  TODO: this shouldn't be hardcoded for hpcmips here!  */
+        memory_device_register(devinit->machine->memory, "pcic_cis",
+                               0x10070000, 0x1000, dev_pcic_cis_access, (void *)d,
+                               DM_DEFAULT, NULL);
 
-	/*  TODO: find out a good way to specify the address, and the IRQ!  */
-	snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x14000180 irq=%s.giu.9",
-	    devinit->interrupt_path);
-	device_add(devinit->machine, tmpstr);
-
-	/*  TODO: Linux/MobilePro looks at 0x14000170 and 0x1f0...  */
-	/*  Yuck. Now there are two. How should this be solved nicely?  */
-	snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x140001f0 irq=%s.giu.9",
-	    devinit->interrupt_path);
-	device_add(devinit->machine, tmpstr);
+        /*  TODO: find out a good way to specify the address, and the IRQ!  */
+        snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x14000180 irq=%s.giu.9",
+                 devinit->interrupt_path);
+        device_add(devinit->machine, tmpstr);
+        
+        /*  TODO: Linux/MobilePro looks at 0x14000170 and 0x1f0...  */
+        /*  Yuck. Now there are two. How should this be solved nicely?  */
+        snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x140001f0 irq=%s.giu.9",
+                 devinit->interrupt_path);
+        device_add(devinit->machine, tmpstr);
+    }
 
 	return 1;
 }

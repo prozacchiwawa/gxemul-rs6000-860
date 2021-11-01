@@ -69,6 +69,7 @@ DEVICE_ACCESS(prep)
 DEVINIT(prep)
 {
 	struct prep_data *d;
+    char tmps[300];
 
 	CHECK_ALLOCATION(d = (struct prep_data *) malloc(sizeof(struct prep_data)));
 	memset(d, 0, sizeof(struct prep_data));
@@ -76,10 +77,20 @@ DEVINIT(prep)
 	memory_device_register(devinit->machine->memory, devinit->name,
 	    0xbffff000, 0x1000, dev_prep_access, d, DM_DEFAULT, NULL);
 
-	/*  This works for at least the IBM 6050:  */
-	bus_isa_init(devinit->machine, devinit->interrupt_path,
-	    BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000, 0xc0000000);
-
+    switch (devinit->machine->machine_subtype) {
+    case MACHINE_PREP_IBM860:
+        bus_isa_init(devinit->machine, devinit->interrupt_path,
+            BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC, 0x80000000, 0xc0000000);
+        snprintf(tmps, sizeof(tmps), "pcic addr="
+                 "0x800003e0", devinit->interrupt_path);
+        device_add(devinit->machine, tmps);
+        break;
+    default:
+        /*  This works for at least the IBM 6050:  */
+        bus_isa_init(devinit->machine, devinit->interrupt_path,
+            BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000, 0xc0000000);
+        break;
+    }
 	return 1;
 }
 

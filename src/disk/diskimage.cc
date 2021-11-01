@@ -888,7 +888,7 @@ int diskimage_add(struct machine *machine, char *fname)
 
 	if ((d->total_size == 720*1024 || d->total_size == 1474560
 	    || d->total_size == 2949120 || d->total_size == 1228800)
-	    && !prefix_i && !prefix_s)
+	    && !prefix_i && !prefix_s && !prefix_R)
 		d->type = DISKIMAGE_FLOPPY;
 
 	switch (d->type) {

@@ -1,0 +1,3 @@
+#!/bin/sh
+PROG=`dirname "$0"`/gxemul
+$PROG -X -x -v -v -e ibm860 -d f:../ppc/860.rom -d R:../ppc/860main.rom -d n:../ppc/860.nvram -V -q "${@}"

@@ -81,7 +81,7 @@ MACHINE_SETUP(prep)
         //machine->path, machine->bootstrap_cpu);
         //device_add(machine, tmpstr);
 
-        //device_add(machine, "ibm_isa addr=0x80004100");
+        device_add(machine, "ibm_carerra addr=0x80004100");
 
 		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
 		    machine->path, machine->bootstrap_cpu);

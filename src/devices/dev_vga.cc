@@ -1153,8 +1153,9 @@ DEVICE_ACCESS(vga_ctrl)
 				odata |= VGA_IS1_DISPLAY_VRETRACE;
 			else {
 				if ((d->current_retrace_line & 7) == 0)
-					odata = VGA_IS1_DISPLAY_DISPLAY_DISABLE;
+					odata = VGA_IS1_DISPLAY_VRETRACE | VGA_IS1_DISPLAY_DISPLAY_DISABLE;
 			}
+			fprintf(stderr, "input status 1: %08x\n", odata);
 			break;
 
 		default:

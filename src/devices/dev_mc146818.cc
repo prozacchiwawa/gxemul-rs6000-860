@@ -55,7 +55,7 @@
 #define	to_bcd(x)	( ((x)/10) * 16 + ((x)%10) )
 #define	from_bcd(x)	( ((x)>>4) * 10 + ((x)&15) )
 
-/*  #define MC146818_DEBUG  */
+#define MC146818_DEBUG  1
 
 #define	MC146818_TICK_SHIFT	14
 

@@ -269,7 +269,7 @@ void framebuffer_blockcopyfill(struct vfb_data *d, int fillflag, int fill_r,
 						buf[x+2] = fill_b;
 					}
 				} else if (d->bit_depth == 8) {
-					memset(buf, fill_r, linelen);
+					memset(buf, fill_r, (uint32_t)linelen);
 				} else {
 					fatal("Unimplemented bit-depth (%i)"
 					    " for fb fill\n", d->bit_depth);

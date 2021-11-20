@@ -1628,19 +1628,19 @@ void coproc_tlbwri(struct cpu *cpu, int randomflag)
 	/*  Debug dump of the previous entry at that index:  */
 	fatal("{ old TLB entry at index %02x:", index);
 	if (cpu->cd.mips.cpu_type.mmu_model == MMU3K) {
-		fatal(" hi=%08"PRIx32, (uint32_t)cp->tlbs[index].hi);
-		fatal(" lo=%08"PRIx32, (uint32_t)cp->tlbs[index].lo0);
+		fatal(" hi=%08" PRIx32, (uint32_t)cp->tlbs[index].hi);
+		fatal(" lo=%08" PRIx32, (uint32_t)cp->tlbs[index].lo0);
 	} else {
 		if (cpu->is_32bit) {
-			fatal(" mask=%08"PRIx32,(uint32_t)cp->tlbs[index].mask);
-			fatal(" hi=%08"PRIx32, (uint32_t)cp->tlbs[index].hi);
-			fatal(" lo0=%08"PRIx32, (uint32_t)cp->tlbs[index].lo0);
-			fatal(" lo1=%08"PRIx32, (uint32_t)cp->tlbs[index].lo1);
+			fatal(" mask=%08" PRIx32,(uint32_t)cp->tlbs[index].mask);
+			fatal(" hi=%08" PRIx32, (uint32_t)cp->tlbs[index].hi);
+			fatal(" lo0=%08" PRIx32, (uint32_t)cp->tlbs[index].lo0);
+			fatal(" lo1=%08" PRIx32, (uint32_t)cp->tlbs[index].lo1);
 		} else {
-			fatal(" mask=%016"PRIx64, cp->tlbs[index].mask);
-			fatal(" hi=%016"PRIx64, cp->tlbs[index].hi);
-			fatal(" lo0=%016"PRIx64, cp->tlbs[index].lo0);
-			fatal(" lo1=%016"PRIx64, cp->tlbs[index].lo1);
+			fatal(" mask=%016" PRIx64, cp->tlbs[index].mask);
+			fatal(" hi=%016" PRIx64, cp->tlbs[index].hi);
+			fatal(" lo0=%016" PRIx64, cp->tlbs[index].lo0);
+			fatal(" lo1=%016" PRIx64, cp->tlbs[index].lo1);
 		}
 	}
 	fatal(" }\n");
@@ -2225,8 +2225,8 @@ void coproc_function(struct cpu *cpu, struct mips_coproc *cp, int cpnr,
 		return;
 	}
 
-	fatal("cpu%i: UNIMPLEMENTED coproc%i function %08"PRIx32" "
-	    "(pc = %016"PRIx64")\n", cpu->cpu_id, cp->coproc_nr,
+	fatal("cpu%i: UNIMPLEMENTED coproc%i function %08" PRIx32" "
+	    "(pc = %016" PRIx64")\n", cpu->cpu_id, cp->coproc_nr,
 	    (uint32_t)function, cpu->pc);
 
 	mips_cpu_exception(cpu, EXCEPTION_CPU, 0, 0, cp->coproc_nr, 0, 0, 0);

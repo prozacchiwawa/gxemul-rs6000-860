@@ -82,7 +82,7 @@ DEVINIT(prep)
         bus_isa_init(devinit->machine, devinit->interrupt_path,
             BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC, 0x80000000, 0xc0000000);
         snprintf(tmps, sizeof(tmps), "pcic addr="
-                 "0x800003e0", devinit->interrupt_path);
+                 "0x800003e0"); // , devinit->interrupt_path);
         device_add(devinit->machine, tmps);
         break;
     default:

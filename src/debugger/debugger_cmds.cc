@@ -29,13 +29,6 @@
  */
 #include "crc.h"
 
-static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
-
-struct ibm_name {
-  uint64_t function_end;
-  char function_name[64];
-};
-
 /*
  *  debugger_cmd_allsettings():
  */
@@ -208,7 +201,7 @@ static void debugger_cmd_device(struct machine *m, char *cmd_line)
 			printf("No memory-mapped devices in this machine.\n");
 
 		for (i=0; i<mem->n_mmapped_devices; i++) {
-			printf("%2i: %25s @ 0x%011"PRIx64", len = 0x%"PRIx64,
+			printf("%2i: %25s @ 0x%011" PRIx64", len = 0x%" PRIx64,
 			    i, mem->devices[i].name,
 			    (uint64_t) mem->devices[i].baseaddr,
 			    (uint64_t) mem->devices[i].length);
@@ -320,9 +313,9 @@ static void debugger_cmd_dump(struct machine *m, char *cmd_line)
 		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 		if (c->is_32bit)
-			printf("0x%08"PRIx32"  ", (uint32_t) addr);
+			printf("0x%08" PRIx32"  ", (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64"  ", (uint64_t) addr);
+			printf("0x%016" PRIx64"  ", (uint64_t) addr);
 
 		if (r == MEMORY_ACCESS_FAILED)
 			printf("(memory access failed)\n");
@@ -498,19 +491,19 @@ static void debugger_cmd_lookup(struct machine *m, char *cmd_line)
 		}
 		printf("%s = 0x", cmd_line);
 		if (m->cpus[0]->is_32bit)
-			printf("%08"PRIx32"\n", (uint32_t) newaddr);
+			printf("%08" PRIx32"\n", (uint32_t) newaddr);
 		else
-			printf("%016"PRIx64"\n", (uint64_t) newaddr);
+			printf("%016" PRIx64"\n", (uint64_t) newaddr);
 		return;
 	}
 
-	symbol = get_symbol_name(&m->symbol_context, addr, &offset);
+	symbol = get_symbol_name(m->cpus[0], &m->symbol_context, addr, &offset);
 
 	if (symbol != NULL) {
 		if (m->cpus[0]->is_32bit)
-			printf("0x%08"PRIx32, (uint32_t) addr);
+			printf("0x%08" PRIx32, (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64, (uint64_t) addr);
+			printf("0x%016" PRIx64, (uint64_t) addr);
 		printf(" = %s\n", symbol);
 	} else
 		printf("lookup for '%s' failed\n", cmd_line);
@@ -643,16 +636,16 @@ static void debugger_cmd_print(struct machine *m, char *cmd_line)
 		printf("Multiple matches. Try prefixing with %%, $, or @.\n");
 		break;
 	case PARSE_SETTINGS:
-		printf("%s = 0x%"PRIx64"\n", cmd_line, (uint64_t)tmp);
+		printf("%s = 0x%" PRIx64"\n", cmd_line, (uint64_t)tmp);
 		break;
 	case PARSE_SYMBOL:
 		if (m->cpus[0]->is_32bit)
-			printf("%s = 0x%08"PRIx32"\n", cmd_line, (uint32_t)tmp);
+			printf("%s = 0x%08" PRIx32"\n", cmd_line, (uint32_t)tmp);
 		else
-			printf("%s = 0x%016"PRIx64"\n", cmd_line,(uint64_t)tmp);
+			printf("%s = 0x%016" PRIx64"\n", cmd_line,(uint64_t)tmp);
 		break;
 	case PARSE_NUMBER:
-		printf("0x%"PRIx64"\n", (uint64_t) tmp);
+		printf("0x%" PRIx64"\n", (uint64_t) tmp);
 		break;
 	}
 }
@@ -761,12 +754,12 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 	case 'b':
 		a_byte = data;
 		if (m->cpus[0]->is_32bit)
-			printf("0x%08"PRIx32, (uint32_t) addr);
+			printf("0x%08" PRIx32, (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64, (uint64_t) addr);
+			printf("0x%016" PRIx64, (uint64_t) addr);
 		printf(": %02x", a_byte);
 		if (data > 255)
-			printf(" (NOTE: truncating %0"PRIx64")",
+			printf(" (NOTE: truncating %0" PRIx64")",
 			    (uint64_t) data);
 		res = m->cpus[0]->memory_rw(m->cpus[0], m->cpus[0]->mem, addr,
 		    &a_byte, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
@@ -778,12 +771,12 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 		if ((addr & 1) != 0)
 			printf("WARNING: address isn't aligned\n");
 		if (m->cpus[0]->is_32bit)
-			printf("0x%08"PRIx32, (uint32_t) addr);
+			printf("0x%08" PRIx32, (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64, (uint64_t) addr);
+			printf("0x%016" PRIx64, (uint64_t) addr);
 		printf(": %04x", (int)data);
 		if (data > 0xffff)
-			printf(" (NOTE: truncating %0"PRIx64")",
+			printf(" (NOTE: truncating %0" PRIx64")",
 			    (uint64_t) data);
 		res = store_16bit_word(m->cpus[0], addr, data);
 		if (!res)
@@ -794,15 +787,15 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 		if ((addr & 3) != 0)
 			printf("WARNING: address isn't aligned\n");
 		if (m->cpus[0]->is_32bit)
-			printf("0x%08"PRIx32, (uint32_t) addr);
+			printf("0x%08" PRIx32, (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64, (uint64_t) addr);
+			printf("0x%016" PRIx64, (uint64_t) addr);
 
 		printf(": %08x", (int)data);
 
 		if (data > 0xffffffff && (data >> 32) != 0
 		    && (data >> 32) != 0xffffffff)
-			printf(" (NOTE: truncating %0"PRIx64")",
+			printf(" (NOTE: truncating %0" PRIx64")",
 			    (uint64_t) data);
 
 		res = store_32bit_word(m->cpus[0], addr, data);
@@ -814,11 +807,11 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 		if ((addr & 7) != 0)
 			printf("WARNING: address isn't aligned\n");
 		if (m->cpus[0]->is_32bit)
-			printf("0x%08"PRIx32, (uint32_t) addr);
+			printf("0x%08" PRIx32, (uint32_t) addr);
 		else
-			printf("0x%016"PRIx64, (uint64_t) addr);
+			printf("0x%016" PRIx64, (uint64_t) addr);
 
-		printf(": %016"PRIx64, (uint64_t) data);
+		printf(": %016" PRIx64, (uint64_t) data);
 
 		res = store_64bit_word(m->cpus[0], addr, data);
 		if (!res)
@@ -949,55 +942,10 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
 
 
 /*
- * Get the name of the current function ibm style, the name is
- * 0x18 bytes after the instruction containing 0x4e800020 (blr)
- */
-static int debugger_get_name(struct machine *m, struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name)
-{
-  unsigned char cur_insn[4];
-  struct memory *mem;
-  int r;
-
-  mem = m->cpus[m->bootstrap_cpu]->mem;
-
-  while (addr < max_addr) {
-    r = c->memory_rw(c, mem, addr, cur_insn, sizeof(cur_insn),
-                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-    if (r == MEMORY_ACCESS_FAILED) {
-      return 0;
-    }
-
-    if (!memcmp(cur_insn, POWERPC_BLR_INSN, sizeof(cur_insn))) {
-      uint16_t name_length;
-      char namebuf[68];
-
-      r = c->memory_rw(c, mem, addr + 0x18, (unsigned char *)namebuf, sizeof(namebuf),
-                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-
-      if (r == MEMORY_ACCESS_FAILED) {
-        return 0;
-      }
-
-      name_length = namebuf[1] + namebuf[0] * 256;
-      if (name_length >= 64) { /* Set an arbitrary limit */
-        return 0;
-      }
-
-      name->function_end = addr + 4;
-      memset(name->function_name, 0, sizeof(name->function_name));
-      memcpy(name->function_name, namebuf + sizeof(uint16_t), name_length);
-
-      return 1;
-    }
-
-    addr += 4;
-  }
-
-  return 0;
-}
-
-/*
- *
+ *  Show the name if available of the indicated address (or pc).
+ *  Uses the symbol style of the startup software on the rs/6000
+ *  where 0x18 bytes after the final blr of a function, there is
+ *  a 2 byte length and a name.
  */
 static void debugger_cmd_findname(struct machine *m, char *cmd_line)
 {
@@ -1045,14 +993,14 @@ static void debugger_cmd_findname(struct machine *m, char *cmd_line)
     addr_end = addr_start + 0x1000;
   }
 
-  if (!debugger_get_name(m, c, addr_start, addr_end, &name_buf)) {
+  if (!debugger_get_name(c, addr_start, addr_end, &name_buf)) {
     printf("name not found\n");
   }
 
   if (m->cpus[0]->is_32bit)
-    printf("0x%08"PRIx32" %s\n", (uint32_t) name_buf.function_end, name_buf.function_name);
+    printf("0x%08" PRIx32" %s\n", (uint32_t) name_buf.function_end, name_buf.function_name);
   else
-    printf("0x%016"PRIx64" %s\n", (uint64_t) name_buf.function_end, name_buf.function_name);
+    printf("0x%016" PRIx64" %s\n", (uint64_t) name_buf.function_end, name_buf.function_name);
 }
 
 /*
@@ -1303,7 +1251,8 @@ static void debugger_cmd_findcrc(struct machine *m, char *cmd_line)
 	struct cpu *c;
 	struct memory *mem;
 	char *p = NULL;
-	int x, r = -1, i;
+	int x, r = -1;
+  uint32_t i = 0;
   char *tmps = NULL, *to_parse = NULL;
   unsigned char *buf;
 
@@ -1384,9 +1333,9 @@ static void debugger_cmd_findcrc(struct machine *m, char *cmd_line)
       have_crc = crc16(&buf[i], length);
       if (have_crc == crc) {
         if (m->cpus[0]->is_32bit) {
-          printf("0x%08"PRIx32"\n", (uint32_t) (addr - length + i));
+          printf("0x%08" PRIx32"\n", (uint32_t) (addr - length + i));
         } else {
-          printf("0x%016"PRIx64"\n", (uint64_t) (addr - length + i));
+          printf("0x%016" PRIx64"\n", (uint64_t) (addr - length + i));
         }
       }
       i += 1;

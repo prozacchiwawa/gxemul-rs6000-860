@@ -90,7 +90,7 @@ MACHINE_SETUP(landisk)
 	device_add(machine, tmpstr);
 
 	/*  rsclock0 at shb0: RS5C313 real time clock  */
-	snprintf(tmpstr, sizeof(tmpstr), "rs5c313 addr=0x%"PRIx64,
+	snprintf(tmpstr, sizeof(tmpstr), "rs5c313 addr=0x%" PRIx64,
 	    (uint64_t) SCI_DEVICE_BASE);
 	device_add(machine, tmpstr);
 

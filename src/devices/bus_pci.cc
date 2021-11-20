@@ -491,7 +491,7 @@ PCIINIT(ali_m1543)
 
 PCIINIT(ali_m5229)
 {
-	char tmpstr[300], irqstr[300];
+	char tmpstr[1024], irqstr[300];
 
 	PCI_SET_DATA(PCI_ID_REG,
 	    PCI_ID_CODE(PCI_VENDOR_ALI, PCI_PRODUCT_ALI_M5229));
@@ -1099,7 +1099,7 @@ printf("reg = 0x%x\n", reg);
 	case PCI_COMMAND_STATUS_REG:
 		if (value & PCI_COMMAND_IO_ENABLE)
 			enabled = 1;
-printf("  value = 0x%"PRIx32"\n", value);
+printf("  value = 0x%" PRIx32"\n", value);
 		if (wdc0 != NULL)
 			wdc_set_io_enabled((struct wdc_data *) wdc0, enabled);
 		if (wdc1 != NULL)
@@ -1178,7 +1178,7 @@ PCIINIT(rtl8139c)
 	uint64_t port, memaddr;
 	int pci_int_line = 0x101, irq = 0;
 	char irqstr[200];
-	char tmpstr[200];
+	char tmpstr[1024];
 
 	PCI_SET_DATA(PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_REALTEK,
 	    PCI_PRODUCT_REALTEK_RT8139));
@@ -1223,7 +1223,7 @@ PCIINIT(dec21143)
 	uint64_t port, memaddr;
 	int pci_int_line = 0x101, irq = 0, isa = 0;
 	char irqstr[200];
-	char tmpstr[200];
+	char tmpstr[1024];
 
 	PCI_SET_DATA(PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_DEC,
 	    PCI_PRODUCT_DEC_21142));

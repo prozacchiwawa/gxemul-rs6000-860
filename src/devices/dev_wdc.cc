@@ -580,13 +580,13 @@ DEVICE_ACCESS(wdc)
 			}
 
 			if (d->data_debug) {
-				const char *s = "0x%04"PRIx64" ]\n";
+				const char *s = "0x%04" PRIx64" ]\n";
 				if (len == 1)
-					s = "0x%02"PRIx64" ]\n";
+					s = "0x%02" PRIx64" ]\n";
 				if (len == 4)
-					s = "0x%08"PRIx64" ]\n";
+					s = "0x%08" PRIx64" ]\n";
 				if (len == 8)
-					s = "0x%016"PRIx64" ]\n";
+					s = "0x%016" PRIx64" ]\n";
 				debug("[ wdc: read from DATA: ");
 				debug(s, (uint64_t) odata);
 			}
@@ -621,13 +621,13 @@ DEVICE_ACCESS(wdc)
 		} else {
 			int inbuf_len;
 			if (d->data_debug) {
-				const char *s = "0x%04"PRIx64" ]\n";
+				const char *s = "0x%04" PRIx64" ]\n";
 				if (len == 1)
-					s = "0x%02"PRIx64" ]\n";
+					s = "0x%02" PRIx64" ]\n";
 				if (len == 4)
-					s = "0x%08"PRIx64" ]\n";
+					s = "0x%08" PRIx64" ]\n";
 				if (len == 8)
-					s = "0x%016"PRIx64" ]\n";
+					s = "0x%016" PRIx64" ]\n";
 				debug("[ wdc: write to DATA: ");
 				debug(s, (uint64_t) idata);
 			}

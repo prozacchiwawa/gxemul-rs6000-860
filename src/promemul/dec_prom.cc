@@ -645,7 +645,7 @@ int decstation_prom_emul(struct cpu *cpu)
 			cpu->running = 0;
 			break;
 		default:
-			fatal("DEC prom emulation: unknown rex() a0=0x%"PRIx64
+			fatal("DEC prom emulation: unknown rex() a0=0x%" PRIx64
 			    " ('%c')\n",
 			    (int64_t) cpu->cd.mips.gpr[MIPS_GPR_A0],
 			    (char) cpu->cd.mips.gpr[MIPS_GPR_A0]);

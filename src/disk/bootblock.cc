@@ -177,7 +177,7 @@ int load_bootblock(struct machine *m, struct cpu *cpu,
 		/*  Convert loadaddr to uncached:  */
 		if ((bootblock_loadaddr & 0xf0000000ULL) != 0x80000000 &&
 		    (bootblock_loadaddr & 0xf0000000ULL) != 0xa0000000) {
-			fatal("\nWARNING! Weird load address 0x%08"PRIx32
+			fatal("\nWARNING! Weird load address 0x%08" PRIx32
 			    " for SCSI id %i.\n\n",
 			    (uint32_t)bootblock_loadaddr, boot_disk_id);
 			if (bootblock_loadaddr == 0) {
@@ -198,7 +198,7 @@ int load_bootblock(struct machine *m, struct cpu *cpu,
 		bootblock_pc |= 0xffffffffa0000000ULL;
 		cpu->pc = bootblock_pc;
 
-		debug("DEC boot: loadaddr=0x%08"PRIx32", pc=0x%08"PRIx32,
+		debug("DEC boot: loadaddr=0x%08" PRIx32", pc=0x%08" PRIx32,
 		    (uint32_t) bootblock_loadaddr, (uint32_t) bootblock_pc);
 
 		readofs = 0x18;

@@ -276,9 +276,9 @@ void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 	int i, x = cpu->cpu_id;
 
 	if (gprs) {
-		symbol = get_symbol_name(&cpu->machine->symbol_context,
+		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
-		debug("cpu%i:  pc  = 0x%08"PRIx32, x, (uint32_t)cpu->pc);
+		debug("cpu%i:  pc  = 0x%08" PRIx32, x, (uint32_t)cpu->pc);
 		debug("  <%s>\n", symbol != NULL? symbol : " no symbol ");
 
 		for (i=0; i<N_M88K_REGS; i++) {
@@ -287,7 +287,7 @@ void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 			if (i == 0)
 				debug("                  ");
 			else
-				debug("  r%-2i = 0x%08"PRIx32,
+				debug("  r%-2i = 0x%08" PRIx32,
 				    i, cpu->cd.m88k.r[i]);
 			if ((i % 4) == 3)
 				debug("\n");
@@ -304,7 +304,7 @@ void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		for (i=0; i<n_control_regs; i++) {
 			if ((i % 4) == 0)
 				debug("cpu%i:", x);
-			debug("  %4s=0x%08"PRIx32,
+			debug("  %4s=0x%08" PRIx32,
 			    m88k_cr_name(cpu, i), cpu->cd.m88k.cr[i]);
 			if ((i % 4) == 3)
 				debug("\n");
@@ -317,7 +317,7 @@ void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		for (i=0; i<n_fpu_control_regs; i++) {
 			if ((i % 4) == 0)
 				debug("cpu%i:", x);
-			debug("  %5s=0x%08"PRIx32,
+			debug("  %5s=0x%08" PRIx32,
 			    m88k_fcr_name(cpu, i), cpu->cd.m88k.fcr[i]);
 			if ((i % 4) == 3)
 				debug("\n");
@@ -357,8 +357,8 @@ void m88k_cpu_tlbdump(struct machine *m, int x, int rawflag)
 			for (i = 0; i < N_M88200_BATC_REGS; i++) {
 				uint32_t b = cmmu->batc[i];
 				printf("cpu%i: BATC[%2i]: ", cpu_nr, i);
-				printf("v=0x%08"PRIx32, b & 0xfff80000);
-				printf(", p=0x%08"PRIx32,
+				printf("v=0x%08" PRIx32, b & 0xfff80000);
+				printf(", p=0x%08" PRIx32,
 				    (b << 13) & 0xfff80000);
 				printf(", %s %s %s %s %s %s\n",
 				    b & BATC_SO? "SP " : "!sp",
@@ -379,8 +379,8 @@ void m88k_cpu_tlbdump(struct machine *m, int x, int rawflag)
 					printf("superv");
 				else
 					printf("user  ");
-				printf(" v=0x%08"PRIx32, v & 0xfffff000);
-				printf(", p=0x%08"PRIx32, p & 0xfffff000);
+				printf(" v=0x%08" PRIx32, v & 0xfffff000);
+				printf(", p=0x%08" PRIx32, p & 0xfffff000);
 
 				printf("  %s %s %s %s %s %s %s",
 				    v & PG_U1?   "U1 " : "!u1",
@@ -633,8 +633,8 @@ static void m88k_memory_transaction_debug_dump(struct cpu *cpu, int n)
 		}
 		debug("bytebits=0x%x ]\n", DMT_ENBITS(dmt));
 
-		debug("[ DMD%i: 0x%08"PRIx32"; ", n, cpu->cd.m88k.dmd[n]);
-		debug("DMA%i: 0x%08"PRIx32" ]\n", n, cpu->cd.m88k.dma[n]);
+		debug("[ DMD%i: 0x%08" PRIx32"; ", n, cpu->cd.m88k.dmd[n]);
+		debug("DMA%i: 0x%08" PRIx32" ]\n", n, cpu->cd.m88k.dma[n]);
 	} else
 		debug("not valid ]\n");
 }
@@ -844,7 +844,7 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 	if (running)
 		dumpaddr = cpu->pc;
 
-	symbol = get_symbol_name(&cpu->machine->symbol_context,
+	symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 	    dumpaddr, &offset);
 	if (symbol != NULL && offset == 0 && supervisor)
 		debug("<%s>\n", symbol);
@@ -852,7 +852,7 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 	if (cpu->machine->ncpus > 1 && running)
 		debug("cpu%i:\t", cpu->cpu_id);
 
-	debug("%c%08"PRIx32": ",
+	debug("%c%08" PRIx32": ",
 	    cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE? 's' : 'u',
 	    (uint32_t) dumpaddr);
 
@@ -861,7 +861,7 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 	else
 		iw = ib[3] + (ib[2]<<8) + (ib[1]<<16) + (ib[0]<<24);
 
-	debug("%08"PRIx32, (uint32_t) iw);
+	debug("%08" PRIx32, (uint32_t) iw);
 
 	if (running && cpu->delay_slot)
 		debug(" (d)");
@@ -909,28 +909,28 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 		debug("\tr%i,r%i,0x%x", d, s1, imm16);
 		if (running) {
 			uint32_t tmpaddr = cpu->cd.m88k.r[s1] + imm16;
-			symbol = get_symbol_name(&cpu->machine->symbol_context,
+			symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 			    tmpaddr, &offset);
 			if (symbol != NULL && supervisor)
 				debug("\t; [<%s>]", symbol);
 			else
-				debug("\t; [0x%08"PRIx32"]", tmpaddr);
+				debug("\t; [0x%08" PRIx32"]", tmpaddr);
 			if (op26 >= 0x08) {
 				/*  Store:  */
 				debug(" = ");
 				switch (op26 & 3) {
-				case 0:	debug("0x%016"PRIx64, (uint64_t)
+				case 0:	debug("0x%016" PRIx64, (uint64_t)
 					    ((((uint64_t) cpu->cd.m88k.r[d])
 					    << 32) + ((uint64_t)
 					    cpu->cd.m88k.r[d+1])) );
 					break;
-				case 1:	debug("0x%08"PRIx32,
+				case 1:	debug("0x%08" PRIx32,
 					    (uint32_t) cpu->cd.m88k.r[d]);
 					break;
-				case 2:	debug("0x%04"PRIx16,
+				case 2:	debug("0x%04" PRIx16,
 					    (uint16_t) cpu->cd.m88k.r[d]);
 					break;
-				case 3:	debug("0x%02"PRIx8,
+				case 3:	debug("0x%02" PRIx8,
 					    (uint8_t) cpu->cd.m88k.r[d]);
 					break;
 				}
@@ -962,12 +962,12 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 			    ((iw2 >> 21) & 0x1f) == s1) {
 				uint32_t tmpaddr = (iw2 << 16) + imm16;
 				symbol = get_symbol_name(
-				    &cpu->machine->symbol_context,
+            cpu, &cpu->machine->symbol_context,
 				    tmpaddr, &offset);
 				if (symbol != NULL && supervisor)
 					debug("\t; [<%s>]", symbol);
 				else
-					debug("\t; [0x%08"PRIx32"]", tmpaddr);
+					debug("\t; [0x%08" PRIx32"]", tmpaddr);
 			}
 		}
 		debug("\n");
@@ -1017,13 +1017,13 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 			    ((iw2 >> 21) & 0x1f) == s1) {
 				uint32_t tmpaddr = (iw2 << 16) + imm16;
 				symbol = get_symbol_name(
-				    &cpu->machine->symbol_context,
+            cpu, &cpu->machine->symbol_context,
 				    tmpaddr, &offset);
 				debug("\t; ");
 				if (symbol != NULL && supervisor)
 					debug("<%s>", symbol);
 				else
-					debug("0x%08"PRIx32, tmpaddr);
+					debug("0x%08" PRIx32, tmpaddr);
 			}
 		}
 
@@ -1145,8 +1145,8 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 		debug("b%sr%s\t",
 		    op26 >= 0x32? "s" : "",
 		    op26 & 1? ".n" : "");
-		debug("0x%08"PRIx32, (uint32_t) (dumpaddr + d26));
-		symbol = get_symbol_name(&cpu->machine->symbol_context,
+		debug("0x%08" PRIx32, (uint32_t) (dumpaddr + d26));
+		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    dumpaddr + d26, &offset);
 		if (symbol != NULL && supervisor)
 			debug("\t; <%s>", symbol);
@@ -1184,8 +1184,8 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 		} else {
 			debug("%i", d);
 		}
-		debug(",r%i,0x%08"PRIx32, s1, (uint32_t) (dumpaddr + d16));
-		symbol = get_symbol_name(&cpu->machine->symbol_context,
+		debug(",r%i,0x%08" PRIx32, s1, (uint32_t) (dumpaddr + d16));
+		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    dumpaddr + d16, &offset);
 		if (symbol != NULL && supervisor)
 			debug("\t; <%s>", symbol);
@@ -1220,12 +1220,12 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 					tmpaddr += scale * cpu->cd.m88k.r[s2];
 				else
 					tmpaddr += cpu->cd.m88k.r[s2];
-				symbol = get_symbol_name(&cpu->machine->
+				symbol = get_symbol_name(cpu, &cpu->machine->
 				    symbol_context, tmpaddr, &offset);
 				if (symbol != NULL && supervisor)
 					debug("\t; [<%s>]", symbol);
 				else
-					debug("\t; [0x%08"PRIx32"]", tmpaddr);
+					debug("\t; [0x%08" PRIx32"]", tmpaddr);
 			}
 
 			debug("\n");
@@ -1309,12 +1309,12 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 					tmpaddr += scale * cpu->cd.m88k.r[s2];
 				else
 					tmpaddr += cpu->cd.m88k.r[s2];
-				symbol = get_symbol_name(&cpu->machine->
+				symbol = get_symbol_name(cpu, &cpu->machine->
 				    symbol_context, tmpaddr, &offset);
 				if (symbol != NULL && supervisor)
 					debug("\t; [<%s>]", symbol);
 				else
-					debug("\t; [0x%08"PRIx32"]", tmpaddr);
+					debug("\t; [0x%08" PRIx32"]", tmpaddr);
 			}
 
 			debug("\n");
@@ -1404,13 +1404,13 @@ int m88k_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 			    s2);
 			if (running) {
 				uint32_t tmpaddr = cpu->cd.m88k.r[s2];
-				symbol = get_symbol_name(&cpu->machine->
+				symbol = get_symbol_name(cpu, &cpu->machine->
 				    symbol_context, tmpaddr, &offset);
 				debug("\t\t; ");
 				if (symbol != NULL && supervisor)
 					debug("<%s>", symbol);
 				else
-					debug("0x%08"PRIx32, tmpaddr);
+					debug("0x%08" PRIx32, tmpaddr);
 			}
 			debug("\n");
 			break;

@@ -1,5 +1,6 @@
 #include "misc.h"
 #include "mem_passthrough.h"
+#if 0
 #include <sstream>
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port.hpp>
@@ -9,11 +10,13 @@
 #include <boost/thread.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#endif
 
 extern int verbose;
 
 // Implementation based on
 // https://gist.github.com/yoggy/3323808
+#if 0
 class SerialMemoryHolePassthrough : public IMemoryHolePassthrough {
 public:
     SerialMemoryHolePassthrough() {
@@ -195,9 +198,11 @@ private:
     boost::condition_variable event;
     boost::mutex mutex;
 };
+#endif
 
 IMemoryHolePassthrough *create_memory_hole_handler(const char *config) {
-    SerialMemoryHolePassthrough *hole = new SerialMemoryHolePassthrough();
-    hole->start(config);
-    return hole;
+  //SerialMemoryHolePassthrough *hole = new SerialMemoryHolePassthrough();
+  //hole->start(config);
+  //return hole;
+  return nullptr;
 }

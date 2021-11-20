@@ -141,7 +141,7 @@ void ieee_interpret_float_value(uint64_t x, struct ieee_float_value *fvp,
 	fvp->f = fraction;
 
 #ifdef IEEE_DEBUG
-	fatal("{ ieee: x=%016"PRIx64" sign=%i exponent=%i frac=%f ",
+	fatal("{ ieee: x=%016" PRIx64" sign=%i exponent=%i frac=%f ",
 	    (uint64_t) x, sign, exponent, fraction);
 #endif
 
@@ -274,7 +274,7 @@ uint64_t ieee_store_float_value(double nf, int fmt, int nan)
 			r = 0;
 
 #ifdef IEEE_DEBUG
-		fatal(" exp=%i, r = %016"PRIx64" }\n", exponent, (uint64_t) r);
+		fatal(" exp=%i, r = %016" PRIx64" }\n", exponent, (uint64_t) r);
 #endif
 		break;
 	default:/*  TODO  */

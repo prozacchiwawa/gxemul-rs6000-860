@@ -474,7 +474,7 @@ DEVICE_ACCESS(footbridge)
 DEVINIT(footbridge)
 {
 	struct footbridge_data *d;
-	char irq_path[300], irq_path_isa[300];
+	char irq_path[300], irq_path_isa[1024];
 	uint64_t pci_addr = 0x7b000000;
 	int i;
 
@@ -501,7 +501,7 @@ DEVINIT(footbridge)
 	    devinit->interrupt_path);
 	for (i=0; i<32; i++) {
 		struct interrupt interrupt_template;
-		char tmpstr[200];
+		char tmpstr[1024];
 
 		memset(&interrupt_template, 0, sizeof(interrupt_template));
 		interrupt_template.line = 1 << i;

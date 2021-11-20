@@ -286,19 +286,19 @@ void settings_debugdump(struct settings *settings, const char *prefix,
 
 			switch (settings->presentation_format[i]) {
 			case SETTINGS_FORMAT_DECIMAL:
-				printf("%"PRIi64, value);
+				printf("%" PRIi64, value);
 				break;
 			case SETTINGS_FORMAT_HEX8:
-				printf("0x%02"PRIx8, (int8_t) value);
+				printf("0x%02" PRIx8, (int8_t) value);
 				break;
 			case SETTINGS_FORMAT_HEX16:
-				printf("0x%04"PRIx16, (int16_t) value);
+				printf("0x%04" PRIx16, (int16_t) value);
 				break;
 			case SETTINGS_FORMAT_HEX32:
-				printf("0x%08"PRIx32, (int32_t) value);
+				printf("0x%08" PRIx32, (int32_t) value);
 				break;
 			case SETTINGS_FORMAT_HEX64:
-				printf("0x%016"PRIx64, (int64_t) value);
+				printf("0x%016" PRIx64, (int64_t) value);
 				break;
 			case SETTINGS_FORMAT_BOOL:
 				printf(value? "true" : "false");

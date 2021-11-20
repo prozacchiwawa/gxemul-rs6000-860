@@ -215,7 +215,7 @@ X(invalid) {
 
 	fatal("FATAL ERROR: An internal error occured in the ARM"
 	    " dyntrans code. Please contact the author with detailed"
-	    " repro steps on how to trigger this bug. pc = 0x%08"PRIx32"\n",
+	    " repro steps on how to trigger this bug. pc = 0x%08" PRIx32"\n",
 	    (uint32_t)cpu->pc);
 
 	cpu->cd.arm.next_ic = &nothing_call;
@@ -803,7 +803,7 @@ X(msr_imm_spsr)
 			cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 			cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 			old_pc = cpu->pc;
-			printf("msr_spsr: old pc = 0x%08"PRIx32"\n", old_pc);
+			printf("msr_spsr: old pc = 0x%08" PRIx32"\n", old_pc);
 		}
 		exit(1);
 	}

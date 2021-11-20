@@ -515,7 +515,7 @@ string GXemul::Version()
 #else
 	    << "(unknown version)"
 #endif
-	    << "      "COPYRIGHT_MSG"\n"SECONDARY_MSG;
+	    << "      " COPYRIGHT_MSG"\n" SECONDARY_MSG;
 
 	return ss.str();
 }
@@ -862,6 +862,8 @@ struct ComponentAndFrequency
 	StateVariable*		step;
 
 	uint64_t		nextTimeToExecute;
+
+  ComponentAndFrequency() : component(), frequency(), step(), nextTimeToExecute() { }
 };
 
 
@@ -876,7 +878,6 @@ static void GetComponentsAndFrequencies(refcount_ptr<Component> component,
 	if (freq != NULL && step != NULL &&
 	    (paused == NULL || paused->ToInteger() == 0)) {
 		struct ComponentAndFrequency caf;
-		memset(&caf, 0, sizeof(caf));
 
 		caf.component = component;
 		caf.frequency = freq->ToDouble();

@@ -75,7 +75,8 @@ public:
 	{
 		if (m_refCount != 0) {
 			std::cerr << "TODO: ~ReferenceCountable count != 0!\n";
-			throw std::exception();
+      abort();
+      //			throw std::exception();
 		}
 	}
 

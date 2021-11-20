@@ -516,7 +516,7 @@ DEVICE_TICK(vga)
 		int base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
 		    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 		int new_u_y1, new_u_y2;
-		debug("[ dev_vga_tick: dyntrans access, %"PRIx64" .. %"
+		debug("[ dev_vga_tick: dyntrans access, %" PRIx64" .. %"
 		    PRIx64" ]\n", (uint64_t) low, (uint64_t) high);
 		low -= base;
 		high -= base;
@@ -590,7 +590,7 @@ DEVICE_ACCESS(vga_graphics)
 	int j, x=0, y=0, x2=0, y2=0, modified = 0;
 	size_t i;
 
-	fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08x len %08x\n", d->cur_mode, d->graphics_mode, relative_addr, len);
+	fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len);
 
 	if (relative_addr + len >= GFX_ADDR_WINDOW)
 		return 0;
@@ -1157,7 +1157,7 @@ DEVICE_ACCESS(vga_ctrl)
 				if ((d->current_retrace_line & 7) == 0)
 					odata = VGA_IS1_DISPLAY_VRETRACE | VGA_IS1_DISPLAY_DISPLAY_DISABLE;
 			}
-			fprintf(stderr, "input status 1: %08x\n", odata);
+			fprintf(stderr, "input status 1: %08" PRIx64"\n", odata);
 			break;
 
 		default:

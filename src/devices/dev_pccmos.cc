@@ -87,7 +87,7 @@ DEVICE_ACCESS(pccmos)
 
 	if (writeflag == MEM_WRITE) {
 		b = idata = memory_readmax64(cpu, data, len);
-		fprintf(stderr, "pccmos: write at relative addr %08x: %08x\n", relative_addr, idata);
+		fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
 	}
 
 	/*
@@ -183,7 +183,7 @@ DEVICE_ACCESS(pccmos)
 			odata = 0x40;
 		}
 		memory_writemax64(cpu, data, len, odata);
-		fprintf(stderr, "pccmos: read at relative addr %08x (dselect %08x): %08x\n", relative_addr, d->select, odata);
+		fprintf(stderr, "pccmos: read at relative addr %08" PRIx64" (dselect %08x): %08" PRIx64"\n", relative_addr, d->select, odata);
 	}
 
 	return 1;

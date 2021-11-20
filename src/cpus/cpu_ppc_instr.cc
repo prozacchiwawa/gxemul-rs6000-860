@@ -2780,7 +2780,7 @@ X(to_be_translated)
 		} else {
 			if (!cpu->translation_readahead)
 				fatal("[ TODO: Unimplemented ALTIVEC, iword"
-				    " = 0x%08"PRIx32"x ]\n", iword);
+				    " = 0x%08" PRIx32"x ]\n", iword);
 			goto bad;
 		}
 		break;

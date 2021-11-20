@@ -80,7 +80,7 @@ struct pic8259_data {
 #define	MAX_IOASIC_DMA_FUNCTIONS	8
 struct dec_ioasic_data {
 	uint32_t	reg[N_DEC_IOASIC_REGS];
-	int		(*(dma_func[MAX_IOASIC_DMA_FUNCTIONS]))(struct cpu *, void *, uint64_t addr, size_t dma_len, int tx);
+	int		(*dma_func[MAX_IOASIC_DMA_FUNCTIONS])(struct cpu *, void *, uint64_t addr, size_t dma_len, int tx);
 	void		*dma_func_extra[MAX_IOASIC_DMA_FUNCTIONS];
 	int		rackmount_flag;
 };

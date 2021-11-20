@@ -735,7 +735,7 @@ int diskimage_add(struct machine *machine, char *fname)
 				if (*fname == ':' || *fname == ';')
 					fname ++;
 				if (override_base_offset < 0) {
-					fatal("Bad base offset: %"PRIi64
+					fatal("Bad base offset: %" PRIi64
 					    "\n", override_base_offset);
 					exit(1);
 				}
@@ -790,10 +790,10 @@ int diskimage_add(struct machine *machine, char *fname)
 		d->type = DISKIMAGE_FLOPPY;
 	if (prefix_s)
 		d->type = DISKIMAGE_SCSI;
-    if (prefix_n)
-        d->type = DISKIMAGE_NVRAM;
-    if (prefix_R)
-        d->type = DISKIMAGE_ROM;
+  if (prefix_n)
+    d->type = DISKIMAGE_NVRAM;
+  if (prefix_R)
+    d->type = DISKIMAGE_ROM;
 
 	/*  Special case: Add an overlay for an already added disk image:  */
 	if (prefix_V) {
@@ -840,10 +840,10 @@ int diskimage_add(struct machine *machine, char *fname)
 
 	CHECK_ALLOCATION(d->fname = strdup(fname));
 
-    if (prefix_n)
-        d->logical_block_size = 1;
-    else
-        d->logical_block_size = 512;
+  if (prefix_n)
+    d->logical_block_size = 1;
+  else
+    d->logical_block_size = 512;
 
 	/*
 	 *  Is this a tape, CD-ROM or a normal disk?

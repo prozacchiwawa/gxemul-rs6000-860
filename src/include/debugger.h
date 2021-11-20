@@ -36,12 +36,18 @@
 struct emul;
 struct machine;
 
+struct ibm_name {
+  uint64_t function_end;
+  char function_name[64];
+};
+
 /*  debugger.c:  */
 void debugger_activate(int x);
 void debugger_execute_cmd(char *cmd, int cmd_len);
 void debugger(void);
 void debugger_reset(void);
 void debugger_init(struct emul *emul);
+int  debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name);
 
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0

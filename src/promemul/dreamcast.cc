@@ -382,7 +382,7 @@ bad:
 	cpu_register_dump(cpu->machine, cpu, 1, 0);
 	printf("\n");
 	fatal("[ dreamcast_emul(): unimplemented dreamcast PROM call, "
-	    "pc=0x%08"PRIx32" (vectorAddr=0x%08"PRIx32") ]\n", (uint32_t)cpu->pc, vectorAddr);
+	    "pc=0x%08" PRIx32" (vectorAddr=0x%08" PRIx32") ]\n", (uint32_t)cpu->pc, vectorAddr);
 	cpu->running = 0;
 	return;
 }

@@ -60,10 +60,9 @@ MACHINE_SETUP(prep)
 
 	struct pci_data *pci_data;
 	const char *model_name = "";
-        struct vfb_data *fb;
+  //struct vfb_data *fb;
 
-
-    struct diskimage *rom_image = NULL;
+  struct diskimage *rom_image = NULL;
 
 	switch (machine->machine_subtype) {
 

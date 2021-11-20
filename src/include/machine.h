@@ -74,7 +74,7 @@ struct tick_functions {
 	/*  Arrays, with one element for each entry:  */
 	int	*ticks_till_next;
 	int	*ticks_reset_value;
-	void	(*(*f))(struct cpu *, void *);
+	void	(**f)(struct cpu *, void *);
 	void	**extra;
 };
 

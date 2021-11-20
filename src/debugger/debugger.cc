@@ -57,7 +57,7 @@ extern int extra_argc;
 extern char **extra_argv;
 extern struct settings *global_settings;
 extern int quiet_mode;
-
+static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
 
 /*
  *  Global debugger variables:
@@ -158,15 +158,64 @@ void debugger_activate(int x)
 
 
 /*
+ * Get the name of the current function ibm style, the name is
+ * 0x18 bytes after the instruction containing 0x4e800020 (blr)
+ */
+int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name)
+{
+  unsigned char cur_insn[4];
+  struct memory *mem;
+  int r;
+
+  mem = c->mem;
+
+  while (addr < max_addr) {
+    r = c->memory_rw(c, mem, addr, cur_insn, sizeof(cur_insn),
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (r == MEMORY_ACCESS_FAILED) {
+      return 0;
+    }
+
+    if (!memcmp(cur_insn, POWERPC_BLR_INSN, sizeof(cur_insn))) {
+      uint16_t name_length;
+      char namebuf[68];
+
+      r = c->memory_rw(c, mem, addr + 0x18, (unsigned char *)namebuf, sizeof(namebuf),
+                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+
+      if (r == MEMORY_ACCESS_FAILED) {
+        return 0;
+      }
+
+      name_length = namebuf[1] + namebuf[0] * 256;
+      if (name_length >= 64) { /* Set an arbitrary limit */
+        return 0;
+      }
+
+      name->function_end = addr + 4;
+      memset(name->function_name, 0, sizeof(name->function_name));
+      memcpy(name->function_name, namebuf + sizeof(uint16_t), name_length);
+
+      return 1;
+    }
+
+    addr += 4;
+  }
+
+  return 0;
+}
+
+
+/*
  *  show_breakpoint():
  */
 static void show_breakpoint(struct machine *m, int i)
 {
 	printf("%3i: 0x", i);
 	if (m->cpus[0]->is_32bit)
-		printf("%08"PRIx32, (uint32_t) m->breakpoints.addr[i]);
+		printf("%08" PRIx32, (uint32_t) m->breakpoints.addr[i]);
 	else
-		printf("%016"PRIx64, (uint64_t) m->breakpoints.addr[i]);
+		printf("%016" PRIx64, (uint64_t) m->breakpoints.addr[i]);
 	if (m->breakpoints.string[i] != NULL)
 		printf(" (%s)", m->breakpoints.string[i]);
 	printf("\n");

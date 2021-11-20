@@ -203,7 +203,7 @@ void mardigras_20400(struct cpu *cpu, struct sgi_mardigras_data *d,
 		return;
 	}
 
-	debug("mardigras_20400(): 0x%016"PRIx64"\n", (uint64_t) idata);
+	debug("mardigras_20400(): 0x%016" PRIx64"\n", (uint64_t) idata);
 }
 
 
@@ -285,7 +285,7 @@ DEVICE_ACCESS(sgi_mardigras)
 			debug("[ sgi_mardigras: read from 0x%08lx ]\n",
 			    (long)relative_addr);
 		} else {
-			debug("[ sgi_mardigras: write to  0x%08lx: 0x%016"PRIx64
+			debug("[ sgi_mardigras: write to  0x%08lx: 0x%016" PRIx64
 			    " ]\n", (long) relative_addr, (uint64_t) idata);
 		}
 	}

@@ -36,6 +36,7 @@
 #include <string.h>
 
 #include "symbol.h"
+#include "debugger.h"
 
 
 #define	SYMBOLBUF_MAX	100
@@ -107,13 +108,20 @@ int get_symbol_addr(struct symbol_context *sc, const char *symbol, uint64_t *add
  *  If no symbol was found, NULL is returned instead.
  */
 static char symbol_buf[SYMBOLBUF_MAX+1];
-char *get_symbol_name_and_n_args(struct symbol_context *sc, uint64_t addr,
+char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc, uint64_t addr,
 	uint64_t *offset, int *n_argsp)
 {
 	struct symbol *s;
+  struct ibm_name namebuf;
 
-	if (sc->n_symbols == 0)
+	if (sc->n_symbols == 0) {
+    if (debugger_get_name(c, addr, addr + 0x1000, &namebuf)) {
+      strcpy(symbol_buf, namebuf.function_name);
+      return symbol_buf;
+    }
+
 		return NULL;
+  }
 
 	if ((addr >> 32) == 0 && (addr & 0x80000000ULL))
 		addr |= 0xffffffff00000000ULL;
@@ -133,7 +141,7 @@ char *get_symbol_name_and_n_args(struct symbol_context *sc, uint64_t addr,
 					    "%s", s->name);
 				else
 					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s+0x%"PRIx64, s->name, (uint64_t)
+					    "%s+0x%" PRIx64, s->name, (uint64_t)
 					    (addr - s->addr));
 				if (offset != NULL)
 					*offset = addr - s->addr;
@@ -157,7 +165,7 @@ char *get_symbol_name_and_n_args(struct symbol_context *sc, uint64_t addr,
 					    "%s", s->name);
 				else
 					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s+0x%"PRIx64, s->name, (uint64_t)
+					    "%s+0x%" PRIx64, s->name, (uint64_t)
 					    (addr - s->addr));
 
 				if (offset != NULL)
@@ -185,9 +193,9 @@ char *get_symbol_name_and_n_args(struct symbol_context *sc, uint64_t addr,
  *
  *  See get_symbol_name_and_n_args().
  */
-char *get_symbol_name(struct symbol_context *sc, uint64_t addr, uint64_t *offs)
+char *get_symbol_name(struct cpu *c, struct symbol_context *sc, uint64_t addr, uint64_t *offs)
 {
-	return get_symbol_name_and_n_args(sc, addr, offs, NULL);
+	return get_symbol_name_and_n_args(c, sc, addr, offs, NULL);
 }
 
 
@@ -318,7 +326,7 @@ void symbol_readfile(struct symbol_context *sc, char *fname)
 		addr = strtoull(b1, NULL, 16);
 		len  = strtoull(b2, NULL, 16);
 		type = b3[0];
-		/*  printf("addr=%016"PRIx64" len=%016"PRIx64" type=%i\n",
+		/*  printf("addr=%016" PRIx64" len=%016" PRIx64" type=%i\n",
 		    addr, len, type);  */
 
 		if (type == 't' || type == 'r' || type == 'g')

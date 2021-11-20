@@ -155,7 +155,7 @@ DEVICE_ACCESS(mc146818_jazz)
 
 #ifdef MC146818_DEBUG
 	if (writeflag == MEM_WRITE) {
-		int i;
+		uint32_t i;
 		fatal("[ mc146818_jazz: write to addr=0x%04x: ",
 		    (int)relative_addr);
 		for (i=0; i<len; i++)

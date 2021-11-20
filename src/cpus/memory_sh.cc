@@ -293,7 +293,7 @@ int sh_translate_v2p(struct cpu *cpu, uint64_t vaddr64, uint64_t *return_paddr,
 	}
 
 	if (flags & FLAG_INSTR) {
-		fatal("TODO: instr at 0x%08"PRIx32"\n", (uint32_t)vaddr);
+		fatal("TODO: instr at 0x%08" PRIx32"\n", (uint32_t)vaddr);
 		exit(1);
 	}
 
@@ -312,7 +312,7 @@ int sh_translate_v2p(struct cpu *cpu, uint64_t vaddr64, uint64_t *return_paddr,
 
 	/*  The ugly 'if' is just here to fool Compaq CC.  */
 	if (!(flags & FLAG_NOEXCEPTIONS)) {
-		fatal("Unimplemented SH vaddr 0x%08"PRIx32"\n", vaddr);
+		fatal("Unimplemented SH vaddr 0x%08" PRIx32"\n", vaddr);
 		exit(1);
 	}
 

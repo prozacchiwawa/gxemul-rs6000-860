@@ -343,7 +343,7 @@ void arm_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 	cpu->cd.arm.cpsr |= (cpu->cd.arm.flags << 28);
 
 	if (gprs) {
-		symbol = get_symbol_name(&cpu->machine->symbol_context,
+		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
 		debug("cpu%i:  cpsr = ", x);
 		debug("%s%s%s%s%s%s%s%s",
@@ -887,7 +887,7 @@ int arm_cpu_disassemble_instr_thumb(struct cpu *cpu, unsigned char *ib,
 				tmp |= 0xfffffe00;
 			tmp = (int32_t)(dumpaddr + 4 + tmp);
 			debug("0x%x", (int)tmp);
-			symbol = get_symbol_name(&cpu->machine->symbol_context,
+			symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 			    tmp, &offset);
 			if (symbol != NULL)
 				debug(" \t<%s>", symbol);
@@ -909,7 +909,7 @@ int arm_cpu_disassemble_instr_thumb(struct cpu *cpu, unsigned char *ib,
 				tmp |= 0xfffff000;
 			tmp = (int32_t)(dumpaddr + 4 + tmp);
 			debug("bal\t0x%x", (int)tmp);
-			symbol = get_symbol_name(&cpu->machine->symbol_context,
+			symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 			    tmp, &offset);
 			if (symbol != NULL)
 				debug(" \t<%s>", symbol);
@@ -949,7 +949,7 @@ int arm_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 	if (running)
 		dumpaddr = cpu->pc;
 
-	symbol = get_symbol_name(&cpu->machine->symbol_context,
+	symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 	    dumpaddr, &offset);
 	if (symbol != NULL && offset == 0)
 		debug("<%s>\n", symbol);
@@ -1271,7 +1271,7 @@ int arm_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 			/*  mov pc,reg:  */
 			if (running && t == 0 && c == 0 && secondary_opcode
 			    == 0xd && r12 == ARM_PC && (iw&15)!=ARM_PC) {
-				symbol = get_symbol_name(&cpu->machine->
+				symbol = get_symbol_name(cpu, &cpu->machine->
 				    symbol_context, cpu->cd.arm.r[iw & 15],
 				    &offset);
 				if (symbol != NULL)
@@ -1355,7 +1355,7 @@ int arm_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 				addr += dumpaddr + 8;
 			else
 				addr += cpu->cd.arm.r[r16];
-			symbol = get_symbol_name(&cpu->machine->symbol_context,
+			symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 			    addr, &offset);
 			if (symbol != NULL)
 				debug(" \t<%s", symbol);
@@ -1381,7 +1381,7 @@ int arm_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 				if (b_bit)
 					debug("%i", tmpw[0]);
 				else {
-					symbol = get_symbol_name(&cpu->machine->
+					symbol = get_symbol_name(cpu, &cpu->machine->
 					    symbol_context, addr, &offset);
 					if (symbol != NULL)
 						debug("%s", symbol);
@@ -1431,7 +1431,7 @@ int arm_cpu_disassemble_instr(struct cpu *cpu, unsigned char *ib,
 			tmp |= 0xfc000000;
 		tmp = (int32_t)(dumpaddr + tmp + 8);
 		debug("0x%x", (int)tmp);
-		symbol = get_symbol_name(&cpu->machine->symbol_context,
+		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    tmp, &offset);
 		if (symbol != NULL)
 			debug(" \t<%s>", symbol);

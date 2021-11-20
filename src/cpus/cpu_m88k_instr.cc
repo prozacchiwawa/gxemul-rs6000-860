@@ -1515,14 +1515,14 @@ X(rte)
 		return;
 	}
 
-	/*  fatal("RTE: NIP=0x%08"PRIx32", FIP=0x%08"PRIx32"\n",
+	/*  fatal("RTE: NIP=0x%08" PRIx32", FIP=0x%08" PRIx32"\n",
 	    cpu->cd.m88k.cr[M88K_CR_SNIP], cpu->cd.m88k.cr[M88K_CR_SFIP]);  */
 
 	quick_pc_to_pointers(cpu);
 	return;
 
 abort_dump:
-	fatal("RTE failed. NIP=0x%08"PRIx32", FIP=0x%08"PRIx32"\n",
+	fatal("RTE failed. NIP=0x%08" PRIx32", FIP=0x%08" PRIx32"\n",
 	    cpu->cd.m88k.cr[M88K_CR_SNIP], cpu->cd.m88k.cr[M88K_CR_SFIP]);
 
 	ABORT_EXECUTION;
@@ -2699,7 +2699,7 @@ X(to_be_translated)
 				if (iword == 0xf400fc00)
 					ic->f = instr(rte);
 				else {
-					fatal("unimplemented rte variant: 0x%08"PRIx32"\n", iword);
+					fatal("unimplemented rte variant: 0x%08" PRIx32"\n", iword);
 					goto bad;
 				}
 				break;

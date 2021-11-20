@@ -86,7 +86,7 @@ DEVICE_ACCESS(eagle)
 
 DEVICE_ACCESS(eagle_800)
 {
-    struct eagle_data *d = (struct eagle_data *) extra;
+    //struct eagle_data *d = (struct eagle_data *) extra;
     uint64_t idata = 0, odata = 0;
 
 	if (writeflag == MEM_WRITE)

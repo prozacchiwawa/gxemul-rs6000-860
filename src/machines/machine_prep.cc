@@ -60,6 +60,8 @@ MACHINE_SETUP(prep)
 
 	struct pci_data *pci_data;
 	const char *model_name = "";
+        struct vfb_data *fb;
+
 
     struct diskimage *rom_image = NULL;
 
@@ -92,6 +94,11 @@ MACHINE_SETUP(prep)
 			bus_pci_add(machine, pci_data, machine->memory,
 			    0, 14, 0, "s3_virge");
 		}
+
+	/*
+        fb = dev_fb_init(machine, machine->memory, 0xc0400000,
+            VFB_GENERIC | VFB_REVERSE_START, 1024,768, 1024,768, 8, "ofb");
+	*/
 
         bus_pci_add(machine, pci_data, machine->memory,
             0, 15, 0, "ibm_isa");

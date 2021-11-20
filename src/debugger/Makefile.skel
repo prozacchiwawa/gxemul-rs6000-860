@@ -4,7 +4,7 @@
 
 CXXFLAGS=$(CWARNINGS) $(COPTIM) $(XINCLUDE) $(DINCLUDE)
 
-OBJS=debugger.o debugger_expr.o
+OBJS=debugger.o debugger_expr.o crc16.o
 
 all: $(OBJS)
 

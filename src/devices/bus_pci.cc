@@ -180,10 +180,14 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 
 	pci_data->last_was_write_ffffffff = 0;
 
-	debug("[ bus_pci: read from PCI DATA, bus %i, device "
-	    "%i, function %i (%s) register 0x%02x: (len=%i) 0x%08lx ]\n",
-	    pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
-	    dev->name, pci_data->cur_reg, len, (long)*data);
+  if (dev && !strcmp(dev->name, "eagle") && pci_data->cur_reg == 0xa0) {
+    *data = 0xff;
+  } else {
+    debug("[ bus_pci: read from PCI DATA, bus %i, device "
+          "%i, function %i (%s) register 0x%02x: (len=%i) 0x%08lx ]\n",
+          pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
+          dev->name, pci_data->cur_reg, len, (long)*data);
+  }
 }
 
 

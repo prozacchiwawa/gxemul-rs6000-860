@@ -27,7 +27,14 @@
  *
  *  Debugger commands. Included from debugger.c.
  */
+#include "crc.h"
 
+static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
+
+struct ibm_name {
+  uint64_t function_end;
+  char function_name[64];
+};
 
 /*
  *  debugger_cmd_allsettings():
@@ -942,6 +949,113 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
 
 
 /*
+ * Get the name of the current function ibm style, the name is
+ * 0x18 bytes after the instruction containing 0x4e800020 (blr)
+ */
+static int debugger_get_name(struct machine *m, struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name)
+{
+  unsigned char cur_insn[4];
+  struct memory *mem;
+  int r;
+
+  mem = m->cpus[m->bootstrap_cpu]->mem;
+
+  while (addr < max_addr) {
+    r = c->memory_rw(c, mem, addr, cur_insn, sizeof(cur_insn),
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (r == MEMORY_ACCESS_FAILED) {
+      return 0;
+    }
+
+    if (!memcmp(cur_insn, POWERPC_BLR_INSN, sizeof(cur_insn))) {
+      uint16_t name_length;
+      char namebuf[68];
+
+      r = c->memory_rw(c, mem, addr + 0x18, (unsigned char *)namebuf, sizeof(namebuf),
+                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+
+      if (r == MEMORY_ACCESS_FAILED) {
+        return 0;
+      }
+
+      name_length = namebuf[1] + namebuf[0] * 256;
+      if (name_length >= 64) { /* Set an arbitrary limit */
+        return 0;
+      }
+
+      name->function_end = addr + 4;
+      memset(name->function_name, 0, sizeof(name->function_name));
+      memcpy(name->function_name, namebuf + sizeof(uint16_t), name_length);
+
+      return 1;
+    }
+
+    addr += 4;
+  }
+
+  return 0;
+}
+
+/*
+ *
+ */
+static void debugger_cmd_findname(struct machine *m, char *cmd_line)
+{
+  uint64_t addr_start = 0, addr_end = 0;
+  uint64_t *parse_numbers[] = {
+    &addr_start,
+    &addr_end,
+    0
+  };
+  char *tmps = NULL, *to_parse = NULL, *p;
+  int i, r;
+  struct ibm_name name_buf;
+	struct cpu *c;
+
+  c = m->cpus[m->bootstrap_cpu];
+
+  if (cmd_line[0] == '\0') {
+    addr_start = c->pc;
+  } else {
+    CHECK_ALLOCATION(tmps = strdup(cmd_line));
+    p = tmps;
+
+    for (i = 0; p && parse_numbers[i]; i++) {
+      to_parse = p;
+      p = strchr(p, ' ');
+      if (p != NULL) {
+        *p = '\0';
+        p++;
+        while (*p && isspace(*p)) {
+          p++;
+        }
+      }
+
+      r = debugger_parse_expression(m, to_parse, 0, parse_numbers[i]);
+
+      if (r == PARSE_NOMATCH || r == PARSE_MULTIPLE) {
+        break;
+      }
+    }
+  }
+
+  free(tmps);
+
+  if (!addr_end) {
+    addr_end = addr_start + 0x1000;
+  }
+
+  if (!debugger_get_name(m, c, addr_start, addr_end, &name_buf)) {
+    printf("name not found\n");
+  }
+
+  if (m->cpus[0]->is_32bit)
+    printf("0x%08"PRIx32" %s\n", (uint32_t) name_buf.function_end, name_buf.function_name);
+  else
+    printf("0x%016"PRIx64" %s\n", (uint64_t) name_buf.function_end, name_buf.function_name);
+}
+
+/*
  *  debugger_cmd_step():
  */
 static void debugger_cmd_step(struct machine *m, char *cmd_line)
@@ -1168,6 +1282,125 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 
 /*
+ *  debugger_cmd_findcrc():
+ *
+ *  Search for a block of length bytes with a given crc.
+ *
+ *  syntax: findcrc length crc addr endaddr
+ */
+static void debugger_cmd_findcrc(struct machine *m, char *cmd_line)
+{
+	uint64_t length, crc, addr_start, addr_end;
+  uint64_t addr;
+  uint16_t have_crc;
+  uint64_t *parse_numbers[] = {
+    &length,
+    &crc,
+    &addr_start,
+    &addr_end,
+    0
+  };
+	struct cpu *c;
+	struct memory *mem;
+	char *p = NULL;
+	int x, r = -1, i;
+  char *tmps = NULL, *to_parse = NULL;
+  unsigned char *buf;
+
+	if (cmd_line[0] != '\0') {
+    CHECK_ALLOCATION(tmps = strdup(cmd_line));
+    p = tmps;
+
+    for (i = 0; p && parse_numbers[i]; i++) {
+      to_parse = p;
+      p = strchr(p, ' ');
+      if (p != NULL) {
+        *p = '\0';
+        p++;
+        while (*p && isspace(*p)) {
+          p++;
+        }
+      }
+
+      r = debugger_parse_expression(m, to_parse, 0, parse_numbers[i]);
+
+      if (r == PARSE_NOMATCH || r == PARSE_MULTIPLE) {
+        break;
+      }
+    }
+  }
+
+  free(tmps);
+
+  if (r == PARSE_NOMATCH || r == PARSE_MULTIPLE) {
+    printf("Unparsable address: %s\n", cmd_line);
+    return;
+  } else if (parse_numbers[i]) {
+    printf("Not enough arguments: %s\n", cmd_line);
+    return;
+  }
+
+  if (m->cpus == NULL) {
+		printf("No cpus (?)\n");
+		return;
+	}
+
+	c = m->cpus[m->bootstrap_cpu];
+	if (c == NULL) {
+		printf("m->cpus[m->bootstrap_cpu] = NULL\n");
+		return;
+	}
+
+	mem = m->cpus[m->bootstrap_cpu]->mem;
+
+	ctrl_c = 0;
+
+  addr = addr_start;
+  i = 4; /* Number of bytes to invert to start crc32 */
+  CHECK_ALLOCATION(buf = (unsigned char*)malloc(length * 2));
+  memset(buf, 0, length * 2);
+
+  x = 1; /* First run */
+  r = c->memory_rw(c, mem, addr, &buf[length], length,
+                   MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+
+	while (addr < addr_end - length) {
+		if (r == MEMORY_ACCESS_FAILED) {
+			printf("(memory access failed)\n");
+      break;
+    }
+
+		if (ctrl_c)
+			return;
+
+    if (x) {
+      x = 0;
+      i = length;
+    } else {
+      i = 1;
+    }
+
+    while (i <= length) {
+      have_crc = crc16(&buf[i], length);
+      if (have_crc == crc) {
+        if (m->cpus[0]->is_32bit) {
+          printf("0x%08"PRIx32"\n", (uint32_t) (addr - length + i));
+        } else {
+          printf("0x%016"PRIx64"\n", (uint64_t) (addr - length + i));
+        }
+      }
+      i += 1;
+    }
+
+		addr += length;
+    memmove(&buf[0], &buf[length], length);
+    r = c->memory_rw(c, mem, addr, &buf[length], length,
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+	}
+}
+
+
+/*
  *  debugger_cmd_version():
  */
 static void debugger_cmd_version(struct machine *m, char *cmd_line)
@@ -1256,7 +1489,7 @@ static struct cmd cmds[] = {
 	/*  NOTE: Try to keep 's' down to only one command. Having 'step'
 	    available as a one-letter command is very convenient.  */
 
-	{ "step", "[n]", 0, debugger_cmd_step,
+	{ "step", "[n]|^function", 0, debugger_cmd_step,
 		"single-step one (or n) instruction(s)" },
 
 	{ "tlbdump", "[cpuid][,r]", 0, debugger_cmd_tlbdump,
@@ -1267,6 +1500,12 @@ static struct cmd cmds[] = {
 
 	{ "unassemble", "[addr [endaddr]]", 0, debugger_cmd_unassemble,
 		"dump memory contents as instructions" },
+
+  { "findcrc", "length crc addr endaddr", 0, debugger_cmd_findcrc,
+    "search memory attached storage for length bytes matching the given crc" },
+
+  { "findname", "[addr [endaddr]]", 0, debugger_cmd_findname,
+    "if the function has a named tail (PowerPC), display it" },
 
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },
@@ -1381,4 +1620,3 @@ static void debugger_cmd_help(struct machine *m, char *cmd_line)
 	    " registers, '@'\nfor symbols, and '$' for numeric values. Use"
 	    " 0x for hexadecimal values.\n");
 }
-

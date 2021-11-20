@@ -66,6 +66,7 @@ DEVICE_ACCESS(fdc)
 
 	switch (relative_addr) {
 	case 0x04:
+		idata |= 0x80;
 		break;
 	default:if (writeflag==MEM_READ) {
 			fatal("[ fdc: read from reg %i ]\n",

@@ -56,9 +56,9 @@
 #define	MAX_RETRACE_SCANLINES	420
 #define	N_IS1_READ_THRESHOLD	50
 
-#define	GFX_ADDR_WINDOW		0x18000
+#define	GFX_ADDR_WINDOW		4 * 1024 * 1024
 
-#define	VGA_FB_ADDR	0x1c00000000ULL
+#define	VGA_FB_ADDR	0x2c00000000ULL
 
 #define	MODE_CHARCELL		1
 #define	MODE_GRAPHICS		2
@@ -589,6 +589,8 @@ DEVICE_ACCESS(vga_graphics)
 	struct vga_data *d = (struct vga_data *) extra;
 	int j, x=0, y=0, x2=0, y2=0, modified = 0;
 	size_t i;
+
+	fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08x len %08x\n", d->cur_mode, d->graphics_mode, relative_addr, len);
 
 	if (relative_addr + len >= GFX_ADDR_WINDOW)
 		return 0;
@@ -1199,12 +1201,13 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base;
-	d->max_x          = 80;
-	d->max_y          = 25;
-	d->cur_mode       = MODE_CHARCELL;
-	d->crtc_reg[0xff] = 0x03;
+	d->max_x          = 1024;
+	d->max_y          = 768;
+	d->cur_mode       = MODE_GRAPHICS;
+	d->graphics_mode  = GRAPHICS_MODE_8BIT;
+	d->crtc_reg[0xff] = 0x99;
 	d->charcells_size = 0x8000;
-	d->gfx_mem_size   = 64;	/*  Nothing, as we start in text mode,
+	d->gfx_mem_size   = 4 * 1024 * 1024;	/*  Nothing, as we start in text mode,
 			but size large enough to make gfx_mem aligned.  */
 	d->pixel_repx = d->pixel_repy = machine->x11_md.scaleup;
 
@@ -1238,11 +1241,11 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 		d->fb_max_y *= d->font_height;
 	}
 
-	memory_device_register(mem, "vga_charcells", videomem_base + 0x18000,
-	    allocsize, dev_vga_access, d, DM_DYNTRANS_OK |
-	    DM_DYNTRANS_WRITE_OK | DM_READS_HAVE_NO_SIDE_EFFECTS,
-	    d->charcells);
-	memory_device_register(mem, "vga_gfx", videomem_base, GFX_ADDR_WINDOW,
+	//memory_device_register(mem, "vga_charcells", videomem_base + 0x18000,
+	//    allocsize, dev_vga_access, d, DM_DYNTRANS_OK |
+	//    DM_DYNTRANS_WRITE_OK | DM_READS_HAVE_NO_SIDE_EFFECTS,
+	//    d->charcells);
+	memory_device_register(mem, "vga_gfx", 0xc4000000 /*videomem_base*/, GFX_ADDR_WINDOW,
 	    dev_vga_graphics_access, d, DM_DEFAULT |
 	    DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
 	memory_device_register(mem, "vga_ctrl", control_base,

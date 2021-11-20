@@ -1,3 +1,14 @@
 #!/bin/sh
 PROG=`dirname "$0"`/gxemul
-$PROG -X -x -v -v -e ibm860 -d f:../ppc/860.rom -d R:../ppc/860main.rom -d n:../ppc/860.nvram -V -q "${@}"
+$PROG -Y 2 -X -v -v -e ibm860 -d f:../ppc/860.rom -d i:../ppc/hd.img -d R:../ppc/860main.rom -d n:../ppc/860.nvram -V -q "${@}"
+#    grep -v '<0x6988(0,' | \
+#    grep -v '<0x6e28(0x3f4,' | \
+#    grep -v '<0x22bfc(0,' | \
+#    grep -v '<0x21fec(' | \
+#    grep -v '<0x697c(' | \
+#    grep -v '<0x21de0(1,' | \
+#    grep -v '<0x69a0(1,' | \
+#    grep -v '<0x68dc(0x1030,' | \
+#    grep -v '<0x68fc(0,' | \
+#    grep -v '<0x68dc(' | \
+#    grep -v '<0x6988(0,'

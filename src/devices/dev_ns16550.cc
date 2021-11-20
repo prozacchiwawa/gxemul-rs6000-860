@@ -159,6 +159,7 @@ DEVICE_ACCESS(ns16550)
 
 		/*  Read/write of data:  */
 		if (writeflag == MEM_WRITE) {
+			fprintf(stderr, "%c", idata & 0xff);
 			if (d->reg[com_mcr] & MCR_LOOPBACK)
 				console_makeavail(d->console_handle, idata);
 			else
@@ -236,8 +237,8 @@ DEVICE_ACCESS(ns16550)
 			d->reg[com_msr] = idata;
 		} else {
 			odata = d->reg[com_msr];
-			debug("[ ns16550 (%s): read from msr: 0x%02x ]\n",
-			    d->name, (int)odata);
+			//debug("[ ns16550 (%s): read from msr: 0x%02x ]\n",
+			//    d->name, (int)odata);
 		}
 		break;
 

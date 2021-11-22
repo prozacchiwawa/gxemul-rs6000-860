@@ -188,7 +188,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
       }
 
       name_length = namebuf[1] + namebuf[0] * 256;
-      if (name_length >= 64) { /* Set an arbitrary limit */
+      if (name_length < 1 || name_length >= 64) { /* Set an arbitrary limit */
         return 0;
       }
 

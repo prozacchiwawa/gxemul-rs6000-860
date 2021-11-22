@@ -115,7 +115,7 @@ char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc, uint6
   struct ibm_name namebuf;
 
 	if (sc->n_symbols == 0) {
-    if (debugger_get_name(c, addr, addr + 0x1000, &namebuf)) {
+    if (debugger_get_name(c, addr, addr + 0x4000, &namebuf)) {
       strcpy(symbol_buf, namebuf.function_name);
       return symbol_buf;
     }

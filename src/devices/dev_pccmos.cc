@@ -53,7 +53,7 @@ extern int verbose;
 #define	DEV_PCCMOS_LENGTH		2
 #define	PCCMOS_MC146818_FAKE_ADDR	0x1d00000000ULL
 
-#define DEV_PCCMOS_IBM_LENGTH   8
+#define DEV_PCCMOS_IBM_LENGTH   16
 #define DEV_PCCMOS_IBM_NVRAM_LENGTH 8192
 
 struct pccmos_data {

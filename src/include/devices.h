@@ -159,6 +159,10 @@ void dev_deccca_init(struct memory *mem, uint64_t baseaddr);
 int dev_decxmi_access(struct cpu *cpu, struct memory *mem, uint64_t relative_addr, unsigned char *data, size_t len, int writeflag, void *);
 void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 
+/*  dev_eagle.c */
+#define DEV_EAGLE_DMA_CHANNEL_2_COMM 0xd111a00000000ull
+extern unsigned char eagle_comm_area[8];
+
 /*  dev_fb.c:  */
 #define	DEV_FB_LENGTH		0x3c0000	/*  3c0000 to not colide with */
 						/*  turbochannel rom,         */

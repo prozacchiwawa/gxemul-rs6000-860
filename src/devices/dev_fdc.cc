@@ -41,6 +41,8 @@
 
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
+#include "diskimage.h"
 #include "interrupt.h"
 #include "machine.h"
 #include "memory.h"
@@ -80,9 +82,10 @@ struct fdc_data {
 DEVICE_ACCESS(fdc)
 {
 	struct fdc_data *d = (struct fdc_data *) extra;
-	uint64_t idata = 0;
+	uint64_t idata = 0, read_addr = 0, read_len = 0, offset = 0;
 	int oldstate = d->state;
 	size_t i;
+  unsigned char eagle_dma_2[8], sector[512];
 
 	d->state = 0;
 
@@ -162,11 +165,11 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[2] = d->seek_head;
 						d->command_bytes[1] = 0;
 						d->command_bytes[0] = 2;
-					        if (d->reg[2] & 8) {
-						        INTERRUPT_ASSERT(d->irq);
-					        }
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
 						break;
-						
+
 					case STATE_READ_NORMAL_DATA:
 						d->state = STATE_READ_NORMAL_DATA | STATE_CMD_QUEUE;
 						d->seek_track = d->command_bytes[6];
@@ -182,9 +185,37 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[2] = d->seek_head;
 						d->command_bytes[1] = MIN(d->eot_sector + 1, 19);
 						d->command_bytes[0] = 2;
-					        if (d->reg[2] & 8) {
-						        INTERRUPT_ASSERT(d->irq);
-					        }
+
+            // Ask the DMA system where to send the data in memory.
+            memcpy(eagle_dma_2, eagle_comm_area, 8);
+
+            // Read addr programmed into DMA 2
+            read_addr = eagle_dma_2[0] | (eagle_dma_2[1] << 8) | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24);
+            // Read len programmed into DMA 2
+            read_len = (eagle_dma_2[4] | (eagle_dma_2[5] << 8)) + 1;
+
+            fprintf(stderr, "[ fdc: read to %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
+            if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
+              offset = 512 * ((d->read_sector - 1) + (d->seek_head * 18) + (d->seek_track * 36));
+
+              while (read_len > 0) {
+                fprintf(stderr, "[ fdc: read diskette to addr %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
+                diskimage_access(cpu->machine, 0, DISKIMAGE_FLOPPY, 0, offset, sector, 512);
+                fprintf(stderr, "[ sector: %02x %02x %02x %02x ... %02x %02x %02x %02x ]\n", sector[0], sector[1], sector[2], sector[3], sector[508], sector[509], sector[510], sector[511]);
+                cpu->memory_rw(cpu, cpu->mem, read_addr & 0xffffff, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+
+                // XXX Check that we read it
+                cpu->memory_rw(cpu, cpu->mem, read_addr & 0xffffff, eagle_dma_2, 8, MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+                fprintf(stderr, "[ read back %02x %02x %02x %02x ... ]\n", eagle_dma_2[0], eagle_dma_2[1], eagle_dma_2[2], eagle_dma_2[3]);
+
+                read_addr += 512;
+                offset += 512;
+                read_len -= 512;
+              }
+
+              // Signal back that we wrote the read sectors.
+              eagle_comm_area[7] = 0xff;
+            }
 						break;
 					}
 				} else {
@@ -247,11 +278,12 @@ DEVICE_ACCESS(fdc)
 				d->command_result--;
 				idata = d->command_bytes[d->command_result];
 				memory_writemax64(cpu, data, len, idata);
-				fprintf(stderr, "[ fdc: command result %02x ]\n", (int)idata);
+				fprintf(stderr, "[ fdc: command result %02x (rem %02x) from %d ]\n", (int)idata, d->command_result, d->state & 0xff);
 				if (!d->command_result) {
 					if ((oldstate & 0xff) == STATE_READ_NORMAL_DATA) {
 						// Signal DMA finish
 						if (d->reg[2] & 8) {
+							fprintf(stderr, "[ fdc: interrupt for dma? ]\n");
 							INTERRUPT_ASSERT(d->irq);
 						}
 					}

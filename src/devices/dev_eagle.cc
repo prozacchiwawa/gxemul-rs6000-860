@@ -36,11 +36,13 @@
 #include "bus_pci.h"
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
 #include "interrupt.h"
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
 
+unsigned char eagle_comm_area[8];
 
 struct eagle_data {
 	struct interrupt irq;
@@ -48,6 +50,13 @@ struct eagle_data {
 	struct pci_data	*pci_data;
 
 	int stage;
+  int addr_low_high_latch;
+  int len_low_high_latch;
+
+  int fin_mask;
+
+  unsigned char dma_page[4];
+  unsigned char dma_high[4];
 };
 
 
@@ -133,6 +142,151 @@ DEVICE_ACCESS(eagle_680)
 }
 
 
+DEVICE_ACCESS(eagle_dma_20)
+{
+    struct eagle_data *d = (struct eagle_data *) extra;
+    uint64_t idata = 0;
+
+    INTERRUPT_DEASSERT(d->irq);
+
+	if (writeflag == MEM_WRITE)
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    INTERRUPT_DEASSERT(d->irq);
+
+    if (writeflag == MEM_WRITE) {
+    	idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    }
+
+    /*
+      [ APIC-4d0 write 14 -> 0 ]
+      [ eagle:dma20 write a -> 6 ]
+      [ eagle:dma20 write b -> 56 ]
+      [ memory_rw(): write data={22} paddr=0x8000040b >= physical_max; pc=0x00006df4 <out8> ]
+      [ eagle:dma20 write c -> 0 ]
+      [ eagle:dma20 write 4 -> 80 ]
+      [ eagle:dma20 write 4 -> 1f ]
+      [ eagle:dma80 write 1 -> 20 ]
+      [ memory_rw(): write data={80} paddr=0x80000481 >= physical_max; pc=0x00006df4 <out8> ]
+      [ eagle:dma20 write c -> 0 ]
+      [ eagle:dma20 write 5 -> ff ]
+      [ eagle:dma20 write 5 -> 1 ]
+      [ eagle:dma20 write a -> 2 ]
+    */
+    switch (relative_addr) {
+    case 12:
+      if (writeflag == MEM_WRITE) {
+        d->addr_low_high_latch = 0;
+        d->len_low_high_latch = 0;
+      }
+      break;
+
+    case 4:
+      if (writeflag == MEM_WRITE) {
+        if (!d->addr_low_high_latch) {
+          eagle_comm_area[0] = idata;
+        } else {
+          eagle_comm_area[1] = idata;
+        }
+        d->addr_low_high_latch = !d->addr_low_high_latch;
+      }
+      break;
+
+    case 5:
+      if (writeflag == MEM_WRITE) {
+        if (!d->len_low_high_latch) {
+          eagle_comm_area[4] = idata;
+        } else {
+          eagle_comm_area[5] = idata;
+        }
+        d->len_low_high_latch = !d->len_low_high_latch;
+      }
+      break;
+
+    case 8:
+      idata = d->fin_mask;
+      d->fin_mask = 0;
+      break;
+
+    case 10:
+      if (writeflag == MEM_WRITE) {
+        if (idata & 4) {
+          eagle_comm_area[7] = 0;
+        } else {
+          if (eagle_comm_area[7]) {
+            INTERRUPT_ASSERT(d->irq);
+          }
+        }
+      }
+      break;
+    }
+
+    debug("[ eagle:dma20 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+    return 1;
+}
+
+
+DEVICE_ACCESS(eagle_dma_80)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    d->dma_page[relative_addr] = idata;
+    if (relative_addr == 1) {
+      eagle_comm_area[2] = idata;
+    }
+  }
+
+  debug("[ eagle:dma80 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+  return 1;
+}
+
+
+DEVICE_ACCESS(eagle_comm)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    eagle_comm_area[relative_addr] = idata;
+    if (relative_addr == 7) {
+      INTERRUPT_ASSERT(d->irq);
+    }
+  } else {
+    memory_writemax64(cpu, data, len, eagle_comm_area[relative_addr]);
+  }
+
+  debug("[ eagle:comm %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+  return 1;
+}
+
+
+DEVICE_ACCESS(eagle_480)
+{
+    struct eagle_data *d = (struct eagle_data *) extra;
+    uint64_t idata = 0;
+
+    if (writeflag == MEM_WRITE) {
+      idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+      d->dma_high[relative_addr] = idata;
+      if (relative_addr == 1) {
+        eagle_comm_area[3] = idata;
+      }
+    } else {
+      idata = d->dma_high[relative_addr];
+    }
+
+    debug("[ dma high: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+    return 1;
+}
+
+
 DEVICE_ACCESS(eagle_4d0)
 {
     uint64_t idata = 0;
@@ -141,8 +295,18 @@ DEVICE_ACCESS(eagle_4d0)
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 
     debug("[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
-    
+
     return 1;
+}
+
+
+DEVICE_TICK(eagle) {
+  struct eagle_data *d = (struct eagle_data *) extra;
+  if (eagle_comm_area[7]) {
+    eagle_comm_area[7] = 0;
+    d->fin_mask = 1;
+    INTERRUPT_ASSERT(d->irq);
+  }
 }
 
 
@@ -218,7 +382,12 @@ DEVINIT(eagle)
 	    isa_portbase + BUS_PCI_ADDR, 8, dev_eagle_access, d,
 	    DM_DEFAULT, NULL);
 
-    memory_device_register(devinit->machine->memory, "eagle feature control",
+  /*  An area to allow communication with the floppy via dma 2. */
+  memory_device_register(devinit->machine->memory, "eagle",
+      DEV_EAGLE_DMA_CHANNEL_2_COMM, 8, dev_eagle_comm_access, d,
+      DM_DEFAULT, NULL);
+
+  memory_device_register(devinit->machine->memory, "eagle feature control",
         isa_portbase + 0x800, 0x30, dev_eagle_800_access, d, 
         DM_DEFAULT, NULL);
 
@@ -230,31 +399,41 @@ DEVINIT(eagle)
         isa_portbase + 0x4d0, 2, dev_eagle_4d0_access, d, 
         DM_DEFAULT, NULL);
 
-    memory_device_register(devinit->machine->memory, "legacy DMA 1 (floppy)",
-        isa_portbase + 0, 0x20, dev_eagle_4d0_access, d, 
+    memory_device_register(devinit->machine->memory, "DMA 2",
+        isa_portbase + 0, 0x20, dev_eagle_dma_20_access, d, 
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "DMA 2",
         isa_portbase + 0xc0, 0x20, dev_eagle_4d0_access, d, 
         DM_DEFAULT, NULL);
 
+    memory_device_register(devinit->machine->memory, "legacy DMA 1 (floppy) 0x80 range",
+        isa_portbase + 0x80, 4, dev_eagle_dma_80_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "DMA page address",
+        isa_portbase + 0x480, 4, dev_eagle_480_access, d,
+        DM_DEFAULT, NULL);
+
     memory_device_register(devinit->machine->memory, "8a0",
         isa_portbase + 0x8a0, 0x20, dev_eagle_4d0_access, d, 
-        DM_DEFAULT, NULL);                           
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "398",
         isa_portbase + 0x398, 8, dev_eagle_4d0_access, d, 
-        DM_DEFAULT, NULL);                           
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "audio",
         isa_portbase + 0x830, 4, dev_eagle_4d0_access, d, 
-        DM_DEFAULT, NULL);                           
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "834",
         isa_portbase + 0x834, 4, dev_eagle_4d0_access, d, 
-        DM_DEFAULT, NULL);                           
+        DM_DEFAULT, NULL);
 
-	switch (devinit->machine->machine_type) {
+    machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
+
+  switch (devinit->machine->machine_type) {
 
 	/* case MACHINE_BEBOX:
 		bus_isa_init(devinit->machine, isa_irq_base,

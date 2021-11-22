@@ -165,7 +165,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
 {
   unsigned char cur_insn[4];
   struct memory *mem;
-  int r;
+  int i, r;
 
   mem = c->mem;
 
@@ -187,9 +187,15 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
         return 0;
       }
 
-      name_length = namebuf[1] + namebuf[0] * 256;
-      if (name_length < 1 || name_length >= 64) { /* Set an arbitrary limit */
+      name_length = 0x7f & (namebuf[1] + namebuf[0] * 256);
+      if ((name_length < 1) || (name_length >= 64)) { /* Set an arbitrary limit */
         return 0;
+      }
+
+      for (i = 0; i < name_length; i++) {
+        if (!isprint(namebuf[i + sizeof(uint16_t)])) {
+          return 0;
+        }
       }
 
       name->function_end = addr + 4;

@@ -245,27 +245,6 @@ DEVICE_ACCESS(eagle_dma_80)
 }
 
 
-DEVICE_ACCESS(eagle_comm)
-{
-  struct eagle_data *d = (struct eagle_data *) extra;
-  uint64_t idata = 0;
-
-  if (writeflag == MEM_WRITE) {
-    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    eagle_comm_area[relative_addr] = idata;
-    if (relative_addr == 7) {
-      INTERRUPT_ASSERT(d->irq);
-    }
-  } else {
-    memory_writemax64(cpu, data, len, eagle_comm_area[relative_addr]);
-  }
-
-  debug("[ eagle:comm %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
-
-  return 1;
-}
-
-
 DEVICE_ACCESS(eagle_480)
 {
     struct eagle_data *d = (struct eagle_data *) extra;
@@ -303,8 +282,9 @@ DEVICE_ACCESS(eagle_4d0)
 DEVICE_TICK(eagle) {
   struct eagle_data *d = (struct eagle_data *) extra;
   if (eagle_comm_area[7]) {
+    fprintf(stderr, "[ eagle: trigger dma int ]\n");
     eagle_comm_area[7] = 0;
-    d->fin_mask = 1;
+    d->fin_mask = 2;
     INTERRUPT_ASSERT(d->irq);
   }
 }
@@ -381,11 +361,6 @@ DEVINIT(eagle)
 	memory_device_register(devinit->machine->memory, "eagle",
 	    isa_portbase + BUS_PCI_ADDR, 8, dev_eagle_access, d,
 	    DM_DEFAULT, NULL);
-
-  /*  An area to allow communication with the floppy via dma 2. */
-  memory_device_register(devinit->machine->memory, "eagle",
-      DEV_EAGLE_DMA_CHANNEL_2_COMM, 8, dev_eagle_comm_access, d,
-      DM_DEFAULT, NULL);
 
   memory_device_register(devinit->machine->memory, "eagle feature control",
         isa_portbase + 0x800, 0x30, dev_eagle_800_access, d, 

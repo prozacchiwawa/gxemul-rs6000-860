@@ -94,9 +94,11 @@ MACHINE_SETUP(prep)
 			    0, 14, 0, "s3_virge");
 		}
 
-        fb = dev_fb_init(machine, machine->memory, 0xc0000000,
-            VFB_GENERIC | VFB_REVERSE_START, 640,480, 640,480, 8, "ofb");
-
+    /*
+        fb = dev_fb_init(machine, machine->memory, 0xc4000000,
+            VFB_GENERIC | VFB_REVERSE_START, 800,600, 800,600, 8, "ofb");
+    */
+    
         bus_pci_add(machine, pci_data, machine->memory,
             0, 15, 0, "ibm_isa");
 

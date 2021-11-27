@@ -707,6 +707,7 @@ DEVICE_ACCESS(fb)
 	size_t i;
 
 #ifdef FB_DEBUG
+  fprintf(stderr, "[ fb: %s access at %08" PRIx64 " ]\n", (writeflag == MEM_WRITE) ? "write" : "read", relative_addr);
 	if (writeflag == MEM_WRITE) { if (data[0]) {
 		fatal("[ dev_fb: write  to addr=%08lx, data = ",
 		    (long)relative_addr);

@@ -56,7 +56,7 @@
 #define	MAX_RETRACE_SCANLINES	420
 #define	N_IS1_READ_THRESHOLD	50
 
-#define	GFX_ADDR_WINDOW		0x18000
+#define	GFX_ADDR_WINDOW		(2 * 1024 * 1024)
 
 #define	VGA_FB_ADDR	0x1c00000000ULL
 
@@ -140,6 +140,9 @@ struct vga_data {
 	int		update_y1;
 	int		update_x2;
 	int		update_y2;
+
+	/* S3 */
+	int             s3_cur_x, s3_cur_y, s3_pix_x, s3_pix_y, s3_draw_width;
 };
 
 
@@ -566,7 +569,7 @@ DEVICE_TICK(vga)
 			    d->update_y1, d->update_x2, d->update_y2);
 		else
 			vga_update_graphics(cpu->machine, d, d->update_x1,
-			    d->update_y1, d->update_x2, d->update_y2);
+                          d->update_y1, d->update_x2, d->update_y2);
 
 		d->palette_modified = 0;
 		d->modified = 0;
@@ -745,6 +748,128 @@ DEVICE_ACCESS(vga)
 		memory_writemax64(cpu, data, len, odata);
 
 	return 1;
+}
+
+
+DEVICE_ACCESS(vga_s3_curx) {
+	struct vga_data *d = (struct vga_data *) extra;
+	uint64_t idata = 0;
+  uint16_t written;
+
+	if (writeflag == MEM_WRITE) {
+		idata = memory_readmax64(cpu, data, len);
+    written = ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
+    d->s3_pix_x = d->s3_cur_x = written;
+    fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written);
+  }
+
+  return 1;
+}
+
+
+DEVICE_ACCESS(vga_s3_cury) {
+  struct vga_data *d = (struct vga_data *) extra;
+  uint64_t idata = 0;
+  uint16_t written;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
+    written = ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
+    d->s3_pix_y = d->s3_cur_y = written;
+    fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written);
+  }
+
+  return 1;
+}
+
+
+DEVICE_ACCESS(vga_s3_major_axis_len) {
+  struct vga_data *d = (struct vga_data *) extra;
+  uint64_t idata = 0;
+  uint16_t written;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
+    written = ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
+    d->s3_draw_width = written + 1;
+    fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written);
+  }
+
+  return 1;
+}
+
+
+DEVICE_ACCESS(vga_s3_pix_transfer) {
+  struct vga_data *d = (struct vga_data *) extra;
+  uint64_t idata = 0;
+  uint64_t target = 0;
+  unsigned char to_write[2];
+  int just_reset = 0;
+
+  /* Hack to force gfx mode */
+  if (d->cur_mode != MODE_GRAPHICS) {
+    d->cur_mode = MODE_GRAPHICS;
+    d->max_x = 800; d->max_y = 600;
+    d->graphics_mode = GRAPHICS_MODE_8BIT;
+    d->bits_per_pixel = 8;
+    d->pixel_repx = d->pixel_repy = 1;
+
+    d->gfx_mem_size = d->max_x * d->max_y /
+      (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);
+
+		CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+
+		/*  Clear screen and reset the palette:  */
+		memset(d->charcells_outputed, 0, d->charcells_size);
+		memset(d->charcells_drawn, 0, d->charcells_size);
+    memset(d->gfx_mem, 0xff, d->gfx_mem_size);
+		d->update_x1 = 0;
+		d->update_x2 = d->max_x - 1;
+		d->update_y1 = 0;
+		d->update_y2 = d->max_y - 1;
+		d->modified = 1;
+		reset_palette(d, 0);
+		register_reset(d);
+
+    d->fb->rgb_palette[255 * 3 + 0] = 0xff;
+    d->fb->rgb_palette[255 * 3 + 1] = 0xff;
+    d->fb->rgb_palette[255 * 3 + 2] = 0xff;
+
+    just_reset = 1;
+  }
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
+
+    to_write[0] = idata;
+    to_write[1] = idata >> 8;
+
+    /* Compute write target */
+    if (!just_reset) {
+      d->update_x1 = d->s3_pix_x;
+      d->update_x2 = d->s3_pix_x + 2;
+      d->update_y1 = d->s3_pix_y;
+      d->update_y2 = d->s3_pix_y + 1;
+    }
+
+    target = (d->s3_pix_y * 800) + d->s3_pix_x;
+    d->s3_pix_x += 2;
+    if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {
+      d->s3_pix_x = d->s3_cur_x;
+      d->s3_pix_y -= 1;
+    }
+
+    if (target < d->gfx_mem_size - 1) {
+      memcpy(d->gfx_mem + target, to_write, 2);
+      fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, (int)idata);
+			vga_update_graphics(cpu->machine, d, d->update_x1,
+                          d->update_y1, d->update_x2, d->update_y2);
+    } else {
+      fprintf(stderr, "[ vga write out of bounds (%d,%d) %08" PRIx64 " = %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, (int)idata);
+    }
+  }
+
+  return 1;
 }
 
 
@@ -1201,8 +1326,8 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base;
-	d->max_x          = 80;
-	d->max_y          = 25;
+	d->max_x          = 100;
+	d->max_y          = 38;
 	d->cur_mode       = MODE_CHARCELL;
 	d->crtc_reg[0xff] = 0x03;
 	d->charcells_size = 0x8000;
@@ -1245,12 +1370,24 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	    allocsize, dev_vga_access, d, DM_DYNTRANS_OK |
 	    DM_DYNTRANS_WRITE_OK | DM_READS_HAVE_NO_SIDE_EFFECTS,
 	    d->charcells);
-	memory_device_register(mem, "vga_gfx", videomem_base, GFX_ADDR_WINDOW,
+	*/
+	memory_device_register(mem, "vga_gfx", 0xc4000000 /*videomem_base*/, GFX_ADDR_WINDOW,
 	    dev_vga_graphics_access, d, DM_DEFAULT |
 	    DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
-	*/
 	memory_device_register(mem, "vga_ctrl", control_base,
 	    32, dev_vga_ctrl_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_curx", 0x800086e8, 4,
+	    dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_cury", 0x800082e8, 4,
+	    dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_major_axis_len", 0x800096e8, 4,
+	    dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_pix_transfer", 0x8000e2e8, 4,
+	    dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
 
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
 	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "VGA");

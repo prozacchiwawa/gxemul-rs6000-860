@@ -595,7 +595,7 @@ DEVICE_ACCESS(vga_graphics)
 
 	fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len);
 
-	if (relative_addr + len >= GFX_ADDR_WINDOW)
+	if (relative_addr + len >= d->gfx_mem_size)
 		return 0;
 
 	if (d->cur_mode != MODE_GRAPHICS)
@@ -751,6 +751,41 @@ DEVICE_ACCESS(vga)
 }
 
 
+void vga_hack_start(struct vga_data *d) {
+  if (d->cur_mode != MODE_GRAPHICS) {
+    d->cur_mode = MODE_GRAPHICS;
+    d->max_x = 800; d->max_y = 600;
+    d->graphics_mode = GRAPHICS_MODE_8BIT;
+    d->bits_per_pixel = 8;
+    d->pixel_repx = d->pixel_repy = 1;
+
+    d->gfx_mem_size = d->max_x * d->max_y /
+      (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);
+
+    CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+
+    /*  Clear screen and reset the palette:  */
+    memset(d->charcells_outputed, 0, d->charcells_size);
+    memset(d->charcells_drawn, 0, d->charcells_size);
+    memset(d->gfx_mem, 0xff, d->gfx_mem_size);
+
+    reset_palette(d, 0);
+    register_reset(d);
+  }
+}
+
+
+DEVICE_ACCESS(vga_s3_control) {
+	struct vga_data *d = (struct vga_data *) extra;
+
+  if (writeflag != MEM_WRITE) {
+    memory_writemax64(cpu, data, len, 0);
+  }
+
+  return 1;
+}
+
+
 DEVICE_ACCESS(vga_s3_curx) {
 	struct vga_data *d = (struct vga_data *) extra;
 	uint64_t idata = 0;
@@ -804,39 +839,7 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
   uint64_t idata = 0;
   uint64_t target = 0;
   unsigned char to_write[2];
-  int just_reset = 0;
-
-  /* Hack to force gfx mode */
-  if (d->cur_mode != MODE_GRAPHICS) {
-    d->cur_mode = MODE_GRAPHICS;
-    d->max_x = 800; d->max_y = 600;
-    d->graphics_mode = GRAPHICS_MODE_8BIT;
-    d->bits_per_pixel = 8;
-    d->pixel_repx = d->pixel_repy = 1;
-
-    d->gfx_mem_size = d->max_x * d->max_y /
-      (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);
-
-		CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
-
-		/*  Clear screen and reset the palette:  */
-		memset(d->charcells_outputed, 0, d->charcells_size);
-		memset(d->charcells_drawn, 0, d->charcells_size);
-    memset(d->gfx_mem, 0xff, d->gfx_mem_size);
-		d->update_x1 = 0;
-		d->update_x2 = d->max_x - 1;
-		d->update_y1 = 0;
-		d->update_y2 = d->max_y - 1;
-		d->modified = 1;
-		reset_palette(d, 0);
-		register_reset(d);
-
-    d->fb->rgb_palette[255 * 3 + 0] = 0xff;
-    d->fb->rgb_palette[255 * 3 + 1] = 0xff;
-    d->fb->rgb_palette[255 * 3 + 2] = 0xff;
-
-    just_reset = 1;
-  }
+  int write_len = sizeof(to_write);
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len);
@@ -845,22 +848,26 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
     to_write[1] = idata >> 8;
 
     /* Compute write target */
-    if (!just_reset) {
-      d->update_x1 = d->s3_pix_x;
-      d->update_x2 = d->s3_pix_x + 2;
-      d->update_y1 = d->s3_pix_y;
-      d->update_y2 = d->s3_pix_y + 1;
+    d->update_x1 = d->s3_pix_x;
+    d->update_x2 = d->s3_pix_x + 2;
+    d->update_y1 = d->s3_pix_y;
+    d->update_y2 = d->s3_pix_y + 1;
+    d->modified = 1;
+
+    if (d->s3_pix_x == d->s3_cur_x + d->s3_draw_width - 1) {
+      write_len = 1;
     }
 
     target = (d->s3_pix_y * 800) + d->s3_pix_x;
     d->s3_pix_x += 2;
+
     if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {
       d->s3_pix_x = d->s3_cur_x;
       d->s3_pix_y -= 1;
     }
 
     if (target < d->gfx_mem_size - 1) {
-      memcpy(d->gfx_mem + target, to_write, 2);
+      memcpy(d->gfx_mem + target, to_write, write_len);
       fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, (int)idata);
 			vga_update_graphics(cpu->machine, d, d->update_x1,
                           d->update_y1, d->update_x2, d->update_y2);
@@ -1092,6 +1099,8 @@ DEVICE_ACCESS(vga_ctrl)
 	size_t i;
 	uint64_t idata = 0, odata = 0;
 
+  vga_hack_start(d);
+
 	for (i=0; i<len; i++) {
 		idata = data[i];
 
@@ -1173,7 +1182,6 @@ DEVICE_ACCESS(vga_ctrl)
 				d->palette_write_index = idata;
 				d->palette_write_subindex = 0;
 
-				/*  TODO: Is this correct?  */
 				d->palette_read_index = idata;
 				d->palette_read_subindex = 0;
 			} else {
@@ -1184,6 +1192,7 @@ DEVICE_ACCESS(vga_ctrl)
 			break;
 		case VGA_DAC_DATA:			/*  0x09  */
 			if (writeflag == MEM_WRITE) {
+        fprintf(stderr, "[ vga: writing dac data (index %d sub %d) ]\n", d->palette_write_index, d->palette_write_subindex);
 				int new_ = (idata & 63) << 2;
 				int old = d->fb->rgb_palette[d->
 				    palette_write_index*3+d->
@@ -1376,6 +1385,9 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	    DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
 	memory_device_register(mem, "vga_ctrl", control_base,
 	    32, dev_vga_ctrl_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_control", 0x80009ae8, 4,
+      dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_curx", 0x800086e8, 4,
 	    dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);

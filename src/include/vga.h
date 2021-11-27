@@ -85,6 +85,8 @@
 #define	   VGA_CRTC_CURSOR_LOCATION_HIGH   0x0e
 #define	   VGA_CRTC_CURSOR_LOCATION_LOW    0x0f
 
+#define VGA_S3_DAC_INDEX      0x18  /*  W  */
+#define VGA_S3_DAC_DATA       0x19  /*  W  */
 #define	VGA_INPUT_STATUS_1		0x1A	/*  R  */
 #define	   VGA_IS1_DISPLAY_VRETRACE	   0x08
 #define	   VGA_IS1_DISPLAY_DISPLAY_DISABLE 0x01

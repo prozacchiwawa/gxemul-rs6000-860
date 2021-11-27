@@ -438,17 +438,18 @@ PCIINIT(igsfb)
 #define PCI_VENDOR_S3			0x5333
 #define PCI_PRODUCT_S3_VIRGE		0x5631
 #define	PCI_PRODUCT_S3_VIRGE_DX		0x8a01
+#define PCI_PRODUCT_S3_AURORA           0x8812
 
 PCIINIT(s3_virge)
 {
 	PCI_SET_DATA(PCI_ID_REG,
-	    PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_VIRGE_DX));
+	    PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA /*PCI_PRODUCT_S3_VIRGE_DX*/));
 
 	PCI_SET_DATA(PCI_CLASS_REG,
 	    PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
 	    PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
-	dev_vga_init(machine, mem, pd->pcibus->isa_membase + 0xa0000,
+	dev_vga_init(machine, mem, 0xc0000000 /* pd->pcibus->isa_membase + 0xa0000 */,
 	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 

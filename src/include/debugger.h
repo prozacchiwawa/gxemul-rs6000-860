@@ -38,7 +38,7 @@ struct machine;
 
 struct ibm_name {
   uint64_t function_end;
-  char function_name[64];
+  char function_name[128];
 };
 
 /*  debugger.c:  */

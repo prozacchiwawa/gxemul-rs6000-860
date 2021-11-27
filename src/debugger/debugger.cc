@@ -163,9 +163,11 @@ void debugger_activate(int x)
  */
 int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name)
 {
+  uint64_t orig_addr = addr;
   unsigned char cur_insn[4];
   struct memory *mem;
   int i, r;
+  char *fnend;
 
   mem = c->mem;
 
@@ -201,6 +203,8 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
       name->function_end = addr + 4;
       memset(name->function_name, 0, sizeof(name->function_name));
       memcpy(name->function_name, namebuf + sizeof(uint16_t), name_length);
+      fnend = name->function_name + name_length;
+      sprintf(fnend, " (%08" PRIx64")", orig_addr);
 
       return 1;
     }

@@ -159,7 +159,7 @@ DEVICE_ACCESS(ns16550)
 
 		/*  Read/write of data:  */
 		if (writeflag == MEM_WRITE) {
-			fprintf(stderr, "%c", (int)(idata & 0xff));
+			fprintf(stderr, "%c", (int)idata);
 			if (d->reg[com_mcr] & MCR_LOOPBACK)
 				console_makeavail(d->console_handle, idata);
 			else

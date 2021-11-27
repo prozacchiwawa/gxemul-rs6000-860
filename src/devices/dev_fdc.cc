@@ -56,7 +56,8 @@
 
 #define STATE_CMD_BYTES 0x8000
 #define STATE_CMD_QUEUE 0x4000
-#define STATE_CMD_BUSY 0x2000
+#define STATE_CMD_DMA 0x2000
+#define STATE_CMD_BUSY 0x1000
 #define STATE_EMPTY 0
 #define STATE_VERSION 1
 #define STATE_SPECIFY 0x03
@@ -93,7 +94,6 @@ DEVICE_ACCESS(fdc)
 	idata = memory_readmax64(cpu, data, len);
 
 	if (writeflag == MEM_WRITE) {
-		d->status_read = 0;
 		d->reg[relative_addr] = (uint8_t)idata;
 	}
 
@@ -107,12 +107,12 @@ DEVICE_ACCESS(fdc)
 			if (oldstate & STATE_CMD_QUEUE) {
 				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
-				idata = 0x80 | ((oldstate & STATE_CMD_BUSY) ? 0x10 : ((oldstate & STATE_CMD_BYTES) ? 0x40 : 0));
+				idata = 0x80 | ((oldstate & STATE_CMD_BUSY) ? 0x10 : ((oldstate & STATE_CMD_BYTES) ? 0x40 : 0)) | ((oldstate & STATE_CMD_DMA) ? 0x20 : 0);
 			}
-			d->state = oldstate & ~STATE_CMD_BUSY;
-			if (!d->status_read || d->state != oldstate) {
-				d->status_read = 1;
+			d->state = oldstate & ~(STATE_CMD_BUSY | STATE_CMD_DMA);
+			if (d->status_read != (int)idata) {
 				fprintf(stderr, "[ fdc: Status read %02x ]\n", (int)idata);
+        d->status_read = idata;
 			}
 			memory_writemax64(cpu, data, len, idata);
 		}
@@ -136,16 +136,16 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[0] = d->seek_track;
 						d->command_result = 2;
 						d->state = STATE_SEEK | STATE_CMD_QUEUE;
-					        if (d->reg[2] & 8) {
-						        INTERRUPT_ASSERT(d->irq);
-					        }
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
 						break;
 
 					case STATE_RECAL:
 						d->state = STATE_RECAL;
-					        if (d->reg[2] & 8) {
-						        INTERRUPT_ASSERT(d->irq);
-					        }
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
 						break;
 
 					case STATE_SPECIFY:
@@ -172,7 +172,7 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_READ_NORMAL_DATA:
-						d->state = STATE_READ_NORMAL_DATA | STATE_CMD_QUEUE;
+						d->state = STATE_READ_NORMAL_DATA | STATE_CMD_QUEUE | STATE_CMD_DMA;
 						d->seek_track = d->command_bytes[6];
 						d->seek_head = d->command_bytes[5];
 						d->read_sector = d->command_bytes[4];
@@ -184,11 +184,12 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
 						d->command_bytes[2] = d->seek_head;
-						d->command_bytes[1] = MIN(d->eot_sector + 1, 19);
+						d->command_bytes[1] = d->read_sector;
 						d->command_bytes[0] = 2;
 
             // Ask the DMA system where to send the data in memory.
             memcpy(eagle_dma_2, eagle_comm_area, 8);
+            eagle_comm_area[7] = 1;
 
             // Read addr programmed into DMA 2
             read_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8) | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0xffffff;
@@ -203,6 +204,16 @@ DEVICE_ACCESS(fdc)
                 fprintf(stderr, "[ fdc: read diskette to addr %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
                 diskimage_access(cpu->machine, 0, DISKIMAGE_FLOPPY, 0, offset, sector, 512);
                 fprintf(stderr, "[ sector: %02x %02x %02x %02x ... %02x %02x %02x %02x ]\n", sector[0], sector[1], sector[2], sector[3], sector[508], sector[509], sector[510], sector[511]);
+
+                for (i = 0; i < 128; i++) {
+                  unsigned char buf[4];
+                  buf[0] = sector[i * 4 + 3];
+                  buf[1] = sector[i * 4 + 2];
+                  buf[2] = sector[i * 4 + 1];
+                  buf[3] = sector[i * 4 + 0];
+                  memcpy(sector + i * 4, buf, 4);
+                }
+
                 cpu->memory_rw(cpu, cpu->mem, read_addr, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
 
                 // XXX Check that we read it
@@ -214,8 +225,6 @@ DEVICE_ACCESS(fdc)
                 read_len -= 512;
               }
             }
-
-            eagle_comm_area[7] = 1;
             break;
 					}
 				} else {
@@ -243,9 +252,6 @@ DEVICE_ACCESS(fdc)
 					d->command_bytes[1] = 0x20;
 					d->command_bytes[0] = 0;
 					d->state = STATE_VERSION | STATE_CMD_QUEUE;
-					if (d->reg[2] & 8) {
-						INTERRUPT_ASSERT(d->irq);
-					}
 					break;
 
 				case STATE_SEEK:
@@ -280,7 +286,11 @@ DEVICE_ACCESS(fdc)
 				memory_writemax64(cpu, data, len, idata);
 				fprintf(stderr, "[ fdc: command result %02x (rem %02x) from %d ]\n", (int)idata, d->command_result, d->state & 0xff);
 				if (!d->command_result) {
-					d->state = STATE_EMPTY;
+          if ((oldstate & 0xff) == STATE_READ_NORMAL_DATA) {
+            d->state = STATE_READ_NORMAL_DATA | STATE_CMD_DMA | STATE_CMD_BUSY;
+          } else {
+            d->state = STATE_EMPTY;
+          }
 				} else {
 					d->state = oldstate;
 				}
@@ -292,13 +302,13 @@ DEVICE_ACCESS(fdc)
 
 	case 0x02:
 		if (writeflag == MEM_WRITE) {
-		    fprintf(stderr, "[ fdc: DOR write %02x ]\n", (int)idata);
-		    d->command_size = 0;
-		    if (idata & 4) {
-			d->state = STATE_EMPTY;
-		    } else {
-			d->state = oldstate;
-		    }
+      fprintf(stderr, "[ fdc: DOR write %02x ]\n", (int)idata);
+      d->command_size = 0;
+      if (idata & 4) {
+        d->state = STATE_EMPTY;
+      } else {
+        d->state = oldstate;
+      }
 		} else {
 			d->state = oldstate;
 		}
@@ -330,10 +340,10 @@ DEVICE_ACCESS(fdc_3f7)
 	idata = memory_readmax64(cpu, data, len);
 
 	if (writeflag == MEM_WRITE) {
-            fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
-            if (d->reg[2] & 8) {
-		INTERRUPT_ASSERT(d->irq);
-	    }
+    fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
+    if (d->reg[2] & 8) {
+      INTERRUPT_ASSERT(d->irq);
+    }
 	} else {
 	    idata = 3;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);

@@ -116,7 +116,7 @@ DEVICE_ACCESS(eagle_800)
 	//       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
 	//       +--------------------------------------- Reserved
     case 0x0c:
-        if (writeflag == MEM_READ) odata = 0x70;
+        if (writeflag == MEM_READ) odata = 0x10;
         break;
     }
 
@@ -147,11 +147,8 @@ DEVICE_ACCESS(eagle_dma_20)
     struct eagle_data *d = (struct eagle_data *) extra;
     uint64_t idata = 0;
 
-    INTERRUPT_DEASSERT(d->irq);
-
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    INTERRUPT_DEASSERT(d->irq);
 
     if (writeflag == MEM_WRITE) {
     	idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
@@ -203,6 +200,7 @@ DEVICE_ACCESS(eagle_dma_20)
       break;
 
     case 8:
+      INTERRUPT_DEASSERT(d->irq);
       idata = d->fin_mask;
       d->fin_mask = 0;
       break;
@@ -284,8 +282,8 @@ DEVICE_TICK(eagle) {
   if (eagle_comm_area[7]) {
     fprintf(stderr, "[ eagle: trigger dma int ]\n");
     eagle_comm_area[7] = 0;
-    d->fin_mask = 2;
     INTERRUPT_ASSERT(d->irq);
+    d->fin_mask = 0x40;
   }
 }
 

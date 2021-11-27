@@ -96,7 +96,7 @@ struct pckbc_data {
 	unsigned	key_queue[2][MAX_8042_QUEUELEN];
 	int		head[2], tail[2];
 
-  int mouse_init;
+  int mouse_cmd;
 };
 
 #define	STATE_NORMAL			0
@@ -525,22 +525,53 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	}
 
 	if (d->state == STATE_WAITING_FOR_AUX) {
-		debug("[ pckbc: (port %i) received aux data: "
-		    "0x%02x ]\n", port_nr, cmd);
-    if (!d->mouse_init) {
-      pckbc_add_code(d, 0xfa, port_nr);
+    if (d->mouse_cmd) {
       pckbc_add_code(d, 0xaa, port_nr);
+      d->mouse_cmd = 0;
     } else {
-      /*  Echo back.  */
-      pckbc_add_code(d, cmd, port_nr);
+      debug("[ pckbc: (port %i) received aux data: "
+            "0x%02x ]\n", port_nr, cmd);
+      switch (cmd) {
+      case 0xff:
+        d->mouse_cmd = 0;
+        pckbc_add_code(d, 0xfa, port_nr);
+        pckbc_add_code(d, 0xaa, port_nr);
+        break;
+
+      case 0xe2:
+        pckbc_add_code(d, 0xaa, port_nr);
+        break;
+        
+      case 0xe6:
+        pckbc_add_code(d, 0xaa, port_nr);
+        break;
+        
+      case 0xe8:
+        pckbc_add_code(d, 0xaa, port_nr);
+        d->mouse_cmd = 0xe8;
+        break;
+        
+      case 0xe9:
+        pckbc_add_code(d, 0xaa, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        break;
+        
+      case 0xeb:
+        pckbc_add_code(d, 0xaa, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 0, port_nr);
+        break;
+      }
     }
+
 		d->state = STATE_NORMAL;
 		return;
 	}
 
 	if (d->state == STATE_WAITING_FOR_AUX_OUT) {
-		debug("[ pckbc: (port %i) received aux out data: "
-		    "0x%02x ]\n", port_nr, cmd);
 		/*  Echo back.  */
 		pckbc_add_code(d, cmd, port_nr);
 		d->state = STATE_NORMAL;
@@ -660,7 +691,7 @@ DEVICE_ACCESS(pckbc)
 		if (relative_addr != 0 && relative_addr != 4) {
 			/*  TODO (port 0x61)  */
 			odata = 0x21;
-{
+      {
 static int x = 0;
 x++;
 if (x&1)
@@ -895,8 +926,9 @@ if (x&1)
 		    (odata << 32) | (odata << 40) | (odata << 48) |
 		    (odata << 56);
 
-	if (writeflag == MEM_READ)
+	if (writeflag == MEM_READ) {
 		memory_writemax64(cpu, data, len, odata);
+  }
 
 	dev_pckbc_tick(cpu, d);
 

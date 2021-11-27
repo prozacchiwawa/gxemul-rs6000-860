@@ -95,6 +95,8 @@ struct pckbc_data {
 
 	unsigned	key_queue[2][MAX_8042_QUEUELEN];
 	int		head[2], tail[2];
+
+  int mouse_init;
 };
 
 #define	STATE_NORMAL			0
@@ -525,8 +527,13 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	if (d->state == STATE_WAITING_FOR_AUX) {
 		debug("[ pckbc: (port %i) received aux data: "
 		    "0x%02x ]\n", port_nr, cmd);
-		/*  Echo back.  */
-		pckbc_add_code(d, cmd, port_nr);
+    if (!d->mouse_init) {
+      pckbc_add_code(d, 0xfa, port_nr);
+      pckbc_add_code(d, 0xaa, port_nr);
+    } else {
+      /*  Echo back.  */
+      pckbc_add_code(d, cmd, port_nr);
+    }
 		d->state = STATE_NORMAL;
 		return;
 	}
@@ -764,6 +771,7 @@ if (x&1)
 				d->cmdbyte &= ~KC8_MDISABLE;
 				break;
 			case 0xa9:	/*  test auxiliary port  */
+        odata = 0;
 				debug("[ pckbc: CONTROL 0xa9, TODO ]\n");
 				break;
 			case 0xaa:	/*  keyboard self-test  */

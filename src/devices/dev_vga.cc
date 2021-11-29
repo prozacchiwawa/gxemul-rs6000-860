@@ -49,6 +49,13 @@
 #include "fonts/font8x10.cc"
 #include "fonts/font8x16.cc"
 
+#define VGA_DEBUG 0
+
+#if VGA_DEBUG
+#define L(x) x
+#else
+#define L(x) do { } while(0)
+#endif
 
 /*  For videomem -> framebuffer updates:  */
 #define	VGA_TICK_SHIFT		18
@@ -614,7 +621,7 @@ DEVICE_ACCESS(vga_graphics)
 	int j, x=0, y=0, x2=0, y2=0, modified = 0;
 	size_t i;
 
-	fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len);
+	L(fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len));
 
 	if (relative_addr + len >= d->gfx_mem_size)
 		return 0;
@@ -817,7 +824,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_le
   d->modified = 1;
 
   if (d->s3_rem_height == 0) {
-    fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]);
+    L(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
     return;
   }
 
@@ -859,14 +866,14 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_le
       break;
 
     default:
-      fprintf(stderr, "[ vga copy pixel: unknown mix type %02x ]\n", d->s3_fg_color_mix);
+      L(fprintf(stderr, "[ vga copy pixel: unknown mix type %02x ]\n", d->s3_fg_color_mix));
       break;
     }
 
     if (!nowrite) {
       d->gfx_mem[target] = pixel;
     }
-    fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix);
+    L(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix));
   }
 
   if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {
@@ -893,7 +900,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     break;
 
   default:
-    fprintf(stderr, "[ s3: unknown color source %d ]\n", color_source);
+    L(fprintf(stderr, "[ s3: unknown color source %d ]\n", color_source));
     break;
   }
 
@@ -915,7 +922,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     memory_writemax64(cpu, data, len, 0);
   } else {
 		written = get_le_16(memory_readmax64(cpu, data, len));
-    fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written);
+    L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
     switch (written >> 13) {
     case 0: // Nop
       break;
@@ -926,13 +933,13 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
       d->s3_v_dir = -1;
 
       if (!(written & 0x100)) {
-        fprintf(stderr, "[ s3 fillrect ]\n");
+        L(fprintf(stderr, "[ s3 fillrect ]\n"));
         fillrect(cpu, d, written & 0x1fff);
       } // Otherwise accept pixel fill below.
       break;
 
     default:
-      fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written);
+      L(fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written));
     }
   }
 
@@ -947,7 +954,7 @@ DEVICE_ACCESS(vga_s3_curx) {
   if (writeflag == MEM_WRITE) {
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_cur_x = written;
-    fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written);
+    L(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
   }
 
   return 1;
@@ -961,7 +968,7 @@ DEVICE_ACCESS(vga_s3_cury) {
   if (writeflag == MEM_WRITE) {
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_cur_y = written;
-    fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written);
+    L(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
   }
 
   return 1;
@@ -974,7 +981,7 @@ DEVICE_ACCESS(vga_s3_bg_color) {
 
   if (writeflag == MEM_WRITE) {
     d->s3_bg_color = get_le_16(memory_readmax64(cpu, data, len));
-    fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written);
+    L(fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written));
   }
 
   return 1;
@@ -987,7 +994,7 @@ DEVICE_ACCESS(vga_s3_fg_color) {
 
   if (writeflag == MEM_WRITE) {
     d->s3_fg_color = get_le_16(memory_readmax64(cpu, data, len));
-    fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written);
+    L(fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written));
   }
 
   return 1;
@@ -1000,7 +1007,7 @@ DEVICE_ACCESS(vga_s3_fg_color_mix) {
 
   if (writeflag == MEM_WRITE) {
     d->s3_fg_color_mix = get_le_16(memory_readmax64(cpu, data, len));
-    fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written);
+    L(fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
   }
 
   return 1;
@@ -1014,7 +1021,7 @@ DEVICE_ACCESS(vga_s3_major_axis_len) {
   if (writeflag == MEM_WRITE) {
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_draw_width = written + 1;
-    fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written);
+    L(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
   }
 
   return 1;
@@ -1027,7 +1034,7 @@ DEVICE_ACCESS(vga_s3_color_compare) {
 
   if (writeflag == MEM_WRITE) {
     d->s3_color_compare = get_le_32(memory_readmax64(cpu, data, len));
-    fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare);
+    L(fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare));
   }
 
   return 1;
@@ -1046,7 +1053,7 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
     write_index = written >> 12;
     d->bee8_regs[write_index] = written & 0xfff;
 
-    fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff));
+    L(fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff)));
 
     switch (write_index) {
     case 0:
@@ -1395,7 +1402,7 @@ DEVICE_ACCESS(vga_ctrl)
 			break;
 		case VGA_DAC_DATA:			/*  0x09  */
 			if (writeflag == MEM_WRITE) {
-        fprintf(stderr, "[ vga: writing dac data (index %d sub %d) ]\n", d->palette_write_index, d->palette_write_subindex);
+        L(fprintf(stderr, "[ vga: writing dac data (index %d sub %d) ]\n", d->palette_write_index, d->palette_write_subindex));
 				int new_ = (idata & 63) << 2;
 				int old = d->fb->rgb_palette[d->
 				    palette_write_index*3+d->
@@ -1497,7 +1504,7 @@ DEVICE_ACCESS(vga_ctrl)
 				if ((d->current_retrace_line & 7) == 0)
 					odata = VGA_IS1_DISPLAY_VRETRACE | VGA_IS1_DISPLAY_DISPLAY_DISABLE;
 			}
-			fprintf(stderr, "input status 1: %08" PRIx64"\n", odata);
+			L(fprintf(stderr, "input status 1: %08" PRIx64"\n", odata));
 			break;
 
 		default:

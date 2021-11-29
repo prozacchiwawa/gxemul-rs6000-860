@@ -115,6 +115,7 @@ struct pckbc_data {
 #define	STATE_WAITING_FOR_AUX_OUT	7
 #define	STATE_LDOUTPUT			8
 #define	STATE_RDOUTPUT			9
+#define STATE_WAITING_FOR_LEDS 10
 
 
 /*
@@ -457,7 +458,11 @@ DEVICE_TICK(pckbc)
       }
       d->flex_id++;
       if (d->flex_id == 3) {
+        fprintf(stderr, "[ pckbc: put scancode %02x ]\n", d->flex_code);
         pckbc_add_code(d, d->flex_code, 0);
+        if (d->flex_code) {
+          pckbc_add_code(d, d->flex_code | 0x80, 0);
+        }
         d->flex_id = -1;
         d->flex_code = 0;
       }
@@ -538,6 +543,12 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	if (d->type == PCKBC_8242)
 		cmd = d->reg[PS2_TXBUF];
 
+  if (d->state == STATE_WAITING_FOR_LEDS) {
+    debug("[ pckbc: leds: %x ]\n", cmd);
+    d->state = STATE_NORMAL;
+    return;
+  }
+
 	if (d->state == STATE_WAITING_FOR_TRANSLTABLE) {
 		debug("[ pckbc: (port %i) switching to translation table "
 		    "0x%02x ]\n", port_nr, cmd);
@@ -574,15 +585,14 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
     port_nr = 1;
     debug("[ pckbc: (port %i) sending to mouse: "
           "0x%02x cmd %02x ]\n", port_nr, cmd, d->mouse_cmd);
-    if (d->mouse_cmd) {
-      pckbc_add_code(d, 0xfa, port_nr);
-      d->mouse_cmd = 0;
-    } else {
+    switch (d->mouse_cmd) {
+    case 0:
       switch (cmd) {
       case 0xff:
         d->mouse_cmd = 0;
         pckbc_add_code(d, 0xfa, port_nr);
         pckbc_add_code(d, 0xaa, port_nr);
+        pckbc_add_code(d, 0, port_nr);
         break;
 
       case 0xf2:
@@ -614,11 +624,30 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 
       case 0xeb:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 8, port_nr);
         pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;
       }
+
+    case 0xe2:
+      switch (cmd) {
+      case 0x40:
+        d->mouse_cmd = 0;
+        pckbc_add_code(d, 0, port_nr);
+        break;
+
+      default:
+        d->mouse_cmd = 0;
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+      }
+      break;
+
+    default:
+      pckbc_add_code(d, 0xfa, port_nr);
+      d->mouse_cmd = 0;
+      break;
     }
 
 		d->state = STATE_NORMAL;
@@ -644,6 +673,7 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 
 	case KBC_MODEIND:	/*  Set LEDs  */
 		/*  Just ACK, no LEDs are actually set.  */
+    d->state = STATE_WAITING_FOR_LEDS;
 		pckbc_add_code(d, KBR_ACK, port_nr);
 		break;
 
@@ -781,7 +811,7 @@ if (x&1)
 				d->state = STATE_NORMAL;
 				break;
 
-			default:if (d->head[1] != d->tail[1]) {
+			default: if (d->head[1] != d->tail[1]) {
           odata = pckbc_get_code(d, 1);
         } else if (d->head[0] != d->tail[0]) {
 					odata = pckbc_get_code(d, 0);
@@ -824,7 +854,8 @@ if (x&1)
 
 			/*  "Data in buffer" bit  */
       if (d->head[1] != d->tail[1]) {
-        odata |= KBS_DIB | 0x21;
+        fprintf(stderr, "[ pckbc: output ring %d-%d ]\n", d->head[1], d->tail[1]);
+        odata |= KBS_DIB | 8;
       } else if (d->head[0] != d->tail[0] ||
                  d->state == STATE_RDCMDBYTE ||
                  d->state == STATE_RDOUTPUT) {
@@ -835,8 +866,8 @@ if (x&1)
 				odata |= KBS_OCMD;
 
 			odata |= KBS_NOSEC;
-			/*  debug("[ pckbc: read from CTL status port: "
-			    "0x%02x ]\n", (int)odata);  */
+			debug("[ pckbc: read from CTL status port: "
+            "0x%02x ]\n", (int)odata);
 		} else {
 			debug("[ pckbc: write to CTL:");
 			for (i=0; i<len; i++)

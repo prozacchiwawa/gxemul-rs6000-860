@@ -126,22 +126,25 @@ DEVICE_ACCESS(fdc)
 				d->command_bytes[d->command_size] = idata;
 				if (!d->command_size) {
 					int command = oldstate & 0xff;
+          int low16_dma_addr;
+
 					oldstate = (oldstate & ~STATE_CMD_BYTES) | STATE_CMD_BUSY;
 					fprintf(stderr, "execute command %02x\n", oldstate & 0xff);
 					switch (command) {
 					case STATE_SEEK:
 						d->seek_head = d->command_bytes[1] >> 1;
 						d->seek_track = d->command_bytes[0];
-						d->command_bytes[1] = 0x20;
-						d->command_bytes[0] = d->seek_track;
-						d->command_result = 2;
-						d->state = STATE_SEEK | STATE_CMD_QUEUE;
+            d->command_bytes[1] = 0x20;
+            d->command_bytes[0] = d->seek_track;
+            d->command_result = 2;
+            d->state = STATE_SEEK | STATE_CMD_QUEUE;
             if (d->reg[2] & 8) {
               INTERRUPT_ASSERT(d->irq);
             }
 						break;
 
 					case STATE_RECAL:
+            d->command_result = 0;
 						d->state = STATE_RECAL;
             if (d->reg[2] & 8) {
               INTERRUPT_ASSERT(d->irq);
@@ -149,10 +152,12 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_SPECIFY:
+            d->command_result = 0;
 						d->state = STATE_EMPTY;
 						break;
 
 					case STATE_CONFIGURE:
+            d->command_result = 0;
 						d->state = STATE_EMPTY;
 						break;
 
@@ -192,7 +197,10 @@ DEVICE_ACCESS(fdc)
             eagle_comm_area[7] = 1;
 
             // Read addr programmed into DMA 2
-            read_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8) | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0xffffff;
+            // Note: lower 16 bits are shifted left 1 because dma is in
+            // 16 bit chunks.
+            low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8)) << 1;
+            read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0xffffff;
             // Read len programmed into DMA 2
             read_len = (eagle_dma_2[4] | (eagle_dma_2[5] << 8)) + 1;
 

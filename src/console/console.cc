@@ -386,6 +386,10 @@ int console_readchar(int handle)
 {
 	int ch;
 
+	if (console_handles[handle].using_xterm ==
+	    USING_XTERM_BUT_NOT_YET_OPEN)
+		start_xterm(handle);
+
 	if (!console_charavail(handle))
 		return -1;
 

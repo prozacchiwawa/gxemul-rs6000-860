@@ -3711,6 +3711,8 @@ X(to_be_translated)
 				switch (xo) {
 				case PPC_31_ADD:
 					ic->f = instr(add_dot); break;
+				case PPC_31_ADDC: // XXX Check correctness
+					ic->f = instr(add_dot); break;
 				case PPC_31_ADDE:
 					ic->f = instr(adde_dot); break;
 				case PPC_31_ADDME:

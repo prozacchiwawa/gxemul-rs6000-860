@@ -125,6 +125,7 @@ struct pckbc_data {
  */
 void pckbc_add_code(struct pckbc_data *d, int code, int port)
 {
+  fprintf(stderr, "[ pckbc: %s enqueue %d ]\n", port ? "mouse" : "kbd", code);
 	/*  Add at the head, read at the tail:  */
 	d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
 	if (d->head[port] == d->tail[port])
@@ -244,7 +245,7 @@ static void ascii_to_pc_scancodes_type3(int a, struct pckbc_data *d)
 
 	if (a==';')	pckbc_add_code(d, 0x4c, p);
 	if (a=='\'')	pckbc_add_code(d, 0x52, p);
-/*	if (a=='~')	pckbc_add_code(d, 0x29, p);  ?  */
+	if (a=='~')	pckbc_add_code(d, 0x29, p);
 	if (a=='\\')	pckbc_add_code(d, 0x5c, p);
 
 	if (a=='z')	pckbc_add_code(d, 0x1a, p);
@@ -330,10 +331,10 @@ static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
 	if (a=='?')  {	a = '/'; shift = 1; }
 	if (a=='~')  {	a = '`'; shift = 1; }
 
-	if (shift)
-		pckbc_add_code(d, 0x2a, p);
-	else
-		pckbc_add_code(d, 0x2a + 0x80, p);
+	//if (shift)
+  //pckbc_add_code(d, 0x2a, p);
+	//else
+  //pckbc_add_code(d, 0x2a + 0x80, p);
 
 	if (ctrl)
 		pckbc_add_code(d, 0x1d, p);
@@ -449,34 +450,12 @@ DEVICE_TICK(pckbc)
 	int port_nr, ch, ints_enabled;
   int mouse_x, mouse_y, mouse_but, fb_nr;
 
-	if (d->in_use && console_charavail(d->console_handle)) {
-		ch = console_readchar(d->console_handle);
-    if (d->flex_id >= 0) {
-      if (ch >= '0' && ch <= '9') {
-        d->flex_code *= 10;
-        d->flex_code += ch - '0';
-      }
-      d->flex_id++;
-      if (d->flex_id == 3) {
-        fprintf(stderr, "[ pckbc: put scancode %02x ]\n", d->flex_code);
-        pckbc_add_code(d, d->flex_code, 0);
-        if (d->flex_code) {
-          pckbc_add_code(d, d->flex_code | 0x80, 0);
-        }
-        d->flex_id = -1;
-        d->flex_code = 0;
-      }
-    } else {
-      if (ch == '~') {
-        d->flex_id = 0;
-        d->flex_code = 0;
-      } else if (ch >= 0) {
-        ascii_to_pc_scancodes_type2(ch, d);
-      }
-    }
-  }
-
 	ints_enabled = d->rx_int_enable;
+
+  if (d->in_use && console_charavail(d->console_handle)) {
+    ch = console_readchar(d->console_handle);
+    ascii_to_pc_scancodes_type2(ch, d);
+  }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
   if (d->mouse_ena &&
@@ -495,9 +474,10 @@ DEVICE_TICK(pckbc)
       pckbc_add_code(d, flags, 1);
       pckbc_add_code(d, diff_x, 1);
       pckbc_add_code(d, diff_y, 1);
+      pckbc_add_code(d, 0, 1);
+      pckbc_add_code(d, 0, 1);
     }
 
-    fprintf(stderr, "[ mouse: %d->%d, %d->%d, %x->%x ]\n", d->mouse_last_x, mouse_x, d->mouse_last_y, mouse_y, d->mouse_last_but, mouse_but);
     d->mouse_last_x = mouse_x;
     d->mouse_last_y = mouse_y;
     d->mouse_last_but = mouse_but;
@@ -511,7 +491,7 @@ DEVICE_TICK(pckbc)
 		    receive buffer: (Otherwise deassert the interrupt.)  */
 
 		if (d->head[port_nr] != d->tail[port_nr] && ints_enabled) {
-			//debug("[ pckbc: interrupt port %i ]\n", port_nr);
+			debug("[ pckbc: interrupt port %i ]\n", port_nr);
 			if (port_nr == 0) {
 				INTERRUPT_ASSERT(d->irq_keyboard);
       } else {
@@ -591,6 +571,7 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
       case 0xff:
         d->mouse_cmd = 0;
         pckbc_add_code(d, 0xfa, port_nr);
+        debug("[ pckbc: add code 0xaa ]\n");
         pckbc_add_code(d, 0xaa, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;
@@ -654,12 +635,12 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 		return;
 	}
 
-	if (d->state == STATE_WAITING_FOR_AUX) {
-		/*  Echo back.  */
-		pckbc_add_code(d, cmd, port_nr);
-		d->state = STATE_NORMAL;
-		return;
-	}
+	// if (d->state == STATE_WAITING_FOR_AUX) {
+	// 	/*  Echo back.  */
+	// 	pckbc_add_code(d, cmd, port_nr);
+	// 	d->state = STATE_NORMAL;
+	// 	return;
+	// }
 
 	switch (cmd) {
 

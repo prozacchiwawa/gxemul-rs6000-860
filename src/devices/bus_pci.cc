@@ -453,7 +453,48 @@ PCIINIT(s3_virge)
 	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
+#define PCI_VENDOR_NCR 0x1000
+#define PCI_PRODUCT_NCR_53C94 0x0001
 
+size_t asc_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
+  return 0;
+}
+
+int asc_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  switch (reg) {
+  case PCI_MAPREG_START + 0x04: // Status, command
+  case PCI_MAPREG_START + 0x0c: // Header type, Latency Timer, Cache Line Size
+  case PCI_MAPREG_START + 0x10: // Base Address Zero (IO)
+  case PCI_MAPREG_START + 0x14: // Base Address One (Mem)
+  case PCI_MAPREG_START + 0x3c: // Max lat, Min gnt, Int pin, Int Line
+    PCI_SET_DATA(reg, value);
+    return 1;
+  }
+}
+
+PCIINIT(asc)
+{
+  char tmpstr[1000];
+
+  PCI_SET_DATA
+    (PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C94));
+
+  PCI_SET_DATA
+    (PCI_CLASS_REG,
+     PCI_CLASS_CODE
+     (PCI_CLASS_MASS_STORAGE,
+      PCI_SUBCLASS_MASS_STORAGE_SCSI,
+      0));
+
+  snprintf(tmpstr, sizeof(tmpstr), "%s",
+           pd->pcibus->irq_path);
+
+  pd->cfg_reg_write = asc_cfg_reg_write;
+
+  dev_asc_init
+    (machine, mem, 0xa0000000, tmpstr, NULL,
+     DEV_ASC_DEC, asc_dma_controller, NULL);
+}
 
 /*
  *  Acer Labs M5229 PCI-IDE (UDMA) controller.
@@ -504,7 +545,7 @@ PCIINIT(ali_m5229)
 	case MACHINE_CATS:
 		/*  CATS ISA interrupts are at footbridge irq 10:  */
 		snprintf(irqstr, sizeof(irqstr), "%s.10.isa",
-		    pd->pcibus->irq_path);
+             pd->pcibus->irq_path);
 		break;
 	default:fatal("ali_m5229 init: unimplemented machine type\n");
 		exit(1);

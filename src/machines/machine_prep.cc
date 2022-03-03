@@ -89,6 +89,8 @@ MACHINE_SETUP(prep)
 
 		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
+		bus_pci_add(machine, pci_data, machine->memory, 0, 13, 0, "asc");
+
 		if (machine->x11_md.in_use) {
 			bus_pci_add(machine, pci_data, machine->memory,
 			    0, 14, 0, "s3_virge");
@@ -98,7 +100,6 @@ MACHINE_SETUP(prep)
         fb = dev_fb_init(machine, machine->memory, 0xc4000000,
             VFB_GENERIC | VFB_REVERSE_START, 800,600, 800,600, 8, "ofb");
     */
-    
         bus_pci_add(machine, pci_data, machine->memory,
             0, 15, 0, "ibm_isa");
 

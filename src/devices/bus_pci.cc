@@ -454,30 +454,34 @@ PCIINIT(s3_virge)
 }
 
 #define PCI_VENDOR_NCR 0x1000
-#define PCI_PRODUCT_NCR_53C94 0x0001
+#define PCI_PRODUCT_NCR_53C810 0x0001
 
-size_t asc_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
+size_t osiop_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
   return 0;
 }
 
-int asc_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+int osiop_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
-  case PCI_MAPREG_START + 0x04: // Status, command
-  case PCI_MAPREG_START + 0x0c: // Header type, Latency Timer, Cache Line Size
-  case PCI_MAPREG_START + 0x10: // Base Address Zero (IO)
-  case PCI_MAPREG_START + 0x14: // Base Address One (Mem)
-  case PCI_MAPREG_START + 0x3c: // Max lat, Min gnt, Int pin, Int Line
+  case 0x04: // Status, command
+  case 0x0c: // Header type, Latency Timer, Cache Line Size
+  case 0x3c: // Max lat, Min gnt, Int pin, Int Line
     PCI_SET_DATA(reg, value);
+    return 1;
+  case PCI_MAPREG_START + 0: // Base Address Zero (IO)
+    PCI_SET_DATA(reg, (value & ~3) | 1);
+    return 1;
+  case PCI_MAPREG_START + 4: // Base Address One (Mem)
+    PCI_SET_DATA(reg, value & ~3);
     return 1;
   }
 }
 
-PCIINIT(asc)
+PCIINIT(osiop)
 {
   char tmpstr[1000];
 
   PCI_SET_DATA
-    (PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C94));
+    (PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810));
 
   PCI_SET_DATA
     (PCI_CLASS_REG,
@@ -486,14 +490,11 @@ PCIINIT(asc)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0));
 
-  snprintf(tmpstr, sizeof(tmpstr), "%s",
-           pd->pcibus->irq_path);
+  PCI_SET_DATA(0x10, 1); // IO Address
+  PCI_SET_DATA(0x14, 0); // Mmap Address
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
-  pd->cfg_reg_write = asc_cfg_reg_write;
-
-  dev_asc_init
-    (machine, mem, 0xa0000000, tmpstr, NULL,
-     DEV_ASC_DEC, asc_dma_controller, NULL);
+	pd->cfg_reg_write = osiop_cfg_reg_write;
 }
 
 /*

@@ -104,8 +104,8 @@ DEVICE_ACCESS(eagle_800)
     switch (relative_addr)
     {
     case 0x00:
-	if (writeflag == MEM_READ) odata = 6;
-	break;
+      if (writeflag == MEM_READ) odata = 6;
+      break;
 
 	// 9.10.2 Equipment Presence Register
 	// MSB | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | LSB
@@ -116,12 +116,12 @@ DEVICE_ACCESS(eagle_800)
 	//       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
 	//       +--------------------------------------- Reserved
     case 0x0c:
-        if (writeflag == MEM_READ) odata = 0x10;
+        if (writeflag == MEM_READ) odata = 0x50;
         break;
     }
 
-    debug("[ unknown-800 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
-    
+    fprintf(stderr, "[ unknown-800 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
+
 	if (writeflag == MEM_READ)
 		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 
@@ -136,22 +136,19 @@ DEVICE_ACCESS(eagle_680)
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 
-    debug("[ unknown-680 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+  fprintf(stderr, "[ unknown-680 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
     
     return 1;
 }
 
 
-DEVICE_ACCESS(eagle_dma_20)
+DEVICE_ACCESS(eagle_dma_1)
 {
     struct eagle_data *d = (struct eagle_data *) extra;
     uint64_t idata = 0;
 
-	if (writeflag == MEM_WRITE)
-		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-
     if (writeflag == MEM_WRITE) {
-    	idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+        idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     }
 
     /*
@@ -200,12 +197,16 @@ DEVICE_ACCESS(eagle_dma_20)
       break;
 
     case 8:
-      INTERRUPT_DEASSERT(d->irq);
-      idata = d->fin_mask;
-      d->fin_mask = 0;
+      if (writeflag != MEM_WRITE) {
+        INTERRUPT_DEASSERT(d->irq);
+        idata = eagle_comm_area[7] | d->fin_mask;
+        eagle_comm_area[7] = 0;
+        d->fin_mask = 0;
+      }
       break;
 
     case 10:
+      /*
       if (writeflag == MEM_WRITE) {
         if (idata & 4) {
           eagle_comm_area[7] = 0;
@@ -215,12 +216,36 @@ DEVICE_ACCESS(eagle_dma_20)
           }
         }
       }
+      */
       break;
     }
 
-    debug("[ eagle:dma20 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    fprintf(stderr, "[ eagle:dma1 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+    if (writeflag != MEM_WRITE) {
+      memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
+    }
 
     return 1;
+}
+
+
+DEVICE_ACCESS(eagle_dma_2)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    d->dma_page[relative_addr] = idata;
+    if (relative_addr == 1) {
+      eagle_comm_area[2] = idata;
+    }
+  }
+
+  fprintf(stderr, "[ eagle:dma2 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+  return 1;
 }
 
 
@@ -237,7 +262,7 @@ DEVICE_ACCESS(eagle_dma_80)
     }
   }
 
-  debug("[ eagle:dma80 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+  fprintf(stderr, "[ eagle:dma80 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
   return 1;
 }
@@ -258,7 +283,7 @@ DEVICE_ACCESS(eagle_480)
       idata = d->dma_high[relative_addr];
     }
 
-    debug("[ dma high: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    fprintf(stderr, "[ dma high: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
     return 1;
 }
@@ -271,7 +296,7 @@ DEVICE_ACCESS(eagle_4d0)
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 
-    debug("[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+  fprintf(stderr, "[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
     return 1;
 }
@@ -279,12 +304,6 @@ DEVICE_ACCESS(eagle_4d0)
 
 DEVICE_TICK(eagle) {
   struct eagle_data *d = (struct eagle_data *) extra;
-  if (eagle_comm_area[7]) {
-    fprintf(stderr, "[ eagle: trigger dma int ]\n");
-    eagle_comm_area[7] = 0;
-    INTERRUPT_ASSERT(d->irq);
-    d->fin_mask = 0x40;
-  }
 }
 
 
@@ -372,12 +391,12 @@ DEVINIT(eagle)
         isa_portbase + 0x4d0, 2, dev_eagle_4d0_access, d, 
         DM_DEFAULT, NULL);
 
-    memory_device_register(devinit->machine->memory, "DMA 2",
-        isa_portbase + 0, 0x20, dev_eagle_dma_20_access, d, 
+    memory_device_register(devinit->machine->memory, "DMA 1",
+        isa_portbase + 0, 0x20, dev_eagle_dma_1_access, d, 
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "DMA 2",
-        isa_portbase + 0xc0, 0x20, dev_eagle_4d0_access, d, 
+        isa_portbase + 0xc0, 0x20, dev_eagle_dma_2_access, d, 
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "legacy DMA 1 (floppy) 0x80 range",

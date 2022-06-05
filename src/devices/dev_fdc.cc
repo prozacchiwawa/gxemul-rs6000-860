@@ -65,8 +65,8 @@
 #define SENSE_INTERRUPT 0x08
 #define STATE_SEEK 0x0f
 #define STATE_CONFIGURE 0x13
-#define STATE_READ_ID 0x4a
-#define STATE_READ_NORMAL_DATA 0xc6
+#define STATE_READ_ID 0x0a
+#define STATE_READ_NORMAL_DATA 0x06
 
 struct fdc_data {
 	uint8_t			reg[DEV_FDC_LENGTH];
@@ -184,7 +184,7 @@ DEVICE_ACCESS(fdc)
 						d->eot_sector = d->command_bytes[2];
 						fprintf(stderr, "[ fdc: read C%d H%d S%d ]\n", d->seek_track, d->seek_head, d->read_sector);
 						d->command_result = 7;
-						d->command_bytes[6] = 0x20;
+						d->command_bytes[6] = 0;
 						d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
@@ -194,15 +194,15 @@ DEVICE_ACCESS(fdc)
 
             // Ask the DMA system where to send the data in memory.
             memcpy(eagle_dma_2, eagle_comm_area, 8);
-            eagle_comm_area[7] = 1;
+            eagle_comm_area[7] = 4;
 
             // Read addr programmed into DMA 2
             // Note: lower 16 bits are shifted left 1 because dma is in
             // 16 bit chunks.
             low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8)) << 1;
-            read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0xffffff;
+            read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0x7fffffff;
             // Read len programmed into DMA 2
-            read_len = (eagle_dma_2[4] | (eagle_dma_2[5] << 8)) + 1;
+            read_len = ((eagle_dma_2[4] & 0xff) | ((eagle_dma_2[5] & 0xff) << 8)) + 1;
 
             fprintf(stderr, "[ fdc: read to %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
             if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
@@ -213,6 +213,7 @@ DEVICE_ACCESS(fdc)
                 diskimage_access(cpu->machine, 0, DISKIMAGE_FLOPPY, 0, offset, sector, 512);
                 fprintf(stderr, "[ sector: %02x %02x %02x %02x ... %02x %02x %02x %02x ]\n", sector[0], sector[1], sector[2], sector[3], sector[508], sector[509], sector[510], sector[511]);
 
+                /*
                 for (i = 0; i < 128; i++) {
                   unsigned char buf[4];
                   buf[0] = sector[i * 4 + 3];
@@ -221,6 +222,7 @@ DEVICE_ACCESS(fdc)
                   buf[3] = sector[i * 4 + 0];
                   memcpy(sector + i * 4, buf, 4);
                 }
+                */
 
                 cpu->memory_rw(cpu, cpu->mem, read_addr, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
 
@@ -233,6 +235,7 @@ DEVICE_ACCESS(fdc)
                 read_len -= 512;
               }
             }
+            INTERRUPT_ASSERT(d->irq);
             break;
 					}
 				} else {
@@ -240,9 +243,9 @@ DEVICE_ACCESS(fdc)
 				}
 			} else {
 				// New command
-				switch (idata) {
+				switch (idata & 0x1f) {
 				case STATE_SPECIFY:
-					fprintf(stderr, "[ fdc: specify ]\n");
+					fprintf(stderr, "[ fdc: specify, NDMA=%d ]\n", d->command_bytes[1] & 1);
 					d->command_size = 2;
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SPECIFY;
 					break;

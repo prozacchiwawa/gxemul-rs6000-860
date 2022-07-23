@@ -274,16 +274,32 @@ DEVICE_ACCESS(eagle_480)
     uint64_t idata = 0;
 
     if (writeflag == MEM_WRITE) {
-      idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-      d->dma_high[relative_addr] = idata;
-      if (relative_addr == 1) {
-        eagle_comm_area[3] = idata;
-      }
+        idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+        d->dma_high[relative_addr] = idata;
+        if (relative_addr == 1) {
+            eagle_comm_area[3] = idata;
+        }
     } else {
-      idata = d->dma_high[relative_addr];
+        idata = d->dma_high[relative_addr];
     }
 
     fprintf(stderr, "[ dma high: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+    return 1;
+}
+
+
+DEVICE_ACCESS(eagle_dma_scatter_gather) {
+    struct eagle_data *d = (struct eagle_data *) extra;
+    uint64_t idata = 0;
+
+    if (writeflag == MEM_WRITE) {
+        // TODO
+    } else {
+        idata = 0xff;
+    }
+
+    fprintf(stderr, "[ dma scatter gather: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
     return 1;
 }
@@ -401,6 +417,10 @@ DEVINIT(eagle)
 
     memory_device_register(devinit->machine->memory, "legacy DMA 1 (floppy) 0x80 range",
         isa_portbase + 0x80, 4, dev_eagle_dma_80_access, d, 
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "DMA Scatter/Gather",
+        isa_portbase + 0x40a, 22, dev_eagle_dma_scatter_gather_access, d,
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "DMA page address",

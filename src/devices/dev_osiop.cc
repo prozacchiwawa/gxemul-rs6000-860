@@ -6,8 +6,8 @@
  *
  *  1. Redistributions of source code must retain the above copyright
  *     notice, this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright  
- *     notice, this list of conditions and the following disclaimer in the 
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
  *  3. The name of the author may not be used to endorse or promote products
  *     derived from this software without specific prior written permission.
@@ -15,7 +15,7 @@
  *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  *  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- *  ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE   
+ *  ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  *  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  *  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -23,7 +23,7 @@
  *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  *  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  *  SUCH DAMAGE.
- *   
+ *
  *
  *  COMMENT: NCR 53C710 SCSI I/O Processor (SIOP)
  *
@@ -57,15 +57,17 @@
 
 #include "thirdparty/osiopreg.h"
 
+#define OSIOP_RELATIVE_ADDRESSING 2
+#define OSIOP_TABLE_INDIRECT 1
 
 /*  #define debug fatal  */
-const int osiop_debug = 0;
+const int osiop_debug = 1;
 
 static const char *phases[8] =
 	{ "DATA_OUT", "DATA_IN", "COMMAND", "STATUS",
 	  "RESERVED_OUT", "RESERVED_IN", "MSG_OUT", "MSG_IN" };
 
-#define	DEV_OSIOP_LENGTH	OSIOP_NREGS
+#define	DEV_OSIOP_LENGTH 0x60
 #define	OSIOP_CHIP_REVISION	2
 
 #define	MAX_SCRIPTS_PER_CHUNK	256	/*  256 may be a reasonable value?  */
@@ -75,7 +77,7 @@ static const char *phases[8] =
 struct osiop_data {
 	struct interrupt	irq;
 	int			asserted;
-	
+
 	int			scripts_running;
 
 	/*  Current transfer:  */
@@ -89,7 +91,7 @@ struct osiop_data {
 
 	/*  ALU:  */
 	int			carry;
-	
+
 	/*
 	 *  Most of these are byte-addressed, but some are not. (Note: For
 	 *  convenience, 32-bit words are stored in host byte order!)
@@ -143,7 +145,7 @@ static void osiop_set_scsi_phase(struct osiop_data *d, int phase)
  *
  *  However, the SIP and DIP bits are set even if interrupts are
  *  masked away using DIEN and SIEN. (At least that is how I understood
- *  things from reading OpenBSD's osiop.c osiop_poll().) 
+ *  things from reading OpenBSD's osiop.c osiop_poll().)
  */
 static int osiop_update_sip_and_dip(struct osiop_data *d)
 {
@@ -198,14 +200,9 @@ static uint32_t read_word(struct osiop_data *d, struct cpu *cpu, uint32_t addr)
 {
 	uint32_t word;
 
-	if (d->last_host_page == NULL ||
-	    d->last_phys_page != (addr & 0xfffff000)) {
-		d->last_phys_page = addr & 0xfffff000;
-		d->last_host_page =
-		    memory_paddr_to_hostaddr(cpu->mem, d->last_phys_page, 0);
-	}
-
-	word = *((uint32_t *) (d->last_host_page + (addr & 0xffc)));
+  if (cpu->memory_rw(cpu, cpu->mem, addr & 0x7fffffff, (unsigned char *)&word, 4, MEM_READ, PHYSICAL | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+    word = 0xffffffff;
+  }
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
 		word = LE32_TO_HOST(word);
@@ -219,25 +216,34 @@ static uint32_t read_word(struct osiop_data *d, struct cpu *cpu, uint32_t addr)
 /*  Helper: reads/writes single bytes from emulated physical RAM.  */
 static uint8_t read_byte(struct osiop_data *d, struct cpu *cpu, uint32_t addr)
 {
-	if (d->last_host_page == NULL ||
-	    d->last_phys_page != (addr & 0xfffff000)) {
-		d->last_phys_page = addr & 0xfffff000;
-		d->last_host_page =
-		    memory_paddr_to_hostaddr(cpu->mem, d->last_phys_page, 0);
-	}
+  uint8_t byte_read;
 
-	return d->last_host_page[addr & 0xfff];
+  if (cpu->memory_rw(cpu, cpu->mem, addr & 0x7fffffff, &byte_read, 1, MEM_READ, PHYSICAL | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+    byte_read = 0xff;
+  }
+
+  return byte_read;
 }
 static void write_byte(struct osiop_data *d, struct cpu *cpu, uint32_t addr, uint8_t byte)
 {
-	if (d->last_host_page == NULL ||
-	    d->last_phys_page != (addr & 0xfffff000)) {
-		d->last_phys_page = addr & 0xfffff000;
-		d->last_host_page =
-		    memory_paddr_to_hostaddr(cpu->mem, d->last_phys_page, 1);
-	}
+  cpu->memory_rw(cpu, cpu->mem, addr, &byte, 1, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+}
 
-	d->last_host_page[addr & 0xfff] = byte;
+
+void set_register_value(struct cpu *cpu, struct osiop_data *d, int offset, uint32_t rv) {
+  d->reg[offset] = rv;
+  d->reg[offset+1] = rv >> 8;
+  d->reg[offset+2] = rv >> 16;
+  d->reg[offset+3] = rv >> 24;
+}
+
+
+uint32_t get_register_value(struct cpu *cpu, struct osiop_data *d, int offset) {
+  return
+    d->reg[offset] |
+    (d->reg[offset+1] << 8) |
+    (d->reg[offset+2] << 16) |
+    (d->reg[offset+3] << 24);
 }
 
 
@@ -254,8 +260,7 @@ static void write_byte(struct osiop_data *d, struct cpu *cpu, uint32_t addr, uin
  */
 uint32_t osiop_get_next_scripts_word(struct cpu *cpu, struct osiop_data *d)
 {
-	uint32_t *dspp = (uint32_t*) &d->reg[OSIOP_DSP];
-	uint32_t dsp = *dspp;
+	uint32_t dsp = get_register_value(cpu, d, OSIOP_DSP);
 	uint32_t instr;
 
 	if (dsp & 3) {
@@ -267,7 +272,7 @@ uint32_t osiop_get_next_scripts_word(struct cpu *cpu, struct osiop_data *d)
 	instr = read_word(d, cpu, dsp);
 
 	dsp += sizeof(instr);
-	*dspp = dsp;
+  set_register_value(cpu, d, OSIOP_DSP, dsp);
 
 	return instr;
 }
@@ -284,14 +289,7 @@ uint32_t osiop_get_next_scripts_word(struct cpu *cpu, struct osiop_data *d)
  */
 int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 {
-	uint32_t *dsap = (uint32_t*) &d->reg[OSIOP_DSA];
-	uint32_t *dnadp = (uint32_t*) &d->reg[OSIOP_DNAD];
-	uint32_t *dbcp = (uint32_t*) &d->reg[OSIOP_DBC];
-	uint32_t *dspsp = (uint32_t*) &d->reg[OSIOP_DSPS];
-	uint32_t *dspp = (uint32_t*) &d->reg[OSIOP_DSP];
-	uint32_t *tempp = (uint32_t*) &d->reg[OSIOP_TEMP];
-
-	uint32_t dspOrig = *dspp;
+	uint32_t dspOrig = get_register_value(cpu, d, OSIOP_DSP);
 	uint32_t instr1 = osiop_get_next_scripts_word(cpu, d);
 	uint32_t instr2 = osiop_get_next_scripts_word(cpu, d);
 	uint32_t dbc, target_addr = 0;
@@ -302,7 +300,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 	int test_carry, compare_data, compare_phase;
 	int jump_if_true, wait_for_valid_phase;
 	int comparison = 0, interrupt_instead_of_branch = 0;
-	
+
 	/*
 	 *  According to the 53C710 manual, chapter 5 (introduction): the first
 	 *  32-bit word is always loaded into DCMD and DBC, the second into
@@ -311,8 +309,9 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 	 */
 
 	dcmd = d->reg[OSIOP_DCMD] = instr1 >> 24;
-	dbc = *dbcp = instr1 & 0x00ffffff;
-	*dspsp = instr2;
+	dbc = instr1 & 0x00ffffff;
+  set_register_value(cpu, d, OSIOP_DBC, dbc);
+  set_register_value(cpu, d, OSIOP_DSP, instr2);
 
 	reladdr = (instr2 << 8);
 	reladdr >>= 8;
@@ -328,18 +327,19 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 
 	case 0x00:
 		{
+      int addrmode;
 			int ofs1 = instr1 & 0x00ffffff;
 			int ofs2 = instr2 & 0x00ffffff;
-			int indirect_addressing = dcmd & 0x20;
-			uint32_t dsa = *dsap;
+			uint32_t dsa = get_register_value(cpu, d, OSIOP_DSA) & 0x7fffffff;
 			uint32_t addr, xfer_byte_count, xfer_addr;
 			int32_t tmp = ofs2 << 8;
 			int res;
 			size_t i;
 
 			tmp >>= 8;
-			table_indirect_addressing = dcmd & 0x10;
-			
+			relative_addressing = dcmd & 0x20;
+      table_indirect_addressing = dcmd & 0x10;
+
 			opcode = (dcmd >> 3) & 1;
 
 			switch (opcode) {
@@ -351,33 +351,45 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				break;
 			}
 
-			if (indirect_addressing) {
-				fatal("osiop: TODO: indirect_addressing move\n");
+			if (osiop_debug)
+				debug(" FROM %i", tmp);
+
+			if (ofs1 != ofs2) {
+				fatal("osiop: TODO: move ofs1 (%08x) !=ofs2 (%08x)\n", ofs1, ofs2);
 				exit(1);
 			}
 
-			if (!table_indirect_addressing) {
-				fatal("osiop: TODO: !table_indirect_addressing move\n");
-				exit(1);
-			}
-			
-			if (osiop_debug)
-				debug(" FROM %i", tmp);
-			
-			if (ofs1 != ofs2) {
-				fatal("osiop: TODO: move ofs1!=ofs2\n");
-				exit(1);
-			}
-			
 			if (phase != osiop_get_scsi_phase(d)) {
 				fatal("osiop: TODO: move: wait for phase. "
 				    "phase = %i, osiop_get_scsi_phase = %i\n",
 				    phase, osiop_get_scsi_phase(d));
-				exit(1);
+				// exit(1);
 			}
 
-			if (osiop_debug)			
+			if (osiop_debug)
 				debug(" WHEN %s", phases[phase]);
+
+      addrmode = ((!!relative_addressing) * OSIOP_RELATIVE_ADDRESSING) |
+        ((!!table_indirect_addressing) * OSIOP_TABLE_INDIRECT);
+
+      switch (addrmode) {
+      case 0:
+				fatal("osiop: TODO: unhandled addr mode %d\n", addrmode);
+				exit(1);
+        break;
+      case OSIOP_RELATIVE_ADDRESSING:
+				fatal("osiop: TODO: unhandled addr mode %d\n", addrmode);
+				exit(1);
+        break;
+      case OSIOP_TABLE_INDIRECT:
+          fatal("osiop: TODO: unhandled addr mode %d\n", addrmode);
+				exit(1);
+        break;
+      case OSIOP_RELATIVE_ADDRESSING | OSIOP_TABLE_INDIRECT:
+				fatal("osiop: TODO: unhandled addr mode %d\n", addrmode);
+				exit(1);
+        break;
+      }
 
 			addr = dsa + tmp;
 			xfer_byte_count = read_word(d, cpu, addr) & 0x00ffffff;
@@ -398,7 +410,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 					xfer_addr ++;
 					xfer_byte_count --;
 				}
-				
+
 				osiop_set_scsi_phase(d, COMMAND_PHASE);
 				break;
 
@@ -424,7 +436,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				}
 
 				d->data_offset = 0;
-				
+
 				if (res == 2)
 					osiop_set_scsi_phase(d, DATA_OUT_PHASE);
 				else if (d->xferp->data_in_len > 0)
@@ -434,6 +446,9 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				break;
 
 			case DATA_OUT_PHASE:
+        if (!d->xferp) {
+          return 1;
+        }
 				if (d->xferp->data_out == NULL)
 					scsi_transfer_allocbuf(&d->xferp->data_out_len,
 					    &d->xferp->data_out, d->xferp->data_out_len, 0);
@@ -512,9 +527,8 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 			}
 
 			/*  Transfer complete.  */
-			*dnadp = xfer_addr;
-			*dbcp = xfer_byte_count;
-			
+      set_register_value(cpu, d, OSIOP_DNAD, xfer_addr);
+      set_register_value(cpu, d, OSIOP_DBC, xfer_byte_count);
 			d->reg[OSIOP_DFIFO] = 0;	/*  TODO  */
 		}
 		break;
@@ -536,7 +550,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 			}
 
 			if (table_indirect_addressing) {
-				uint32_t dsa = *dsap;
+				uint32_t dsa = get_register_value(cpu, d, OSIOP_DSA);
 				uint32_t addr, word;
 				int32_t tmp = dbc << 8;
 				tmp >>= 8;
@@ -564,7 +578,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 			if (scsi_ids_to_select != 0) {
 				fatal("osiop: TODO: multiselect?\n");
 				exit(1);
-			}		
+			}
 
 			if (osiop_debug)
 				debug(" [SCSI ID %i]", scsi_id_to_select);
@@ -573,7 +587,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				/*  Note: Relative to _current_ DSP value, not
 				    what the DSP was when the current
 				    instruction was read!  */
-				target_addr = reladdr + *dspp;
+				target_addr = reladdr + get_register_value(cpu, d, OSIOP_DSP);
 				if (osiop_debug)
 					debug(" REL(%i)", reladdr);
 			} else {
@@ -602,7 +616,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 			}
 
 			break;
-			
+
 		case 1:	if (osiop_debug)
 				debug(": WAIT DISCONNECT");
 			/*  TODO  */
@@ -694,7 +708,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				/*  Note: Relative to _current_ DSP value,
 				    not what it was when the current instruction
 				    was read!  */
-				target_addr = reladdr + *dspp;
+				target_addr = reladdr + get_register_value(cpu, d, OSIOP_DSP);
 				if (osiop_debug)
 					debug(" REL(%i)", reladdr);
 			} else {
@@ -705,7 +719,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 		} else {
 			if (opcode == 2) {
 				/*  Return:  */
-				target_addr = *tempp;
+				target_addr = get_register_value(cpu, d, OSIOP_TEMP);
 			} else {
 				/*  Interrupt:  */
 				interrupt_instead_of_branch = 1;
@@ -754,7 +768,7 @@ int osiop_execute_scripts_instr(struct cpu *cpu, struct osiop_data *d)
 				d->scripts_running = 0;
 				d->reg[OSIOP_DSTAT] |= OSIOP_DSTAT_SIR;
 			} else {
-				*dspp = target_addr;
+        set_register_value(cpu, d, OSIOP_DSP, target_addr);
 			}
 		}
 
@@ -796,7 +810,7 @@ void osiop_execute_scripts(struct cpu *cpu, struct osiop_data *d)
 	    osiop_execute_scripts_instr(cpu, d))
 		n++;
 
-	if (osiop_debug)	
+	if (osiop_debug)
 		debug("{ SCRIPTS end }\n");
 }
 
@@ -822,13 +836,6 @@ DEVICE_ACCESS(osiop)
 
 	idata = memory_readmax64(cpu, data, len);
 
-	/*  Make relative_addr suit addresses in osiopreg.h:  */
-	if (cpu->byte_order == EMUL_BIG_ENDIAN) {
-		relative_addr =
-		    (relative_addr & ~3) |
-		    (3 - (relative_addr & 3));
-	}
-
 	if (len == sizeof(uint32_t)) {
 		/*
 		 *  NOTE: These are stored in HOST byte order!
@@ -845,27 +852,30 @@ DEVICE_ACCESS(osiop)
 			relative_addr = origofs;
 			non1lenOk = 1;
 
-			uint32_t *p = (uint32_t*) &d->reg[origofs];
+      if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
+        idata = LE32_TO_HOST(idata);
+      } else {
+        idata = BE32_TO_HOST(idata);
+      }
 
-			if (writeflag == MEM_WRITE)
-				*p = idata;
-			else
-				odata = *p;
-			
+      if (writeflag == MEM_WRITE) {
+        set_register_value(cpu, d, origofs, idata);
+      } else {
+        odata = get_register_value(cpu, d, origofs);
+      }
 			break;
 		}
 	} else {
-		/*  Byte access:  */
 		oldreg = d->reg[relative_addr];
 
-		if (writeflag == MEM_WRITE)
+		if (writeflag == MEM_WRITE) {
 			d->reg[relative_addr] = idata;
-		else
+		} else {
 			odata = oldreg;
+    }
 	}
 
 	switch (relative_addr) {
-
 	case OSIOP_SCNTL0:
 	case OSIOP_SCNTL1:
 		break;
@@ -880,8 +890,10 @@ DEVICE_ACCESS(osiop)
 
 	case OSIOP_SCID:
 		if (idata != oldreg) {
-			fatal("osiop TODO: attempt to change SCID?\n");
-			exit(1);
+      if (idata != 7) {
+        fatal("[ osiop: SCID = %d ]\n", idata);
+        exit(1);
+      }
 		}
 		break;
 
@@ -915,11 +927,11 @@ DEVICE_ACCESS(osiop)
 	case OSIOP_SSTAT1:
 	case OSIOP_SSTAT2:
 		break;
-		
+
 	case OSIOP_DSA:
 		if (writeflag == MEM_WRITE) {
 			if (osiop_debug)
-				debug("[ osiop: DSA set to 0x%x ]\n", (int) idata);
+				debug("[ osiop: DSA set to 0x%x ]\n", (int)idata);
 		}
 		break;
 
@@ -930,7 +942,7 @@ DEVICE_ACCESS(osiop)
 	case OSIOP_CTEST4:
 	case OSIOP_CTEST5:
 	case OSIOP_CTEST6:
-	case OSIOP_CTEST7:
+    //	case OSIOP_CTEST7:
 		break;
 
 	case OSIOP_TEMP:
@@ -953,13 +965,15 @@ DEVICE_ACCESS(osiop)
 			d->reg[relative_addr] = idata &
 			    ~(OSIOP_ISTAT_ABRT | OSIOP_ISTAT_RST);
 			osiop_reassert_interrupts(d);
-		}
+    }
 		break;
 
+    /*
 	case OSIOP_CTEST8:
 		odata = (odata & 0xf) | (OSIOP_CHIP_REVISION << 4);
 		break;
-
+    */
+    
 	case OSIOP_DBC:
 		break;
 
@@ -991,6 +1005,11 @@ DEVICE_ACCESS(osiop)
 
 	case OSIOP_DCNTL:
 		if (writeflag == MEM_WRITE) {
+			if (idata & OSIOP_DCNTL_STD) {
+				fatal("osiop TODO: STD\n");
+				// exit(1);
+			}
+      /*
 			if (idata & OSIOP_DCNTL_SSM) {
 				fatal("osiop TODO: SSM\n");
 				exit(1);
@@ -999,10 +1018,7 @@ DEVICE_ACCESS(osiop)
 				fatal("osiop TODO: LLM\n");
 				exit(1);
 			}
-			if (idata & OSIOP_DCNTL_STD) {
-				fatal("osiop TODO: STD\n");
-				exit(1);
-			}
+      */
 		}
 		break;
 
@@ -1014,18 +1030,20 @@ DEVICE_ACCESS(osiop)
 			fatal("[ osiop: write to  0x%02lx: 0x%02x ]\n",
 			    (long)relative_addr, (int)idata);
 		}
-
-		exit(1);
+		// exit(1);
 	}
 
 	if (len != 1 && !non1lenOk) {
 		fatal("[ osiop: TODO: len != 1, addr 0x%0x ]\n",
 		    (int)relative_addr);
-		exit(1);
+		// exit(1);
 	}
 
-	if (writeflag == MEM_READ)
+  fprintf(stderr, "[ osiop access: %s (%d) %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", len, relative_addr, idata);
+
+	if (writeflag == MEM_READ) {
 		memory_writemax64(cpu, data, len, odata);
+  }
 
 	return 1;
 }
@@ -1047,8 +1065,8 @@ DEVINIT(osiop)
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 
 	memory_device_register(devinit->machine->memory, "osiop",
-	    devinit->addr, DEV_OSIOP_LENGTH,
-	    dev_osiop_access, d, DM_DEFAULT, NULL);
+                         devinit->addr, DEV_OSIOP_LENGTH,
+                         dev_osiop_access, d, DM_DEFAULT, NULL);
 
 	machine_add_tickfunction(devinit->machine,
 	    dev_osiop_tick, d, OSIOP_TICK_SHIFT);

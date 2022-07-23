@@ -178,7 +178,7 @@ DEVICE_ACCESS(z8530)
 			odata = x < 0? 0 : x;
 		} else {
 			idata &= 255;
-			fprintf(stderr, "%c", (int)idata);
+			fputc((int)idata, stderr);
 			if (idata != 0)
 				console_putchar(d->console_handle[port_nr],
 				    idata);

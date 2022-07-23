@@ -70,9 +70,9 @@
 #include "thirdparty/ncr53c9xreg.h"
 
 
-/*  #define ASC_DEBUG  */
+#define ASC_DEBUG  1
 /*  #define debug fatal  */
-/*  #define ASC_FULL_REGISTER_ACCESS_DEBUG  */
+#define ASC_FULL_REGISTER_ACCESS_DEBUG  1
 /*  static int quiet_mode = 0;  */
 
 #define	ASC_TICK_SHIFT		15
@@ -808,13 +808,13 @@ DEVICE_ACCESS(asc)
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len);
 
-#if 0
+  //#if 0
 	/*  Debug stuff useful when trying to make dev_asc compatible
 	    with the 'arc' emulation mode, which is different from
 	    the DECstation mode.  */
-	fatal("[ asc: writeflag=%i addr=%08x idata=%016llx ]\n",
+	debug("[ asc: writeflag=%i addr=%08x idata=%016llx ]\n",
 	    writeflag, (int)relative_addr, (long long)idata);
-#endif
+  //#endif
 
 	switch (d->mode) {
 	case DEV_ASC_DEC:
@@ -1250,6 +1250,7 @@ void dev_asc_init(struct machine *machine, struct memory *mem,
 	d->dma_controller      = dma_controller;
 	d->dma_controller_data = dma_controller_data;
 
+  debug("asc baseaddr = %x\n", (int)baseaddr);
 	memory_device_register(mem, "asc", baseaddr,
 	    mode == DEV_ASC_PICA? DEV_ASC_PICA_LENGTH : DEV_ASC_DEC_LENGTH,
 	    dev_asc_access, d, DM_DEFAULT, NULL);

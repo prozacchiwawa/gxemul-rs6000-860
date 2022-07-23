@@ -168,10 +168,18 @@ DEVICE_ACCESS(pccmos)
 				odata = b;
 			}
 		} else {
-			if (writeflag == MEM_WRITE)
-				d->ram[d->select] = idata;
-			else
+			if (writeflag == MEM_WRITE) {
+        if (relative_addr > 7) {
+          debug("[ write to cmos: relative addr %d, %02x ]\n", relative_addr, (int)(idata & 0xff));
+        } else {
+          d->ram[d->select] = idata;
+        }
+      } else {
 				odata = d->ram[d->select];
+        if (relative_addr > 7) {
+          debug("[ read cmos: relative addr %d, %02x ]\n", relative_addr, (int)(odata & 0xff));
+        }
+      }
 		}
 	}
 

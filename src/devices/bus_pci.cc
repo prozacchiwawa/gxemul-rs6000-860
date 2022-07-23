@@ -479,6 +479,9 @@ int osiop_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 PCIINIT(osiop)
 {
   char tmpstr[1000];
+  char irqstr[100];
+  int irq = 13;
+	uint64_t port, memaddr;
 
   PCI_SET_DATA
     (PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810));
@@ -490,11 +493,18 @@ PCIINIT(osiop)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0));
 
-  PCI_SET_DATA(0x10, 1); // IO Address
+  PCI_SET_DATA(0x10, 0xa0000001); // IO Address
   PCI_SET_DATA(0x14, 0); // Mmap Address
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = osiop_cfg_reg_write;
+
+  snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
+           pd->pcibus->irq_path_isa, irq);
+
+  snprintf(tmpstr, sizeof(tmpstr), "osiop addr=0x%llx irq=%s",
+           0xa0000000, irqstr);
+  device_add(machine, tmpstr);
 }
 
 /*

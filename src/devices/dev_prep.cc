@@ -55,6 +55,7 @@ DEVICE_ACCESS(prep)
 
 	if (writeflag == MEM_READ) {
 		odata = cpu->machine->isa_pic_data.last_int;
+    fprintf(stderr, "[ int ack: %d ]\n", odata);
 	} else {
 		fatal("[ prep: write to interrupt register? ]\n");
 	}

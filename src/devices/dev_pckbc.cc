@@ -101,6 +101,9 @@ struct pckbc_data {
   int flex_id;
   int flex_code;
 
+  int mouse_remote, mouse_reporting;
+  int mouse_scaling, mouse_resolution, mouse_sample_rate;
+
   int mouse_ena;
   int mouse_last_x, mouse_last_y, mouse_last_but;
 };
@@ -474,8 +477,6 @@ DEVICE_TICK(pckbc)
       pckbc_add_code(d, flags, 1);
       pckbc_add_code(d, diff_x, 1);
       pckbc_add_code(d, diff_y, 1);
-      pckbc_add_code(d, 0, 1);
-      pckbc_add_code(d, 0, 1);
     }
 
     d->mouse_last_x = mouse_x;
@@ -570,10 +571,30 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
       switch (cmd) {
       case 0xff:
         d->mouse_cmd = 0;
+        d->mouse_sample_rate = 100;
+        d->mouse_resolution = 2;
+        d->mouse_scaling = 0;
+        d->mouse_remote = 0;
+        d->mouse_ena = 1;
+
         pckbc_add_code(d, 0xfa, port_nr);
-        debug("[ pckbc: add code 0xaa ]\n");
         pckbc_add_code(d, 0xaa, port_nr);
         pckbc_add_code(d, 0, port_nr);
+        break;
+
+      case 0xf5:
+        d->mouse_reporting = 0;
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
+      case 0xf4:
+        d->mouse_reporting = 1;
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
+      case 0xf3:
+        d->mouse_cmd = 0xf3;
+        pckbc_add_code(d, 0xfa, port_nr);
         break;
 
       case 0xf2:
@@ -587,6 +608,12 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
         break;
 
       case 0xe6:
+        d->mouse_scaling = 0;
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
+      case 0xe7:
+        d->mouse_scaling = 1;
         pckbc_add_code(d, 0xfa, port_nr);
         break;
 
@@ -597,25 +624,44 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 
       case 0xe9:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        d->mouse_ena = 1;
+        pckbc_add_code(d, d->mouse_reporting << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
+        pckbc_add_code(d, d->mouse_resolution, port_nr);
+        pckbc_add_code(d, d->mouse_sample_rate, port_nr);
         break;
 
       case 0xeb:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 8, port_nr);
+        pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;
       }
+      break;
+
+    case 0xf3:
+      d->mouse_cmd = 0;
+      d->mouse_sample_rate = cmd;
+      pckbc_add_code(d, 0xfa, port_nr);
+      break;
+
+    case 0xe8:
+      d->mouse_cmd = 0;
+      d->mouse_resolution = cmd;
+      pckbc_add_code(d, 0xfa, port_nr);
+      break;
 
     case 0xe2:
       switch (cmd) {
       case 0x40:
         d->mouse_cmd = 0;
-        pckbc_add_code(d, 0, port_nr);
+        d->mouse_remote = 0;
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
+      case 0x41:
+        d->mouse_cmd = 0;
+        d->mouse_remote = 1;
+        pckbc_add_code(d, 0xfa, port_nr);
         break;
 
       default:
@@ -634,13 +680,6 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 		d->state = STATE_NORMAL;
 		return;
 	}
-
-	// if (d->state == STATE_WAITING_FOR_AUX) {
-	// 	/*  Echo back.  */
-	// 	pckbc_add_code(d, cmd, port_nr);
-	// 	d->state = STATE_NORMAL;
-	// 	return;
-	// }
 
 	switch (cmd) {
 
@@ -681,7 +720,7 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 		/*  Get keyboard ID.  NOTE/TODO: Ugly hardcoded answer.  */
 		pckbc_add_code(d, KBR_ACK, port_nr);
 		pckbc_add_code(d, 0xab, port_nr);
-		pckbc_add_code(d, 0x41, port_nr);
+		pckbc_add_code(d, 0x83, port_nr);
 		break;
 
 	case KBC_TYPEMATIC:
@@ -714,7 +753,8 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	default:
 		fatal("[ pckbc: (port %i) UNIMPLEMENTED 8048 command"
 		    " 0x%02x ]\n", port_nr, cmd);
-		exit(1);
+		// exit(1);
+    break;
 	}
 }
 
@@ -898,11 +938,11 @@ if (x&1)
 				break;
 			case 0xd3:	/*  write to auxiliary device
 					    output buffer  */
-				debug("[ pckbc: CONTROL 0xd3, TODO ]\n");
+				debug("[ pckbc: send data to kbd ]\n");
 				d->state = STATE_WAITING_FOR_AUX;
 				break;
 			case 0xd4:	/*  write to auxiliary port  */
-				debug("[ pckbc: CONTROL 0xd4, TODO ]\n");
+				debug("[ pckbc: send data to mouse ]\n");
 				d->state = STATE_WAITING_FOR_AUX_OUT;
 				break;
 			default:

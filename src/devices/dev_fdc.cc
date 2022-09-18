@@ -154,11 +154,17 @@ DEVICE_ACCESS(fdc)
 					case STATE_SPECIFY:
             d->command_result = 0;
 						d->state = STATE_EMPTY;
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
 						break;
 
 					case STATE_CONFIGURE:
             d->command_result = 0;
 						d->state = STATE_EMPTY;
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
 						break;
 
 					case STATE_READ_ID:
@@ -236,7 +242,9 @@ DEVICE_ACCESS(fdc)
                 read_len -= 512;
               }
             }
-            INTERRUPT_ASSERT(d->irq);
+            if (d->reg[2] & 8) {
+              INTERRUPT_ASSERT(d->irq);
+            }
             break;
 					}
 				} else {

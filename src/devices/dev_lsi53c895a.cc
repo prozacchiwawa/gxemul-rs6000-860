@@ -20,6 +20,7 @@
 
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
 #include "diskimage.h"
 #include "interrupt.h"
 #include "machine.h"
@@ -247,7 +248,9 @@ struct SCSIRequest {
 
 static void scsi_bus_init(SCSIBus *bus) { }
 
-static void bus_cold_reset(SCSIBus *bus) { }
+static void bus_cold_reset(SCSIBus *bus) {
+    assert(false);
+}
 
 static void device_cold_reset(SCSIDevice *device) { }
 
@@ -255,14 +258,17 @@ static void scsi_req_unref(struct SCSIRequest *req) {
 }
 
 static SCSIDevice *scsi_device_find(SCSIBus *bus, uint8_t channel, uint8_t id, uint8_t lun) {
+    assert(false);
     return nullptr; // XXX
 }
 
 static SCSIRequest *scsi_req_new(SCSIDevice *dev, uint32_t tag, uint8_t lun, uint8_t *buf, uint32_t dbc, lsi_request *current) {
+    assert(false);
     return nullptr; // XXX
 }
 
 static int scsi_req_enqueue(SCSIRequest *req) {
+    assert(false);
     return -1;
 }
 
@@ -575,7 +581,7 @@ static void stn_le_p(uint8_t *addr, unsigned size, uint32_t val) {
         break;
 
     default:
-        assert(false);
+        abort();
         break;
     }
 }
@@ -600,7 +606,7 @@ static uint32_t ldn_le_p(uint8_t *addr, unsigned size) {
         return *addr;
 
     default:
-        assert(false);
+        abort();
         break;
     }
 }
@@ -614,6 +620,7 @@ static void address_space_init
  const char *name
  )
 {
+    abort();
 }
 
 static void address_space_read
@@ -624,6 +631,7 @@ static void address_space_read
  dma_addr_t len
  )
 {
+    abort();
 }
 
 static void address_space_write
@@ -634,6 +642,7 @@ static void address_space_write
  dma_addr_t len
  )
 {
+    abort();
 }
 
 static uint8_t *scsi_req_get_buf(SCSIRequest *req) { return nullptr; } // XXX
@@ -641,9 +650,11 @@ static void scsi_req_cancel(SCSIRequest *req) { } // XXX
 static void scsi_req_continue(SCSIRequest *req) { } // XXX
 
 static void pci_dma_read(LSIState *s, dma_addr_t addr, void *buf, dma_addr_t len) {
+    abort();
 }
 
 static void pci_dma_write(LSIState *s, dma_addr_t addr, const void *buf, dma_addr_t len) {
+    abort();
 }
 
 static const char *scsi_phase_name(int phase)
@@ -804,9 +815,14 @@ static void lsi_stop_script(LSIState *s)
 
 static void lsi_set_irq(LSIState *s, int level)
 {
-    if (!s->asserted) {
+    fprintf(stderr, "lsi_set_irq(%d)\n", level);
+    if (!s->asserted && level) {
+        eagle_comm_area[8] = 0xff;
         INTERRUPT_ASSERT(s->ext_irq);
         s->asserted = true;
+    } else if (s->asserted && !level) {
+        INTERRUPT_DEASSERT(s->ext_irq);
+        s->asserted = false;
     }
 }
 
@@ -944,6 +960,7 @@ static void lsi_do_dma(struct cpu *cpu, LSIState *s, int out)
 
     if (!s->current || !s->current->dma_len) {
         /* Wait until data is available.  */
+        s->istat0 |= LSI_ISTAT0_DIP | LSI_ISTAT0_SIP;
         trace_lsi_do_dma_unavailable();
         return;
     }
@@ -1466,7 +1483,7 @@ again:
          */
         if (!(s->sien0 & LSI_SIST0_UDC)) {
             qemu_log_mask(LOG_GUEST_ERROR,
-                          "lsi_scsi: inf. loop with UDC masked");
+                          "lsi_scsi: inf. loop with UDC masked\n");
         }
         lsi_script_scsi_interrupt(s, LSI_SIST0_UDC, 0);
         lsi_disconnect(s);
@@ -1546,7 +1563,7 @@ again:
                 default:
                     qemu_log_mask(LOG_GUEST_ERROR,
                           "lsi_scsi: Illegal selector specified (0x%x > 0x15) "
-                          "for 64-bit DMA block move", selector);
+                          "for 64-bit DMA block move\n", selector);
                     break;
                 }
             }
@@ -2703,7 +2720,9 @@ DEVICE_TICK(lsi53c895a)
 {
     struct lsi53c895a_data *d = (struct lsi53c895a_data *) extra;
 
-    // XXX
+    if (d->istat1 & LSI_ISTAT1_SRUN) {
+        lsi_execute_script(cpu, d);
+    }
 }
 
 DEVICE_ACCESS(lsi53c895a)
@@ -2719,6 +2738,26 @@ DEVICE_ACCESS(lsi53c895a)
         uint64_t odata = lsi_mmio_read(cpu, d, relative_addr, len);
         memory_writemax64(cpu, data, len, odata);
     }
+
+    return 1;
+}
+
+DEVICE_ACCESS(lsi53c895a_io)
+{
+    assert(cpu);
+    struct lsi53c895a_data *d = (lsi53c895a_data *)extra;
+    relative_addr -= 0x80;
+    uint64_t idata = memory_readmax64(cpu, data, len);
+
+    if (writeflag == MEM_WRITE) {
+        lsi_mmio_write(cpu, d, relative_addr, idata, len);
+    } else {
+        fprintf(stderr, "LSI read to %p (%d) from %08x\n", data, len, relative_addr);
+        uint64_t odata = lsi_mmio_read(cpu, d, relative_addr, len);
+        memory_writemax64(cpu, data, len, odata);
+    }
+
+    return 1;
 }
 
 DEVINIT(lsi53c895a)
@@ -2730,6 +2769,11 @@ DEVINIT(lsi53c895a)
 
     /* Set up device register values: */
 
+    lsi_soft_reset(d);
+
+    d->scid = 7;
+    d->config[PCI_LATENCY_TIMER] = 0xff;
+
     INTERRUPT_CONNECT(devinit->interrupt_path, d->ext_irq);
 
     QTAILQ_INIT(&d->queue);
@@ -2737,6 +2781,10 @@ DEVINIT(lsi53c895a)
     memory_device_register(devinit->machine->memory, "lsi53c895a",
                            devinit->addr, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_access, d, DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "lsi53c895a (IO)",
+                           devinit->addr2, DEV_LSI53C895A_LENGTH,
+                           dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_lsi53c895a_tick, d, LSI_TICK_SHIFT);
 

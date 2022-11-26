@@ -477,6 +477,8 @@ DEVICE_TICK(pckbc)
       pckbc_add_code(d, flags, 1);
       pckbc_add_code(d, diff_x, 1);
       pckbc_add_code(d, diff_y, 1);
+      pckbc_add_code(d, 0, 1);
+      pckbc_add_code(d, 0, 1);
     }
 
     d->mouse_last_x = mouse_x;

@@ -1,7 +1,7 @@
 #!/bin/sh
 PROG=`dirname "$0"`/gxemul
 # -d f:../ppc/860.rom
-$PROG -X -x -v -v -e ibm860 -d f:sms126.dd -d i:../ppc/hd.img -d R:../ppc/860main.rom -d n:../ppc/860.nvram -V -q "${@}"
+script -c "$PROG -X -x -v -v -e ibm860 -d f:sms126.dd -d s:../ppc/hd.img -d R:../ppc/860main.rom -d n:../ppc/860.nvram -V -q ${@}"
 #    grep -v '<0x6988(0,' | \
 #    grep -v '<0x6e28(0x3f4,' | \
 #    grep -v '<0x22bfc(0,' | \

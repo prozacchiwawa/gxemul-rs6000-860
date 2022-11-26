@@ -495,7 +495,7 @@ PCIINIT(lsi53c895a)
       0));
 
   PCI_SET_DATA(0x10, 0xa0000001); // IO Address
-  PCI_SET_DATA(0x14, 0); // Mmap Address
+  PCI_SET_DATA(0x14, 0x00008000); // mmap address
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
@@ -503,8 +503,8 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
-           0xa0000000, irqstr);
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x addr2=0x%x irq=%s",
+           0xa0000000, 0x80008000, irqstr);
   device_add(machine, tmpstr);
 }
 

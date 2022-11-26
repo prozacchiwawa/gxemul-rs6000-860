@@ -42,7 +42,7 @@
 #include "memory.h"
 #include "misc.h"
 
-unsigned char eagle_comm_area[8];
+unsigned char eagle_comm_area[16];
 
 struct eagle_data {
 	struct interrupt irq;
@@ -296,7 +296,8 @@ DEVICE_ACCESS(eagle_dma_scatter_gather) {
     if (writeflag == MEM_WRITE) {
         // TODO
     } else {
-        idata = 0xff;
+        idata = eagle_comm_area[8];
+        eagle_comm_area[8] = 0;
     }
 
     fprintf(stderr, "[ dma scatter gather: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);

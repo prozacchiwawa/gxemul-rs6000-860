@@ -241,7 +241,7 @@ void dreamcast_emul(struct cpu *cpu)
 	// cpu->pc is the address where PROM emulation was triggered, but
 	// what we are after is the indirect vector that was used to fetch
 	// that address.
-	int vectorAddr = ((cpu->pc & 0x00ffffff) - 0x100 + 0xb0) | 0x8c000000;
+	unsigned vectorAddr = ((cpu->pc & 0x00ffffff) - 0x100 + 0xb0) | 0x8c000000;
 
 	int r1 = cpu->cd.sh.r[1];
 	int r6 = cpu->cd.sh.r[6];

@@ -128,7 +128,7 @@ struct pckbc_data {
  */
 void pckbc_add_code(struct pckbc_data *d, int code, int port)
 {
-  fprintf(stderr, "[ pckbc: %s enqueue %d ]\n", port ? "mouse" : "kbd", code);
+  fprintf(stderr, "[ pckbc: %s enqueue %02x ]\n", port ? "mouse" : "kbd", code);
 	/*  Add at the head, read at the tail:  */
 	d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
 	if (d->head[port] == d->tail[port])
@@ -353,20 +353,20 @@ static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
 
 	old_head = d->head[p];
 
-	if (a==27)	pckbc_add_code(d, 0x01, p);
+	if (a==27)	pckbc_add_code(d, 0x0e, p);
 
-	if (a=='1')	pckbc_add_code(d, 0x02, p);
-	if (a=='2')	pckbc_add_code(d, 0x03, p);
-	if (a=='3')	pckbc_add_code(d, 0x04, p);
-	if (a=='4')	pckbc_add_code(d, 0x05, p);
-	if (a=='5')	pckbc_add_code(d, 0x06, p);
-	if (a=='6')	pckbc_add_code(d, 0x07, p);
-	if (a=='7')	pckbc_add_code(d, 0x08, p);
-	if (a=='8')	pckbc_add_code(d, 0x09, p);
-	if (a=='9')	pckbc_add_code(d, 0x0a, p);
-	if (a=='0')	pckbc_add_code(d, 0x0b, p);
-	if (a=='-')	pckbc_add_code(d, 0x0c, p);
-	if (a=='=')	pckbc_add_code(d, 0x0d, p);
+	if (a=='1')	pckbc_add_code(d, 0x16, p);
+	if (a=='2')	pckbc_add_code(d, 0x1e, p);
+	if (a=='3')	pckbc_add_code(d, 0x26, p);
+	if (a=='4')	pckbc_add_code(d, 0x25, p);
+	if (a=='5')	pckbc_add_code(d, 0x2e, p);
+	if (a=='6')	pckbc_add_code(d, 0x36, p);
+	if (a=='7')	pckbc_add_code(d, 0x3d, p);
+	if (a=='8')	pckbc_add_code(d, 0x3e, p);
+	if (a=='9')	pckbc_add_code(d, 0x46, p);
+	if (a=='0')	pckbc_add_code(d, 0x45, p);
+	if (a=='-')	pckbc_add_code(d, 0x4e, p);
+	if (a=='=')	pckbc_add_code(d, 0x55, p);
 
 	if (a=='!')  {	pckbc_add_code(d, 0x2a, p);
 			pckbc_add_code(d, 0x02, p); }
@@ -682,7 +682,6 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	}
 
 	switch (cmd) {
-
 	case 0x00:
 		/*
 		 *  TODO: What does this do? This is possibly due to an
@@ -887,8 +886,10 @@ if (x&1)
 				odata |= KBS_OCMD;
 
 			odata |= KBS_NOSEC;
-			debug("[ pckbc: read from CTL status port: "
-            "0x%02x ]\n", (int)odata);
+      if (odata != 0x10) {
+        debug("[ pckbc: read from CTL status port: "
+              "0x%02x ]\n", (int)odata);
+      }
 		} else {
 			debug("[ pckbc: write to CTL:");
 			for (i=0; i<len; i++)
@@ -913,6 +914,7 @@ if (x&1)
 				break;
 			case 0xa8:
 				d->cmdbyte &= ~KC8_MDISABLE;
+        pckbc_add_code(d, 0xfa, 0);
 				break;
 			case 0xa9:	/*  test auxiliary port  */
         odata = 0;
@@ -1078,7 +1080,7 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	d->type              = type;
 	d->in_use            = in_use;
 	d->pc_style_flag     = pc_style_flag;
-	d->translation_table = 2;
+	d->translation_table = 3; // 2
 	d->rx_int_enable     = 1;
 	d->output_byte       = 0x02;	/*  A20 enable on PCs  */
 

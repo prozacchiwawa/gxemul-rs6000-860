@@ -77,20 +77,22 @@
 
 #define OSIOP_DSA	0x10		/* rw: Data Structure Address */
 
-#define OSIOP_ISTAT	(0x14+BL0)	/* rw: Interrupt Status reg */
-// #define OSIOP_LCRC	(0x14+BL3)	/* rw: LCRC value */
+#define OSIOP_CTEST0	(0x14+BL0)	/* ro: Chip test register 0 */
+#define OSIOP_CTEST1	(0x14+BL1)	/* ro: Chip test register 1 */
+#define OSIOP_CTEST2	(0x14+BL2)	/* ro: Chip test register 2 */
+#define OSIOP_CTEST3	(0x14+BL3)	/* ro: Chip test register 3 */
 
-#define OSIOP_CTEST0	(0x18+BL0)	/* ro: Chip test register 0 */
-#define OSIOP_CTEST1	(0x18+BL1)	/* ro: Chip test register 1 */
-#define OSIOP_CTEST2	(0x18+BL2)	/* ro: Chip test register 2 */
-#define OSIOP_CTEST3	(0x18+BL3)	/* ro: Chip test register 3 */
+#define OSIOP_CTEST4	(0x18+BL0)	/* rw: Chip test register 4 */
+#define OSIOP_CTEST5	(0x18+BL1)	/* rw: Chip test register 5 */
+#define OSIOP_CTEST6	(0x18+BL2)	/* rw: Chip test register 6 */
+#define OSIOP_CTEST7	(0x18+BL3)	/* rw: Chip test register 7 */
 
 #define OSIOP_TEMP	0x1c		/* rw: Temporary Stack reg */
 
 #define OSIOP_DFIFO	(0x20+BL0)	/* rw: DMA FIFO */
-#define OSIOP_CTEST4	(0x20+BL1)	/* rw: Chip test register 4 */
-#define OSIOP_CTEST5	(0x20+BL2)	/* rw: Chip test register 5 */
-#define OSIOP_CTEST6	(0x20+BL3)	/* rw: Chip test register 6 */
+#define OSIOP_ISTAT	(0x20+BL1)	/* rw: Interrupt Status reg */
+#define OSIOP_CTEST8	(0x20+BL2)	/* rw: Chip test register 8 */
+#define OSIOP_LCRC	(0x20+BL3)	/* rw: LCRC value */
 
 #define OSIOP_DBC	0x24		/* rw: DMA Counter reg (longword) */
 #define OSIOP_DBC0	(0x24+BL0)	/* rw: DMA Byte Counter reg 0 */
@@ -113,7 +115,7 @@
 
 #define OSIOP_ADDER	0x3c		/* ro: Adder Sum Output */
 
-#define OSIOP_NREGS	0x60
+#define OSIOP_NREGS	0x40
 
 
 /*

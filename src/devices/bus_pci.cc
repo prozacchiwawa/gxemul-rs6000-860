@@ -456,11 +456,11 @@ PCIINIT(s3_virge)
 #define PCI_VENDOR_NCR 0x1000
 #define PCI_PRODUCT_NCR_53C810 0x0001
 
-size_t osiop_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
+size_t lsi53c895a_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
   return 0;
 }
 
-int osiop_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
   case 0x04: // Status, command
   case 0x0c: // Header type, Latency Timer, Cache Line Size
@@ -473,15 +473,16 @@ int osiop_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   case PCI_MAPREG_START + 4: // Base Address One (Mem)
     PCI_SET_DATA(reg, value & ~3);
     return 1;
+  default:
+    return 0;
   }
 }
 
-PCIINIT(osiop)
+PCIINIT(lsi53c895a)
 {
   char tmpstr[1000];
   char irqstr[100];
   int irq = 13;
-	uint64_t port, memaddr;
 
   PCI_SET_DATA
     (PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810));
@@ -497,12 +498,12 @@ PCIINIT(osiop)
   PCI_SET_DATA(0x14, 0); // Mmap Address
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
-	pd->cfg_reg_write = osiop_cfg_reg_write;
+	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
 
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  snprintf(tmpstr, sizeof(tmpstr), "osiop addr=0x%llx irq=%s",
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
            0xa0000000, irqstr);
   device_add(machine, tmpstr);
 }

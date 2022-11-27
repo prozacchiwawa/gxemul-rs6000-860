@@ -160,6 +160,25 @@ int dev_decxmi_access(struct cpu *cpu, struct memory *mem, uint64_t relative_add
 void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 
 /*  dev_eagle.c */
+struct eagle_data {
+	struct interrupt irq;
+
+	struct pci_data	*pci_data;
+
+	int stage;
+  int addr_low_high_latch;
+  int len_low_high_latch;
+
+  int fin_mask;
+
+  unsigned char dma_page[4];
+  unsigned char dma_high[4];
+
+  uint8_t err_reg[2];
+
+  int want_error;
+};
+
 extern unsigned char eagle_comm_area[16];
 
 /*  dev_fb.c:  */

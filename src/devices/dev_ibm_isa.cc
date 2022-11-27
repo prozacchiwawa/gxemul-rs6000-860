@@ -43,25 +43,38 @@
 #include "memory.h"
 #include "misc.h"
 
+struct ibm_carerra_data {
+    int dev_state;
+};
+
 DEVICE_ACCESS(ibm_carerra) {
+    struct ibm_carerra_data *d = (struct ibm_carerra_data *)extra;
     unsigned char b = 0;
     uint64_t idata = 0, odata = 0;
 
-	if (writeflag == MEM_WRITE) {
-		b = idata = memory_readmax64(cpu, data, len);
+    if (writeflag == MEM_WRITE) {
+        b = idata = memory_readmax64(cpu, data, len);
+
+        if (relative_addr == 0) {
+            d->dev_state += 1;
+        }
     }
 
     switch (relative_addr)
     {
     case 1:
-        odata = 6;
+        if (d->dev_state > 20) {
+            odata = 0;
+        } else {
+            odata = 2;
+        }
         break;
     }
 
     debug("[ carerra %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
-	if (writeflag == MEM_READ) {
-		memory_writemax64(cpu, data, len, odata);
+    if (writeflag == MEM_READ) {
+        memory_writemax64(cpu, data, len, odata);
     }
 
     return 1;
@@ -71,35 +84,33 @@ DEVICE_ACCESS(ibm_carerra_83e) {
     unsigned char b = 0;
     uint64_t idata = 0, odata = 0;
 
-	if (writeflag == MEM_WRITE) {
-		b = idata = memory_readmax64(cpu, data, len);
+    if (writeflag == MEM_WRITE) {
+        b = idata = memory_readmax64(cpu, data, len);
     }
 
     debug("[ carerra-83e %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
-	if (writeflag == MEM_READ) {
-		memory_writemax64(cpu, data, len, odata);
+    if (writeflag == MEM_READ) {
+        memory_writemax64(cpu, data, len, odata);
     }
 
     return 1;
 }
 
 DEVINIT(ibm_carerra) {
+    struct ibm_carerra_data *d;
+
+    CHECK_ALLOCATION(d = (struct ibm_carerra_data*)malloc(sizeof(struct ibm_carerra_data)));
+    memset(d, 0, sizeof(*d));
+
     memory_device_register
         (devinit->machine->memory, devinit->name,
-         devinit->addr, 
+         devinit->addr,
          2,
-         dev_ibm_carerra_access, 
-         NULL, // Device own data ptr
+         dev_ibm_carerra_access,
+         d,
          DM_DEFAULT,
          NULL);
-    memory_device_register
-        (devinit->machine->memory, devinit->name,
-         0x8000083e,
-         1,
-         dev_ibm_carerra_83e_access, 
-         NULL, // Device own data ptr
-         DM_DEFAULT,
-         NULL);
+
     return 1;
 }

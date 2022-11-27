@@ -464,14 +464,11 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
   case 0x04: // Status, command
   case 0x0c: // Header type, Latency Timer, Cache Line Size
+  case 0x10:
+    PCI_SET_DATA(reg, (value & ~0x3ff) | 1);
+    return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
     PCI_SET_DATA(reg, value);
-    return 1;
-  case PCI_MAPREG_START + 0: // Base Address Zero (IO)
-    PCI_SET_DATA(reg, (value & ~3) | 1);
-    return 1;
-  case PCI_MAPREG_START + 4: // Base Address One (Mem)
-    PCI_SET_DATA(reg, value & ~3);
     return 1;
   default:
     return 0;
@@ -494,8 +491,6 @@ PCIINIT(lsi53c895a)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0));
 
-  PCI_SET_DATA(0x10, 0xa0000001); // IO Address
-  PCI_SET_DATA(0x14, 0x00008000); // mmap address
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
@@ -503,8 +498,8 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x addr2=0x%x irq=%s",
-           0xa0000000, 0x80008000, irqstr);
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
+           0xa0000000, irqstr);
   device_add(machine, tmpstr);
 }
 
@@ -1142,18 +1137,18 @@ struct symphony_82c105_extra {
 };
 
 int symphony_82c105_cfg_reg_write(struct pci_device *pd, int reg,
-	uint32_t value)
+                                  uint32_t value)
 {
 	void *wdc0 = ((struct symphony_82c105_extra *)pd->extra)->wdc0;
 	void *wdc1 = ((struct symphony_82c105_extra *)pd->extra)->wdc1;
 	int enabled = 0;
 
-printf("reg = 0x%x\n", reg);
+  printf("reg = 0x%x\n", reg);
 	switch (reg) {
 	case PCI_COMMAND_STATUS_REG:
 		if (value & PCI_COMMAND_IO_ENABLE)
 			enabled = 1;
-printf("  value = 0x%" PRIx32"\n", value);
+    printf("  value = 0x%" PRIx32"\n", value);
 		if (wdc0 != NULL)
 			wdc_set_io_enabled((struct wdc_data *) wdc0, enabled);
 		if (wdc1 != NULL)
@@ -1340,8 +1335,6 @@ PCIINIT(dec21143)
 	device_add(machine, tmpstr);
 }
 
-
-
 /*
  *  DEC 21030 "tga" graphics.
  */
@@ -1393,8 +1386,6 @@ PCIINIT(dec21030)
 	device_add(machine, tmpstr);
 }
 
-
-
 /*
  *  Motorola MPC105 "Eagle" Host Bridge
  *
@@ -1403,6 +1394,78 @@ PCIINIT(dec21030)
 
 #define	PCI_VENDOR_MOT			0x1057
 #define	PCI_PRODUCT_MOT_MPC105		0x0001
+
+int eagle_cfg_reg_write(struct pci_device *pd, int reg,
+                        uint32_t value)
+{
+  static int want_error = 0;
+  fprintf(stderr, "[ bus_pci: write eagle reg %02x value %08x ]\n", reg, value);
+
+	switch (reg) {
+  case 0x70:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0x90:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0x94:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xa0:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xa4:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xa8:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xb8:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xac:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xc0:
+    if (value & 0x400) {
+      want_error += 1;
+    }
+    if (want_error == 2) {
+      PCI_SET_DATA(reg, 1);
+    } else {
+      PCI_SET_DATA(reg, 0);
+    }
+    want_error++;
+    //    PCI_SET_DATA(reg, value);
+		return 1;
+
+  case 0xf0:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xf4:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xf8:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0xfc:
+    PCI_SET_DATA(reg, value);
+    return 1;
+  }
+
+	return 0;
+}
 
 PCIINIT(eagle)
 {
@@ -1414,6 +1477,11 @@ PCIINIT(eagle)
 
 	PCI_SET_DATA(PCI_BHLC_REG,
 	    PCI_BHLC_CODE(0,0, 1 /* multi-function */, 0x40,0));
+
+  // Cache line size
+  PCI_SET_DATA(0x0c, 8);
+
+  pd->cfg_reg_write = eagle_cfg_reg_write;
 }
 
 

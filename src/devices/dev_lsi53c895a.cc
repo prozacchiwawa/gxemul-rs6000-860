@@ -223,7 +223,7 @@ typedef uint32_t dma_addr_t;
 typedef uint32_t hwaddr;
 
 struct SCSIDevice {
-    char dummy;
+    int id;
 };
 
 typedef struct SCSIDevice DeviceState;
@@ -237,12 +237,23 @@ struct SCSIBus {
     SCSIDevice devices[8];
 };
 
+#define SCSI_CMD_BUF_SIZE 16
+
+typedef struct SCSICommand {
+    uint8_t buf[SCSI_CMD_BUF_SIZE];
+    int len;
+    size_t xfer;
+    uint64_t lba;
+    int mode;
+} SCSICommand;
+
 struct lsi_request;
 struct SCSIRequest {
     SCSIRequest *next;
     SCSIRequest *prev;
     SCSIDevice *dev;
     SCSIBus *bus;
+    SCSICommand cmd;
     struct lsi_request *hba_private;
     int status;
     int tag;
@@ -523,6 +534,7 @@ static const char *scsi_phases[] = {
 
 #define qemu_log_mask(_, args...) fprintf(stderr,args)
 
+#define MIN(x,y) (((x)<(y))?(x):(y))
 #define g_new0(TYPE, N) ((TYPE*)calloc(sizeof(TYPE), N))
 
 static void g_free(void *p) {
@@ -548,6 +560,9 @@ static SCSIRequest *scsi_req_new(struct lsi53c895a_data *d, SCSIDevice *dev, uin
     req->hba_private = current;
     req->status = 0;
     req->tag = tag;
+    fprintf(stderr, "lsi: create command with %d bytes\n", dbc);
+    memcpy(req->cmd.buf, buf, MIN(16, dbc));
+    req->cmd.len = dbc;
     return req;
 }
 
@@ -555,9 +570,17 @@ static int scsi_req_enqueue(SCSIRequest *req) {
     if (req->hba_private->dma_len == 0) {
         return 1;
     } else {
+        uint8_t opcode = req->hba_private->dma_buf[0];
+        switch (opcode) {
+        default:
+            fprintf(stderr, "Unknown SCSI opcode %02x\n", opcode);
+            ABORT();
+        }
+        /*
         req->hba_private->pending = 1;
         QTAILQ_INSERT_TAIL(&req->bus->qbus.parent->queue, req, next);
         return 0;
+        */
     }
 }
 
@@ -671,9 +694,34 @@ static void address_space_write
     ABORT();
 }
 
-static uint8_t *scsi_req_get_buf(SCSIRequest *req) { return nullptr; } // XXX
-static void scsi_req_cancel(SCSIRequest *req) { } // XXX
-static void scsi_req_continue(SCSIRequest *req) { } // XXX
+static uint8_t *scsi_req_get_buf(SCSIRequest *req) {
+    ABORT();
+    return nullptr;
+}
+
+static void scsi_req_cancel(SCSIRequest *req) {
+    ABORT();
+}
+
+static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
+    switch (req->cmd.buf[0]) {
+    case 0x12: {
+        struct scsi_transfer xfer = { 0 };
+        xfer.cmd = req->cmd.buf;
+        xfer.cmd_len = req->cmd.len;
+        auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, req->cmd.buf[0], &xfer);
+        if (cmd_res != 0) {
+            fprintf(stderr, "lsi: bad result %d\n", cmd_res);
+            ABORT();
+        }
+        fprintf(stderr, "disk returned %d bytes\n", xfer.data_out_len);
+        ABORT();
+    }
+    default:
+        fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
+        ABORT();
+    }
+}
 
 static void pci_dma_read(struct cpu *cpu, LSIState *s, dma_addr_t addr, void *buf, dma_addr_t len) {
     fprintf(stderr, "pci_dma_read(%08x,%d)\n", (int)addr, len);
@@ -713,6 +761,10 @@ static void lsi_soft_reset(LSIState *s)
 {
     trace_lsi_reset();
     s->carry = 0;
+
+    for (int i = 0; i < 8; i++) {
+        s->bus.devices[i].id = i;
+    }
 
     s->bus.qbus.parent = s;
 
@@ -1029,7 +1081,7 @@ static void lsi_do_dma(struct cpu *cpu, LSIState *s, int out)
     s->current->dma_len -= count;
     if (s->current->dma_len == 0) {
         s->current->dma_buf = NULL;
-        scsi_req_continue(s->current->req);
+        scsi_req_continue(cpu, s->current->req);
     } else {
         s->current->dma_buf += count;
         lsi_resume_script(cpu, s);
@@ -1243,7 +1295,7 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
         } else if (n < 0) {
             lsi_set_phase(s, PHASE_DO);
         }
-        scsi_req_continue(s->current->req);
+        scsi_req_continue(cpu, s->current->req);
     }
     if (!s->command_complete) {
         if (n) {
@@ -1631,15 +1683,19 @@ again:
                 s->waiting = LSI_DMA_IN_PROGRESS;
             break;
         case PHASE_CMD:
+            fprintf(stderr, "lsi: PHASE_CMD\n");
             lsi_do_command(cpu, s);
             break;
         case PHASE_ST:
+            fprintf(stderr, "lsi: PHASE_ST\n");
             lsi_do_status(cpu, s);
             break;
         case PHASE_MO:
+            fprintf(stderr, "lsi: PHASE_MO\n");
             lsi_do_msgout(cpu, s);
             break;
         case PHASE_MI:
+            fprintf(stderr, "lsi: PHASE_MI\n");
             lsi_do_msgin(cpu, s);
             break;
         default:

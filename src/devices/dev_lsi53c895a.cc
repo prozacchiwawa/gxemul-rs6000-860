@@ -257,6 +257,9 @@ struct SCSIRequest {
     struct lsi_request *hba_private;
     int status;
     int tag;
+    uint8_t *result_buf;
+    uint8_t result_len;
+    struct scsi_transfer xfer;
 };
 
 #define BUS(bus) ((SCSIBus *)&(bus))
@@ -542,7 +545,7 @@ static void g_free(void *p) {
 }
 
 static void scsi_req_unref(struct SCSIRequest *req) {
-    ABORT();
+    // OK.
 }
 
 static SCSIDevice *scsi_device_find(struct cpu *cpu, struct lsi53c895a_data *d, SCSIBus *bus, uint8_t channel, uint8_t id, uint8_t lun) {
@@ -703,19 +706,26 @@ static void scsi_req_cancel(SCSIRequest *req) {
     ABORT();
 }
 
+static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len);
+static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid);
+
 static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     switch (req->cmd.buf[0]) {
     case 0x12: {
-        struct scsi_transfer xfer = { 0 };
-        xfer.cmd = req->cmd.buf;
-        xfer.cmd_len = req->cmd.len;
-        auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, req->cmd.buf[0], &xfer);
-        if (cmd_res != 0) {
+        req->xfer.cmd = req->cmd.buf;
+        req->xfer.cmd_len = req->cmd.len;
+        auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
+        if (cmd_res != 1) {
             fprintf(stderr, "lsi: bad result %d\n", cmd_res);
             ABORT();
         }
-        fprintf(stderr, "disk returned %d bytes\n", xfer.data_out_len);
-        ABORT();
+        req->hba_private->dma_buf = req->xfer.msg_in;
+        req->hba_private->dma_len = req->xfer.msg_in_len;
+        fprintf(stderr, "lsi: disk returned %d bytes (return to %p %d)\n", req->xfer.data_in_len, req->hba_private->dma_buf, req->hba_private->dma_len);
+        size_t result_size = MIN(req->xfer.msg_in_len, req->cmd.buf[4]);
+        lsi_transfer_data(cpu, req, result_size);
+        lsi_command_complete(cpu, req, result_size);
+        break;
     }
     default:
         fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
@@ -2864,6 +2874,7 @@ DEVICE_TICK(lsi53c895a)
         struct lsi_request *request = get_pending_req(d);
         if (request) {
             fprintf(stderr, "lsi: waiting command: tag %08x dma_buf %p dma_len %08x pending %d\n", request->tag, request->dma_buf, request->dma_len, request->pending);
+            ABORT();
         }
     }
 }

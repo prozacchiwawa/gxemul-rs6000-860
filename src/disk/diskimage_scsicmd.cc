@@ -236,6 +236,7 @@ int diskimage_scsicommand(struct cpu *cpu, int id, int type,
 	if (d == NULL) {
 		fprintf(stderr, "[ diskimage_scsicommand(): %s "
 		    " id %i not connected? ]\n", diskimage_types[type], id);
+    return 0;
 	}
 
 	if (xferp->cmd == NULL) {
@@ -294,6 +295,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICMD_INQUIRY:
+    fprintf(stderr, "SCSI: device ptr %p\n", d);
 		debug("INQUIRY");
 		if (xferp->cmd_len != 6)
 			debug(" (weird len=%i)", xferp->cmd_len);
@@ -312,8 +314,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		}
 
 		/*  Return data:  */
+    fprintf(stderr, "SCSI: Allocate data buf\n");
 		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in,
 		    retlen, 1);
+    fprintf(stderr, "SCSI: data buf %p", xferp->data_in);
 		xferp->data_in[0] = 0x00;  /*  0x00 = Direct-access disk  */
 		xferp->data_in[1] = 0x00;  /*  0x00 = non-removable  */
 		xferp->data_in[2] = 0x02;  /*  SCSI-2  */
@@ -327,9 +331,11 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 
 		/*  These are padded with spaces:  */
 
+    fprintf(stderr, "SCSI: copying in name\n");
 		memcpy(xferp->data_in+8,  "GXemul  ", 8);
 		if (diskimage_getname(cpu->machine, id,
 		    type, namebuf, sizeof(namebuf))) {
+      fprintf(stderr, "SCSI: start namebuf\n");
 			for (size_t j=0; j<sizeof(namebuf); j++) {
 				if (namebuf[j] == 0) {
 					for (; j<sizeof(namebuf); j++)
@@ -337,17 +343,21 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 					break;
 				}
 			}
-			
+
+      fprintf(stderr, "SCSI: finish namebuf\n");
 			memcpy(xferp->data_in+16, namebuf, 16);
-		} else
+		} else {
+      fprintf(stderr, "SCSI: generic namebuf\n");
 			memcpy(xferp->data_in+16, "DISK            ", 16);
+    }
+
+    fprintf(stderr, "SCSI: finish namebuf\n");
 		memcpy(xferp->data_in+32, "0   ", 4);
 
 		/*
 		 *  Some Ultrix kernels want specific responses from
 		 *  the drives.
 		 */
-
 		if (machine->machine_type == MACHINE_PMAX) {
 			/*  DEC, RZ25 (rev 0900) = 832527 sectors  */
 			/*  DEC, RZ58 (rev 2000) = 2698061 sectors  */
@@ -357,6 +367,7 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 		}
 
 		/*  Some data is different for CD-ROM drives:  */
+    fprintf(stderr, "SCSI: check device ptr %p\n", d);
 		if (d->is_a_cdrom) {
 			xferp->data_in[0] = 0x05;  /*  0x05 = CD-ROM  */
 			xferp->data_in[1] = 0x80;  /*  0x80 = removable  */

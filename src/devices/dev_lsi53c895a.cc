@@ -257,6 +257,7 @@ struct SCSIRequest {
     struct lsi_request *hba_private;
     int status;
     int tag;
+    int refct;
     uint8_t *result_buf;
     uint8_t result_len;
     struct scsi_transfer xfer;
@@ -545,7 +546,11 @@ static void g_free(void *p) {
 }
 
 static void scsi_req_unref(struct SCSIRequest *req) {
-    // OK.
+    if (--req->refct == 0) {
+        free(req->xfer.msg_in);
+        free(req->xfer.msg_out);
+        free(req);
+    }
 }
 
 static SCSIDevice *scsi_device_find(struct cpu *cpu, struct lsi53c895a_data *d, SCSIBus *bus, uint8_t channel, uint8_t id, uint8_t lun) {
@@ -563,6 +568,7 @@ static SCSIRequest *scsi_req_new(struct lsi53c895a_data *d, SCSIDevice *dev, uin
     req->hba_private = current;
     req->status = 0;
     req->tag = tag;
+    req->refct = 1;
     fprintf(stderr, "lsi: create command with %d bytes\n", dbc);
     memcpy(req->cmd.buf, buf, MIN(16, dbc));
     req->cmd.len = dbc;
@@ -711,7 +717,13 @@ static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid
 
 static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     switch (req->cmd.buf[0]) {
-    case 0x12: {
+    case 0x00:
+    case 0x08:
+    case 0x12:
+    case 0x1a:
+    case 0x1b:
+    case 0x1e:
+    case 0x25: {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
@@ -1682,12 +1694,14 @@ again:
         switch (s->sstat1 & 0x7) {
         case PHASE_DO:
             s->waiting = LSI_DMA_SCRIPTS;
+            fprintf(stderr, "lsi: dma PHASE_DO\n");
             lsi_do_dma(cpu, s, 1);
             if (s->waiting)
                 s->waiting = LSI_DMA_IN_PROGRESS;
             break;
         case PHASE_DI:
             s->waiting = LSI_DMA_SCRIPTS;
+            fprintf(stderr, "lsi: dma PHASE_DI\n");
             lsi_do_dma(cpu, s, 0);
             if (s->waiting)
                 s->waiting = LSI_DMA_IN_PROGRESS;

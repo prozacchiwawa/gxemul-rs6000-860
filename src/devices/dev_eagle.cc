@@ -315,11 +315,11 @@ DEVICE_ACCESS(eagle_880)
 
     switch (relative_addr) {
     case 0:
-        odata = 15;
+        odata = 1;
         break;
 
     case 4:
-        odata = 15;
+        odata = 1;
         break;
     }
 

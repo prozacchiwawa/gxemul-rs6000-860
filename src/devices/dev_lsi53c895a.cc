@@ -272,6 +272,7 @@ struct SCSIRequest {
 
 struct SCSIBus {
     QBus qbus;
+    SCSIRequest queue;
     SCSIDevice devices[8];
 };
 
@@ -590,21 +591,53 @@ static SCSIRequest *scsi_req_new(struct lsi53c895a_data *d, SCSIDevice *dev, uin
     return req;
 }
 
-static int scsi_req_enqueue(SCSIRequest *req) {
-    if (req->hba_private->dma_len == 0) {
+static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len);
+static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid);
+static void lsi_add_msg_byte(LSIState *s, uint8_t data);
+
+static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
+    auto s = req->bus->qbus.parent;
+
+    assert(!req->enqueued);
+    req->enqueued = true;
+    req->refct++;
+
+    switch (req->cmd.buf[0]) {
+    case 0x00:
         return 1;
-    } else {
-        uint8_t opcode = req->hba_private->dma_buf[0];
-        switch (opcode) {
-        default:
-            fprintf(stderr, "Unknown SCSI opcode %02x\n", opcode);
-            ABORT();
-        }
-        /*
-        req->hba_private->pending = 1;
-        QTAILQ_INSERT_TAIL(&req->bus->qbus.parent->queue, req, next);
-        return 0;
-        */
+
+    case 0x08:
+    case 0x12:
+    case 0x1a:
+    case 0x1b:
+    case 0x1e:
+    case 0x25: {
+        req->xfer.cmd = req->cmd.buf;
+        req->xfer.cmd_len = req->cmd.len;
+        auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
+        if (cmd_res != 1) {
+            fprintf(stderr, "lsi: bad result %d\n", cmd_res);
+             ABORT();
+         }
+
+        fprintf(
+            stderr,
+            "lsi: disk cmd %d msg_out %d data_out %d data_in %d msg_in %d status %d bytes\n",
+            req->xfer.cmd_len,
+            req->xfer.msg_out_len,
+            req->xfer.data_out_len,
+            req->xfer.data_in_len,
+            req->xfer.msg_in_len,
+            req->xfer.status_len
+            );
+
+        req->status = req->xfer.status[0];
+        QTAILQ_INSERT_TAIL(&req->bus->queue, req, next);
+        return req->cmd.buf[0] != 0;
+    }
+    default:
+        fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
+        ABORT();
     }
 }
 
@@ -731,14 +764,10 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len);
 static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid);
 
 static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
+    size_t result_size;
+
     switch (req->cmd.buf[0]) {
-    case 0x00:
-    case 0x08:
-    case 0x12:
-    case 0x1a:
-    case 0x1b:
-    case 0x1e:
-    case 0x25: {
+    case 0x00: {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
@@ -748,12 +777,24 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
         }
         req->hba_private->dma_buf = req->xfer.msg_in;
         req->hba_private->dma_len = req->xfer.msg_in_len;
-        fprintf(stderr, "lsi: disk returned %d bytes (return to %p %d)\n", req->xfer.data_in_len, req->hba_private->dma_buf, req->hba_private->dma_len);
         size_t result_size = MIN(req->xfer.msg_in_len, req->cmd.buf[4]);
         lsi_transfer_data(cpu, req, result_size);
         lsi_command_complete(cpu, req, result_size);
         break;
     }
+    case 0x08:
+    case 0x12:
+    case 0x1a:
+    case 0x1b:
+    case 0x25: {
+        req->hba_private->dma_buf = req->xfer.data_in;
+        req->hba_private->dma_len = req->xfer.data_in_len;
+        lsi_transfer_data(cpu, req, req->xfer.data_in_len);
+        lsi_command_complete(cpu, req, req->xfer.data_in_len);
+        fprintf(stderr, "lsi: disk returned %d bytes\n", (int)req->xfer.data_in_len);
+        break;
+    }
+
     default:
         fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
         ABORT();
@@ -1325,7 +1366,7 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
     s->current->req = scsi_req_new(s, dev, s->current->tag, s->current_lun, buf,
                                    s->dbc, s->current);
 
-    n = scsi_req_enqueue(s->current->req);
+    n = scsi_req_enqueue(cpu, s->current->req);
     if (n) {
         if (n > 0) {
             lsi_set_phase(s, PHASE_DI);
@@ -2943,6 +2984,7 @@ DEVINIT(lsi53c895a)
     INTERRUPT_CONNECT(devinit->interrupt_path, d->ext_irq);
 
     QTAILQ_INIT(&d->queue);
+    QTAILQ_INIT(&d->bus.queue);
 
     memory_device_register(devinit->machine->memory, "lsi53c895a (IO)",
                            devinit->addr, DEV_LSI53C895A_LENGTH,

@@ -226,16 +226,20 @@ struct SCSIDevice {
     int id;
 };
 
+struct DMASetup {
+    uint32_t count;
+    dma_addr_t addr;
+    SCSIDevice *dev;
+};
+
 typedef struct SCSIDevice DeviceState;
 
 struct QBus {
     struct lsi53c895a_data *parent;
 };
 
-struct SCSIBus {
-    QBus qbus;
-    SCSIDevice devices[8];
-};
+struct SCSIRequest;
+struct SCSIBus;
 
 #define SCSI_CMD_BUF_SIZE 16
 
@@ -251,6 +255,7 @@ struct lsi_request;
 struct SCSIRequest {
     SCSIRequest *next;
     SCSIRequest *prev;
+
     SCSIDevice *dev;
     SCSIBus *bus;
     SCSICommand cmd;
@@ -258,9 +263,16 @@ struct SCSIRequest {
     int status;
     int tag;
     int refct;
+    int transferred;
+    int enqueued;
     uint8_t *result_buf;
     uint8_t result_len;
     struct scsi_transfer xfer;
+};
+
+struct SCSIBus {
+    QBus qbus;
+    SCSIDevice devices[8];
 };
 
 #define BUS(bus) ((SCSIBus *)&(bus))
@@ -281,6 +293,9 @@ static void device_cold_reset(struct lsi53c895a_data *device) {
 }
 
 typedef struct lsi_request {
+    struct lsi_request *next;
+    struct lsi_request *prev;
+
     SCSIRequest *req;
     uint32_t tag;
     uint32_t dma_len;
@@ -381,7 +396,7 @@ struct lsi53c895a_data {
     /* The tag is a combination of the device ID and the SCSI tag.  */
     uint32_t select_tag;
     int command_complete;
-    SCSIRequest queue;
+    lsi_request queue;
     lsi_request *current;
 
     uint32_t dsa;
@@ -769,11 +784,11 @@ static inline int lsi_irq_on_rsl(LSIState *s)
 
 static lsi_request *get_pending_req(LSIState *s)
 {
-    SCSIRequest *p;
+    struct lsi_request *p;
 
     QTAILQ_FOREACH(p, &s->queue, next) {
-        if (p->hba_private->pending) {
-            return p->hba_private;
+        if (p->pending) {
+            return p;
         }
     }
     return NULL;
@@ -1119,7 +1134,7 @@ static void lsi_queue_command(LSIState *s)
     trace_lsi_queue_command(p->tag);
     assert(s->current != NULL);
     assert(s->current->dma_len == 0);
-    QTAILQ_INSERT_TAIL(&s->queue, s->current->req, next);
+    QTAILQ_INSERT_TAIL(&s->queue, s->current, next);
     s->current = NULL;
 
     p->pending = 0;
@@ -1170,11 +1185,11 @@ static void lsi_reselect(LSIState *s, lsi_request *p)
 
 static lsi_request *lsi_find_by_tag(LSIState *s, uint32_t tag)
 {
-    SCSIRequest *p;
+    struct lsi_request *p;
 
     QTAILQ_FOREACH(p, &s->queue, next) {
         if (p->tag == tag) {
-            return p->hba_private;
+            return p;
         }
     }
 
@@ -1411,7 +1426,7 @@ static void lsi_do_msgout(struct cpu *cpu, LSIState *s)
     int len;
     uint32_t current_tag;
     lsi_request *current_req;
-    SCSIRequest *p, *p_next;
+    struct lsi_request *p, *p_next;
 
     if (s->current) {
         current_tag = s->current->tag;
@@ -1513,7 +1528,7 @@ static void lsi_do_msgout(struct cpu *cpu, LSIState *s)
                commands for the current device: */
             QTAILQ_FOREACH_SAFE(p, &s->queue, next, p_next) {
                 if ((p->tag & 0x0000ff00) == (current_tag & 0x0000ff00)) {
-                    scsi_req_cancel(p);
+                    scsi_req_cancel(p->req);
                 }
             }
 

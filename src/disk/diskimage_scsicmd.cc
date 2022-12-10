@@ -279,6 +279,9 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 }
 #endif
 
+  uint8_t buf[256];
+  uint8_t *old_ptr;
+
 	switch (xferp->cmd[0]) {
 
 	case SCSICMD_TEST_UNIT_READY:
@@ -308,15 +311,21 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		/*  Return values:  */
 		retlen = xferp->cmd[4];
+    /*
 		if (retlen < 36) {
 			fatal("WARNING: SCSI inquiry len=%i, <36!\n", retlen);
 			retlen = 36;
 		}
+    */
 
 		/*  Return data:  */
     fprintf(stderr, "SCSI: Allocate data buf\n");
 		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in,
 		    retlen, 1);
+
+    old_ptr = xferp->data_in;
+    xferp->data_in = buf;
+
     fprintf(stderr, "SCSI: data buf %p", xferp->data_in);
 		xferp->data_in[0] = 0x00;  /*  0x00 = Direct-access disk  */
 		xferp->data_in[1] = 0x00;  /*  0x00 = non-removable  */
@@ -412,6 +421,9 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 				memcpy(xferp->data_in+32, "2000", 4);
 			}
 		}
+
+    memcpy(old_ptr, buf, retlen);
+    xferp->data_in = old_ptr;
 
 		diskimage__return_default_status_and_message(xferp);
 		break;

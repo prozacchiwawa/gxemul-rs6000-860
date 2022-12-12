@@ -752,8 +752,7 @@ static void address_space_write
 }
 
 static uint8_t *scsi_req_get_buf(SCSIRequest *req) {
-    ABORT();
-    return nullptr;
+    return req->result_buf;
 }
 
 static void scsi_req_cancel(SCSIRequest *req) {
@@ -801,16 +800,43 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     }
 }
 
+static uint64_t lsi_mmio_read(struct cpu *cpu, LSIState *s, hwaddr addr,
+                              unsigned size);
+
+static uint64_t lsi_ram_read(struct lsi53c895a_data *s, hwaddr addr,
+                             unsigned size);
+static void lsi_ram_write(struct lsi53c895a_data *s, hwaddr addr,
+                          uint64_t val, unsigned size);
+
 static void pci_dma_read(struct cpu *cpu, LSIState *s, dma_addr_t addr, void *buf, dma_addr_t len) {
-    fprintf(stderr, "pci_dma_read(%08x,%d)\n", (int)addr, len);
-    addr &= ~0x80000000;
-    cpu->memory_rw(cpu, cpu->mem, addr, (uint8_t*)buf, len, MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (addr & 0x80000000) {
+        fprintf(stderr, "pci_dma_read(%08x,%d)\n", (int)addr, len);
+        addr &= ~0x80000000;
+        for (auto i = 0; i < len; i++) {
+            cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_READ, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
+        }
+    } else {
+        for (auto i = 0; i < len; i++) {
+            *(((uint8_t *)buf) + i) = lsi_ram_read(s, (addr + i) & 0x1fff, 1);
+        }
+    }
 }
 
+static void lsi_mmio_write(struct cpu *cpu, LSIState *s, hwaddr addr,
+                           uint64_t val, unsigned size);
+
 static void pci_dma_write(struct cpu *cpu, LSIState *s, dma_addr_t addr, const void *buf, dma_addr_t len) {
-    fprintf(stderr, "pci_dma_write(%08x,%d)\n", (int)addr, len);
-    addr &= ~0x80000000;
-    cpu->memory_rw(cpu, cpu->mem, addr, (uint8_t*)buf, len, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
+    if (addr & 0x80000000) {
+        fprintf(stderr, "pci_dma_write(%08x,%d)\n", (int)addr, len);
+        addr &= ~0x80000000;
+        for (auto i = 0; i < len; i++) {
+            cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
+        }
+    } else {
+        for (auto i = 0; i < len; i++) {
+            lsi_ram_write(s, (addr + i) & 0x1fff, ((uint8_t *)buf)[i], 1);
+        }
+    }
 }
 
 static const char *scsi_phase_name(int phase)
@@ -1599,11 +1625,13 @@ static void lsi_memcpy(struct cpu *cpu, LSIState *s, uint32_t dest, uint32_t src
     int n;
     uint8_t buf[LSI_BUF_SIZE];
 
-    trace_lsi_memcpy(cpu, dest, src, count);
+    trace_lsi_memcpy(dest, src, count);
     while (count) {
         n = (count > LSI_BUF_SIZE) ? LSI_BUF_SIZE : count;
-        lsi_mem_read(cpu, s, src, buf, n);
-        lsi_mem_write(cpu, s, dest, buf, n);
+        for (auto i = 0; i < n; i++) {
+            lsi_mem_read(cpu, s, src + i, buf + i, 1);
+            lsi_mem_write(cpu, s, dest + i, buf + i, 1);
+        }
         src += n;
         dest += n;
         count -= n;

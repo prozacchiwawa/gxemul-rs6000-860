@@ -226,12 +226,6 @@ struct SCSIDevice {
     int id;
 };
 
-struct DMASetup {
-    uint32_t count;
-    dma_addr_t addr;
-    SCSIDevice *dev;
-};
-
 typedef struct SCSIDevice DeviceState;
 
 struct QBus {
@@ -266,7 +260,7 @@ struct SCSIRequest {
     int transferred;
     int enqueued;
     uint8_t *result_buf;
-    uint8_t result_len;
+    int result_len;
     struct scsi_transfer xfer;
 };
 
@@ -785,6 +779,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x12:
     case 0x1a:
     case 0x1b:
+    case 0x1e:
     case 0x25: {
         req->hba_private->dma_buf = req->xfer.data_in;
         req->hba_private->dma_len = req->xfer.data_in_len;

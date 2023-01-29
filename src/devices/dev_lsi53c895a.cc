@@ -503,7 +503,7 @@ static const char *scsi_phases[] = {
 #define trace_lsi_queue_req(args...) TRACE("trace_lsi_queue_req", "%08x",##args)
 #define trace_lsi_command_complete(args...) TRACE("trace_lsi_command_complete", "%d",##args)
 #define trace_lsi_transfer_data(args...) TRACE("trace_lsi_transfer_data", "%08x %08x",##args)
-#define trace_lsi_do_command(args...) TRACE("trace_lsi_do_command", "%08x",##args)
+#define trace_lsi_do_command(args...) TRACE("trace_lsi_do_command", "%08x id=%d",##args)
 #define trace_lsi_do_status(args...) TRACE("trace_lsi_do_status", "%08x %08x",##args)
 #define trace_lsi_do_status_error(args...) TRACE("trace_lsi_do_status_error", "",##args)
 #define trace_lsi_do_msgin(args...) TRACE("trace_lsi_do_msgin", "%08x %08x",##args)
@@ -592,20 +592,28 @@ static void lsi_add_msg_byte(LSIState *s, uint8_t data);
 static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     auto s = req->bus->qbus.parent;
 
+    fprintf(stderr, "lsi: DNAD is %08x at ENQUEUE, DBC %08x DSA %08x\n", s->dnad, s->dbc, s->dsa);
+
     assert(!req->enqueued);
     req->enqueued = true;
     req->refct++;
 
     switch (req->cmd.buf[0]) {
     case 0x00:
+    case 0x1b:
+    case 0x1e: {
         return 1;
+    }
 
     case 0x08:
     case 0x12:
     case 0x1a:
-    case 0x1b:
-    case 0x1e:
-    case 0x25: {
+    case 0x25:
+    case 0x28: {
+        if (req->cmd.buf[0] == 0x12 && req->cmd.buf[1] & 0x20 && req->cmd.buf[2]) {
+            req->status = 2; // CHECK_CONDITION
+            return 1;
+        }
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
@@ -627,7 +635,10 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
 
         req->status = req->xfer.status[0];
         QTAILQ_INSERT_TAIL(&req->bus->queue, req, next);
-        return req->cmd.buf[0] != 0;
+        req->result_buf = req->xfer.data_in;
+        req->result_len = req->xfer.data_in_len;
+        fprintf(stderr, "result_buf: %p len: %d\n", req->result_buf, req->result_len);
+        return req->xfer.data_in_len;
     }
     default:
         fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
@@ -640,17 +651,20 @@ static inline uint32_t cpu_to_le32(struct cpu *cpu, uint32_t word) {
 }
 
 static inline uint32_t sextract32(uint32_t val, uint32_t first_bit, uint32_t last_bit) {
-    auto res_1 = val >> first_bit;
-    auto sign_bit = val & 0x80000000;
+    auto mask = (1 << last_bit) - 1;
+    auto sign_bit = val & (1 << (first_bit + last_bit - 1));
+    auto sign_mask = ~((1 << (first_bit + last_bit)) - 1);
+    uint32_t res;
     if (sign_bit) {
-        return res_1 | ~((1 << last_bit) - 1);
+        res = (val >> first_bit) | sign_mask;
     } else {
-        return res_1 & ((1 << (last_bit - first_bit)) - 1);
+        res = (val >> first_bit) & mask;
     }
+    return res;
 }
 
 static inline uint32_t deposit32(uint32_t val, uint32_t first_bit, uint32_t last_bit, uint32_t replacement) {
-    auto mask = (~((1 << last_bit) - 1)) << first_bit;
+    auto mask = ((1 << last_bit) - 1) << first_bit;
     return (val & ~mask) | ((replacement << first_bit) & mask);
 }
 
@@ -760,7 +774,9 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     size_t result_size;
 
     switch (req->cmd.buf[0]) {
-    case 0x00: {
+    case 0x00:
+    case 0x1b:
+    case 0x1e: {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
@@ -768,8 +784,6 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
             fprintf(stderr, "lsi: bad result %d\n", cmd_res);
             ABORT();
         }
-        req->hba_private->dma_buf = req->xfer.msg_in;
-        req->hba_private->dma_len = req->xfer.msg_in_len;
         size_t result_size = MIN(req->xfer.msg_in_len, req->cmd.buf[4]);
         lsi_transfer_data(cpu, req, result_size);
         lsi_command_complete(cpu, req, result_size);
@@ -778,14 +792,16 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x08:
     case 0x12:
     case 0x1a:
-    case 0x1b:
-    case 0x1e:
-    case 0x25: {
-        req->hba_private->dma_buf = req->xfer.data_in;
-        req->hba_private->dma_len = req->xfer.data_in_len;
-        lsi_transfer_data(cpu, req, req->xfer.data_in_len);
-        lsi_command_complete(cpu, req, req->xfer.data_in_len);
-        fprintf(stderr, "lsi: disk returned %d bytes\n", (int)req->xfer.data_in_len);
+    case 0x25:
+    case 0x28: {
+        fprintf(stderr, "lsi: transferred %d\n", req->transferred);
+        if (!req->transferred) {
+            req->transferred++;
+            result_size = req->xfer.data_in_len;
+            lsi_transfer_data(cpu, req, result_size);
+        } else {
+            lsi_command_complete(cpu, req, result_size);
+        }
         break;
     }
 
@@ -1141,6 +1157,7 @@ static void lsi_do_dma(struct cpu *cpu, LSIState *s, int out)
     dma_addr_t addr;
     SCSIDevice *dev;
 
+    fprintf(stderr, "lsi: current %p dma_len %08x (DNAD %08x DBC %08x)\n", s->current, s->current ? s->current->dma_len : 0, s->dnad, s->dbc);
     if (!s->current || !s->current->dma_len) {
         /* Wait until data is available.  */
         s->istat0 |= LSI_ISTAT0_DIP | LSI_ISTAT0_SIP;
@@ -1348,6 +1365,7 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len)
     out = (s->sstat1 & PHASE_MASK) == PHASE_DO;
 
     /* host adapter (re)connected */
+    fprintf(stderr, "lsi: transfer data: DNAD %08x DBC %08x\n", s->dnad, s->dbc);
     trace_lsi_transfer_data(req->tag, len);
     s->current->dma_len = len;
     s->command_complete = 1;
@@ -1367,14 +1385,15 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
     uint32_t id;
     int n;
 
-    trace_lsi_do_command(cpu, s->dbc);
+    id = (s->select_tag >> 8) & 0xf;
+    s->ssid = id;
+    trace_lsi_do_command(cpu, s->dbc, id);
     if (s->dbc > 16)
         s->dbc = 16;
     pci_dma_read(cpu, PCI_DEVICE(s), s->dnad, buf, s->dbc);
     s->sfbr = buf[0];
     s->command_complete = 0;
 
-    id = (s->select_tag >> 8) & 0xf;
     dev = scsi_device_find(cpu, s, &s->bus, 0, id, s->current_lun);
     if (!dev) {
         lsi_bad_selection(s, id);
@@ -1388,6 +1407,7 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
                                    s->dbc, s->current);
 
     n = scsi_req_enqueue(cpu, s->current->req);
+    fprintf(stderr, "lsi: enqueue returned %d\n", n);
     if (n) {
         if (n > 0) {
             lsi_set_phase(s, PHASE_DI);
@@ -1415,14 +1435,13 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
 static void lsi_do_status(struct cpu *cpu, LSIState *s)
 {
     uint8_t status;
+    fprintf(stderr, "lsi status: DNAD is %08x, DBC is %08x\n", s->dnad, s->dbc);
     trace_lsi_do_status(s->dbc, s->status);
-    if (s->dbc != 1) {
-        trace_lsi_do_status_error();
-    }
-    s->dbc = 1;
     status = s->status;
     s->sfbr = status;
-    pci_dma_write(cpu, PCI_DEVICE(s), s->dnad, &status, 1);
+    if (s->dbc) {
+        pci_dma_write(cpu, PCI_DEVICE(s), s->dnad, &status, 1);
+    }
     lsi_set_phase(s, PHASE_MI);
     s->msg_action = LSI_MSG_ACTION_DISCONNECT;
     lsi_add_msg_byte(s, 0); /* COMMAND COMPLETE */
@@ -1818,9 +1837,12 @@ again:
             uint32_t id;
 
             if (insn & (1 << 25)) {
-                id = read_dword(cpu, s, s->dsa + sextract32(insn, 0, 24));
+                uint32_t id_offset = sextract32(insn, 0, 24);
+                uint32_t id_addr = s->dsa + id_offset;
+                id = read_dword(cpu, s, id_addr);
             } else {
                 id = insn;
+                fprintf(stderr, "lsi: raw id %08x\n", id);
             }
             id = (id >> 16) & 0xf;
             if (insn & (1 << 26)) {
@@ -1830,6 +1852,7 @@ again:
             switch (opcode) {
             case 0: /* Select */
                 s->sdid = id;
+                fprintf(stderr, "lsi: select scsi id %d\n", id);
                 if (s->scntl1 & LSI_SCNTL1_CON) {
                     trace_lsi_execute_script_io_alreadyreselected();
                     s->dsp = s->dnad;

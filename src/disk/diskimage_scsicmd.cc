@@ -302,12 +302,14 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		debug("INQUIRY");
 		if (xferp->cmd_len != 6)
 			debug(" (weird len=%i)", xferp->cmd_len);
-		if (xferp->cmd[1] != 0x00) {
+    /*
+      if (xferp->cmd[1] != 0x00) {
 			debug("WARNING: INQUIRY with cmd[1]=0x%02x not yet "
 			    "implemented\n", (int)xferp->cmd[1]);
 
 			break;
 		}
+    */
 
 		/*  Return values:  */
 		retlen = xferp->cmd[4];

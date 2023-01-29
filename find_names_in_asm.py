@@ -13,8 +13,11 @@ def find_names_in_asm(lines):
     for lns in lines:
         l = lns.strip()
         addr_split = l.split(' ')
+        if len(addr_split) < 2:
+            continue
+
         code_split = addr_split[1].split('\t')
-        if len(addr_split) == 0 or (not addr_split[0].endswith(':')):
+        if len(code_split) < 2 or (not addr_split[0].endswith(':')):
             continue
 
         addr = int(addr_split[0][:8], 16)
@@ -47,15 +50,8 @@ def find_names_in_asm(lines):
                 continue
 
             name = bytes(letters_between).decode('utf8')
-
-            # Search back for cror 31,31,31
-            j = i
-            while j >= 0:
-                maybe_cror = bytes(data[j:j+4])
-                if maybe_cror == b'\x4f\xff\xfb\x82':
-                    result[first_addr + j] = name
-                    break
-                j -= 4
+            # Just list the address of the name block.
+            result[first_addr + i] = name
 
         i += 4
 

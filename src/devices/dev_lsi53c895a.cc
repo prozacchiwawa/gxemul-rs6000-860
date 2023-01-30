@@ -601,8 +601,14 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     switch (req->cmd.buf[0]) {
     case 0x00:
     case 0x1b:
-    case 0x1e: {
+    case 0x1e:
+    case 0x35: {
         return 1;
+    }
+
+    case 0x0a: {
+        req->hba_private->out = 1;
+        return -1;
     }
 
     case 0x08:
@@ -617,10 +623,6 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
-        if (cmd_res != 1) {
-            fprintf(stderr, "lsi: bad result %d\n", cmd_res);
-             ABORT();
-         }
 
         fprintf(
             stderr,
@@ -776,18 +778,26 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     switch (req->cmd.buf[0]) {
     case 0x00:
     case 0x1b:
-    case 0x1e: {
-        req->xfer.cmd = req->cmd.buf;
-        req->xfer.cmd_len = req->cmd.len;
-        auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
-        if (cmd_res != 1) {
-            fprintf(stderr, "lsi: bad result %d\n", cmd_res);
-            ABORT();
-        }
-        size_t result_size = MIN(req->xfer.msg_in_len, req->cmd.buf[4]);
+    case 0x1e:
+    case 0x35: {
         lsi_transfer_data(cpu, req, result_size);
         lsi_command_complete(cpu, req, result_size);
         break;
+    }
+    case 0x0a: {
+        // Write
+        if (!req->transferred) {
+            req->transferred++;
+            lsi_transfer_data(cpu, req, result_size);
+        } else {
+            req->xfer.data_out_len = req->hba_private->dma_len;
+            req->xfer.data_out = (uint8_t*)malloc(req->xfer.data_out_len);
+            memcpy(req->xfer.data_out, req->hba_private->dma_buf, req->xfer.data_out_len);
+            auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
+            free(req->xfer.data_out);
+            req->status = cmd_res;
+            lsi_command_complete(cpu, req, req->xfer.data_out_len);
+        }
     }
     case 0x08:
     case 0x12:
@@ -1016,7 +1026,7 @@ static void lsi_set_irq(LSIState *s, int level)
 {
     fprintf(stderr, "lsi_set_irq(%d)\n", level);
     if (!s->asserted && level) {
-        eagle_comm_area[8] = 0xff;
+        eagle_comm.eagle_comm_area[8] = 0xff;
         INTERRUPT_ASSERT(s->ext_irq);
         s->asserted = true;
     } else if (s->asserted && !level) {

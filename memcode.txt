@@ -1,3 +1,5 @@
+;; 20548 from spawn("iat_mem")
+
 extended_memory:
 00020548: 7c0802a6	mflr	r0		<lr>
 0002054c: 7d800026	mfcr	r12
@@ -32,6 +34,7 @@ extended_memory:
 000205c0: 41820008	bc	12,2,0x205c8
 000205c4: 408e0008	bc	4,14,0x205cc
 000205c8: 48000a39	bl	0x21000	<display_mem_err_msg (00021000)>
+;; 668(r2) is total memory.
 000205cc: 8062029c	lwz	r3,668(r2)
 000205d0: 80630000	lwz	r3,0(r3)
 000205d4: 4800573d	bl	0x25d10	<setup_full_malloc (00025d10)>
@@ -126,6 +129,7 @@ determine_mem_size:
 00020730: 7c002030	slw	r0,r0,r4
 00020734: 7c600038	and	r0,r3,r0
 00020738: 7c002430	srw	r0,r0,r4
+;; 668(r2) = total memory
 0002073c: 8062029c	lwz	r3,668(r2)
 00020740: 30000001	addic	r0,r0,1
 00020744: 90030000	stw	r0,0(r3)
@@ -146,6 +150,7 @@ determine_mem_size:
 00020780: 73697a65	andi.	r9,r27,0x7a65
 
 clear_extended_memory:
+;; 668(r2) = total memory
 00020784: 80a2029c	lwz	r5,668(r2)
 00020788: 3c600030	lis	r3,48
 0002078c: 80850000	lwz	r4,0(r5)
@@ -184,18 +189,20 @@ clear_extended_memory:
 00020810: 5f6d656d	rlwnm.	r13,r27,r12,21,22
 00020814: 6f727900	xoris	r18,r27,0x7900
 
-test_extended_memory:
+test_extended_memory:  ;; Must return 1 on success.
 00020818: bf81fff0	stmw	r28,-16(r1)
 0002081c: 7c0802a6	mflr	r0		<lr>
 00020820: 3be00000	li	r31,0
 00020824: 90010008	stw	r0,8(r1)
 00020828: 9421ffb0	stwu	r1,-80(r1)
 0002082c: 48000495	bl	0x20cc0	<read_and_clear_parity (00020cc0)>
+;; 668(r2) = ??
 00020830: 83c2029c	lwz	r30,668(r2)
 00020834: 3f800030	lis	r28,48
 00020838: 801e0000	lwz	r0,0(r30)
 0002083c: 5400a016	rlwinm	r0,r0,20,0,11
 00020840: 7c00e000	cmpw	r0,r28
+;; Early error return.  Wants r28 < r0
 00020844: 40810050	bc	4,1,0x20894	<test_extended_memory (00020894)>
 00020848: 387c0000	addi	r3,r28,0
 0002084c: 480001e5	bl	0x20a30	<test_next_meg (00020a30)>
@@ -524,6 +531,7 @@ read_and_clear_parity:
 setup_progress_indicator:
 00020d2c: bfa1fff4	stmw	r29,-12(r1)
 00020d30: 83e202a0	lwz	r31,672(r2)
+;; Setup progress indicator.  Perhaps 668(r2) is the total memory?
 00020d34: 8082029c	lwz	r4,668(r2)
 00020d38: 80df0000	lwz	r6,0(r31)
 00020d3c: 83c202a4	lwz	r30,676(r2)
@@ -580,6 +588,7 @@ update_progress:
 00020e00: 9421ffc0	stwu	r1,-64(r1)
 00020e04: 90010048	stw	r0,72(r1)
 00020e08: 1c040064	mulli	r0,r4,100
+;; 668(r2) = total memory?
 00020e0c: 8082029c	lwz	r4,668(r2)
 00020e10: 806202b4	lwz	r3,692(r2)
 00020e14: 80840000	lwz	r4,0(r4)
@@ -617,8 +626,8 @@ check_base_mem_result:
 00020e8c: 3b9f0000	addi	r28,r31,0
 00020e90: 836202b8	lwz	r27,696(r2)
 00020e94: 834202bc	lwz	r26,700(r2)
-00020e98: 38790000	addi	r3,r25,0
-00020e9c: 4bfe5f8d	bl	0x6e28	<in8 (00006e28)>
+00020e98: 38790000	addi	r3,r25,0 ;; Load 880 into r3, then 888
+00020e9c: 4bfe5f8d	bl	0x6e28	<in8 (00006e28)> ;; in8 880
 00020ea0: 4ffffb82	cror	31,31,31
 00020ea4: 5464073e	rlwinm	r4,r3,0,28,31
 00020ea8: 2884000f	cmplwi	cr1,r4,15
@@ -635,18 +644,28 @@ check_base_mem_result:
 00020ed4: 54660efc	rlwinm	r6,r3,1,27,30
 00020ed8: 389b0000	addi	r4,r27,0
 00020edc: 4186003c	bc	12,6,0x20f18	<check_base_mem_result (00020f18)>
-00020ee0: 7c053040	cmplw	r5,r6
+00020ee0: 7c053040	cmplw	r5,r6 ;; 0x12 vs 2, 0x14 vs 2, 2 vs 2
 00020ee4: 4182003c	bc	12,2,0x20f20	<check_base_mem_result (00020f20)>
 00020ee8: 8ca40004	lbzu	r5,4(r4)
 00020eec: 288500ff	cmplwi	cr1,r5,255
 00020ef0: 4086fff0	bc	4,6,0x20ee0	<check_base_mem_result (00020ee0)>
 00020ef4: 48000024	b	0x20f18	<check_base_mem_result (00020f18)>
 00020ef8: 280400ff	cmplwi	r4,255
-00020efc: 38ba0000	addi	r5,r26,0
+00020efc: 38ba0000	addi	r5,r26,0 ;; 0x12 + 0xfd840
 00020f00: 41820018	bc	12,2,0x20f18	<check_base_mem_result (00020f18)>
-00020f04: 7c843040	cmplw	cr1,r4,r6
+00020f04: 7c843040	cmplw	cr1,r4,r6 ;; 0xc1 vs 0 -> 0xc2 vs 0
 00020f08: 41860018	bc	12,6,0x20f20	<check_base_mem_result (00020f20)>
-00020f0c: 8c850004	lbzu	r4,4(r5)
+00020f0c: 8c850004	lbzu	r4,4(r5) ;; load 0xc2 into r4 (was 0xc1) then 0xd4 then c4
+;; It's scanning this table:
+;; 0x000fd840  c1020101 c2020303 d4010f00 c4020f0f  ................
+;; 0x000fd850  b4010f00 b2010300 a2020303 d2010300  ................
+;; 0x000fd860  ff000000 00000000 00000000 50414e49  ............PANI
+;; 0x000fd870  433a2041 6c6c2062 616e6b73 20646973  C: All banks dis
+;;
+;; Trying to find a match for r6.
+;;
+;; Hypothesis is that we should see one of these values from
+;; eagle_880
 00020f10: 280400ff	cmplwi	r4,255
 00020f14: 4082fff0	bc	4,2,0x20f04	<check_base_mem_result (00020f04)>
 00020f18: 38600001	li	r3,1
@@ -801,7 +820,7 @@ get_bad_mem_head:
 0002114c: 6d5f6865	xoris	r31,r10,0x6865
 00021150: 61640000	ori	r4,r11,0x0000
 
-get_memory_size:
+get_memory_size: ;; 668(r2) = total memory
 00021154: 8062029c	lwz	r3,668(r2)
 00021158: 80630000	lwz	r3,0(r3)
 0002115c: 4e800020	bclr	20,0,0
@@ -1037,6 +1056,7 @@ get_memory_info:
 000214dc: 9421ff70	stwu	r1,-144(r1)
 000214e0: 4bfffc41	bl	0x21120	<get_bad_mem_head (00021120)>
 000214e4: 38830000	addi	r4,r3,0
+;; 668(r2) = total memory
 000214e8: 80a2029c	lwz	r5,668(r2)
 000214ec: 2c040000	cmpwi	r4,0
 000214f0: 9079003c	stw	r3,60(r25)

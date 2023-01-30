@@ -463,7 +463,7 @@ if [ -x _testprog ]; then
 		$CXX $CWARNINGS $CXXFLAGS _testprog.cc -o _testprog -Werror 2> _testprog.err
 		if [ -x _testprog ]; then
 			printf "yes\n"
-			CWARNINGS="$CWARNINGS -Werror"
+			# CWARNINGS="$CWARNINGS -Werror"
 		else
 			printf "no\n"
 			

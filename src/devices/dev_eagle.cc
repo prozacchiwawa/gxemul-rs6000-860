@@ -42,7 +42,7 @@
 #include "memory.h"
 #include "misc.h"
 
-unsigned char eagle_comm_area[16];
+struct eagle_glob eagle_comm;
 
 DEVICE_ACCESS(eagle)
 {
@@ -165,9 +165,9 @@ DEVICE_ACCESS(eagle_dma_1)
     case 4:
       if (writeflag == MEM_WRITE) {
         if (!d->addr_low_high_latch) {
-          eagle_comm_area[0] = idata;
+            eagle_comm.eagle_comm_area[0] = idata;
         } else {
-          eagle_comm_area[1] = idata;
+            eagle_comm.eagle_comm_area[1] = idata;
         }
         d->addr_low_high_latch = !d->addr_low_high_latch;
       }
@@ -176,9 +176,9 @@ DEVICE_ACCESS(eagle_dma_1)
     case 5:
       if (writeflag == MEM_WRITE) {
         if (!d->len_low_high_latch) {
-          eagle_comm_area[4] = idata;
+            eagle_comm.eagle_comm_area[4] = idata;
         } else {
-          eagle_comm_area[5] = idata;
+            eagle_comm.eagle_comm_area[5] = idata;
         }
         d->len_low_high_latch = !d->len_low_high_latch;
       }
@@ -187,8 +187,8 @@ DEVICE_ACCESS(eagle_dma_1)
     case 8:
       if (writeflag != MEM_WRITE) {
         INTERRUPT_DEASSERT(d->irq);
-        idata = eagle_comm_area[7] | d->fin_mask;
-        eagle_comm_area[7] = 0;
+        idata = eagle_comm.eagle_comm_area[7] | d->fin_mask;
+        eagle_comm.eagle_comm_area[7] = 0;
         d->fin_mask = 0;
       }
       break;
@@ -227,7 +227,7 @@ DEVICE_ACCESS(eagle_dma_2)
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     d->dma_page[relative_addr] = idata;
     if (relative_addr == 1) {
-      eagle_comm_area[2] = idata;
+        eagle_comm.eagle_comm_area[2] = idata;
     }
   }
 
@@ -246,7 +246,7 @@ DEVICE_ACCESS(eagle_dma_80)
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     d->dma_page[relative_addr] = idata;
     if (relative_addr == 1) {
-      eagle_comm_area[2] = idata;
+        eagle_comm.eagle_comm_area[2] = idata;
     }
   }
 
@@ -279,7 +279,7 @@ DEVICE_ACCESS(eagle_480)
         idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
         d->dma_high[relative_addr] = idata;
         if (relative_addr == 1) {
-            eagle_comm_area[3] = idata;
+            eagle_comm.eagle_comm_area[3] = idata;
         }
     } else {
         idata = d->dma_high[relative_addr];
@@ -313,13 +313,34 @@ DEVICE_ACCESS(eagle_880)
         idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     }
 
+    // It's scanning this table:
+    // 0x000fd840  c1020101 c2020303 d4010f00 c4020f0f  ................
+    // 0x000fd850  b4010f00 b2010300 a2020303 d2010300  ................
+    // 0x000fd860  ff000000 00000000 00000000 50414e49  ............PANI
+    // 0x000fd870  433a2041 6c6c2062 616e6b73 20646973  C: All banks dis
+    //
+    // Trying to find a match for r6.
+    //
+    // Hypothesis is that we should see one of these values from
+    // eagle_880
+    //
+    // Each of these represents memory bank presence.  Populating all 4
+    // with the first element in the above table makes memory test pass.
     switch (relative_addr) {
     case 0:
-        odata = 1;
+        odata = 0xc1;
         break;
 
     case 4:
-        odata = 1;
+        odata = 0xc1;
+        break;
+
+    case 8:
+        odata = 0xc1;
+        break;
+
+    case 0xc:
+        odata = 0xc1;
         break;
     }
 
@@ -355,8 +376,8 @@ DEVICE_ACCESS(eagle_dma_scatter_gather) {
     if (writeflag == MEM_WRITE) {
         // TODO
     } else {
-        idata = eagle_comm_area[8];
-        eagle_comm_area[8] = 0;
+        idata = eagle_comm.eagle_comm_area[8];
+        eagle_comm.eagle_comm_area[8] = 0;
     }
 
     fprintf(stderr, "[ dma scatter gather: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);

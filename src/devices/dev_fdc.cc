@@ -216,9 +216,9 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[0] = 2;
 
             // Ask the DMA system where to send the data in memory.
-            memcpy(eagle_dma_2, eagle_comm_area, 8);
-            eagle_comm_area[7] = 4;
-            eagle_comm_area[8] = 0xff;
+            memcpy(eagle_dma_2, eagle_comm.eagle_comm_area, 8);
+            eagle_comm.eagle_comm_area[7] = 4;
+            eagle_comm.eagle_comm_area[8] = 0xff;
 
             // Read addr programmed into DMA 2
             // Note: lower 16 bits are shifted left 1 because dma is in

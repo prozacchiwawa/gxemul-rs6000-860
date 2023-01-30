@@ -179,7 +179,19 @@ struct eagle_data {
   int want_error;
 };
 
-extern unsigned char eagle_comm_area[16];
+struct eagle_glob {
+  uint16_t pci_status;
+  uint16_t pci_command;
+  int want_error;
+
+  /* 0xc0 */
+  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
+  uint8_t error_enabling_2, error_detection_2, bus_status_pci;
+
+  unsigned char eagle_comm_area[16];
+};
+
+extern struct eagle_glob eagle_comm;
 
 /*  dev_fb.c:  */
 #define	DEV_FB_LENGTH		0x3c0000	/*  3c0000 to not colide with */

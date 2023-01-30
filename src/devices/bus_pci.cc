@@ -180,14 +180,10 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 
 	pci_data->last_was_write_ffffffff = 0;
 
-  if (dev && !strcmp(dev->name, "eagle") && pci_data->cur_reg == 0xa0) {
-    *data = 0xff;
-  } else {
-    debug("[ bus_pci: read from PCI DATA, bus %i, device "
-          "%i, function %i (%s) register 0x%02x: (len=%i) 0x%08lx ]\n",
-          pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
-          dev->name, pci_data->cur_reg, len, (long)*data);
-  }
+  debug("[ bus_pci: read from PCI DATA, bus %i, device "
+        "%i, function %i (%s) register 0x%02x: (len=%i) 0x%08lx ]\n",
+        pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
+        dev->name, pci_data->cur_reg, len, (long)*data);
 }
 
 
@@ -1398,67 +1394,33 @@ PCIINIT(dec21030)
 int eagle_cfg_reg_write(struct pci_device *pd, int reg,
                         uint32_t value)
 {
-  static int want_error = 0;
   fprintf(stderr, "[ bus_pci: write eagle reg %02x value %08x ]\n", reg, value);
 
 	switch (reg) {
-  case 0x70:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0x90:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0x94:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0xa0:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0xa4:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0xa8:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0xb8:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
-  case 0xac:
-    PCI_SET_DATA(reg, value);
+  case 0x04:
+    eagle_comm.pci_status &= ~(value >> 16);
+    eagle_comm.pci_command = value;
+    PCI_SET_DATA(reg, ((uint32_t)eagle_comm.pci_status) << 16 | eagle_comm.pci_command);
     return 1;
 
   case 0xc0:
-    if (value & 0x400) {
-      want_error += 1;
-    }
-    if (want_error == 2) {
-      PCI_SET_DATA(reg, 1);
-    } else {
-      PCI_SET_DATA(reg, 0);
-    }
-    want_error++;
-    //    PCI_SET_DATA(reg, value);
+    eagle_comm.error_detection_1 &= ~(value >> 8);
+    eagle_comm.error_enabling_1 = value;
+    eagle_comm.bus_status_60x = value >> 24;
+    PCI_SET_DATA(reg, (eagle_comm.bus_status_60x << 24) | (eagle_comm.error_detection_1 << 8) | eagle_comm.error_enabling_1);
 		return 1;
 
+  case 0x70:
+  case 0x90:
+  case 0x94:
+  case 0xa0:
+  case 0xa4:
+  case 0xa8:
+  case 0xac:
+  case 0xb8:
   case 0xf0:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
   case 0xf4:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
   case 0xf8:
-    PCI_SET_DATA(reg, value);
-    return 1;
-
   case 0xfc:
     PCI_SET_DATA(reg, value);
     return 1;
@@ -1480,6 +1442,14 @@ PCIINIT(eagle)
 
   // Cache line size
   PCI_SET_DATA(0x0c, 8);
+  // Memory ending address 1 0x90
+  PCI_SET_DATA(0x90, 0x201);
+  // Memory ending address 2 0x94
+  PCI_SET_DATA(0x94, 0);
+  // Memory bank enable.
+  PCI_SET_DATA(0xa0, 0);
+  // Error reporting/enabling
+  PCI_SET_DATA(0xc0, 1);
 
   pd->cfg_reg_write = eagle_cfg_reg_write;
 }

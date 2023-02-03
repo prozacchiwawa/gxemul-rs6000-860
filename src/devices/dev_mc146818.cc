@@ -118,6 +118,7 @@ DEVICE_TICK(mc146818)
 	int pti = d->pending_timer_interrupts;
 
   if (eagle_comm.want_timer_int) {
+    fprintf(stderr, "mc146818: want timer int: %d\n", eagle_comm.want_timer_int);
     if (--eagle_comm.want_timer_int == 0) {
       pti++;
     }
@@ -286,9 +287,10 @@ DEVICE_ACCESS(mc146818)
 	struct tm *tmp;
 	time_t timet;
 	size_t i;
+  uint64_t idata;
 
 	/*  NOTE/TODO: This access function only handles 8-bit accesses!  */
-
+  fprintf(stderr, "[ mc146818 access type %s relative_addr %04x ]\n", (writeflag == MEM_WRITE) ? "write" : "read", relative_addr);
 	relative_addr /= d->addrdiv;
 
 	/*  Different ways of accessing the registers:  */

@@ -211,6 +211,7 @@ DEVICE_ACCESS(8259)
 		if (writeflag == MEM_WRITE) {
 			int old_ier = d->ier;
 			d->ier = idata;
+      fprintf(stderr, "[ 8259: write IER %08x ]\n", d->ier);
 
 			/*  Recalculate interrupt assertions,
 			    if necessary:  */
@@ -222,6 +223,7 @@ DEVICE_ACCESS(8259)
 			}
 		} else {
 			odata = d->ier;
+      fprintf(stderr, "[ 8259: read IER %08x ]\n", d->ier);
 		}
 		break;
 	default:

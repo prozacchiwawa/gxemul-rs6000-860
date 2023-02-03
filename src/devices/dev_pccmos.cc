@@ -57,13 +57,15 @@ extern int verbose;
 #define DEV_PCCMOS_IBM_NVRAM_LENGTH 8192
 
 struct pccmos_data {
-	unsigned char	select;
-	unsigned char	ram[256];
+    unsigned char	select;
+    unsigned char	ram[256];
 
     unsigned int    extended_select;
     unsigned int    extended_size;
     unsigned char  *extended_nvram;
     struct diskimage *extended_nvram_disk;
+
+    unsigned char upper_half[8];
 };
 
 // Find the NVRAM disk if it exists.
@@ -80,121 +82,136 @@ static struct diskimage *find_nvram_disk(struct machine *machine) {
 
 DEVICE_ACCESS(pccmos)
 {
-	struct pccmos_data *d = (struct pccmos_data *) extra;
-	uint64_t idata = 0, odata = 0;
-	unsigned char b = 0;
-	int r = 1;
+    struct pccmos_data *d = (struct pccmos_data *) extra;
+    uint64_t idata = 0, odata = 0;
+    unsigned char b = 0;
+    int r = 1;
 
-	if (writeflag == MEM_WRITE) {
-		b = idata = memory_readmax64(cpu, data, len);
-		//fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
-	}
-
-	/*
-	 *  Accesses to CMOS register 0 .. 0xd are rerouted to the
-	 *  RTC; all other access are treated as CMOS RAM read/writes.
-	 */
-
-	if (relative_addr == 1) {
-		if (writeflag == MEM_WRITE) {
-			d->select = idata;
-			if (idata <= 0x0d) {
-				r = cpu->memory_rw(cpu, cpu->mem,
-				    PCCMOS_MC146818_FAKE_ADDR, &b, 1,
-				    MEM_WRITE, PHYSICAL);
-			}
-		} else
-			odata = d->select;
-    } else 
-    // IBM machines have an extra 16k nvram (which appears in 4 copies)
-    // in the 64k address space.  These will only be alive if we initialized
-    // the size of the CMOS ISA device at 8 ports.
-    if (relative_addr == 0) {
-	    d->select = idata;
+    if (writeflag == MEM_WRITE) {
+        b = idata = memory_readmax64(cpu, data, len);
+        //fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
+    } else {
+        fprintf(stderr, "pccmos: read at relative_addr %08x selector %d\n", relative_addr, d->select);
     }
-    if (relative_addr == 4) {
+
+    /*
+     *  Accesses to CMOS register 0 .. 0xd are rerouted to the
+     *  RTC; all other access are treated as CMOS RAM read/writes.
+     */
+
+    if (relative_addr == 1) {
         if (writeflag == MEM_WRITE) {
-            d->extended_select = (d->extended_select & 0xff00) | idata;
-        } else {
-            odata = d->extended_select & 0xff;
-        }
-    } else if (relative_addr == 5) {
-        if (writeflag == MEM_WRITE) {
-            d->extended_select = (d->extended_select & 0xff) | (idata << 8);
-        } else {
-            odata = (d->extended_select >> 8) & 0xff;
-        }
-    } else if (relative_addr == 6) {
-        if (verbose && writeflag == MEM_WRITE) {
-            debug
-                ("[ extended nvram write %04x = %02x ]\n", 
-                 d->extended_select,
-                 idata);
-        }
-        if (d->extended_nvram != NULL) {
-            if (writeflag == MEM_WRITE) {
-                d->extended_nvram
-                    [d->extended_select % d->extended_size] = idata;
-            } else {
-                odata = d->extended_nvram
-                    [d->extended_select % d->extended_size];
+            d->select = idata;
+            if (idata <= 0x0d) {
+                r = cpu->memory_rw(cpu, cpu->mem,
+                                   PCCMOS_MC146818_FAKE_ADDR, &b, 1,
+                                   MEM_WRITE, PHYSICAL);
             }
         } else {
-            uint8_t buf = idata;
-            diskimage__internal_access
-                (d->extended_nvram_disk, 
-                 writeflag,
-                 d->extended_select,
-                 &buf,
-                 1);
-            odata = buf;
+            odata = d->select;
+            if (d->select == 13) {
+                odata = 0x80;
+            }
         }
-        if (verbose && writeflag != MEM_WRITE) {
-            debug
-                ("[ extended nvram read %04x -> %02x ]\n",
-                 d->extended_select,
-                 odata);
+    } else {
+        if (relative_addr == 0 && writeflag == MEM_WRITE) {
+            d->select = idata;
         }
-	} else {
-		if (d->select <= 0x0d) {
-			if (writeflag == MEM_WRITE) {
-				r = cpu->memory_rw(cpu, cpu->mem,
-				    PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
-				    MEM_WRITE, PHYSICAL);
-			} else {
-				r = cpu->memory_rw(cpu, cpu->mem,
-				    PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
-				    MEM_READ, PHYSICAL);
-				odata = b;
-			}
-		} else {
-			if (writeflag == MEM_WRITE) {
-        if (relative_addr > 7) {
-          debug("[ write to cmos: relative addr %d, %02x ]\n", relative_addr, (int)(idata & 0xff));
+
+        // IBM machines have an extra 16k nvram (which appears in 4 copies)
+        // in the 64k address space.  These will only be alive if we initialized
+        // the size of the CMOS ISA device at 8 ports.
+        if (relative_addr == 4) {
+            if (writeflag == MEM_WRITE) {
+                d->extended_select = (d->extended_select & 0xff00) | idata;
+            } else {
+                odata = d->extended_select & 0xff;
+            }
+        } else if (relative_addr == 5) {
+            if (writeflag == MEM_WRITE) {
+                d->extended_select = (d->extended_select & 0xff) | (idata << 8);
+            } else {
+                odata = (d->extended_select >> 8) & 0xff;
+            }
+        } else if (relative_addr == 6) {
+            if (verbose && writeflag == MEM_WRITE) {
+                debug
+                    ("[ extended nvram write %04x = %02x ]\n",
+                     d->extended_select,
+                     idata);
+            }
+            if (d->extended_nvram != NULL) {
+                if (writeflag == MEM_WRITE) {
+                    d->extended_nvram
+                        [d->extended_select % d->extended_size] = idata;
+                } else {
+                    odata = d->extended_nvram
+                        [d->extended_select % d->extended_size];
+                }
+            } else {
+                uint8_t buf = idata;
+                diskimage__internal_access
+                    (d->extended_nvram_disk,
+                     writeflag,
+                     d->extended_select,
+                     &buf,
+                     1);
+                odata = buf;
+            }
+            if (verbose && writeflag != MEM_WRITE) {
+                debug
+                    ("[ extended nvram read %04x -> %02x ]\n",
+                     d->extended_select,
+                     odata);
+            }
+        } else if (relative_addr > 7) {
+            relative_addr &= 7;
+            if (writeflag == MEM_WRITE) {
+                idata &= 0xff;
+                debug("[ write to cmos upper half: relative addr %d, %02x ]\n", relative_addr+8, (int)idata);
+                d->upper_half[relative_addr] = idata;
+                if (idata == 0x80) {
+                    eagle_comm.want_timer_int = 2;
+                }
+            } else {
+                odata = d->upper_half[relative_addr];
+                if (relative_addr == 4) {
+                    d->upper_half[relative_addr] += 0x35;
+                }
+                debug("[ read cmos upper half: relative addr %d, %02x ]\n", relative_addr+8, (int)(odata & 0xff));
+            }
         } else {
-          d->ram[d->select] = idata;
+            if (d->select == 10) {
+                odata = 0x40;
+            } else if (d->select <= 0x0d) {
+                if (writeflag == MEM_WRITE) {
+                    r = cpu->memory_rw(cpu, cpu->mem,
+                                       PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
+                                       MEM_WRITE, PHYSICAL);
+                } else {
+                    debug("[ pccmos delegating read to mc146818 (select %d) ]\n", d->select);
+                    r = cpu->memory_rw(cpu, cpu->mem,
+                                       PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
+                                       MEM_READ, PHYSICAL);
+                    odata = b;
+                }
+            } else if (d->select == 13) {
+                odata = 0xff;
+            } else {
+                odata = d->ram[d->select];
+            }
         }
-      } else {
-				odata = d->ram[d->select];
-        if (relative_addr > 7) {
-          debug("[ read cmos: relative addr %d, %02x ]\n", relative_addr, (int)(odata & 0xff));
-        }
-      }
-		}
-	}
+    }
 
-	if (r == 0)
-		fatal("[ pccmos: memory_rw() error! ]\n");
+    if (r == 0)
+        fatal("[ pccmos: memory_rw() error! ]\n");
 
-	if (writeflag == MEM_READ) {
-		if (d->select == 10) {
-			odata = 0x40;
-		}
-		memory_writemax64(cpu, data, len, odata);
-		//fprintf(stderr, "pccmos: read at relative addr %08" PRIx64" (dselect %08x): %08" PRIx64"\n", relative_addr, d->select, odata);
-	}
+    if (writeflag == MEM_READ) {
+        memory_writemax64(cpu, data, len, odata);
+        //fprintf(stderr, "pccmos: read at relative addr %08" PRIx64" (dselect %08x): %08" PRIx64"\n", relative_addr, d->select, odata);
+    }
 
-	return 1;
+    return 1;
 }
 
 DEVINIT(pccmos)

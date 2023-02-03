@@ -79,32 +79,48 @@ DEVICE_ACCESS(eagle)
 
 DEVICE_ACCESS(eagle_800)
 {
-    //struct eagle_data *d = (struct eagle_data *) extra;
+    struct eagle_data *d = (struct eagle_data *) extra;
     uint64_t idata = 0, odata = 0;
 
     if (writeflag == MEM_WRITE)
-      odata = idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+        odata = idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 
     switch (relative_addr)
-      {
-      case 0x00:
-          if (writeflag == MEM_READ) odata = 6;
-          break;
+    {
+    case 0x00:
+        if (writeflag == MEM_READ) odata = 6;
+        break;
 
-      case 0x08:
-          // Spammy: hd light
-          return 1;
+    case 0x08:
+        // Spammy: hd light
+        return 1;
 
-	// 9.10.2 Equipment Presence Register
-	// MSB | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | LSB
-	//       |    |    |    |    |    |    |    |
-	//       |    |    |    |    +----+----+----+---- Reserved
-	//       |    |    |    +------------------------ PCI Presence Detect 1 (0 means present)
-	//       |    |    +----------------------------- PCI Presence Detect 2 (0 means present)
-	//       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
-	//       +--------------------------------------- Reserved
+        // 9.10.2 Equipment Presence Register
+        // MSB | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | LSB
+        //       |    |    |    |    |    |    |    |
+        //       |    |    |    |    +----+----+----+---- Reserved
+        //       |    |    |    +------------------------ PCI Presence Detect 1 (0 means present)
+        //       |    |    +----------------------------- PCI Presence Detect 2 (0 means present)
+        //       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
+        //       +--------------------------------------- Reserved
     case 0x0c:
         if (writeflag == MEM_READ) odata = 0x70;
+        break;
+
+    case 0x10:
+        if (writeflag == MEM_READ) {
+            odata = eagle_comm.password_protect_1;
+        } else {
+            eagle_comm.password_protect_1 |= idata;
+        }
+        break;
+
+      case 0x12:
+        if (writeflag == MEM_READ) {
+            odata = eagle_comm.password_protect_2;
+        } else {
+            eagle_comm.password_protect_2 |= idata;
+        }
         break;
     }
 
@@ -361,7 +377,13 @@ DEVICE_ACCESS(eagle_8a0)
         idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     }
 
-    fprintf(stderr, "[ unknown-8a0: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    switch (relative_addr) {
+    case 0:
+        odata = 0xff;
+        break;
+    }
+
+    fprintf(stderr, "[ unknown-8a0: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
     if (writeflag == MEM_READ)
         memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);

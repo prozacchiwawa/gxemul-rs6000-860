@@ -117,6 +117,12 @@ DEVICE_TICK(mc146818)
 	struct mc_data *d = (struct mc_data *) extra;
 	int pti = d->pending_timer_interrupts;
 
+  if (eagle_comm.want_timer_int) {
+    if (--eagle_comm.want_timer_int == 0) {
+      pti++;
+    }
+  }
+
 	if ((d->reg[MC_REGB * 4] & MC_REGB_PIE) && pti > 0) {
 #if 0
 		/*  For debugging, to see how much the interrupts are

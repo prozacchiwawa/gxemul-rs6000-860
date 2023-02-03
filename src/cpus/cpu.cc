@@ -228,7 +228,21 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
 		show_symbolic_function_name = 0;
 
-	if (cpu->machine->ncpus > 1)
+  // Hack: don't show these.
+  //<timeout (00022bfc)(0,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<get_rtc (00021fec)(0x17da70,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x697c(0x17da70,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<turn_ext_ints_off (00021de0)(1,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x69a0(1,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x68dc(0x1030,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x68fc(0,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x68dc(0xc984013,0xdc8ed1d,0xdc8ed1d,0,..)>
+  //<0x6988(0,0xdc8ed1d,0xdc8ed1d,0,..)>
+  if (f == 0x22bfc || f == 0x21fec || f == 0x697c || f == 0x21de0 || f == 0x69a0 || f == 0x68dc || f == 0x68fc || f == 0x6988 || f == 0x7bd8 || f == 0x2523d0 || f == 0x20de60 || f == 0x210290 || f == 0x20b310) {
+    return;
+  }
+
+  if (cpu->machine->ncpus > 1)
 		fatal("cpu%i:\t", cpu->cpu_id);
 
 	if (cpu->trace_tree_depth > 100)

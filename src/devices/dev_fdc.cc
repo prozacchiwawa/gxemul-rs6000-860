@@ -79,6 +79,7 @@ struct fdc_data {
     int			read_sector, eot_sector;
     int			status_read;
     bool    asserting_interrupt;
+    bool    just_reset;
 	struct interrupt	irq;
 };
 
@@ -163,15 +164,15 @@ DEVICE_ACCESS(fdc)
 						d->seek_track = d->command_bytes[0];
             d->command_bytes[1] = 0x20;
             d->command_bytes[0] = d->seek_track;
-            d->command_result = 2;
-            d->state = STATE_SEEK | STATE_CMD_QUEUE;
+            d->command_result = 0;
+            d->state = STATE_CMD_BUSY;
             maybe_interrupt(d);
 						break;
 
 					case STATE_RECAL:
             d->command_result = 0;
 						d->state = STATE_RECAL;
-            maybe_interrupt(d);
+            // maybe_interrupt(d);
 						break;
 
 					case STATE_SPECIFY:
@@ -223,7 +224,7 @@ DEVICE_ACCESS(fdc)
             // Read addr programmed into DMA 2
             // Note: lower 16 bits are shifted left 1 because dma is in
             // 16 bit chunks.
-            low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8)) << 1;
+            low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8));
             read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0x7fffffff;
             // Read len programmed into DMA 2
             read_len = ((eagle_dma_2[4] & 0xff) | ((eagle_dma_2[5] & 0xff) << 8)) + 1;
@@ -286,8 +287,13 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: sense interrupt ]\n");
 					d->command_size = 0;
 					d->command_result = 2;
-					d->command_bytes[1] = 0x20;
-					d->command_bytes[0] = 0;
+          d->just_reset = false;
+          if (d->just_reset) {
+              d->command_bytes[1] = 0xc0;
+          } else {
+              d->command_bytes[1] = 0x20;
+          }
+          d->command_bytes[0] = d->seek_track;
 					d->state = STATE_VERSION | STATE_CMD_QUEUE;
 					break;
 
@@ -325,6 +331,8 @@ DEVICE_ACCESS(fdc)
 				if (!d->command_result) {
           if ((oldstate & 0xff) == STATE_READ_NORMAL_DATA) {
             d->state = STATE_READ_NORMAL_DATA | STATE_CMD_DMA | STATE_CMD_BUSY;
+          } else if ((oldstate & 0xff) == STATE_SEEK) {
+            d->state = STATE_EMPTY | STATE_CMD_BUSY;
           } else {
             d->state = STATE_EMPTY;
           }

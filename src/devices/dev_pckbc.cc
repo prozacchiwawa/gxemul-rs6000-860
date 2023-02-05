@@ -467,7 +467,7 @@ DEVICE_TICK(pckbc)
        (d->mouse_last_but != mouse_but))
       ) {
     int diff_x = mouse_x - d->mouse_last_x;
-    int diff_y = mouse_y - d->mouse_last_y;
+    int diff_y = -(mouse_y - d->mouse_last_y);
     int flags =
       ((diff_x < 0) ? 0x10 : 0) |
       ((diff_y < 0) ? 0x20 : 0) |
@@ -477,8 +477,8 @@ DEVICE_TICK(pckbc)
       pckbc_add_code(d, flags, 1);
       pckbc_add_code(d, diff_x, 1);
       pckbc_add_code(d, diff_y, 1);
-      pckbc_add_code(d, 0, 1);
-      pckbc_add_code(d, 0, 1);
+      // pckbc_add_code(d, 0, 1);
+      // pckbc_add_code(d, 0, 1);
     }
 
     d->mouse_last_x = mouse_x;

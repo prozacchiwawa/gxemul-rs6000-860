@@ -18,6 +18,13 @@ would make a good addition to gxemul.
 
 The fdc driver is likewise.
 
+A few features from the real RTC chip have been added such as
+the battery good bit, attached nvram and a watchdog timer
+interface used in the PReP 604 reference design.
+
+ISA DMA is implemented well enough to read the floppy, and is
+needed for the IDE interface, but that isn't hooked up yet.
+
 I've made additions as well to add different pseudo disk types
 for the original firmware (-d R:...) and a copy of the nvram
 (-d n:...).  If one has these from somewhere, they can be used

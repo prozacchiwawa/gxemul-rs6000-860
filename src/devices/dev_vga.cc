@@ -161,6 +161,9 @@ struct vga_data {
 
   /* BEE8H */
   uint16_t bee8_regs[16];
+
+  /* Command */
+  int s3_cmd_mx, s3_cmd_bus_size, s3_cmd_swap, s3_cmd_pxtrans;
 };
 
 
@@ -807,7 +810,7 @@ void vga_hack_start(struct vga_data *d) {
 }
 
 
-void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_len) {
+void pixel_transfer(cpu *cpu, struct vga_data *d, int fg_color_mix, uint8_t *pixel_p, int write_len) {
   uint64_t target = 0;
   int do_color_compare = d->bee8_regs[0xe] & 0x100;
   int copy_if_equal = !!(d->bee8_regs[0xe] & 0x80);
@@ -818,7 +821,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_le
 
   /* Compute write target */
   d->update_x1 = d->s3_pix_x;
-  d->update_x2 = d->s3_pix_x + 2;
+  d->update_x2 = d->s3_pix_x + 1;
   d->update_y1 = d->s3_pix_y;
   d->update_y2 = d->s3_pix_y + 1;
   d->modified = 1;
@@ -844,7 +847,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_le
 
     d->s3_pix_x++;
 
-    switch (d->s3_fg_color_mix) {
+    switch (fg_color_mix) {
     case 0x27:
       // Use color register
       pixel = d->s3_fg_color;
@@ -863,6 +866,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, uint8_t *pixel_p, int write_le
     case 0x67:
       // Use pixel
       pixel = pixel_p[pix];
+      d->update_x2++;
       break;
 
     default:
@@ -908,7 +912,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     // Actually draw
     d->s3_v_dir = 1;
     while (d->s3_rem_height > 0) {
-      pixel_transfer(cpu, d, transfer_color, sizeof(transfer_color));
+      pixel_transfer(cpu, d, d->s3_fg_color_mix, transfer_color, sizeof(transfer_color));
     }
   }
 }
@@ -917,6 +921,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
 DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
 	struct vga_data *d = (struct vga_data *) extra;
   uint16_t written;
+  bool draws_up;
 
   if (writeflag != MEM_WRITE) {
     memory_writemax64(cpu, data, len, 0);
@@ -928,9 +933,14 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
       break;
 
     case 2: // Rectangle Fill
+      d->s3_cmd_mx = !!(written & 2);
+      d->s3_cmd_pxtrans = !!(written & 0x100);
+      draws_up = written & (1 << 7) && d->s3_cmd_pxtrans;
       d->s3_pix_x = d->s3_cur_x;
       d->s3_pix_y = d->s3_cur_y;
-      d->s3_v_dir = -1;
+      d->s3_v_dir = draws_up ? 1 : -1;
+      d->s3_cmd_bus_size = (written >> 9) & 3;
+      d->s3_cmd_swap = (written >> 12) & 1;
 
       if (!(written & 0x100)) {
         L(fprintf(stderr, "[ s3 fillrect ]\n"));
@@ -1078,14 +1088,34 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
 DEVICE_ACCESS(vga_s3_pix_transfer) {
   struct vga_data *d = (struct vga_data *) extra;
   uint64_t idata;
-  uint8_t to_write[2];
+  uint8_t to_write[4];
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len);
+    if (d->s3_cmd_swap) {
+      to_write[1] = idata;
+      to_write[0] = idata >> 8;
+    } else {
+      to_write[0] = idata;
+      to_write[1] = idata >> 8;
+    }
 
-    to_write[0] = idata;
-    to_write[1] = idata >> 8;
-    pixel_transfer(cpu, d, to_write, 2);
+    int dt_ext_src = (d->bee8_regs[0xa] >> 6) & 3;
+
+    if (d->s3_cmd_mx && dt_ext_src == 2) {
+      // Transfer across the plane, 1bpp
+      uint8_t pixels[32];
+      int pxcount = 8 + (8 * d->s3_cmd_bus_size);
+      for (int i = 0; i < pxcount; i++) {
+        // XXX Implement dst and src mix etc.
+        bool pix = 1 & (to_write[i / 8] >> ((7 - i) % 8));
+        pixels[i] = pix ? d->s3_fg_color : d->s3_bg_color;
+      }
+      int old_fg_color_mix = d->s3_fg_color_mix;
+      pixel_transfer(cpu, d, 0x67, pixels, pxcount);
+    } else {
+      pixel_transfer(cpu, d, d->s3_fg_color_mix, to_write, 1 + d->s3_cmd_bus_size);
+    }
   }
 
   return 1;

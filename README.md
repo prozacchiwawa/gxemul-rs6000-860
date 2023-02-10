@@ -5,10 +5,7 @@ served as a very good base for experimenting and learning.
 
 My focus was to be able to run the native firmware of the quirky
 RS/6000 model 860 and the operating systems released for it.  It's
-still got a ways to go: typing 'eatabug' at the easy config screen
-does drop into the builtin shell and it can be interacted with,
-but it uses features I haven't finished emulating in the S3 vga
-yet.
+still got a ways to go.
 
 Parts of this are absent from upstream gxemul and it's my hope
 to upstream some of it.

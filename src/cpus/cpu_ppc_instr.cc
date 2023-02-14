@@ -2715,6 +2715,7 @@ X(to_be_translated)
 	    / sizeof(struct ppc_instr_call);
 	addr = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
+  int offset = (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0;
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc = addr;
 	addr &= ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
@@ -2739,10 +2740,10 @@ X(to_be_translated)
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */
-		memcpy(ib, page + (addr & 0xfff), sizeof(ib));
+		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
 	} else {
 		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!cpu->memory_rw(cpu, cpu->mem, addr, ib,
+		if (!cpu->memory_rw(cpu, cpu->mem, (addr ^ offset), ib,
 		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
 			fatal("PPC to_be_translated(): "
 			    "read failed: TODO\n");
@@ -2751,10 +2752,13 @@ X(to_be_translated)
 		}
 	}
 
-	{
+	if (cpu->cd.ppc.msr & PPC_MSR_LE) {
 		uint32_t *p = (uint32_t *) ib;
-		iword = *p;
-		iword = BE32_TO_HOST(iword);
+    iword = BE32_TO_HOST(*p);
+		// fprintf(stderr, "%08x:%08x: LE translate instruction %08x\n", cpu->pc, addr ^ offset, iword);
+	} else {
+		uint32_t *p = (uint32_t *) ib;
+    iword = BE32_TO_HOST(*p);
 	}
 
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD

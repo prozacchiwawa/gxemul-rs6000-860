@@ -306,6 +306,8 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		return;
 	}
 
+  int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+
 	if (writeflag) {
 		cpu->cd.ppc.msr = *valuep;
 
@@ -328,10 +330,10 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
 	/*  TODO: Is the little-endian bit writable?  */
-
-	cpu->cd.ppc.msr &= ~PPC_MSR_LE;
-	if (cpu->byte_order != EMUL_BIG_ENDIAN)
-		cpu->cd.ppc.msr |= PPC_MSR_LE;
+  int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+  if (old_le != new_le) {
+    fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
+  }
 
 	if (!writeflag)
 		*valuep = cpu->cd.ppc.msr;
@@ -659,7 +661,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		debug("%016" PRIx64, (uint64_t) dumpaddr);
 
 	/*  NOTE: Fixed to big-endian.  */
-	iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
+    iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
 	    + instr[3];
 
 	debug(": %08" PRIx32"\t", iword);

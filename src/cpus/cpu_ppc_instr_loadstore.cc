@@ -41,18 +41,46 @@
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
+  int offset =
+    (cpu->cd.ppc.msr & PPC_MSR_LE) ? 
+#ifdef LS_B
+    7
+#elif defined(LS_H)
+    6
+#elif defined(LS_W)
+    4
+#else
+    0
+#endif
+    : 0;
+
 #ifdef MODE32
 	uint32_t addr =
 #else
 	uint64_t addr =
 #endif
-	    reg(ic->arg[1]) +
+    offset ^
+    (reg(ic->arg[1]) +
 #ifdef LS_INDEXED
-	    reg(ic->arg[2]);
+     reg(ic->arg[2])
 #else
-	    (int32_t)ic->arg[2];
+     (int32_t)ic->arg[2]
 #endif
+     );
 	unsigned char data[LS_SIZE];
+
+	/*
+  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
+    const char *ls =
+#ifdef LS_LOAD
+      "load"
+#else
+      "store"
+#endif
+      ;
+    fprintf(stderr, "LE generic %s %d from %08x\n", ls, 8 - offset, addr);
+  }
+  */
 
 	/*  Synchronize the PC:  */
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
@@ -161,7 +189,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_UPDATE
-	reg(ic->arg[1]) = addr;
+	reg(ic->arg[1]) = addr ^ offset;
 #endif
 }
 #endif
@@ -169,6 +197,19 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
+  int offset =
+    (cpu->cd.ppc.msr & PPC_MSR_LE) ?
+#ifdef LS_B
+    7
+#elif defined(LS_H)
+    6
+#elif defined(LS_W)
+    4
+#else
+    0
+#endif
+    : 0;
+
 #ifndef MODE32
 	/************************************************************/
 	/* For now, 64-bit access is done using the slow fallback.  */
@@ -184,15 +225,29 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
 	uint64_t addr =
 #endif
-	    reg(ic->arg[1])
+    offset ^
+    (reg(ic->arg[1])
 #ifdef LS_INDEXED
-	    + reg(ic->arg[2])
+     + reg(ic->arg[2])
 #else
 #ifndef LS_IGNOREOFS
-	    + (int32_t)ic->arg[2]
+     + (int32_t)ic->arg[2]
 #endif
 #endif
-	    ;
+     );
+
+	/*
+  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
+    const char *ls =
+#ifdef LS_LOAD
+      "load"
+#else
+      "store"
+#endif
+      ;
+    fprintf(stderr, "LE %s %d from %08x\n", ls, 8 - offset, addr);
+  }
+  */
 
 	unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
@@ -202,7 +257,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 	    [addr >> 12];
 #ifdef LS_UPDATE
-	uint32_t new_addr = addr;
+	uint32_t new_addr = addr ^ offset;
 #endif
 
 #ifndef LS_B

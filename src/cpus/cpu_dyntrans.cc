@@ -277,9 +277,15 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		if (cpu->machine->instruction_trace) {
 			/*  TODO/Note: This must be large enough to hold
 			    any instruction for any ISA:  */
+      int offset = 0;
+#ifdef DYNTRANS_PPC
+      if (cpu->cd.ppc.msr & PPC_MSR_LE) {
+        offset ^= 4;
+      }
+#endif
 			unsigned char instr[1 <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-			if (!cpu->memory_rw(cpu, cpu->mem, cached_pc, &instr[0],
+			if (!cpu->memory_rw(cpu, cpu->mem, (cached_pc ^ offset), &instr[0],
 			    sizeof(instr), MEM_READ, CACHE_INSTRUCTION)) {
 				fatal("XXX_run_instr(): could not read "
 				    "the instruction\n");

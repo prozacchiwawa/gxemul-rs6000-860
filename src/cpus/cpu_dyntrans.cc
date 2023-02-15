@@ -466,7 +466,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 {
 	int show_symbolic_function_name = 1;
-        char strbuf[50];
+        char strbuf[64];
 	char *symbol;
 	uint64_t ot;
 	int x, print_dots = 1, n_args_to_print =
@@ -531,10 +531,22 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 
 		if (d > -256 && d < 256)
 			fatal("%i", (int)d);
-		else if (memory_points_to_string(cpu, cpu->mem, d, 1))
-			fatal("\"%s\"", memory_conv_to_string(cpu,
-			    cpu->mem, d, strbuf, sizeof(strbuf)));
-		else if (symbol != NULL && ot == 0 &&
+		else if (memory_points_to_string(cpu, cpu->mem, d, 1)) {
+      char *str_read = memory_conv_to_string
+        (cpu,
+         cpu->mem, d, strbuf, sizeof(strbuf));
+#ifdef DYNTRANS_PPC
+			// PPC addr swizzle
+			for (int as = 0; str_read && (cpu->cd.ppc.msr & PPC_MSR_LE) && as < sizeof(strbuf); as += 8) {
+				for (int astmp, at = 0; at < 4; at++) {
+					astmp = strbuf[as+7-at];
+					strbuf[as+7-at] = strbuf[as+at];
+					strbuf[as+at] = astmp;
+				}
+			}
+#endif
+			fatal("\"%s\"", str_read);
+		} else if (symbol != NULL && ot == 0 &&
 		    show_symbolic_function_name)
 			fatal("&%s", symbol);
 		else {

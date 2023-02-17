@@ -45,6 +45,7 @@
 #include "settings.h"
 #include "symbol.h"
 
+extern int single_step;
 
 /*  This is initialized by machine_init():  */
 struct machine_entry *first_machine_entry = NULL;
@@ -654,7 +655,12 @@ int machine_run(struct machine *machine)
 		if (cpus[i]->running)
 			return 1;
 
-	return 0;
+	if (machine->exit_without_entering_debugger) {
+		return 0;
+	} else {
+		single_step = 1;
+		return 1; // Don't abrutply abort so we can see what's going on.
+	}
 }
 
 

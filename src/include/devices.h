@@ -183,6 +183,7 @@ struct eagle_glob {
   uint16_t pci_status;
   uint16_t pci_command;
   int want_error;
+  int swap_bytelanes;
 
   /* 0xc0 */
   uint8_t error_enabling_1, error_detection_1, bus_status_60x;

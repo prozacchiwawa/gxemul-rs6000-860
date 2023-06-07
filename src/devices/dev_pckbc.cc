@@ -203,7 +203,6 @@ static void ascii_to_pc_scancodes_type3(int a, struct pckbc_data *d)
 
 	old_head = d->head[p];
 
-	if (a==27)	pckbc_add_code(d, 0x08, p);
 	if (a=='1')	pckbc_add_code(d, 0x16, p);
 	if (a=='2')	pckbc_add_code(d, 0x1e, p);
 	if (a=='3')	pckbc_add_code(d, 0x26, p);
@@ -249,7 +248,7 @@ static void ascii_to_pc_scancodes_type3(int a, struct pckbc_data *d)
 	if (a==';')	pckbc_add_code(d, 0x4c, p);
 	if (a=='\'')	pckbc_add_code(d, 0x52, p);
 	if (a=='~')	pckbc_add_code(d, 0x29, p);
-	if (a=='\\')	pckbc_add_code(d, 0x5c, p);
+	if (a=='\\')	pckbc_add_code(d, 0x5d, p);
 
 	if (a=='z')	pckbc_add_code(d, 0x1a, p);
 	if (a=='x')	pckbc_add_code(d, 0x22, p);
@@ -298,6 +297,14 @@ static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
 	int p = 0;	/*  port  */
 	int shift = 0, ctrl = 0;
 
+  static int kpmode = 0;
+
+  if (a >= 0x100) {
+    fprintf(stderr, "direct keycode %02x\n", (a >> 8));
+    pckbc_add_code(d, a >> 8, p);
+    return;
+  }
+
 	if (d->translation_table == 3) {
 		ascii_to_pc_scancodes_type3(a, d);
 		return;
@@ -334,10 +341,10 @@ static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
 	if (a=='?')  {	a = '/'; shift = 1; }
 	if (a=='~')  {	a = '`'; shift = 1; }
 
-	//if (shift)
-  //pckbc_add_code(d, 0x2a, p);
-	//else
-  //pckbc_add_code(d, 0x2a + 0x80, p);
+	if (shift)
+    pckbc_add_code(d, 0x2a, p);
+	else
+    pckbc_add_code(d, 0x2a + 0x80, p);
 
 	if (ctrl)
 		pckbc_add_code(d, 0x1d, p);
@@ -1082,7 +1089,7 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	d->type              = type;
 	d->in_use            = in_use;
 	d->pc_style_flag     = pc_style_flag;
-	d->translation_table = 3; // 2
+	d->translation_table = 3;
 	d->rx_int_enable     = 1;
 	d->output_byte       = 0x02;	/*  A20 enable on PCs  */
 

@@ -40,7 +40,7 @@
 
 void console_deinit_main(void);
 void console_sigcont(int x);
-void console_makeavail(int handle, char ch);
+void console_makeavail(int handle, int ch);
 int console_charavail(int handle);
 int console_readchar(int handle);
 void console_putchar(int handle, int ch);

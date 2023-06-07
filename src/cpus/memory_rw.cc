@@ -337,16 +337,6 @@ not just the device in question.
 				res = 0;
 				if (!no_exceptions || (mem->devices[i].flags &
                                DM_READS_HAVE_NO_SIDE_EFFECTS)) {
-#ifdef MEM_PPC
-          if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-            // The CPU generates swizzled addresses in LE mode but the PReP
-            // PCI bus unswizzles?
-            if (len < 8) {
-              paddr ^= 8 - len;
-              // fprintf(stderr, "LE: access PCI (%s) %08x (%d)\n", mem->devices[i].name, paddr, len);
-            }
-          }
-#endif
 					res = mem->devices[i].f(cpu, mem, paddr,
 					    data, len, writeflag,
 					    mem->devices[i].extra);

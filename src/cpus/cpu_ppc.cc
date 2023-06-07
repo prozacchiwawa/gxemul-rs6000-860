@@ -369,7 +369,8 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
-	cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR);
+	cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_LE);
+  cpu->cd.ppc.msr |= PPC_MSR_LE & (cpu->cd.ppc.msr >> 16);
 
 	cpu->pc = exception_nr * 0x100;
 	if (cpu->cd.ppc.msr & PPC_MSR_IP)

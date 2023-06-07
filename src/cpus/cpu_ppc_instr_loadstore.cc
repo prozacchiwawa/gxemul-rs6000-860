@@ -37,12 +37,38 @@
  *	     (or, for Indexed load/stores: pointer to index register)
  */
 
+#ifndef swap2
+#define swap2(data) do { \
+  uint8_t t = data[0]; \
+  data[0] = data[1]; \
+  data[1] = t; \
+} while(0)
+#endif
+
+#ifndef swap4
+#define swap4(data) do { \
+  uint8_t t = data[0]; \
+  data[0] = data[1]; \
+  data[1] = data[2]; \
+  data[3] = t; \
+} while(0)
+#endif
+
+#ifndef swap8
+#define swap8
+#define swap8(data) do { \
+  uint32_t *tptr = (uint32_t *)data; \
+  uint32_t t = tptr[0]; \
+  tptr[0] = tptr[1]; \
+  tptr[1] = t; \
+} while(0)
+#endif
 
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
   int offset =
-    (cpu->cd.ppc.msr & PPC_MSR_LE) ? 
+    (!!(cpu->cd.ppc.msr & PPC_MSR_LE) != !!eagle_comm.swap_bytelanes) ?
 #ifdef LS_B
     7
 #elif defined(LS_H)
@@ -69,7 +95,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
      );
 	unsigned char data[LS_SIZE];
 
-	/*
   if (cpu->cd.ppc.msr & PPC_MSR_LE) {
     const char *ls =
 #ifdef LS_LOAD
@@ -80,7 +105,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
       ;
     fprintf(stderr, "LE generic %s %d from %08x\n", ls, 8 - offset, addr);
   }
-  */
 
 	/*  Synchronize the PC:  */
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
@@ -110,6 +134,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    data[0];
 #endif
 #ifdef LS_H
+  if (eagle_comm.swap_bytelanes) {
+    swap2(data);
+  }
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
 	    ((data[1] << 8) + data[0]);
@@ -121,6 +148,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /*  !BYTEREVERSE  */
 #endif
 #ifdef LS_W
+  if (eagle_comm.swap_bytelanes) {
+    swap4(data);
+  }
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
 	    ((data[3] << 24) + (data[2] << 16) +
@@ -136,6 +166,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
+  if (eagle_comm.swap_bytelanes) {
+    swap8(data);
+  }
 	(*(uint64_t *)(ic->arg[0])) =
 	    ((uint64_t)data[0] << 56) + ((uint64_t)data[1] << 48) +
 	    ((uint64_t)data[2] << 40) + ((uint64_t)data[3] << 32) +
@@ -146,9 +179,15 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else	/*  store:  */
 
 #ifdef LS_B
+  if ((addr & 0xff0) == 0xda0) {
+    fprintf(stderr, "Write %02x at %08x\n", reg(ic->arg[0]) & 0xff, addr);
+  }
 	data[0] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
+  if ((addr & 0xff0) == 0xda0) {
+    fprintf(stderr, "Write %04x at %08x\n", reg(ic->arg[0]) & 0xffff, addr);
+  }
 #ifdef LS_BYTEREVERSE
 	data[0] = reg(ic->arg[0]);
 	data[1] = reg(ic->arg[0]) >> 8;
@@ -156,8 +195,14 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[0] = reg(ic->arg[0]) >> 8;
 	data[1] = reg(ic->arg[0]);
 #endif
+  if (eagle_comm.swap_bytelanes) {
+    swap2(data);
+  }
 #endif
 #ifdef LS_W
+  if ((addr & 0xff0) == 0xda0) {
+    fprintf(stderr, "%08x: Write %08x at %08x\n", (uint32_t)cpu->pc, reg(ic->arg[0]), addr);
+  }
 #ifdef LS_BYTEREVERSE
 	data[0] = reg(ic->arg[0]);
 	data[1] = reg(ic->arg[0]) >> 8;
@@ -169,6 +214,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[2] = reg(ic->arg[0]) >> 8;
 	data[3] = reg(ic->arg[0]);
 #endif /* !LS_BYTEREVERSE */
+  if (eagle_comm.swap_bytelanes) {
+    swap4(data);
+  }
 #endif
 #ifdef LS_D
 	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
@@ -180,6 +228,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[5] = x >> 16;
 	data[6] = x >> 8;
 	data[7] = x; }
+  if (eagle_comm.swap_bytelanes) {
+    swap8(data);
+  }
 #endif
 	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
@@ -198,7 +249,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
   int offset =
-    (cpu->cd.ppc.msr & PPC_MSR_LE) ?
+    (!!(cpu->cd.ppc.msr & PPC_MSR_LE) != !!eagle_comm.swap_bytelanes) ?
 #ifdef LS_B
     7
 #elif defined(LS_H)
@@ -236,7 +287,6 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
      );
 
-	/*
   if (cpu->cd.ppc.msr & PPC_MSR_LE) {
     const char *ls =
 #ifdef LS_LOAD
@@ -247,7 +297,6 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       ;
     fprintf(stderr, "LE %s %d from %08x\n", ls, 8 - offset, addr);
   }
-  */
 
 	unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
@@ -321,9 +370,15 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 		/*  Store:  */
 #ifdef LS_B
+    if ((addr & 0xff0) == 0xda0) {
+      fprintf(stderr, "Write %02x at %08x\n", reg(ic->arg[0]) & 0xff, addr);
+    }
 		page[addr] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
+    if ((addr & 0xff0) == 0xda0) {
+      fprintf(stderr, "Write %04x at %08x\n", reg(ic->arg[0]) & 0xffff, addr);
+    }
 #ifdef LS_BYTEREVERSE
 		page[addr]   = reg(ic->arg[0]);
 		page[addr+1] = reg(ic->arg[0]) >> 8;
@@ -333,6 +388,9 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /* !BYTEREVERSE */
 #endif
 #ifdef LS_W
+    if ((addr & 0xff0) == 0xda0) {
+      fprintf(stderr, "%08x: Write %08x at %08x\n", (uint32_t)cpu->pc, reg(ic->arg[0]), addr);
+    }
 #ifdef LS_BYTEREVERSE
 		page[addr]   = reg(ic->arg[0]);
 		page[addr+1] = reg(ic->arg[0]) >> 8;

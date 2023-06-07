@@ -35,7 +35,7 @@
 
 
 #include "float_emul.h"
-
+#include "devices.h"
 
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
@@ -2741,6 +2741,9 @@ X(to_be_translated)
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */
 		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
+    if ((addr & ~0xfff) == 0x6e0000) {
+      fprintf(stderr, "PPC Page read %08x %d ib = %02x %02x %02x %02x\n", addr, offset, ib[0], ib[1], ib[2], ib[3]);
+    }
 	} else {
 		/*  fatal("TRANSLATION MISS!\n");  */
 		if (!cpu->memory_rw(cpu, cpu->mem, (addr ^ offset), ib,
@@ -2750,12 +2753,20 @@ X(to_be_translated)
 			exit(1);
 			/*  goto bad;  */
 		}
+    if ((addr & ~0xfff) == 0x6e0000) {
+      fprintf(stderr, "PPC Generic read %08x %d ib = %02x %02x %02x %02x\n", addr, offset, ib[0], ib[1], ib[2], ib[3]);
+    }
 	}
 
-	if (cpu->cd.ppc.msr & PPC_MSR_LE) {
+	if (eagle_comm.swap_bytelanes) {
 		uint32_t *p = (uint32_t *) ib;
-    iword = BE32_TO_HOST(*p);
-		// fprintf(stderr, "%08x:%08x: LE translate instruction %08x\n", cpu->pc, addr ^ offset, iword);
+    iword = LE32_TO_HOST(*p);
+    // Hack: the real PPC ensures that under certain circumstances, instructions
+    // have been cached or are in the pipeline.
+    if (iword == 0x6400004c) {
+      iword = 0x4c000064;
+    }
+		fprintf(stderr, "%08x:%08x: LE translate instruction %08x\n", cpu->pc, addr ^ offset, iword);
 	} else {
 		uint32_t *p = (uint32_t *) ib;
     iword = BE32_TO_HOST(*p);

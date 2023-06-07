@@ -195,7 +195,7 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
 						d->command_bytes[2] = d->seek_head;
-						d->command_bytes[1] = 0;
+						d->command_bytes[1] = 1;
 						d->command_bytes[0] = 2;
             maybe_interrupt(d);
 						break;
@@ -232,7 +232,8 @@ DEVICE_ACCESS(fdc)
             fprintf(stderr, "[ fdc: read to %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
             if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
               // LBA = (cylinder * number_of_heads + head) * sectors_per_track + sector - 1
-              offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 18) + d->read_sector - 1);
+              //offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 18) + (d->read_sector - 1));
+              offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 36) + (d->read_sector - 1));
 
               while (read_len > 0) {
                 fprintf(stderr, "[ fdc: read diskette from %08x to addr %08" PRIx64" len %08" PRIx64" ]\n", offset, read_addr, read_len);

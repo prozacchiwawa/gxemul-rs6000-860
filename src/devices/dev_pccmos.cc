@@ -91,7 +91,7 @@ DEVICE_ACCESS(pccmos)
         b = idata = memory_readmax64(cpu, data, len);
         //fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
     } else {
-        fprintf(stderr, "pccmos: read at relative_addr %08x selector %d\n", relative_addr, d->select);
+      fprintf(stderr, "pccmos: read at relative_addr %08x selector %d\n", relative_addr, d->select);
     }
 
     /*
@@ -107,6 +107,9 @@ DEVICE_ACCESS(pccmos)
                                    PCCMOS_MC146818_FAKE_ADDR, &b, 1,
                                    MEM_WRITE, PHYSICAL);
             }
+        } else if (d->select == 0x80) {
+            fprintf(stderr, "[ pccmos: faking selector 0x80 ]\n");
+            odata = ++d->ram[0x80];
         } else {
             odata = d->select;
             if (d->select == 13) {
@@ -121,7 +124,7 @@ DEVICE_ACCESS(pccmos)
         // IBM machines have an extra 16k nvram (which appears in 4 copies)
         // in the 64k address space.  These will only be alive if we initialized
         // the size of the CMOS ISA device at 8 ports.
-        if (relative_addr == 4) {
+        else if (relative_addr == 4) {
             if (writeflag == MEM_WRITE) {
                 d->extended_select = (d->extended_select & 0xff00) | idata;
             } else {
@@ -171,7 +174,7 @@ DEVICE_ACCESS(pccmos)
                 debug("[ write to cmos upper half: relative addr %d, %02x ]\n", relative_addr+8, (int)idata);
                 d->upper_half[relative_addr] = idata;
                 if (idata == 0x80) {
-                    eagle_comm.want_timer_int = 2;
+                    // eagle_comm.want_timer_int = 20;
                 }
             } else {
                 odata = d->upper_half[relative_addr];

@@ -651,7 +651,7 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 				memset(text, 0, sizeof(text));
 
 				if (XLookupString(&event.xkey, text,
-				    sizeof(text), &key, 0) == 1) {
+				    sizeof(text), &key, 0) == 1 && key != XK_Escape && key != XK_BackSpace) {
 					console_makeavail(
 					    m->main_console_handle, text[0]);
 				} else {
@@ -669,11 +669,25 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 					 *  the DECstation's keyboard or the
 					 *  PC-style 8042 controller.
 					 */
-					switch (x) {
-					case 9:	/*  Escape  */
+          switch (key) {
+          case 0xff08: /* Backspace */
 						console_makeavail(m->
-						    main_console_handle, 27);
-						break;
+                              main_console_handle, (0x66 << 8) | 8);
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8));
+						console_makeavail(m->
+                              main_console_handle, (0x66 << 8));
+            break;
+					case 0xff1b:	/*  Escape  */
+						console_makeavail(m->
+                              main_console_handle, (0x76 << 8) | 27);
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8));
+						console_makeavail(m->
+                              main_console_handle, (0x76 << 8));
+            break;
+          default:
+					switch (x) {
 #if 0
 					/*  TODO  */
 
@@ -685,18 +699,44 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 #endif
 					/*  F1..F4:  */
 					case 67:	/*  F1  */
+						console_makeavail(m->
+                              main_console_handle, (0x05 << 8) | 27);
+          console_makeavail(m->
+                            main_console_handle, (0xf0 << 8) | '[');
+          console_makeavail(m->
+                            main_console_handle, (0x05 << 8) | 'O');
+          console_makeavail(m->
+                            main_console_handle, 'P');
+          break;
 					case 68:	/*  F2  */
+						console_makeavail(m->
+                              main_console_handle, (0x06 << 8) | 27);
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8) | '[');
+						console_makeavail(m->
+                              main_console_handle, (0x06 << 8) | 'O');
+						console_makeavail(m->
+                              main_console_handle, 'Q');
+            break;
 					case 69:	/*  F3  */
+						console_makeavail(m->
+                              main_console_handle, (0x04 << 8) | 27);
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8) | '[');
+						console_makeavail(m->
+                              main_console_handle, (0x04 << 8) | 'O');
+						console_makeavail(m->
+                              main_console_handle, 'R');
+            break;
 					case 70:	/*  F4  */
 						console_makeavail(m->
-						    main_console_handle, 27);
+                              main_console_handle, (0x0c << 8) | 27);
 						console_makeavail(m->
-						    main_console_handle, '[');
+                              main_console_handle, (0xf0 << 8) | '[');
 						console_makeavail(m->
-						    main_console_handle, 'O');
+                              main_console_handle, (0x0c << 8) | 'O');
 						console_makeavail(m->
-						    main_console_handle, 'P' +
-						    x - 67);
+                              main_console_handle, 'S');
 						break;
 					case 71:	/*  F5  */
 						console_makeavail(m->
@@ -709,6 +749,13 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 						    main_console_handle, '5');
 						break;
 					case 72:	/*  F6  */
+						console_makeavail(m->
+                              main_console_handle, (0x0b << 8));
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8));
+						console_makeavail(m->
+                              main_console_handle, (0x0b << 8));
+            break;
 					case 73:	/*  F7  */
 					case 74:	/*  F8  */
 						console_makeavail(m->
@@ -722,6 +769,13 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 						    x - 72);
 						break;
 					case 75:	/*  F9  */
+						console_makeavail(m->
+                              main_console_handle, (0x01 << 8));
+						console_makeavail(m->
+                              main_console_handle, (0xf0 << 8));
+						console_makeavail(m->
+                              main_console_handle, (0x01 << 8));
+            break;
 					case 76:	/*  F10  */
 						console_makeavail(m->
 						    main_console_handle, 27);
@@ -817,10 +871,59 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 						console_makeavail(m->
 						    main_console_handle, '~');
 						break;
+          case 111:
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x75 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xf0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x75 << 8);
+                break;
+          case 113:
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x6b << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xf0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x6b << 8);
+                break;
+          case 114:
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x64 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xf0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x64 << 8);
+                break;
+          case 116:
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x72 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xe0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0xf0 << 8);
+            console_makeavail(m->
+                              main_console_handle, 0x72 << 8);
+                break;
 					default:
 						debug("[ unimplemented X11 "
 						    "keycode %i ]\n", x);
 					}
+          }
 				}
 			}
 		}

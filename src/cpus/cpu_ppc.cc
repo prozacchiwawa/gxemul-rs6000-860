@@ -306,7 +306,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		return;
 	}
 
-  int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
 
 	if (writeflag) {
 		cpu->cd.ppc.msr = *valuep;
@@ -329,12 +329,11 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		}
 	}
 
-	/*  TODO: Is the little-endian bit writable?  */
-  int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
-  if (old_le != new_le) {
-    fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
-  }
-
+        /*  TODO: Is the little-endian bit writable?  */
+	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+	if (old_le != new_le) {
+		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
+	}
 	if (!writeflag)
 		*valuep = cpu->cd.ppc.msr;
 
@@ -369,7 +368,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
-	cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_LE);
+  cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_LE);
   cpu->cd.ppc.msr |= PPC_MSR_LE & (cpu->cd.ppc.msr >> 16);
 
 	cpu->pc = exception_nr * 0x100;
@@ -487,6 +486,8 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		if (!bits32)
 			debug("  hdec = 0x%08" PRIx32"\n",
 			    (uint32_t) cpu->cd.ppc.spr[SPR_HDEC]);
+
+    debug(" swap %d", eagle_comm.swap_bytelanes & 3);
 
 		debug("\n");
 	}
@@ -662,7 +663,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		debug("%016" PRIx64, (uint64_t) dumpaddr);
 
 	/*  NOTE: Fixed to big-endian.  */
-    iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
+	iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
 	    + instr[3];
 
 	debug(": %08" PRIx32"\t", iword);

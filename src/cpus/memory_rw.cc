@@ -80,7 +80,6 @@ int MEMORY_RW(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	no_exceptions = misc_flags & NO_EXCEPTIONS;
 	cache = misc_flags & CACHE_FLAGS_MASK;
 
-
 	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
 		paddr = vaddr;
 	} else {
@@ -336,12 +335,11 @@ not just the device in question.
 
 				res = 0;
 				if (!no_exceptions || (mem->devices[i].flags &
-                               DM_READS_HAVE_NO_SIDE_EFFECTS)) {
+				    DM_READS_HAVE_NO_SIDE_EFFECTS))
 					res = mem->devices[i].f(cpu, mem, paddr,
 					    data, len, writeflag,
 					    mem->devices[i].extra);
-        }
-        
+
 				if (res == 0)
 					res = -1;
 
@@ -423,6 +421,7 @@ not just the device in question.
 		} else
 #endif /* MIPS */
 		{
+
 			if (paddr >= mem->physical_max && !no_exceptions)
 				memory_warn_about_unimplemented_addr
 				    (cpu, mem, writeflag, paddr, data, len);
@@ -518,10 +517,34 @@ not just the device in question.
 	}
 
 	/*  And finally, read or write the data:  */
-	if (writeflag == MEM_WRITE)
+  offset ^= bytelane_swizzle(len);
+	if (writeflag == MEM_WRITE) {
 		memcpy(memblock + offset, data, len);
-	else
+#ifdef MEM_PPC
+    if (eagle_comm.swap_bytelanes & 1) {
+      if (len == 8) {
+        swap8(memblock + offset);
+      } else if (len == 4) {
+        swap4(memblock + offset);
+      } else if (len == 2) {
+        swap2(memblock + offset);
+      }
+    }
+#endif
+	} else {
 		memcpy(data, memblock + offset, len);
+#ifdef MEM_PPC
+    if (eagle_comm.swap_bytelanes & 1) {
+      if (len == 8) {
+        swap8(data);
+      } else if (len == 4) {
+        swap4(data);
+      } else if (len == 2) {
+        swap2(data);
+      }
+    }
+#endif
+  }
 
 do_return_ok:
 	return MEMORY_ACCESS_OK;

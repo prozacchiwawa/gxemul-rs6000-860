@@ -75,7 +75,7 @@ struct ppc_cpu_type_def {
 	{ "PPC601",	0,          32, PPC_601, 14,5,4, 14,5,4, 0,0,0, 0 },\
 	{ "PPC603",	0x00030302, 32, PPC_603, 14,5,4, 14,5,4, 0,0,0, 0 },\
 	{ "PPC603e",	0x00060104, 32, PPC_603, 14,5,4, 14,5,4, 0,0,0, 0 },\
-	{ "PPC604",	0x00040103, 32, 0, 15,5,4, 15,5,4, 0,0,0, 0 },	\
+  { "PPC604",	0x00040103, 32, 0, 15,5,4, 15,5,4, 0,0,0, 0 },      \
 	{ "PPC620",	0x00140000, 64, 0, 15,5,4, 15,5,4, 0,0,0, 0 },	\
 	{ "MPC7400",	0x000c0000, 32, 0, 15,5,2, 15,5,2, 19,5,1, 1 },	\
 	{ "PPC750",	0x00084202, 32, 0, 15,5,2, 15,5,2, 20,5,1, 0 },	\
@@ -189,7 +189,7 @@ struct ppc_cpu {
 #define	PPC_EXCEPTION_DSI	0x3	/*  Data Storage Interrupt  */
 #define	PPC_EXCEPTION_ISI	0x4	/*  Instruction Storage Interrupt  */
 #define	PPC_EXCEPTION_EI	0x5	/*  External interrupt  */
-#define PPC_EXCEPTION_PRG       0x7     /*  Program exception */
+#define PPC_EXCEPTION_PRG 0x7 /*  Program exception */
 #define	PPC_EXCEPTION_FPU	0x8	/*  Floating-Point unavailable  */
 #define	PPC_EXCEPTION_DEC	0x9	/*  Decrementer  */
 #define	PPC_EXCEPTION_SC	0xc	/*  Syscall  */
@@ -220,5 +220,40 @@ int ppc_cpu_family_init(struct cpu_family *);
 /*  memory_ppc.c:  */
 int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	uint64_t *return_addr, int flags);
+
+uint32_t ppc_swizzle(struct cpu *cpu, int size);
+uint32_t bytelane_swizzle(int size);
+void bytelane_memcpy_frommem(void *target, void *source, int size, uint32_t address_low);
+void bytelane_memcpy_tomem(void *target, void *source, int size, uint32_t address_low);
+
+#ifndef swap2
+#define swap2(data) do {  \
+    uint8_t *d = (uint8_t *)data;                 \
+    uint8_t __t = d[0];                           \
+    d[0] = d[1];                                  \
+    d[1] = __t;                                   \
+  } while(0)
+#endif
+
+#ifndef swap4
+#define swap4(data) do {                        \
+    uint8_t *d = (uint8_t *)data;               \
+    uint8_t __t = d[0];                         \
+    d[0] = d[1];                                \
+    d[1] = d[2];                                \
+    d[3] = __t;                                 \
+  } while(0)
+#endif
+
+#ifndef swap8
+#define swap8(data) do {                      \
+    uint32_t *tptr = (uint32_t *)data;        \
+    uint32_t __t = tptr[0];                   \
+    tptr[0] = tptr[1];                        \
+    tptr[1] = __t;                            \
+    swap4(data);                              \
+    swap4(data+4);                            \
+  } while(0)
+#endif
 
 #endif	/*  CPU_PPC_H  */

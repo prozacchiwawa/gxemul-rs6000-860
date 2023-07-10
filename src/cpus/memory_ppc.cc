@@ -301,3 +301,38 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	return 0;
 }
 
+// Given a source and target and address_low indicating the low 32-bits of the
+// address being copied, do a correct, bytelane swapped copy when bytelane
+// swapping (port 92 on PReP hardware) is enabled, otherwise it's just a normal
+// memcpy.
+uint32_t ppc_swizzle(struct cpu *cpu, int size) {
+  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
+    return
+      (size > 4) ?
+      0 :
+      (size == 4) ?
+      4 :
+      (size == 2) ?
+      6 :
+      7
+      ;
+  } else {
+    return 0;
+  }
+}
+
+uint32_t bytelane_swizzle(int size) {
+  if (eagle_comm.swap_bytelanes & 1) {
+    return
+      (size > 4) ?
+      0 :
+      (size == 4) ?
+      4 :
+      (size == 2) ?
+      6 :
+      7
+      ;
+  } else {
+    return 0;
+  }
+}

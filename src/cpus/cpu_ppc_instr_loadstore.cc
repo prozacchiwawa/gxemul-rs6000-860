@@ -37,74 +37,33 @@
  *	     (or, for Indexed load/stores: pointer to index register)
  */
 
-#ifndef swap2
-#define swap2(data) do { \
-  uint8_t t = data[0]; \
-  data[0] = data[1]; \
-  data[1] = t; \
-} while(0)
-#endif
-
-#ifndef swap4
-#define swap4(data) do { \
-  uint8_t t = data[0]; \
-  data[0] = data[1]; \
-  data[1] = data[2]; \
-  data[3] = t; \
-} while(0)
-#endif
-
-#ifndef swap8
-#define swap8
-#define swap8(data) do { \
-  uint32_t *tptr = (uint32_t *)data; \
-  uint32_t t = tptr[0]; \
-  tptr[0] = tptr[1]; \
-  tptr[1] = t; \
-} while(0)
+#ifdef LS_D
+#define SWIZZLE_SIZE 0
+#elif defined(LS_W)
+#define SWIZZLE_SIZE 4
+#elif defined(LS_H)
+#define SWIZZLE_SIZE 6
+#else
+#define SWIZZLE_SIZE 7
 #endif
 
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
-  int offset =
-    (!!(cpu->cd.ppc.msr & PPC_MSR_LE) != !!eagle_comm.swap_bytelanes) ?
-#ifdef LS_B
-    7
-#elif defined(LS_H)
-    6
-#elif defined(LS_W)
-    4
-#else
-    0
-#endif
-    : 0;
-
 #ifdef MODE32
 	uint32_t addr =
 #else
 	uint64_t addr =
 #endif
-    offset ^
-    (reg(ic->arg[1]) +
+	    reg(ic->arg[1]) +
 #ifdef LS_INDEXED
-     reg(ic->arg[2])
+	    reg(ic->arg[2]);
 #else
-     (int32_t)ic->arg[2]
+	    (int32_t)ic->arg[2];
 #endif
-     );
-	unsigned char data[LS_SIZE];
+  uint32_t offset = ppc_swizzle(cpu, SWIZZLE_SIZE);
 
-  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-    const char *ls =
-#ifdef LS_LOAD
-      "load"
-#else
-      "store"
-#endif
-      ;
-    fprintf(stderr, "LE generic %s %d from %08x\n", ls, 8 - offset, addr);
-  }
+	unsigned char data[LS_SIZE];
 
 	/*  Synchronize the PC:  */
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
@@ -121,7 +80,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_LOAD
-	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
+	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
 	    MEM_READ, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -134,105 +93,84 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    data[0];
 #endif
 #ifdef LS_H
-  if (eagle_comm.swap_bytelanes) {
-    swap2(data);
-  }
+  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 1 : 0;
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
-	    ((data[1] << 8) + data[0]);
+	    ((data[1^swap_swizzle] << 8) + data[0^swap_swizzle]);
 #else
 #ifndef LS_ZERO
 	    (int16_t)
 #endif
-	    ((data[0] << 8) + data[1]);
+	    ((data[0&swap_swizzle] << 8) + data[1^swap_swizzle]);
 #endif /*  !BYTEREVERSE  */
 #endif
 #ifdef LS_W
-  if (eagle_comm.swap_bytelanes) {
-    swap4(data);
-  }
+      int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 3 : 0;
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
-	    ((data[3] << 24) + (data[2] << 16) +
-	    (data[1] << 8) + data[0]);
+	    ((data[3^swap_swizzle] << 24) + (data[2^swap_swizzle] << 16) +
+	    (data[1^swap_swizzle] << 8) + data[0^swap_swizzle]);
 #else  /* !LS_BYTEREVERSE  */
 #ifndef LS_ZERO
 	    (int32_t)
 #else
 	    (uint32_t)
 #endif
-	    ((data[0] << 24) + (data[1] << 16) +
-	    (data[2] << 8) + data[3]);
+	    ((data[0^swap_swizzle] << 24) + (data[1^swap_swizzle] << 16) +
+	    (data[2^swap_swizzle] << 8) + data[3^swap_swizzle]);
 #endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
-  if (eagle_comm.swap_bytelanes) {
-    swap8(data);
-  }
+      int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 7 : 0;
 	(*(uint64_t *)(ic->arg[0])) =
-	    ((uint64_t)data[0] << 56) + ((uint64_t)data[1] << 48) +
-	    ((uint64_t)data[2] << 40) + ((uint64_t)data[3] << 32) +
-	    ((uint64_t)data[4] << 24) + (data[5] << 16) +
-	    (data[6] << 8) + data[7];
+	    ((uint64_t)data[0^swap_swizzle] << 56) + ((uint64_t)data[1^swap_swizzle] << 48) +
+	    ((uint64_t)data[2^swap_swizzle] << 40) + ((uint64_t)data[3^swap_swizzle] << 32) +
+	    ((uint64_t)data[4^swap_swizzle] << 24) + (data[5^swap_swizzle] << 16) +
+	    (data[6^swap_swizzle] << 8) + data[7^swap_swizzle];
 #endif
 
 #else	/*  store:  */
 
 #ifdef LS_B
-  if ((addr & 0xff0) == 0xda0) {
-    fprintf(stderr, "Write %02x at %08x\n", reg(ic->arg[0]) & 0xff, addr);
-  }
 	data[0] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-  if ((addr & 0xff0) == 0xda0) {
-    fprintf(stderr, "Write %04x at %08x\n", reg(ic->arg[0]) & 0xffff, addr);
-  }
+  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 1 : 0;
 #ifdef LS_BYTEREVERSE
-	data[0] = reg(ic->arg[0]);
-	data[1] = reg(ic->arg[0]) >> 8;
+	data[0^swap_swizzle] = reg(ic->arg[0]);
+	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
 #else
-	data[0] = reg(ic->arg[0]) >> 8;
-	data[1] = reg(ic->arg[0]);
+	data[0^swap_swizzle] = reg(ic->arg[0]) >> 8;
+	data[1^swap_swizzle] = reg(ic->arg[0]);
 #endif
-  if (eagle_comm.swap_bytelanes) {
-    swap2(data);
-  }
 #endif
 #ifdef LS_W
-  if ((addr & 0xff0) == 0xda0) {
-    fprintf(stderr, "%08x: Write %08x at %08x\n", (uint32_t)cpu->pc, reg(ic->arg[0]), addr);
-  }
+  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 3 : 0;
 #ifdef LS_BYTEREVERSE
-	data[0] = reg(ic->arg[0]);
-	data[1] = reg(ic->arg[0]) >> 8;
-	data[2] = reg(ic->arg[0]) >> 16;
-	data[3] = reg(ic->arg[0]) >> 24;
+	data[0^swap_swizzle] = reg(ic->arg[0]);
+	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
+	data[2^swap_swizzle] = reg(ic->arg[0]) >> 16;
+	data[3^swap_swizzle] = reg(ic->arg[0]) >> 24;
 #else
-	data[0] = reg(ic->arg[0]) >> 24;
-	data[1] = reg(ic->arg[0]) >> 16;
-	data[2] = reg(ic->arg[0]) >> 8;
-	data[3] = reg(ic->arg[0]);
+	data[0^swap_swizzle] = reg(ic->arg[0]) >> 24;
+	data[1^swap_swizzle] = reg(ic->arg[0]) >> 16;
+	data[2^swap_swizzle] = reg(ic->arg[0]) >> 8;
+	data[3^swap_swizzle] = reg(ic->arg[0]);
 #endif /* !LS_BYTEREVERSE */
-  if (eagle_comm.swap_bytelanes) {
-    swap4(data);
-  }
 #endif
 #ifdef LS_D
+  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 7 : 0;
 	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-	data[0] = x >> 56;
-	data[1] = x >> 48;
-	data[2] = x >> 40;
-	data[3] = x >> 32;
-	data[4] = x >> 24;
-	data[5] = x >> 16;
-	data[6] = x >> 8;
-	data[7] = x; }
-  if (eagle_comm.swap_bytelanes) {
-    swap8(data);
-  }
+	data[0^swap_swizzle] = x >> 56;
+	data[1^swap_swizzle] = x >> 48;
+	data[2^swap_swizzle] = x >> 40;
+	data[3^swap_swizzle] = x >> 32;
+	data[4^swap_swizzle] = x >> 24;
+	data[5^swap_swizzle] = x >> 16;
+	data[6^swap_swizzle] = x >> 8;
+	data[7^swap_swizzle] = x; }
 #endif
-	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
+	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -240,7 +178,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_UPDATE
-	reg(ic->arg[1]) = addr ^ offset;
+	reg(ic->arg[1]) = addr;
 #endif
 }
 #endif
@@ -248,19 +186,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
-  int offset =
-    (!!(cpu->cd.ppc.msr & PPC_MSR_LE) != !!eagle_comm.swap_bytelanes) ?
-#ifdef LS_B
-    7
-#elif defined(LS_H)
-    6
-#elif defined(LS_W)
-    4
-#else
-    0
-#endif
-    : 0;
-
 #ifndef MODE32
 	/************************************************************/
 	/* For now, 64-bit access is done using the slow fallback.  */
@@ -276,27 +201,15 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
 	uint64_t addr =
 #endif
-    offset ^
-    (reg(ic->arg[1])
+	    reg(ic->arg[1])
 #ifdef LS_INDEXED
-     + reg(ic->arg[2])
+	    + reg(ic->arg[2])
 #else
 #ifndef LS_IGNOREOFS
-     + (int32_t)ic->arg[2]
+	    + (int32_t)ic->arg[2]
 #endif
 #endif
-     );
-
-  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-    const char *ls =
-#ifdef LS_LOAD
-      "load"
-#else
-      "store"
-#endif
-      ;
-    fprintf(stderr, "LE %s %d from %08x\n", ls, 8 - offset, addr);
-  }
+	    ;
 
 	unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
@@ -306,7 +219,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 	    [addr >> 12];
 #ifdef LS_UPDATE
-	uint32_t new_addr = addr ^ offset;
+	uint32_t new_addr = addr;
 #endif
 
 #ifndef LS_B
@@ -316,10 +229,12 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	}
 #endif
 
+  uint32_t offset = ppc_swizzle(cpu, SWIZZLE_SIZE);
 	if (page == NULL) {
 		LS_GENERIC_N(cpu, ic);
 		return;
 	} else {
+    offset ^= bytelane_swizzle(SWIZZLE_SIZE);
 		addr &= 4095;
 #ifdef LS_LOAD
 		/*  Load:  */
@@ -328,91 +243,82 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #ifndef LS_ZERO
 		    (int8_t)
 #endif
-		    page[addr];
+		    page[addr ^ offset];
 #endif	/*  LS_B  */
 #ifdef LS_H
 		reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
-		    ((page[addr+1] << 8) + page[addr]);
+      ((page[(addr^offset)+1] << 8) + page[(addr^offset)]);
 #else
 #ifndef LS_ZERO
 		    (int16_t)
 #endif
-		    ((page[addr] << 8) + page[addr+1]);
+          ((page[(addr^offset)] << 8) + page[(addr^offset)+1]);
 #endif /* !BYTEREVERSE */
 #endif	/*  LS_H  */
 #ifdef LS_W
 		reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
-		    ((page[addr+3] << 24) + (page[addr+2] << 16) +
-		    (page[addr+1] << 8) + page[addr]);
+      ((page[(addr^offset)+3] << 24) + (page[(addr^offset)+2] << 16) +
+       (page[(addr^offset)+1] << 8) + page[addr ^ offset]);
 #else  /*  !LS_BYTEREVERSE  */
 #ifndef LS_ZERO
 		    (int32_t)
 #else
 		    (uint32_t)
 #endif
-		    ((page[addr] << 24) + (page[addr+1] << 16) +
-		    (page[addr+2] << 8) + page[addr+3]);
+          ((page[(addr^offset)] << 24) + (page[(addr^offset)+1] << 16) +
+           (page[(addr^offset)+2] << 8) + page[(addr^offset)+3]);
 #endif  /*  !LS_BYTEREVERSE  */
 #endif	/*  LS_W  */
 #ifdef LS_D
 		(*(uint64_t *)(ic->arg[0])) =
-		    ((uint64_t)page[addr+0] << 56) +
-		    ((uint64_t)page[addr+1] << 48) +
-		    ((uint64_t)page[addr+2] << 40) +
-		    ((uint64_t)page[addr+3] << 32) +
-		    ((uint64_t)page[addr+4] << 24) + (page[addr+5] << 16) +
-		    (page[addr+6] << 8) + page[addr+7];
+      ((uint64_t)page[(addr^offset)+0] << 56) +
+      ((uint64_t)page[(addr^offset)+1] << 48) +
+      ((uint64_t)page[(addr^offset)+2] << 40) +
+      ((uint64_t)page[(addr^offset)+3] << 32) +
+      ((uint64_t)page[(addr^offset)+4] << 24) + (page[(addr^offset)+5] << 16) +
+      (page[(addr^offset)+6] << 8) + page[(addr^offset)+7];
 #endif	/*  LS_D  */
 
 #else	/*  !LS_LOAD  */
 
 		/*  Store:  */
 #ifdef LS_B
-    if ((addr & 0xff0) == 0xda0) {
-      fprintf(stderr, "Write %02x at %08x\n", reg(ic->arg[0]) & 0xff, addr);
-    }
-		page[addr] = reg(ic->arg[0]);
+		page[(addr^offset)] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-    if ((addr & 0xff0) == 0xda0) {
-      fprintf(stderr, "Write %04x at %08x\n", reg(ic->arg[0]) & 0xffff, addr);
-    }
 #ifdef LS_BYTEREVERSE
-		page[addr]   = reg(ic->arg[0]);
-		page[addr+1] = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)]   = reg(ic->arg[0]);
+		page[(addr^offset)+1] = reg(ic->arg[0]) >> 8;
 #else
-		page[addr]   = reg(ic->arg[0]) >> 8;
-		page[addr+1] = reg(ic->arg[0]);
+		page[(addr^offset)]   = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)+1] = reg(ic->arg[0]);
 #endif /* !BYTEREVERSE */
 #endif
 #ifdef LS_W
-    if ((addr & 0xff0) == 0xda0) {
-      fprintf(stderr, "%08x: Write %08x at %08x\n", (uint32_t)cpu->pc, reg(ic->arg[0]), addr);
-    }
 #ifdef LS_BYTEREVERSE
-		page[addr]   = reg(ic->arg[0]);
-		page[addr+1] = reg(ic->arg[0]) >> 8;
-		page[addr+2] = reg(ic->arg[0]) >> 16;
-		page[addr+3] = reg(ic->arg[0]) >> 24;
+		page[(addr^offset)]   = reg(ic->arg[0]);
+		page[(addr^offset)+1] = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)+2] = reg(ic->arg[0]) >> 16;
+		page[(addr^offset)+3] = reg(ic->arg[0]) >> 24;
 #else
-		page[addr]   = reg(ic->arg[0]) >> 24;
-		page[addr+1] = reg(ic->arg[0]) >> 16;
-		page[addr+2] = reg(ic->arg[0]) >> 8;
-		page[addr+3] = reg(ic->arg[0]);
+		page[(addr^offset)]   = reg(ic->arg[0]) >> 24;
+		page[(addr^offset)+1] = reg(ic->arg[0]) >> 16;
+		page[(addr^offset)+2] = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)+3] = reg(ic->arg[0]);
 #endif /* !LS_BYTEREVERSE  */
 #endif
 #ifdef LS_D
 		{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-		page[addr]   = x >> 56;
-		page[addr+1] = x >> 48;
-		page[addr+2] = x >> 40;
-		page[addr+3] = x >> 32;
-		page[addr+4] = x >> 24;
-		page[addr+5] = x >> 16;
-		page[addr+6] = x >> 8;
-		page[addr+7] = x; }
+      page[(addr^offset)]   = x >> 56;
+      page[(addr^offset)+1] = x >> 48;
+      page[(addr^offset)+2] = x >> 40;
+      page[(addr^offset)+3] = x >> 32;
+      page[(addr^offset)+4] = x >> 24;
+      page[(addr^offset)+5] = x >> 16;
+      page[(addr^offset)+6] = x >> 8;
+      page[(addr^offset)+7] = x; }
 #endif
 #endif	/*  !LS_LOAD  */
 	}
@@ -422,3 +328,4 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 }
 
+#undef SWIZZLE_SIZE

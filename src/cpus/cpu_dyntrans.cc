@@ -277,15 +277,17 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		if (cpu->machine->instruction_trace) {
 			/*  TODO/Note: This must be large enough to hold
 			    any instruction for any ISA:  */
-      int offset = 0;
+      int offset =
 #ifdef DYNTRANS_PPC
-      if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-        offset ^= 4;
-      }
+        (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0
+#else
+        0
 #endif
+        ;
+
 			unsigned char instr[1 <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-			if (!cpu->memory_rw(cpu, cpu->mem, (cached_pc ^ offset), &instr[0],
+			if (!cpu->memory_rw(cpu, cpu->mem, cached_pc ^ offset, &instr[0],
 			    sizeof(instr), MEM_READ, CACHE_INSTRUCTION)) {
 				fatal("XXX_run_instr(): could not read "
 				    "the instruction\n");
@@ -531,23 +533,23 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 
 		if (d > -256 && d < 256)
 			fatal("%i", (int)d);
-		else if (memory_points_to_string(cpu, cpu->mem, d, 1)) {
+    else if (memory_points_to_string(cpu, cpu->mem, d, 1)) {
       char *str_read = memory_conv_to_string
         (cpu,
          cpu->mem, d, strbuf, sizeof(strbuf));
 #ifdef DYNTRANS_PPC
-			// PPC addr swizzle
-			for (int as = 0; str_read && (cpu->cd.ppc.msr & PPC_MSR_LE) && as < sizeof(strbuf); as += 8) {
-				for (int astmp, at = 0; at < 4; at++) {
-					astmp = strbuf[as+7-at];
-					strbuf[as+7-at] = strbuf[as+at];
-					strbuf[as+at] = astmp;
-				}
-			}
+      // PPC addr swizzle
+      for (int as = 0; str_read && (cpu->cd.ppc.msr & PPC_MSR_LE) && as < sizeof(strbuf); as += 8) {
+        for (int astmp, at = 0; at < 4; at++) {
+          astmp = strbuf[as+7-at];
+          strbuf[as+7-at] = strbuf[as+at];
+          strbuf[as+at] = astmp;
+        }
+      }
 #endif
-			fatal("\"%s\"", str_read);
-		} else if (symbol != NULL && ot == 0 &&
-		    show_symbolic_function_name)
+      fatal("\"%s\"", str_read);
+    } else if (symbol != NULL && ot == 0 &&
+        show_symbolic_function_name)
 			fatal("&%s", symbol);
 		else {
 			if (cpu->is_32bit)

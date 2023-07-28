@@ -162,7 +162,7 @@ static void gather_statistics(struct cpu *cpu)
 */
 #endif	/*  STATIC STUFF  */
 
-
+#define PASTE(x,y) x ## y
 
 #ifdef	DYNTRANS_RUN_INSTR_DEF
 /*
@@ -262,7 +262,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	cpu->n_translated_instrs = 0;
 
 	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
-	    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
 
 	if (single_step || cpu->machine->instruction_trace
 	    || cpu->machine->register_dump) {
@@ -274,6 +274,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			debug("\n");
 			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
 		}
+
 		if (cpu->machine->instruction_trace) {
 			/*  TODO/Note: This must be large enough to hold
 			    any instruction for any ISA:  */
@@ -284,6 +285,20 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
         0
 #endif
         ;
+
+#ifdef DYNTRANS_PPC
+      unsigned char instr_[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
+      if (!cpu->memory_rw(cpu, cpu->mem, cached_pc ^ offset, &instr_[0],
+                          sizeof(instr_), MEM_READ, CACHE_INSTRUCTION)) {
+        fatal("XXX_run_instr(): could not read "
+              "the instruction\n");
+      }
+
+      if (eagle_comm.swap_bytelanes == 1 && instr_[0] == instr_[3] && instr_[1] == instr_[2]) {
+        fprintf(stderr, "bytelane swapping latch on %02x %02x %02x %02x\n", instr_[0], instr_[1], instr_[2], instr_[3]);
+        eagle_comm.swap_bytelanes = 3;
+      }
+#endif
 
 			unsigned char instr[1 <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
@@ -892,12 +907,14 @@ have_it:
 #ifdef DYNTRANS_INIT_TABLES
 
 /*  forward declaration of to_be_translated and end_of_page:  */
-static void instr(to_be_translated)(struct cpu *, struct DYNTRANS_IC *);
+void instr(to_be_translated)(struct cpu *, struct DYNTRANS_IC *);
 static void instr(end_of_page)(struct cpu *,struct DYNTRANS_IC *);
 #ifdef DYNTRANS_DUALMODE_32
 static void instr32(to_be_translated)(struct cpu *, struct DYNTRANS_IC *);
 static void instr32(end_of_page)(struct cpu *,struct DYNTRANS_IC *);
 #endif
+
+extern void (*single_step_instr_fn)(struct cpu *, struct ppc_instr_call *);
 
 #ifdef DYNTRANS_DUALMODE_32
 #define TO_BE_TRANSLATED    ( cpu->is_32bit? instr32(to_be_translated) : \
@@ -1304,7 +1321,7 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 		table_index = PAGENR_TO_TABLE_INDEX(pagenr);
 
 		physpage_entryp = &(((uint32_t *)cpu->
-		    translation_cache)[table_index]);
+                         translation_cache)[table_index]);
 		physpage_ofs = *physpage_entryp;
 
 		/*  Return immediately if there is no code translation
@@ -1318,7 +1335,7 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 		while (physpage_ofs != 0) {
 			prev_ppp = ppp;
 			ppp = (struct DYNTRANS_TC_PHYSPAGE *)
-			    (cpu->translation_cache + physpage_ofs);
+        (cpu->translation_cache + physpage_ofs);
 
 			/*  If we found the page in the cache,
 			    then we're done:  */

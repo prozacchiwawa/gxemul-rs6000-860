@@ -305,6 +305,10 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 // address being copied, do a correct, bytelane swapped copy when bytelane
 // swapping (port 92 on PReP hardware) is enabled, otherwise it's just a normal
 // memcpy.
+int do_bytelane_swapping() {
+  return eagle_comm.swap_bytelanes & 2;
+}
+
 uint32_t ppc_swizzle(struct cpu *cpu, int size) {
   if (cpu->cd.ppc.msr & PPC_MSR_LE) {
     return
@@ -322,7 +326,7 @@ uint32_t ppc_swizzle(struct cpu *cpu, int size) {
 }
 
 uint32_t bytelane_swizzle(int size) {
-  if (eagle_comm.swap_bytelanes & 1) {
+  if (do_bytelane_swapping()) {
     return
       (size > 4) ?
       0 :

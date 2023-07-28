@@ -93,7 +93,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    data[0];
 #endif
 #ifdef LS_H
-  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 1 : 0;
+  int swap_swizzle = do_bytelane_swapping() ? 1 : 0;
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
 	    ((data[1^swap_swizzle] << 8) + data[0^swap_swizzle]);
@@ -105,7 +105,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /*  !BYTEREVERSE  */
 #endif
 #ifdef LS_W
-      int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 3 : 0;
+      int swap_swizzle = do_bytelane_swapping() ? 3 : 0;
 	reg(ic->arg[0]) =
 #ifdef LS_BYTEREVERSE
 	    ((data[3^swap_swizzle] << 24) + (data[2^swap_swizzle] << 16) +
@@ -121,7 +121,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
-      int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 7 : 0;
+      int swap_swizzle = do_bytelane_swapping() ? 7 : 0;
 	(*(uint64_t *)(ic->arg[0])) =
 	    ((uint64_t)data[0^swap_swizzle] << 56) + ((uint64_t)data[1^swap_swizzle] << 48) +
 	    ((uint64_t)data[2^swap_swizzle] << 40) + ((uint64_t)data[3^swap_swizzle] << 32) +
@@ -135,7 +135,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[0] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 1 : 0;
+  int swap_swizzle = do_bytelane_swapping() ? 1 : 0;
 #ifdef LS_BYTEREVERSE
 	data[0^swap_swizzle] = reg(ic->arg[0]);
 	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
@@ -145,7 +145,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 #ifdef LS_W
-  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 3 : 0;
+  int swap_swizzle = do_bytelane_swapping() ? 3 : 0;
 #ifdef LS_BYTEREVERSE
 	data[0^swap_swizzle] = reg(ic->arg[0]);
 	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
@@ -159,7 +159,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
-  int swap_swizzle = (eagle_comm.swap_bytelanes & 1) ? 7 : 0;
+  int swap_swizzle = do_bytelane_swapping() ? 7 : 0;
 	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
 	data[0^swap_swizzle] = x >> 56;
 	data[1^swap_swizzle] = x >> 48;

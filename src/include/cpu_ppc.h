@@ -225,35 +225,30 @@ uint32_t ppc_swizzle(struct cpu *cpu, int size);
 uint32_t bytelane_swizzle(int size);
 void bytelane_memcpy_frommem(void *target, void *source, int size, uint32_t address_low);
 void bytelane_memcpy_tomem(void *target, void *source, int size, uint32_t address_low);
+int do_bytelane_swapping();
 
-#ifndef swap2
-#define swap2(data) do {  \
-    uint8_t *d = (uint8_t *)data;                 \
-    uint8_t __t = d[0];                           \
-    d[0] = d[1];                                  \
-    d[1] = __t;                                   \
-  } while(0)
-#endif
+static void swap2(uint8_t *dptr) {
+  uint8_t __t = dptr[0];
+  dptr[0] = dptr[1];
+  dptr[1] = __t;
+}
 
-#ifndef swap4
-#define swap4(data) do {                        \
-    uint8_t *d = (uint8_t *)data;               \
-    uint8_t __t = d[0];                         \
-    d[0] = d[1];                                \
-    d[1] = d[2];                                \
-    d[3] = __t;                                 \
-  } while(0)
-#endif
+static void swap4(uint8_t *dptr) {
+  swap2(dptr);
+  swap2(dptr+2);
+  uint16_t *tptr = (uint16_t *)dptr;
+  uint16_t __t = tptr[0];
+  tptr[0] = tptr[1];
+  tptr[1] = __t;
+}
 
-#ifndef swap8
-#define swap8(data) do {                      \
-    uint32_t *tptr = (uint32_t *)data;        \
-    uint32_t __t = tptr[0];                   \
-    tptr[0] = tptr[1];                        \
-    tptr[1] = __t;                            \
-    swap4(data);                              \
-    swap4(data+4);                            \
-  } while(0)
-#endif
+static void swap8(uint8_t *dptr) {
+  swap4(dptr);
+  swap4(dptr+4);
+  uint32_t *tptr = (uint32_t *)dptr;
+  uint32_t __t = tptr[0];
+  tptr[0] = tptr[1];
+  tptr[1] = __t;
+}
 
 #endif	/*  CPU_PPC_H  */

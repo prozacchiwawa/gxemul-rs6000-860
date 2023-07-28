@@ -521,7 +521,7 @@ not just the device in question.
 	if (writeflag == MEM_WRITE) {
 		memcpy(memblock + offset, data, len);
 #ifdef MEM_PPC
-    if (eagle_comm.swap_bytelanes & 1) {
+    if (do_bytelane_swapping()) {
       if (len == 8) {
         swap8(memblock + offset);
       } else if (len == 4) {
@@ -534,7 +534,7 @@ not just the device in question.
 	} else {
 		memcpy(data, memblock + offset, len);
 #ifdef MEM_PPC
-    if (eagle_comm.swap_bytelanes & 1) {
+    if (do_bytelane_swapping()) {
       if (len == 8) {
         swap8(data);
       } else if (len == 4) {

@@ -334,8 +334,10 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
 	}
-	if (!writeflag)
+
+	if (!writeflag) {
 		*valuep = cpu->cd.ppc.msr;
+  }
 
 	if (check_for_interrupts && cpu->cd.ppc.msr & PPC_MSR_EE) {
 		if (cpu->cd.ppc.dec_intr_pending &&

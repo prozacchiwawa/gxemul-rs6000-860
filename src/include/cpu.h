@@ -512,5 +512,8 @@ void cpu_init(void);
 	return 1;							\
 	}
 
+const char *bytelane_string();
+
+void utility_break_next_instruction(struct machine *m, struct cpu *cpu, const char *use);
 
 #endif	/*  CPU_H  */

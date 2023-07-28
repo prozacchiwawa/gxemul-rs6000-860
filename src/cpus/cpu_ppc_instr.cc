@@ -35,7 +35,6 @@
 
 
 #include "float_emul.h"
-#include "devices.h"
 
 
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
@@ -2691,6 +2690,12 @@ X(end_of_page)
 /*****************************************************************************/
 
 
+X(single_step)
+{
+  fprintf(stderr, "yay\n");
+  abort();
+}
+
 /*
  *  ppc_instr_to_be_translated():
  *
@@ -2711,6 +2716,14 @@ X(to_be_translated)
 	    bfa, fp, byterev, nb, mb, me;
 	void (*samepage_function)(struct cpu *, struct ppc_instr_call *);
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
+
+  // Support for jumping out of run mode to single step.
+  if (single_step_instr_fn) {
+    ic->f = single_step_instr_fn;
+    single_step_instr_fn = NULL;
+    ic->f(cpu, ic);
+    goto stop_running_translated;
+  }
 
 	/*  Figure out the (virtual) address of the instruction:  */
 	low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
@@ -2739,27 +2752,28 @@ X(to_be_translated)
 	}
 #endif
 
-	if (page != NULL) {
-		/*  fatal("TRANSLATION HIT!\n");  */
-    offset ^= bytelane_swizzle(4);
-		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
-    if (eagle_comm.swap_bytelanes & 1) {
-      swap4(ib);
-    }
-	} else {
-		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
-		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
-			fatal("PPC to_be_translated(): "
-			    "read failed: TODO\n");
-			exit(1);
-			/*  goto bad;  */
-		}
-	}
+  {
+    int dbs;
 
-	{
+    dbs = do_bytelane_swapping();
+
+    if (page != NULL) {
+      /*  fatal("TRANSLATION HIT!\n");  */
+      offset ^= bytelane_swizzle(4);
+      memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
+    } else {
+      /*  fatal("TRANSLATION MISS!\n");  */
+      if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
+                          sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
+        fatal("PPC to_be_translated(): "
+              "read failed: TODO\n");
+        exit(1);
+        /*  goto bad;  */
+      }
+    }
+
 		uint32_t *p = (uint32_t *) ib;
-		iword = BE32_TO_HOST(*p);
+    iword = BE32_TO_HOST(*p);
 	}
 
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD

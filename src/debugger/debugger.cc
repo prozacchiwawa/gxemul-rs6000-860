@@ -791,3 +791,43 @@ void debugger_init(struct emul *emul)
 	repeat_cmd[0] = '\0';
 }
 
+static const char *bytelane_str = "*bytelane*";
+
+const char *bytelane_string() { return bytelane_str; }
+
+/* Allow intrusive entry into single step mode */
+void (*single_step_instr_fn)(struct cpu *, struct ppc_instr_call *);
+void ppc_instr_to_be_translated(struct cpu *, struct ppc_instr_call *);
+void cpu_set_up_to_step(struct cpu *cpu) {
+  auto ic_ptr = cpu->cd.ppc.next_ic;
+  single_step_instr_fn = ic_ptr->f;
+  ic_ptr->f = ppc_instr_to_be_translated;
+}
+
+void utility_break_next_instruction(struct machine *m, struct cpu *cpu, const char *use) {
+  int i = m->breakpoints.n;
+
+  CHECK_ALLOCATION(m->breakpoints.string = (char **) realloc
+                   (m->breakpoints.string, sizeof(char *) *
+                    (m->breakpoints.n + 1)));
+  CHECK_ALLOCATION(m->breakpoints.addr = (uint64_t *) realloc
+                   (m->breakpoints.addr, sizeof(uint64_t) *
+                    (m->breakpoints.n + 1)));
+
+  size_t breakpoint_buf_len = strlen(use);
+
+  CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)
+                   malloc(breakpoint_buf_len));
+  strlcpy(m->breakpoints.string[i], use, breakpoint_buf_len);
+  m->breakpoints.addr[i] = cpu->pc + 4;
+
+  m->breakpoints.n ++;
+  show_breakpoint(m, i);
+
+  /* Clear translations:  */
+  for (i=0; i<m->ncpus; i++)
+    if (m->cpus[i]->translation_cache != NULL)
+      cpu_create_or_reset_tc(m->cpus[i]);
+
+  cpu_set_up_to_step(cpu);
+}

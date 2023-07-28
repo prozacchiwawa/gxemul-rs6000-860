@@ -442,7 +442,11 @@ DEVICE_ACCESS(eagle_bytelanes) {
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     fprintf(stderr, "[ eagle: bytelane swap %d @ %08x ]\n", !!idata, cpu->pc);
+
     eagle_comm.swap_bytelanes = !!idata;
+
+    /* Set a breakpoint at the next instruction */
+    utility_break_next_instruction(cpu->machine, cpu, bytelane_string());
   }
 
   return 1;

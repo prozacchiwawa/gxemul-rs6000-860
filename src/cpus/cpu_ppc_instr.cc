@@ -2708,7 +2708,7 @@ X(to_be_translated)
 {
 	uint64_t addr, low_pc, tmp_addr;
 	uint32_t iword, mask;
-  uint32_t offset = (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0;
+  uint32_t offset = cpu_swizzle(cpu, 4);
 	unsigned char *page;
 	unsigned char ib[4];
 	int main_opcode, rt, rs, ra, rb, rc, aa_bit, l_bit, lk_bit, spr, sh,
@@ -2757,11 +2757,12 @@ X(to_be_translated)
 
     dbs = do_bytelane_swapping();
 
-    if (page != NULL) {
+    int from_page_cache = 1;
+    if (page != NULL && !dbs) {
       /*  fatal("TRANSLATION HIT!\n");  */
-      offset ^= bytelane_swizzle(4);
       memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
     } else {
+      from_page_cache = 0;
       /*  fatal("TRANSLATION MISS!\n");  */
       if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
                           sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
@@ -2774,6 +2775,9 @@ X(to_be_translated)
 
 		uint32_t *p = (uint32_t *) ib;
     iword = BE32_TO_HOST(*p);
+    if (dbs) {
+      fprintf(stderr, "%08x(%d) [%s]: INST %08x\n", addr, offset, from_page_cache ? "PAG" : "BUS", iword);
+    }
 	}
 
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD

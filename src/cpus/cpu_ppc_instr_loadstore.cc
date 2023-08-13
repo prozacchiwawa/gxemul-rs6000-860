@@ -38,13 +38,13 @@
  */
 
 #ifdef LS_D
-#define SWIZZLE_SIZE 0
+#define SWIZZLE_SIZE 8
 #elif defined(LS_W)
 #define SWIZZLE_SIZE 4
 #elif defined(LS_H)
-#define SWIZZLE_SIZE 6
+#define SWIZZLE_SIZE 2
 #else
-#define SWIZZLE_SIZE 7
+#define SWIZZLE_SIZE 1
 #endif
 
 #ifndef LS_IGNOREOFS
@@ -61,9 +61,16 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
 	    (int32_t)ic->arg[2];
 #endif
-  uint32_t offset = ppc_swizzle(cpu, SWIZZLE_SIZE);
+  uint32_t offset = cpu_swizzle(cpu, SWIZZLE_SIZE);
 
 	unsigned char data[LS_SIZE];
+  int load =
+#ifdef LS_LOAD
+    1
+#else
+    0
+#endif
+    ;
 
 	/*  Synchronize the PC:  */
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
@@ -101,7 +108,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #ifndef LS_ZERO
 	    (int16_t)
 #endif
-	    ((data[0&swap_swizzle] << 8) + data[1^swap_swizzle]);
+	    ((data[0^swap_swizzle] << 8) + data[1^swap_swizzle]);
 #endif /*  !BYTEREVERSE  */
 #endif
 #ifdef LS_W
@@ -177,6 +184,22 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	}
 #endif
 
+#ifdef LS_BYTEREVERSE
+  fprintf(stderr, "%08x G [%s] [%s] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, addr);
+  for (int xxi = 0; xxi < LS_SIZE; xxi++) {
+    fprintf(stderr, " %02x", data[xxi]);
+  }
+  fprintf(stderr, "\n");
+#else
+  if (is_ls_tracing()) {
+    fprintf(stderr, "%08x G [%s] [%s] %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, addr);
+    for (int xxi = 0; xxi < LS_SIZE; xxi++) {
+      fprintf(stderr, " %02x", data[xxi]);
+    }
+    fprintf(stderr, "\n");
+  }
+#endif
+
 #ifdef LS_UPDATE
 	reg(ic->arg[1]) = addr;
 #endif
@@ -210,8 +233,17 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 	    ;
+  uint32_t full_addr = addr;
 
-	unsigned char *page = cpu->cd.ppc.
+  int load =
+#ifdef LS_LOAD
+    1
+#else
+    0
+#endif
+    ;
+
+unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
 	    host_load
 #else
@@ -322,6 +354,22 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif	/*  !LS_LOAD  */
 	}
+
+#ifdef LS_BYTEREVERSE
+  fprintf(stderr, "%08x N [%s] [%s] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, full_addr);
+  for (int xxi = 0; xxi < LS_SIZE; xxi++) {
+    fprintf(stderr, " %02x", page[addr + xxi]);
+  }
+  fprintf(stderr, "\n");
+#else
+  if (is_ls_tracing()) {
+    fprintf(stderr, "%08x N [%s] [%s] %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, full_addr);
+    for (int xxi = 0; xxi < LS_SIZE; xxi++) {
+      fprintf(stderr, " %02x", page[addr + xxi]);
+    }
+    fprintf(stderr, "\n");
+  }
+#endif
 
 #ifdef LS_UPDATE
 	reg(ic->arg[1]) = new_addr;

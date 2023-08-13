@@ -275,31 +275,17 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
 		}
 
+    int offset =
+#ifdef DYNTRANS_PPC
+      (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0
+#else
+      0
+#endif
+      ;
+
 		if (cpu->machine->instruction_trace) {
 			/*  TODO/Note: This must be large enough to hold
 			    any instruction for any ISA:  */
-      int offset =
-#ifdef DYNTRANS_PPC
-        (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0
-#else
-        0
-#endif
-        ;
-
-#ifdef DYNTRANS_PPC
-      unsigned char instr_[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-      if (!cpu->memory_rw(cpu, cpu->mem, cached_pc ^ offset, &instr_[0],
-                          sizeof(instr_), MEM_READ, CACHE_INSTRUCTION)) {
-        fatal("XXX_run_instr(): could not read "
-              "the instruction\n");
-      }
-
-      if (eagle_comm.swap_bytelanes == 1 && instr_[0] == instr_[3] && instr_[1] == instr_[2]) {
-        fprintf(stderr, "bytelane swapping latch on %02x %02x %02x %02x\n", instr_[0], instr_[1], instr_[2], instr_[3]);
-        eagle_comm.swap_bytelanes = 3;
-      }
-#endif
-
 			unsigned char instr[1 <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
 			if (!cpu->memory_rw(cpu, cpu->mem, cached_pc ^ offset, &instr[0],
@@ -335,6 +321,20 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #endif
 			}
 		}
+
+#ifdef DYNTRANS_PPC
+    unsigned char instr_[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
+    if (!cpu->memory_rw(cpu, cpu->mem, cached_pc ^ offset, &instr_[0],
+                        sizeof(instr_), MEM_READ, CACHE_INSTRUCTION)) {
+      fatal("XXX_run_instr(): could not read "
+            "the instruction\n");
+    }
+
+    if (eagle_comm.swap_bytelanes == 1 && instr_[0] == instr_[3] && instr_[1] == instr_[2]) {
+      fprintf(stderr, "bytelane swapping latch on %02x %02x %02x %02x\n", instr_[0], instr_[1], instr_[2], instr_[3]);
+      eagle_comm.swap_bytelanes = 3;
+    }
+#endif
 
 		if (cpu->machine->statistics.enabled)
 			S;

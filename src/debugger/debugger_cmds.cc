@@ -1363,6 +1363,14 @@ static void debugger_cmd_version(struct machine *m, char *cmd_line)
 }
 
 
+/*
+ * debugger_cmd_ls_trace():
+ */
+static void debugger_cmd_ls_trace(struct machine *m, char *cmd_line)
+{
+  printf("ls_trace = %d\n", toggle_ls_tracing());
+}
+
 /****************************************************************************/
 
 
@@ -1458,6 +1466,8 @@ static struct cmd cmds[] = {
 
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },
+
+  { "ls_trace", "", 0, debugger_cmd_ls_trace, "toggle load-store trace" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

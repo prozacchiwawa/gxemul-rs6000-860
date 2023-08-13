@@ -517,33 +517,10 @@ not just the device in question.
 	}
 
 	/*  And finally, read or write the data:  */
-  offset ^= bytelane_swizzle(len);
 	if (writeflag == MEM_WRITE) {
 		memcpy(memblock + offset, data, len);
-#ifdef MEM_PPC
-    if (do_bytelane_swapping()) {
-      if (len == 8) {
-        swap8(memblock + offset);
-      } else if (len == 4) {
-        swap4(memblock + offset);
-      } else if (len == 2) {
-        swap2(memblock + offset);
-      }
-    }
-#endif
 	} else {
 		memcpy(data, memblock + offset, len);
-#ifdef MEM_PPC
-    if (do_bytelane_swapping()) {
-      if (len == 8) {
-        swap8(data);
-      } else if (len == 4) {
-        swap4(data);
-      } else if (len == 2) {
-        swap2(data);
-      }
-    }
-#endif
   }
 
 do_return_ok:

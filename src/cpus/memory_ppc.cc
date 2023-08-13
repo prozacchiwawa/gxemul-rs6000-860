@@ -326,17 +326,18 @@ uint32_t ppc_swizzle(struct cpu *cpu, int size) {
 }
 
 uint32_t bytelane_swizzle(int size) {
-  if (do_bytelane_swapping()) {
-    return
-      (size > 4) ?
-      0 :
-      (size == 4) ?
-      4 :
-      (size == 2) ?
-      6 :
-      7
-      ;
-  } else {
-    return 0;
-  }
+  return 0;
+}
+
+uint32_t cpu_swizzle(struct cpu *cpu, int size) {
+  return ppc_swizzle(cpu, size) ^ bytelane_swizzle(size);
+}
+
+int ls_tracing;
+int toggle_ls_tracing() {
+  return ls_tracing = !ls_tracing;
+}
+
+int is_ls_tracing() {
+  return ls_tracing;
 }

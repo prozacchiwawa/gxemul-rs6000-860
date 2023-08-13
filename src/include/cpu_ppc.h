@@ -226,6 +226,7 @@ uint32_t bytelane_swizzle(int size);
 void bytelane_memcpy_frommem(void *target, void *source, int size, uint32_t address_low);
 void bytelane_memcpy_tomem(void *target, void *source, int size, uint32_t address_low);
 int do_bytelane_swapping();
+uint32_t cpu_swizzle(struct cpu *cpu, int size);
 
 static void swap2(uint8_t *dptr) {
   uint8_t __t = dptr[0];
@@ -250,5 +251,8 @@ static void swap8(uint8_t *dptr) {
   tptr[0] = tptr[1];
   tptr[1] = __t;
 }
+
+int toggle_ls_tracing();
+int is_ls_tracing();
 
 #endif	/*  CPU_PPC_H  */

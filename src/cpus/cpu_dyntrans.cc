@@ -277,7 +277,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
     int offset =
 #ifdef DYNTRANS_PPC
-      (cpu->cd.ppc.msr & PPC_MSR_LE) ? 4 : 0
+      cpu_swizzle(cpu, 4)
 #else
       0
 #endif

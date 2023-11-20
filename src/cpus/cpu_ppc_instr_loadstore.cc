@@ -86,6 +86,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	}
 #endif
 
+  int swap_swizzle = 0;
 #ifdef LS_LOAD
 	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
 	    MEM_READ, CACHE_DATA)) {
@@ -100,24 +101,28 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    data[0];
 #endif
 #ifdef LS_H
-  int swap_swizzle = do_bytelane_swapping() ? 1 : 0;
-	reg(ic->arg[0]) =
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-	    ((data[1^swap_swizzle] << 8) + data[0^swap_swizzle]);
+    0 : 1
 #else
+    1 : 0
+#endif
+    ;
+	reg(ic->arg[0]) =
 #ifndef LS_ZERO
 	    (int16_t)
 #endif
 	    ((data[0^swap_swizzle] << 8) + data[1^swap_swizzle]);
-#endif /*  !BYTEREVERSE  */
 #endif
 #ifdef LS_W
-      int swap_swizzle = do_bytelane_swapping() ? 3 : 0;
-	reg(ic->arg[0]) =
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-	    ((data[3^swap_swizzle] << 24) + (data[2^swap_swizzle] << 16) +
-	    (data[1^swap_swizzle] << 8) + data[0^swap_swizzle]);
-#else  /* !LS_BYTEREVERSE  */
+        0 : 3
+#else
+        3 : 0
+#endif
+        ;
+	reg(ic->arg[0]) =
 #ifndef LS_ZERO
 	    (int32_t)
 #else
@@ -125,10 +130,15 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 	    ((data[0^swap_swizzle] << 24) + (data[1^swap_swizzle] << 16) +
 	    (data[2^swap_swizzle] << 8) + data[3^swap_swizzle]);
-#endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
-      int swap_swizzle = do_bytelane_swapping() ? 7 : 0;
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
+#ifdef LS_BYTEREVERSE
+        0 : 7
+#else
+        7 : 0
+#endif
+        ;
 	(*(uint64_t *)(ic->arg[0])) =
 	    ((uint64_t)data[0^swap_swizzle] << 56) + ((uint64_t)data[1^swap_swizzle] << 48) +
 	    ((uint64_t)data[2^swap_swizzle] << 40) + ((uint64_t)data[3^swap_swizzle] << 32) +
@@ -142,31 +152,37 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[0] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-  int swap_swizzle = do_bytelane_swapping() ? 1 : 0;
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-	data[0^swap_swizzle] = reg(ic->arg[0]);
-	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
+    0 : 1
 #else
+    1 : 0
+#endif
+    ;
 	data[0^swap_swizzle] = reg(ic->arg[0]) >> 8;
 	data[1^swap_swizzle] = reg(ic->arg[0]);
 #endif
-#endif
 #ifdef LS_W
-  int swap_swizzle = do_bytelane_swapping() ? 3 : 0;
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-	data[0^swap_swizzle] = reg(ic->arg[0]);
-	data[1^swap_swizzle] = reg(ic->arg[0]) >> 8;
-	data[2^swap_swizzle] = reg(ic->arg[0]) >> 16;
-	data[3^swap_swizzle] = reg(ic->arg[0]) >> 24;
+    0 : 3
 #else
+    3 : 0
+#endif
+    ;
 	data[0^swap_swizzle] = reg(ic->arg[0]) >> 24;
 	data[1^swap_swizzle] = reg(ic->arg[0]) >> 16;
 	data[2^swap_swizzle] = reg(ic->arg[0]) >> 8;
 	data[3^swap_swizzle] = reg(ic->arg[0]);
-#endif /* !LS_BYTEREVERSE */
 #endif
 #ifdef LS_D
-  int swap_swizzle = do_bytelane_swapping() ? 7 : 0;
+  swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
+#ifdef LS_BYTEREVERSE
+    0 : 7
+#else
+    7 : 0
+#endif
+    ;
 	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
 	data[0^swap_swizzle] = x >> 56;
 	data[1^swap_swizzle] = x >> 48;
@@ -185,14 +201,14 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_BYTEREVERSE
-  fprintf(stderr, "%08x G [%s] [%s] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, addr);
+  fprintf(stderr, "%08x G [%s] [%s] [sw:%d:%d] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", swap_swizzle, offset, load ? "load" : "store", LS_SIZE, addr);
   for (int xxi = 0; xxi < LS_SIZE; xxi++) {
     fprintf(stderr, " %02x", data[xxi]);
   }
   fprintf(stderr, "\n");
 #else
   if (is_ls_tracing()) {
-    fprintf(stderr, "%08x G [%s] [%s] %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, addr);
+    fprintf(stderr, "%08x G [%s] [%s] [sw:%d:%d] %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", swap_swizzle, offset, load ? "load" : "store", LS_SIZE, addr);
     for (int xxi = 0; xxi < LS_SIZE; xxi++) {
       fprintf(stderr, " %02x", data[xxi]);
     }
@@ -262,11 +278,12 @@ unsigned char *page = cpu->cd.ppc.
 #endif
 
   uint32_t offset = ppc_swizzle(cpu, SWIZZLE_SIZE);
+  uint32_t swap_swizzle = 0;
+
 	if (page == NULL) {
 		LS_GENERIC_N(cpu, ic);
 		return;
 	} else {
-    offset ^= bytelane_swizzle(SWIZZLE_SIZE);
 		addr &= 4095;
 #ifdef LS_LOAD
 		/*  Load:  */
@@ -278,39 +295,53 @@ unsigned char *page = cpu->cd.ppc.
 		    page[addr ^ offset];
 #endif	/*  LS_B  */
 #ifdef LS_H
-		reg(ic->arg[0]) =
+    swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-      ((page[(addr^offset)+1] << 8) + page[(addr^offset)]);
+      0 : 1
 #else
+      1 : 0
+#endif
+      ;
+		reg(ic->arg[0]) =
 #ifndef LS_ZERO
 		    (int16_t)
 #endif
-          ((page[(addr^offset)] << 8) + page[(addr^offset)+1]);
-#endif /* !BYTEREVERSE */
+      ((page[addr^offset^swap_swizzle] << 8) + page[(addr^offset)+(1^swap_swizzle)]);
 #endif	/*  LS_H  */
 #ifdef LS_W
-		reg(ic->arg[0]) =
+        swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-      ((page[(addr^offset)+3] << 24) + (page[(addr^offset)+2] << 16) +
-       (page[(addr^offset)+1] << 8) + page[addr ^ offset]);
-#else  /*  !LS_BYTEREVERSE  */
+          0 : 3
+#else
+          3 : 0
+#endif
+          ;
+		reg(ic->arg[0]) =
 #ifndef LS_ZERO
 		    (int32_t)
 #else
 		    (uint32_t)
 #endif
-          ((page[(addr^offset)] << 24) + (page[(addr^offset)+1] << 16) +
-           (page[(addr^offset)+2] << 8) + page[(addr^offset)+3]);
-#endif  /*  !LS_BYTEREVERSE  */
+      ((page[addr^offset^swap_swizzle] << 24) + (page[(addr^offset)+(1^swap_swizzle)] << 16) +
+       (page[(addr^offset)+(2^swap_swizzle)] << 8) + page[(addr^offset)+(3^swap_swizzle)]);
 #endif	/*  LS_W  */
 #ifdef LS_D
+        swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
+#ifdef LS_BYTEREVERSE
+          0 : 7
+#else
+          7 : 0
+#endif
+          ;
 		(*(uint64_t *)(ic->arg[0])) =
-      ((uint64_t)page[(addr^offset)+0] << 56) +
-      ((uint64_t)page[(addr^offset)+1] << 48) +
-      ((uint64_t)page[(addr^offset)+2] << 40) +
-      ((uint64_t)page[(addr^offset)+3] << 32) +
-      ((uint64_t)page[(addr^offset)+4] << 24) + (page[(addr^offset)+5] << 16) +
-      (page[(addr^offset)+6] << 8) + page[(addr^offset)+7];
+      ((uint64_t)page[(addr^offset)+0^swap_swizzle] << 56) +
+      ((uint64_t)page[(addr^offset)+1^swap_swizzle] << 48) +
+      ((uint64_t)page[(addr^offset)+2^swap_swizzle] << 40) +
+      ((uint64_t)page[(addr^offset)+3^swap_swizzle] << 32) +
+      ((uint64_t)page[(addr^offset)+4^swap_swizzle] << 24) +
+      (page[(addr^offset)+5^swap_swizzle] << 16) +
+      (page[(addr^offset)+6^swap_swizzle] << 8) +
+      page[(addr^offset)+7^swap_swizzle];
 #endif	/*  LS_D  */
 
 #else	/*  !LS_LOAD  */
@@ -320,52 +351,61 @@ unsigned char *page = cpu->cd.ppc.
 		page[(addr^offset)] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
+    swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-		page[(addr^offset)]   = reg(ic->arg[0]);
-		page[(addr^offset)+1] = reg(ic->arg[0]) >> 8;
+      0 : 1
 #else
-		page[(addr^offset)]   = reg(ic->arg[0]) >> 8;
-		page[(addr^offset)+1] = reg(ic->arg[0]);
-#endif /* !BYTEREVERSE */
+      1 : 0
+#endif
+      ;
+		page[addr^offset^swap_swizzle]   = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)+(1^swap_swizzle)] = reg(ic->arg[0]);
 #endif
 #ifdef LS_W
+    swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
 #ifdef LS_BYTEREVERSE
-		page[(addr^offset)]   = reg(ic->arg[0]);
-		page[(addr^offset)+1] = reg(ic->arg[0]) >> 8;
-		page[(addr^offset)+2] = reg(ic->arg[0]) >> 16;
-		page[(addr^offset)+3] = reg(ic->arg[0]) >> 24;
+      0 : 3
 #else
-		page[(addr^offset)]   = reg(ic->arg[0]) >> 24;
-		page[(addr^offset)+1] = reg(ic->arg[0]) >> 16;
-		page[(addr^offset)+2] = reg(ic->arg[0]) >> 8;
-		page[(addr^offset)+3] = reg(ic->arg[0]);
-#endif /* !LS_BYTEREVERSE  */
+      3 : 0
+#endif
+      ;
+		page[addr^offset^swap_swizzle]   = reg(ic->arg[0]) >> 24;
+		page[(addr^offset)+(1^swap_swizzle)] = reg(ic->arg[0]) >> 16;
+		page[(addr^offset)+(2^swap_swizzle)] = reg(ic->arg[0]) >> 8;
+		page[(addr^offset)+(3^swap_swizzle)] = reg(ic->arg[0]);
 #endif
 #ifdef LS_D
+    swap_swizzle = bytelane_swizzle(SWIZZLE_SIZE) ?
+#ifdef LS_BYTEREVERSE
+      0 : 7
+#else
+      7 : 0
+#endif
+      ;
 		{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-      page[(addr^offset)]   = x >> 56;
-      page[(addr^offset)+1] = x >> 48;
-      page[(addr^offset)+2] = x >> 40;
-      page[(addr^offset)+3] = x >> 32;
-      page[(addr^offset)+4] = x >> 24;
-      page[(addr^offset)+5] = x >> 16;
-      page[(addr^offset)+6] = x >> 8;
-      page[(addr^offset)+7] = x; }
+      page[addr^offset^swap_swizzle]   = x >> 56;
+      page[(addr^offset)+(1^swap_swizzle)] = x >> 48;
+      page[(addr^offset)+(2^swap_swizzle)] = x >> 40;
+      page[(addr^offset)+(3^swap_swizzle)] = x >> 32;
+      page[(addr^offset)+(4^swap_swizzle)] = x >> 24;
+      page[(addr^offset)+(5^swap_swizzle)] = x >> 16;
+      page[(addr^offset)+(6^swap_swizzle)] = x >> 8;
+      page[(addr^offset)+(7^swap_swizzle)] = x; }
 #endif
 #endif	/*  !LS_LOAD  */
 	}
 
 #ifdef LS_BYTEREVERSE
-  fprintf(stderr, "%08x N [%s] [%s] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, full_addr);
+  fprintf(stderr, "%08x N [%s] [%s] [sw:%d:%d] REV %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", swap_swizzle, offset, load ? "load" : "store", LS_SIZE, full_addr);
   for (int xxi = 0; xxi < LS_SIZE; xxi++) {
-    fprintf(stderr, " %02x", page[addr + xxi]);
+    fprintf(stderr, " %02x", page[(addr ^ offset) + xxi]);
   }
   fprintf(stderr, "\n");
 #else
   if (is_ls_tracing()) {
     fprintf(stderr, "%08x N [%s] [%s] %s: %d @%08x --", cpu->pc, (cpu->cd.ppc.msr & PPC_MSR_LE) ? "LE" : "le", (eagle_comm.swap_bytelanes & 2) ? "92" : "__", load ? "load" : "store", LS_SIZE, full_addr);
     for (int xxi = 0; xxi < LS_SIZE; xxi++) {
-      fprintf(stderr, " %02x", page[addr + xxi]);
+      fprintf(stderr, " %02x", page[(addr ^ offset) + xxi]);
     }
     fprintf(stderr, "\n");
   }

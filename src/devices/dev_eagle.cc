@@ -400,7 +400,7 @@ DEVICE_ACCESS(eagle_8a0)
     fprintf(stderr, "[ unknown-8a0: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
     if (writeflag == MEM_READ)
-        memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+      memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 
     return 1;
 }
@@ -447,6 +447,8 @@ DEVICE_ACCESS(eagle_bytelanes) {
 
     /* Set a breakpoint at the next instruction */
     utility_break_next_instruction(cpu->machine, cpu, bytelane_string());
+  } else {
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, eagle_comm.swap_bytelanes & 1);
   }
 
   return 1;

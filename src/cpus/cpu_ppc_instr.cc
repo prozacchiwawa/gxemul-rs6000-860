@@ -2755,10 +2755,10 @@ X(to_be_translated)
   {
     int dbs;
 
-    dbs = do_bytelane_swapping();
+    dbs = do_bytelane_swapping(cpu);
 
     int from_page_cache = 1;
-    if (page != NULL && !dbs) {
+    if (page != NULL) {
       /*  fatal("TRANSLATION HIT!\n");  */
       memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
     } else {
@@ -2774,9 +2774,18 @@ X(to_be_translated)
     }
 
 		uint32_t *p = (uint32_t *) ib;
-    iword = BE32_TO_HOST(*p);
+    if ((cpu->cd.ppc.msr & PPC_MSR_LE) && (eagle_comm.swap_bytelanes & 2)) {
+      iword = LE32_TO_HOST(*p);
+    } else {
+      iword = BE32_TO_HOST(*p);
+      if ((((iword >> 1) & 0x3ff) == 50) && ((iword >> 26) == 19) && (eagle_comm.swap_bytelanes & 1)) {
+        fprintf(stderr, "Detected BL instruction, about to exit cached space?\n");
+        eagle_comm.swap_bytelanes |= 4;
+      }
+    }
+
     if (dbs) {
-      fprintf(stderr, "%08x(%d) [%s]: INST %08x\n", addr, offset, from_page_cache ? "PAG" : "BUS", iword);
+      fprintf(stderr, "%08x(%d) [%s]: INST %08x [%02x %02x %02x %02x]\n", addr, offset, from_page_cache ? "PAG" : "BUS", iword, ib[0], ib[1], ib[2], ib[3]);
     }
 	}
 

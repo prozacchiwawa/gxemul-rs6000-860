@@ -225,7 +225,7 @@ uint32_t ppc_swizzle(struct cpu *cpu, int size);
 uint32_t bytelane_swizzle(int size);
 void bytelane_memcpy_frommem(void *target, void *source, int size, uint32_t address_low);
 void bytelane_memcpy_tomem(void *target, void *source, int size, uint32_t address_low);
-int do_bytelane_swapping();
+int do_bytelane_swapping(struct cpu *cpu);
 uint32_t cpu_swizzle(struct cpu *cpu, int size);
 
 static void swap2(uint8_t *dptr) {

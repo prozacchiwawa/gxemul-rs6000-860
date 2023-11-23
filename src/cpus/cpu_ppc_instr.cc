@@ -1643,6 +1643,15 @@ X(crand) {
 	if (ba & bb)
 		cpu->cd.ppc.cr |= (1 << (31-bt));
 }
+X(crnand) {
+	uint32_t iword = ic->arg[0]; int bt = (iword >> 21) & 31;
+	int ba = (iword >> 16) & 31, bb = (iword >> 11) & 31;
+	ba = (cpu->cd.ppc.cr >> (31-ba)) & 1;
+	bb = (cpu->cd.ppc.cr >> (31-bb)) & 1;
+	cpu->cd.ppc.cr &= ~(1 << (31-bt));
+	if (!(ba & bb))
+		cpu->cd.ppc.cr |= (1 << (31-bt));
+}
 X(crandc) {
 	uint32_t iword = ic->arg[0]; int bt = (iword >> 21) & 31;
 	int ba = (iword >> 16) & 31, bb = (iword >> 11) & 31;
@@ -3128,6 +3137,7 @@ X(to_be_translated)
 			break;
 
 		case PPC_19_CRAND:
+    case PPC_19_CRNAND:
 		case PPC_19_CRANDC:
 		case PPC_19_CREQV:
 		case PPC_19_CROR:
@@ -3136,6 +3146,7 @@ X(to_be_translated)
 		case PPC_19_CRXOR:
 			switch (xo) {
 			case PPC_19_CRAND:  ic->f = instr(crand); break;
+      case PPC_19_CRNAND: ic->f = instr(crnand); break;
 			case PPC_19_CRANDC: ic->f = instr(crandc); break;
 			case PPC_19_CREQV:  ic->f = instr(creqv); break;
 			case PPC_19_CROR:   ic->f = instr(cror); break;

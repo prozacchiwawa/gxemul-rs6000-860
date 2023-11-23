@@ -410,7 +410,11 @@ not just the device in question.
 
 	/*  Outside of physical RAM?  */
 	if (paddr >= mem->physical_max) {
-#ifdef MEM_MIPS
+#ifdef MEM_PPC
+    if ((paddr & 0xfffe0000) == 0xfffe0000) {
+      paddr &= ~0xffff0000;
+    }
+#elif defined(MEM_MIPS)
 		if ((paddr & 0xffffc00000ULL) == 0x1fc00000) {
 			/*  Ok, this is PROM stuff  */
 		} else if ((paddr & 0xfffff00000ULL) == 0x1ff00000) {
@@ -517,10 +521,11 @@ not just the device in question.
 	}
 
 	/*  And finally, read or write the data:  */
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		memcpy(memblock + offset, data, len);
-	else
+  } else {
 		memcpy(data, memblock + offset, len);
+  }
 
 do_return_ok:
 	return MEMORY_ACCESS_OK;

@@ -342,21 +342,31 @@ DEVICE_ACCESS(eagle_880)
     //
     // Each of these represents memory bank presence.  Populating all 4
     // with the first element in the above table makes memory test pass.
+    // c1s: 24Mb
+    // c2s: 48Mb
+    // c4s: 20000 memory
+    // b2s: 40Mb
+    // d4s: 20000 memory
+    // a2s: panic: all banks disable
+    // multiple set (0xc1c1) - same as 0xc1
+    // 0 and 4 return 0xc2, 8 and c return 0? 20000 memory
+    // 0 and 4 return 0xc2, 8 and c return 0xff: 2 banks present, 2 absent, 32mb.
+    // (the default configuration for the RS/6000 model 860).
     switch (relative_addr) {
     case 0:
-        odata = 0xc1;
+        odata = 0xc2;
         break;
 
     case 4:
-        odata = 0xc1;
+        odata = 0xc2;
         break;
 
     case 8:
-        odata = 0xc1;
+        odata = 0xff;
         break;
 
     case 0xc:
-        odata = 0xc1;
+        odata = 0xff;
         break;
     }
 
@@ -381,12 +391,16 @@ DEVICE_ACCESS(eagle_8a0)
     case 0:
         odata = 0xff;
         break;
+
+    case 1:
+        odata = 0;
+        break;
     }
 
     fprintf(stderr, "[ unknown-8a0: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
 
     if (writeflag == MEM_READ)
-        memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+      memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 
     return 1;
 }
@@ -410,14 +424,14 @@ DEVICE_ACCESS(eagle_dma_scatter_gather) {
 
 DEVICE_ACCESS(eagle_4d0)
 {
-    uint64_t idata = 0;
+  uint64_t idata = 0;
 
-    if (writeflag == MEM_WRITE)
-        idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  if (writeflag == MEM_WRITE)
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 
-    fprintf(stderr, "[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+  fprintf(stderr, "[ APIC-4d0 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
-    return 1;
+  return 1;
 }
 
 

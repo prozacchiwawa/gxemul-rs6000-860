@@ -840,10 +840,11 @@ int diskimage_add(struct machine *machine, char *fname)
 
 	CHECK_ALLOCATION(d->fname = strdup(fname));
 
-  if (prefix_n)
+  if (prefix_n) {
     d->logical_block_size = 1;
-  else
+  } else {
     d->logical_block_size = 512;
+  }
 
 	/*
 	 *  Is this a tape, CD-ROM or a normal disk?
@@ -874,13 +875,15 @@ int diskimage_add(struct machine *machine, char *fname)
 			 *  TODO
 			 */
 
-#if 0
-			if (machine->machine_type == MACHINE_PMAX)
-				d->logical_block_size = 512;
-			else
-				d->logical_block_size = 2048;
-#endif
-			d->logical_block_size = 512;
+			if (machine->machine_type == MACHINE_PMAX || machine->machine_type == MACHINE_PREP) {
+        if (prefix_c) {
+          d->logical_block_size = 2048;
+        } else {
+          d->logical_block_size = 512;
+        }
+      } else {
+        d->logical_block_size = 512;
+      }
 		}
 	}
 

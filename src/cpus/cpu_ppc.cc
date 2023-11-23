@@ -306,6 +306,8 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		return;
 	}
 
+	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+
 	if (writeflag) {
 		cpu->cd.ppc.msr = *valuep;
 
@@ -327,14 +329,15 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		}
 	}
 
-	/*  TODO: Is the little-endian bit writable?  */
+        /*  TODO: Is the little-endian bit writable?  */
+	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+	if (old_le != new_le) {
+		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
+	}
 
-	cpu->cd.ppc.msr &= ~PPC_MSR_LE;
-	if (cpu->byte_order != EMUL_BIG_ENDIAN)
-		cpu->cd.ppc.msr |= PPC_MSR_LE;
-
-	if (!writeflag)
+	if (!writeflag) {
 		*valuep = cpu->cd.ppc.msr;
+  }
 
 	if (check_for_interrupts && cpu->cd.ppc.msr & PPC_MSR_EE) {
 		if (cpu->cd.ppc.dec_intr_pending &&
@@ -367,7 +370,8 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
-	cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR);
+  cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_LE);
+  cpu->cd.ppc.msr |= PPC_MSR_LE & (cpu->cd.ppc.msr >> 16);
 
 	cpu->pc = exception_nr * 0x100;
 	if (cpu->cd.ppc.msr & PPC_MSR_IP)

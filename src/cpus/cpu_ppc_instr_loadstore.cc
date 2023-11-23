@@ -153,6 +153,10 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	data[6] = x >> 8;
 	data[7] = x; }
 #endif
+  if (addr == 0x80000092) {
+    fprintf(stderr, "write %08x to port 92\n", reg(ic->arg[0]));
+  }
+
 	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
@@ -193,6 +197,8 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 	    ;
+
+  uint64_t full_addr = addr;
 
 	unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
@@ -301,6 +307,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 		page[addr+6] = x >> 8;
 		page[addr+7] = x; }
 #endif
+
+    if (full_addr == 0x80000092) {
+      fprintf(stderr, "write %08x to port 92\n", (int)full_addr);
+    }
 #endif	/*  !LS_LOAD  */
 	}
 

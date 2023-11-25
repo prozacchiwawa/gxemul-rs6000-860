@@ -1189,6 +1189,11 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 	ctrl_c = 0;
 
+  int offset = 0;
+  if (c->cd.ppc.msr & PPC_MSR_LE) {
+    offset ^= 1;
+  }
+
 	while (addr < addr_end) {
 		unsigned int i, len;
 		int failed = 0;
@@ -1197,7 +1202,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 		memset(buf, 0, sizeof(buf));
 
 		for (i=0; i<sizeof(buf); i++) {
-			if (c->memory_rw(c, mem, addr+i, buf+i, 1, MEM_READ,
+			if (c->memory_rw(c, mem, (addr+i)^offset, buf+i, 1, MEM_READ,
 			    CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED)
 				failed ++;
 		}

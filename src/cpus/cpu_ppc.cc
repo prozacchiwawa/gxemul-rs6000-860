@@ -333,6 +333,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
+    ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
 	}
 
 	if (!writeflag) {
@@ -370,7 +371,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
-  cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_LE);
+  cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_IR | PPC_MSR_DR | PPC_MSR_LE);
   cpu->cd.ppc.msr |= PPC_MSR_LE & (cpu->cd.ppc.msr >> 16);
 
 	cpu->pc = exception_nr * 0x100;
@@ -462,15 +463,20 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		/*  Other special registers:  */
 		if (bits32) {
 			debug("cpu%i: srr0 = 0x%08" PRIx32
-			    " srr1 = 0x%08" PRIx32"\n", x,
+			    " srr1 = 0x%08" PRIx32, x,
 			    (uint32_t) cpu->cd.ppc.spr[SPR_SRR0],
 			    (uint32_t) cpu->cd.ppc.spr[SPR_SRR1]);
 		} else {
 			debug("cpu%i: srr0 = 0x%016" PRIx64
-			    "  srr1 = 0x%016" PRIx64"\n", x,
+			    "  srr1 = 0x%016" PRIx64, x,
 			    (uint64_t) cpu->cd.ppc.spr[SPR_SRR0],
 			    (uint64_t) cpu->cd.ppc.spr[SPR_SRR1]);
 		}
+
+    debug(" bridge swap D%d I%d latch %d\n",
+          cpu->cd.ppc.bytelane_swap[0],
+          cpu->cd.ppc.bytelane_swap[1],
+          cpu->cd.ppc.bytelane_swap_latch);
 
 		debug("cpu%i: msr = ", x);
 		reg_access_msr(cpu, &tmp, 0, 0);
@@ -1862,6 +1868,20 @@ void update_cr0(struct cpu *cpu, uint64_t value)
 	cpu->cd.ppc.cr |= ((uint32_t)c << 28);
 }
 
+void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset) {
+  int le_mode = cpu->cd.ppc.msr & PPC_MSR_LE;
+  if (le_mode != cpu->cd.ppc.bytelane_swap[code]) {
+    *offset = 7 ^ (size - 1);
+  } else {
+    *offset = 0;
+  }
+
+  if (cpu->cd.ppc.bytelane_swap[code]) {
+    *swizzle = size - 1;
+  } else {
+    *swizzle = 0;
+  }
+}
 
 #include "memory_ppc.cc"
 

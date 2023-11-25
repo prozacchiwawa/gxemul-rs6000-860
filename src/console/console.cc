@@ -117,7 +117,7 @@ struct console_handle {
 	int		w_descriptor;
 	int		r_descriptor;
 
-	unsigned char	fifo[CONSOLE_FIFO_LEN];
+	unsigned int	fifo[CONSOLE_FIFO_LEN];
 	int		fifo_head;
 	int		fifo_tail;
 };
@@ -293,7 +293,7 @@ static int d_avail(int d)
  *  Put a character in the queue, so that it will be avaiable,
  *  by inserting it into the char fifo.
  */
-void console_makeavail(int handle, char ch)
+void console_makeavail(int handle, int ch)
 {
 	console_handles[handle].fifo[
 	    console_handles[handle].fifo_head] = ch;

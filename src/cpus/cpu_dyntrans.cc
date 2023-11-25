@@ -351,6 +351,8 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			I; I; I; I; I;   I; I; I; I; I;
 			I; I; I; I; I;   I; I; I; I; I;
 			I; I; I; I; I;   I; I; I; I; I;
+      I; I;
+      /*
 			I; I; I; I; I;   I; I; I; I; I;
 			I; I; I; I; I;   I; I; I; I; I;
 
@@ -363,8 +365,9 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			I; I; I; I; I;   I; I; I; I; I;
 
 			I; I; I; I; I;   I; I; I; I; I;
+      */
 
-			cpu->n_translated_instrs += 120;
+			cpu->n_translated_instrs += 32;
 			if (cpu->n_translated_instrs >= N_SAFE_DYNTRANS_LIMIT)
 				break;
 		}

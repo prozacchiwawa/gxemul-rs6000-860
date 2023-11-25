@@ -136,6 +136,8 @@ struct ppc_cpu {
 	uint64_t	ll_addr;	/*  Load-linked / store-conditional  */
 	int		ll_bit;
 
+  int   bytelane_swap_latch;
+  int   bytelane_swap[2];
 
 	/*
 	 *  Instruction translation cache and Virtual->Physical->Host
@@ -220,5 +222,7 @@ int ppc_cpu_family_init(struct cpu_family *);
 /*  memory_ppc.c:  */
 int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	uint64_t *return_addr, int flags);
+
+void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset);
 
 #endif	/*  CPU_PPC_H  */

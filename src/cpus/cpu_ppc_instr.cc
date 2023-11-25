@@ -2719,6 +2719,10 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct ppc_instr_call *);
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
 
+  int swizzle = 0, offset = 0;
+
+  cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
+
 	/*  Figure out the (virtual) address of the instruction:  */
 	low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
 	    / sizeof(struct ppc_instr_call);
@@ -2748,10 +2752,10 @@ X(to_be_translated)
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */
-		memcpy(ib, page + (addr & 0xfff), sizeof(ib));
+		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
 	} else {
 		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!cpu->memory_rw(cpu, cpu->mem, addr, ib,
+		if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
 		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
 			fatal("PPC to_be_translated(): "
 			    "read failed: TODO\n");
@@ -2763,8 +2767,30 @@ X(to_be_translated)
 	{
 		uint32_t *p = (uint32_t *) ib;
 		iword = *p;
-		iword = BE32_TO_HOST(iword);
+    if (cpu->cd.ppc.bytelane_swap[1]) {
+      iword = LE32_TO_HOST(iword);
+    } else {
+      iword = BE32_TO_HOST(iword);
+    }
 	}
+
+  if (offset) {
+    fprintf(stderr, "%08x: ", addr ^ offset);
+    DISASSEMBLE(cpu, ib, 1, 0);
+  } else if (cpu->cd.ppc.bytelane_swap[1]) {
+    fprintf(stderr, "%08x: ", addr ^ offset);
+    unsigned char ib_swap[sizeof(ib)];
+    for (int i = 0; i < sizeof(ib); i++) {
+      ib_swap[i] = ib[sizeof(ib) - i - 1];
+    }
+    DISASSEMBLE(cpu, ib_swap, 1, 0);
+  }
+
+  if (iword == 0x38010138 && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
+    fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
+    cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
+    cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
+  }
 
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"

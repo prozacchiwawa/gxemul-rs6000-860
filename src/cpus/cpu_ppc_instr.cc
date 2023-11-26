@@ -2590,11 +2590,11 @@ X(twi)
     imm |= 0xffff0000;
   }
   uint32_t to = ic->arg[2];
-  int do_trap = ((regval < simm) && ((to & 1) != 0))
-    || ((regval > simm) && ((to & 2) != 0))
+  int do_trap = ((regval < simm) && ((to & 16) != 0))
+    || ((regval > simm) && ((to & 8) != 0))
     || ((regval == simm) && ((to & 4) != 0))
-    || ((uregval < imm) && ((to & 8) != 0))
-    || ((uregval > imm) && ((to & 16) != 0));
+    || ((uregval < imm) && ((to & 2) != 0))
+    || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
     ppc_exception(cpu, PPC_EXCEPTION_PRG);

@@ -926,8 +926,7 @@ if (x&1)
         pckbc_add_code(d, 0xfa, 0);
 				break;
 			case 0xa9:	/*  test auxiliary port  */
-        odata = 0;
-				debug("[ pckbc: CONTROL 0xa9, TODO ]\n");
+        pckbc_add_code(d, 0x00, 0);
 				break;
 			case 0xaa:	/*  keyboard self-test  */
 				pckbc_add_code(d, 0x55, port_nr);

@@ -88,6 +88,7 @@ static void assert_interrupt(struct fdc_data *d)
 {
     if (!d->asserting_interrupt) {
         d->asserting_interrupt = true;
+        d->reg[0] |= 0x80;
         INTERRUPT_ASSERT(d->irq);
     }
 }
@@ -360,9 +361,18 @@ DEVICE_ACCESS(fdc)
 		}
 		break;
 
+  case 0:
+    if (writeflag == MEM_READ) {
+      int result = d->reg[0];
+      d->reg[0] &= 0x7f;
+      fatal("[ fdc: read from reg STA: %02x ]\n", d->reg[0]);
+			memory_writemax64(cpu, data, len, result);
+    }
+    break;
+
 	default:if (writeflag==MEM_READ) {
-			fatal("[ fdc: read from reg %i ]\n",
-			    (int)relative_addr);
+			fatal("[ fdc: read from reg %i: %02x ]\n",
+            (int)relative_addr, d->reg[relative_addr]);
 			memory_writemax64(cpu, data, len, d->reg[relative_addr]);
 		} else {
 			fatal("[ fdc: write to reg %i:", (int)relative_addr);
@@ -387,6 +397,8 @@ DEVICE_ACCESS(fdc_3f7)
 
 	if (writeflag == MEM_WRITE) {
       fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
+      deassert_interrupt(d);
+      assert_interrupt(d);
 	} else {
 	    idata = 3;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);

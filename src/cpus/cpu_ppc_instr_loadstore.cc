@@ -153,23 +153,11 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
 
-  if (reg(ic->arg[0]) == 0xcdf0000 || reg(ic->arg[0]) == 0xf0cd) {
-    fprintf(stderr, "%08x: writing 0xcdf0000 to %08x\n", cpu->pc, addr^offset);
-  }
-
 	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
 	}
-
-  if (swizzle || offset) {
-    fprintf(stderr, "%08x (%d:%d): [%08x] <- %08x --", (int)cpu->pc, offset, swizzle, (int)addr, (int)reg(ic->arg[0]));
-    for (int i = 0; i < LS_SIZE; i++) {
-      fprintf(stderr, " %02x", (int)data[i] & 0xff);
-    }
-    fprintf(stderr, "\n");
-  }
 #endif
 
 #ifdef LS_UPDATE
@@ -310,22 +298,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       page[(addr+7)^offset^swizzle] = x; }
 #endif
 
-    if (reg(ic->arg[0]) == 0xcdf0000 || reg(ic->arg[0]) == 0xdf0c) {
-      fprintf(stderr, "%08x: writing 0xcdf0000: to %08x\n", cpu->pc, full_addr^offset);
-    }
-
     if (full_addr == 0x80000092) {
       fprintf(stderr, "write %08x to port 92\n", (int)full_addr);
       cpu->cd.ppc.bytelane_swap_latch = (reg(ic->arg[0]) & 2) >> 1;
       ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-    }
-
-    if (swizzle || offset) {
-      fprintf(stderr, "%08x (%d,%d): [%08x] <- %08x --", (int)cpu->pc, offset, swizzle, (int)full_addr, (int)reg(ic->arg[0]));
-      for (int i = 0; i < LS_SIZE; i++) {
-        fprintf(stderr, " %02x", (int)page[addr+i] & 0xff);
-      }
-      fprintf(stderr, "\n");
     }
 #endif	/*  !LS_LOAD  */
 	}

@@ -672,8 +672,13 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		debug("%016" PRIx64, (uint64_t) dumpaddr);
 
 	/*  NOTE: Fixed to big-endian.  */
-	iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
+  if (cpu->cd.ppc.bytelane_swap[0]) {
+    iword = (instr[3] << 24) + (instr[2] << 16) + (instr[1] << 8)
+	    + instr[0];
+  } else {
+    iword = (instr[0] << 24) + (instr[1] << 16) + (instr[2] << 8)
 	    + instr[3];
+  }
 
 	debug(": %08" PRIx32"\t", iword);
 

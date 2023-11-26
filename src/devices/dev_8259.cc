@@ -134,6 +134,21 @@ DEVICE_ACCESS(8259)
 			} else if (idata >= 0xc0 && idata <= 0xc7) {
 				/*  Set IRQ Priority Order  */
 				/*  TODO  */
+      } else if (idata == 0x02) {
+        /*  No idea, treat as end of interrupt  */
+        fatal("[ 8259: command 2 at %08x ]\n", (unsigned int)cpu->pc);
+				int old_irr = d->irr;
+        d->ier = 0xff;
+				d->irr &= ~d->isr;
+				d->isr = 0;
+				/*  Recalculate interrupt assertions,
+				    if necessary:  */
+				if ((old_irr & ~d->ier) != (d->irr & ~d->ier)) {
+					if (d->irr & ~d->ier)
+						INTERRUPT_ASSERT(d->irq);
+					else
+						INTERRUPT_DEASSERT(d->irq);
+				}
 			} else {
 				fatal("[ 8259: unimplemented command 0x%02x"
 				    " ]\n", (int)idata);

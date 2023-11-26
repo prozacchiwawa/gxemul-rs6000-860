@@ -2804,18 +2804,6 @@ X(to_be_translated)
     }
 	}
 
-  if (offset) {
-    fprintf(stderr, "%08x: ", addr ^ offset);
-    DISASSEMBLE(cpu, ib, 1, 0);
-  } else if (cpu->cd.ppc.bytelane_swap[1]) {
-    fprintf(stderr, "%08x: ", addr ^ offset);
-    unsigned char ib_swap[sizeof(ib)];
-    for (int i = 0; i < sizeof(ib); i++) {
-      ib_swap[i] = ib[sizeof(ib) - i - 1];
-    }
-    DISASSEMBLE(cpu, ib_swap, 1, 0);
-  }
-
   if (iword == 0x38010138 && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
     fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
     cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;

@@ -2573,6 +2573,36 @@ X(stvx)
 
 
 /*
+ * twi: Trap Word Immediate
+ *
+ * arg[0] = r<n>
+ * arg[1] = SIMM
+ * arg[2] = TO
+ */
+X(twi)
+{
+  int32_t regval = *((int32_t *)ic->arg[0]);
+  uint32_t uregval = *((uint32_t *)ic->arg[0]);
+  int32_t simm = ic->arg[1];
+  uint32_t imm = ic->arg[1];
+  if (simm & 0x8000) {
+    simm |= 0xffff0000;
+    imm |= 0xffff0000;
+  }
+  uint32_t to = ic->arg[2];
+  int do_trap = ((regval < simm) && ((to & 1) != 0))
+    || ((regval > simm) && ((to & 2) != 0))
+    || ((regval == simm) && ((to & 4) != 0))
+    || ((uregval < imm) && ((to & 8) != 0))
+    || ((uregval > imm) && ((to & 16) != 0));
+
+  if (do_trap) {
+    ppc_exception(cpu, PPC_EXCEPTION_PRG);
+  }
+}
+
+
+/*
  *  vxor:  Vector (16-byte) XOR
  *
  *  arg[0] = v-register nr of source 1
@@ -2804,6 +2834,16 @@ X(to_be_translated)
 	main_opcode = iword >> 26;
 
 	switch (main_opcode) {
+  case 0x03:
+    /* TWI */
+    ic->f = instr(twi);
+    rt = (iword >> 21) & 31;
+    ra = (iword >> 16) & 31;
+    imm = (int16_t)(iword & 0xffff);
+    ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+    ic->arg[1] = (ssize_t)imm;
+    ic->arg[2] = (size_t)rt;
+    break;
 
 	case 0x04:
 		if (iword == 0x12739cc4) {

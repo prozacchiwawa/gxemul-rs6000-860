@@ -122,6 +122,14 @@ DEVICE_ACCESS(eagle_800)
             eagle_comm.password_protect_2 |= idata;
         }
         break;
+
+    case 0x1c:
+      if (writeflag == MEM_READ) {
+        odata = d->l2_cache;
+      } else {
+        d->l2_cache = idata & 0xe1;
+      }
+      break;
     }
 
     fprintf(stderr, "[ unknown-800 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);

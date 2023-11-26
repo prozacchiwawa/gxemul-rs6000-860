@@ -177,6 +177,7 @@ struct eagle_data {
   uint8_t err_reg[2];
 
   int want_error;
+  int l2_cache;
 };
 
 struct eagle_glob {

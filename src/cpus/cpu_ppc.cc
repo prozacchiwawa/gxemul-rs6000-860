@@ -362,8 +362,11 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 	if (exception_nr >= 0x10 && exception_nr <= 0x13)
 		cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff)
 		    | (cpu->cd.ppc.cr & 0xf0000000);
-	else
+	else if (exception_nr != PPC_EXCEPTION_PRG) {
 		cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0x87c0ffff);
+  } else {
+    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | (cpu->cd.ppc.msr & 0x3c00000) | 0x10000;
+  }
 
 	if (!quiet_mode)
 		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" ]\n",

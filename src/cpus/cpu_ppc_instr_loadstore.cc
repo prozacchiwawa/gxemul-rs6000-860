@@ -153,7 +153,11 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
 
-	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
+  if (reg(ic->arg[0]) == 0xcdf0000 || reg(ic->arg[0]) == 0xf0cd) {
+    fprintf(stderr, "%08x: writing 0xcdf0000 to %08x\n", cpu->pc, addr^offset);
+  }
+
+	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -249,14 +253,14 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #ifndef LS_ZERO
 		    (int8_t)
 #endif
-		    page[addr];
+		    page[addr ^ offset];
 #endif	/*  LS_B  */
 #ifdef LS_H
 		reg(ic->arg[0]) =
 #ifndef LS_ZERO
 		    (int16_t)
 #endif
-          ((page[addr^swizzle] << 8) + page[(addr+1)^swizzle]);
+          ((page[addr^offset^swizzle] << 8) + page[(addr+1)^offset^swizzle]);
 #endif	/*  LS_H  */
 #ifdef LS_W
 		reg(ic->arg[0]) =
@@ -265,46 +269,50 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
 		    (uint32_t)
 #endif
-          ((page[addr^swizzle] << 24) + (page[(addr+1)^swizzle] << 16) +
-           (page[(addr+2)^swizzle] << 8) + page[(addr+3)^swizzle]);
+          ((page[addr^offset^swizzle] << 24) + (page[(addr+1)^offset^swizzle] << 16) +
+           (page[(addr+2)^offset^swizzle] << 8) + page[(addr+3)^offset^swizzle]);
 #endif	/*  LS_W  */
 #ifdef LS_D
 		(*(uint64_t *)(ic->arg[0])) =
-      ((uint64_t)page[(addr+0)^swizzle] << 56) +
-      ((uint64_t)page[(addr+1)^swizzle] << 48) +
-      ((uint64_t)page[(addr+2)^swizzle] << 40) +
-      ((uint64_t)page[(addr+3)^swizzle] << 32) +
-      ((uint64_t)page[(addr+4)^swizzle] << 24) + (page[(addr+5)^swizzle] << 16) +
-      (page[(addr+6)^swizzle] << 8) + page[(addr+7)^swizzle];
+      ((uint64_t)page[(addr+0)^offset^swizzle] << 56) +
+      ((uint64_t)page[(addr+1)^offset^swizzle] << 48) +
+      ((uint64_t)page[(addr+2)^offset^swizzle] << 40) +
+      ((uint64_t)page[(addr+3)^offset^swizzle] << 32) +
+      ((uint64_t)page[(addr+4)^offset^swizzle] << 24) + (page[(addr+5)^offset^swizzle] << 16) +
+      (page[(addr+6)^offset^swizzle] << 8) + page[(addr+7)^offset^swizzle];
 #endif	/*  LS_D  */
 
 #else	/*  !LS_LOAD  */
 
 		/*  Store:  */
 #ifdef LS_B
-		page[addr] = reg(ic->arg[0]);
+		page[addr^offset] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-		page[addr^swizzle]   = reg(ic->arg[0]) >> 8;
-		page[(addr+1)^swizzle] = reg(ic->arg[0]);
+		page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 8;
+		page[(addr+1)^offset^swizzle] = reg(ic->arg[0]);
 #endif
 #ifdef LS_W
-		page[addr^swizzle]   = reg(ic->arg[0]) >> 24;
-		page[(addr+1)^swizzle] = reg(ic->arg[0]) >> 16;
-		page[(addr+2)^swizzle] = reg(ic->arg[0]) >> 8;
-		page[(addr+3)^swizzle] = reg(ic->arg[0]);
+		page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 24;
+		page[(addr+1)^offset^swizzle] = reg(ic->arg[0]) >> 16;
+		page[(addr+2)^offset^swizzle] = reg(ic->arg[0]) >> 8;
+		page[(addr+3)^offset^swizzle] = reg(ic->arg[0]);
 #endif
 #ifdef LS_D
 		{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-      page[addr^swizzle]   = x >> 56;
-      page[(addr+1)^swizzle] = x >> 48;
-      page[(addr+2)^swizzle] = x >> 40;
-      page[(addr+3)^swizzle] = x >> 32;
-      page[(addr+4)^swizzle] = x >> 24;
-      page[(addr+5)^swizzle] = x >> 16;
-      page[(addr+6)^swizzle] = x >> 8;
-      page[(addr+7)^swizzle] = x; }
+      page[addr^offset^swizzle]   = x >> 56;
+      page[(addr+1)^offset^swizzle] = x >> 48;
+      page[(addr+2)^offset^swizzle] = x >> 40;
+      page[(addr+3)^offset^swizzle] = x >> 32;
+      page[(addr+4)^offset^swizzle] = x >> 24;
+      page[(addr+5)^offset^swizzle] = x >> 16;
+      page[(addr+6)^offset^swizzle] = x >> 8;
+      page[(addr+7)^offset^swizzle] = x; }
 #endif
+
+    if (reg(ic->arg[0]) == 0xcdf0000 || reg(ic->arg[0]) == 0xdf0c) {
+      fprintf(stderr, "%08x: writing 0xcdf0000: to %08x\n", cpu->pc, full_addr^offset);
+    }
 
     if (full_addr == 0x80000092) {
       fprintf(stderr, "write %08x to port 92\n", (int)full_addr);

@@ -282,6 +282,153 @@ static void ascii_to_pc_scancodes_type3(int a, struct pckbc_data *d)
 	}
 }
 
+/*
+ *  ascii_to_scancodes_type1():
+ *
+ *  Conversion from ASCII codes to default (US) XT keyboard scancodes.
+ *  (See http://www.techhelpmanual.com/57-keyboard_scan_codes.html)
+ *
+ * Hex Dec Key │Hex Dec Key  │Hex Dec Key    │Hex Dec Key    │Hex Dec Key
+ * ────────────┼─────────────┼───────────────┼───────────────┼─────────────────
+ * 01   1  Esc │12  18  E    │23  35  H      │34  52  . >    │45  69  NumLock
+ * 02   2  1 ! │13  19  R    │24  36  J      │35  53  / ?    │46  70  ScrollLck
+ * 03   3  2 @ │14  20  T    │25  37  K      │36  54  Shft(R)│47  71  Home [7]
+ * 04   4  3 # │15  21  Y    │26  38  L      │37  55  * PrtSc│48  72  ↑    [8]
+ * 05   5  4 $ │16  22  U    │27  39  ; :    │38  56  Alt    │49  73  PgUp [9]
+ * 06   6  5 % │17  23  I    │28  40  " '    │39  57  space  │4a  74  K -
+ * 07   7  6 ^ │18  24  O    │29  41  ` ~    │3a  58  CapsLck│4b  75  ←    [4]
+ * 08   8  7 & │19  25  P    │2a  42  Shft(L)│3b  59  F1     │4c  76       [5]
+ * 09   9  8 * │1a  26  [ {  │2b  43  \ |    │3c  60  F2     │4d  77  →    [6]
+ * 0a  10  9 ( │1b  27  ] }  │2c  44  Z      │3d  61  F3     │4e  78  K +
+ * 0b  11  0 ) │1c  28  Enter│2d  45  X      │3e  62  F4     │4f  79  End  [1]
+ * 0c  12  - _ │1d  29  Ctrl │2e  46  C      │3f  63  F5     │50  80  ↓    [2]
+ * 0d  13  + = │1e  30  A    │2f  47  V      │40  64  F6     │51  81  PgDn [3]
+ * 0e  14  bksp│1f  31  S    │30  48  B      │41  65  F7     │52  82  Ins  [0]
+ * 0f  15  Tab │20  32  D    │31  49  N      │42  66  F8     │53  83  Del  [.]
+ * 10  16  Q   │21  33  F    │32  50  M      │43  67  F9     │
+ * 11  17  W   │22  34  G    │33  51  , <    │44  68  F10    │
+ */
+static void ascii_to_pc_scancodes_type1(int a, struct pckbc_data *d)
+{
+	int old_head;
+	int p = 0;	/*  port  */
+	int shift = 0, ctrl = 0;
+
+	if (a >= 'A' && a <= 'Z') { a += 32; shift = 1; }
+	if ((a >= 1 && a <= 26) && (a!='\n' && a!='\t' && a!='\b' && a!='\r'))
+		{ a += 96; ctrl = 1; }
+	if (a=='!')  {	a = '1'; shift = 1; }
+	if (a=='@')  {	a = '2'; shift = 1; }
+	if (a=='#')  {	a = '3'; shift = 1; }
+	if (a=='$')  {	a = '4'; shift = 1; }
+	if (a=='%')  {	a = '5'; shift = 1; }
+	if (a=='^')  {	a = '6'; shift = 1; }
+	if (a=='&')  {	a = '7'; shift = 1; }
+	if (a=='*')  {	a = '8'; shift = 1; }
+	if (a=='(')  {	a = '9'; shift = 1; }
+	if (a==')')  {	a = '0'; shift = 1; }
+	if (a=='_')  {	a = '-'; shift = 1; }
+	if (a=='+')  {	a = '='; shift = 1; }
+	if (a=='{')  {	a = '['; shift = 1; }
+	if (a=='}')  {	a = ']'; shift = 1; }
+	if (a==':')  {	a = ';'; shift = 1; }
+	if (a=='"')  {	a = '\''; shift = 1; }
+	if (a=='|')  {	a = '\\'; shift = 1; }
+	if (a=='<')  {	a = ','; shift = 1; }
+	if (a=='>')  {	a = '.'; shift = 1; }
+	if (a=='?')  {	a = '/'; shift = 1; }
+
+	if (shift)
+		pckbc_add_code(d, 0x2a, p);
+	if (ctrl)
+		pckbc_add_code(d, 0x1d, p);
+
+	/*
+	 *  Note: The ugly hack used to add release codes for all of these
+	 *  keys is as follows:  we remember how much of the kbd buf that
+	 *  is in use here, before we add any scancode. After we've added
+	 *  one or more scancodes (ie an optional shift + another key)
+	 *  then we add 0xf0 + the last scancode _if_ the kbd buf was altered.
+	 */
+
+	old_head = d->head[p];
+
+	if (a=='1')	pckbc_add_code(d, 0x02, p);
+	if (a=='2')	pckbc_add_code(d, 0x03, p);
+	if (a=='3')	pckbc_add_code(d, 0x04, p);
+	if (a=='4')	pckbc_add_code(d, 0x05, p);
+	if (a=='5')	pckbc_add_code(d, 0x06, p);
+	if (a=='6')	pckbc_add_code(d, 0x07, p);
+	if (a=='7')	pckbc_add_code(d, 0x08, p);
+	if (a=='8')	pckbc_add_code(d, 0x09, p);
+	if (a=='9')	pckbc_add_code(d, 0x0a, p);
+	if (a=='0')	pckbc_add_code(d, 0x0b, p);
+	if (a=='-')	pckbc_add_code(d, 0x0c, p);
+	if (a=='=')	pckbc_add_code(d, 0x0d, p);
+
+	if (a=='\b')	pckbc_add_code(d, 0x0e, p);
+
+	if (a=='\t')	pckbc_add_code(d, 0x0f, p);
+	if (a=='q')	pckbc_add_code(d, 0x10, p);
+	if (a=='w')	pckbc_add_code(d, 0x11, p);
+	if (a=='e')	pckbc_add_code(d, 0x12, p);
+	if (a=='r')	pckbc_add_code(d, 0x13, p);
+	if (a=='t')	pckbc_add_code(d, 0x14, p);
+	if (a=='y')	pckbc_add_code(d, 0x15, p);
+	if (a=='u')	pckbc_add_code(d, 0x16, p);
+	if (a=='i')	pckbc_add_code(d, 0x17, p);
+	if (a=='o')	pckbc_add_code(d, 0x18, p);
+	if (a=='p')	pckbc_add_code(d, 0x19, p);
+
+	if (a=='[')	pckbc_add_code(d, 0x1a, p);
+	if (a==']')	pckbc_add_code(d, 0x1b, p);
+
+	if (a=='\n' || a=='\r')	pckbc_add_code(d, 0x1c, p);
+
+	if (a=='a')	pckbc_add_code(d, 0x1e, p);
+	if (a=='s')	pckbc_add_code(d, 0x1f, p);
+	if (a=='d')	pckbc_add_code(d, 0x20, p);
+	if (a=='f')	pckbc_add_code(d, 0x21, p);
+	if (a=='g')	pckbc_add_code(d, 0x22, p);
+	if (a=='h')	pckbc_add_code(d, 0x23, p);
+	if (a=='j')	pckbc_add_code(d, 0x24, p);
+	if (a=='k')	pckbc_add_code(d, 0x25, p);
+	if (a=='l')	pckbc_add_code(d, 0x26, p);
+
+	if (a==';')	pckbc_add_code(d, 0x27, p);
+	if (a=='\'')	pckbc_add_code(d, 0x28, p);
+	if (a=='~')	pckbc_add_code(d, 0x29, p);
+	if (a=='\\')	pckbc_add_code(d, 0x2b, p);
+
+	if (a=='z')	pckbc_add_code(d, 0x2c, p);
+	if (a=='x')	pckbc_add_code(d, 0x2d, p);
+	if (a=='c')	pckbc_add_code(d, 0x2e, p);
+	if (a=='v')	pckbc_add_code(d, 0x2f, p);
+	if (a=='b')	pckbc_add_code(d, 0x30, p);
+	if (a=='n')	pckbc_add_code(d, 0x31, p);
+	if (a=='m')	pckbc_add_code(d, 0x32, p);
+
+	if (a==',')	pckbc_add_code(d, 0x33, p);
+	if (a=='.')	pckbc_add_code(d, 0x34, p);
+	if (a=='/')	pckbc_add_code(d, 0x35, p);
+
+	if (a==' ')	pckbc_add_code(d, 0x39, p);
+
+	/*  Add release code, if a key was pressed:  */
+	if (d->head[p] != old_head) {
+		int code = d->key_queue[p][d->head[p]];
+		pckbc_add_code(d, code | 0x80, p);
+	}
+
+	/*  Release shift and ctrl:  */
+	if (shift) {
+		pckbc_add_code(d, 0xaa, p);
+	}
+	if (ctrl) {
+		pckbc_add_code(d, 0x9d, p);
+	}
+}
+
 
 /*
  *  ascii_to_scancodes_type2():
@@ -464,7 +611,11 @@ DEVICE_TICK(pckbc)
 
   if (d->in_use && console_charavail(d->console_handle)) {
     ch = console_readchar(d->console_handle);
-    ascii_to_pc_scancodes_type2(ch, d);
+    if (d->translation_table == 1) {
+      ascii_to_pc_scancodes_type1(ch, d);
+    } else {
+      ascii_to_pc_scancodes_type2(ch, d);
+    }
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
@@ -543,6 +694,7 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 		debug("[ pckbc: (port %i) switching to translation table "
 		    "0x%02x ]\n", port_nr, cmd);
 		switch (cmd) {
+    case 1:
 		case 2:
 		case 3:	d->translation_table = cmd;
 			break;

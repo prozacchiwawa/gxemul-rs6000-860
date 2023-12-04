@@ -55,11 +55,99 @@ void x11_check_event(struct emul *emul) { }
 
 #else	/*  WITH_X11  */
 
-
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/cursorfont.h>
 
+struct KeysymAndKeyName {
+  int keysym;
+  int keyname_idx;
+};
+
+KeysymAndKeyName x11_keys[] = {
+  { XK_Escape, KeyNames::ESC },
+  { XK_F1, KeyNames::F1 },
+  { XK_F2, KeyNames::F2 },
+  { XK_F3, KeyNames::F3 },
+  { XK_F4, KeyNames::F4 },
+  { XK_F5, KeyNames::F5 },
+  { XK_F6, KeyNames::F6 },
+  { XK_F7, KeyNames::F7 },
+  { XK_F8, KeyNames::F8 },
+  { XK_F9, KeyNames::F9 },
+  { XK_F10, KeyNames::F10 },
+  { XK_F11, KeyNames::F11 },
+  { XK_F12, KeyNames::F12 },
+  { XK_Print, KeyNames::PrtSc },
+  { XK_Insert, KeyNames::Insert },
+  { XK_Delete, KeyNames::Delete },
+  { XK_1, KeyNames::N1 },
+  { XK_2, KeyNames::N2 },
+  { XK_3, KeyNames::N3 },
+  { XK_4, KeyNames::N4 },
+  { XK_5, KeyNames::N5 },
+  { XK_6, KeyNames::N6 },
+  { XK_7, KeyNames::N7 },
+  { XK_8, KeyNames::N8 },
+  { XK_9, KeyNames::N9 },
+  { XK_0, KeyNames::N0 },
+  { XK_minus, KeyNames::Minus },
+  { XK_equal, KeyNames::Equals },
+  { XK_BackSpace, KeyNames::Backspace },
+  { XK_Tab, KeyNames::Tab },
+  { XK_Q, KeyNames::Q },
+  { XK_W, KeyNames::W },
+  { XK_E, KeyNames::E },
+  { XK_R, KeyNames::R },
+  { XK_T, KeyNames::T },
+  { XK_Y, KeyNames::Y },
+  { XK_U, KeyNames::U },
+  { XK_I, KeyNames::I },
+  { XK_O, KeyNames::O },
+  { XK_P, KeyNames::P },
+  { XK_braceleft, KeyNames::LBrace },
+  { XK_braceright, KeyNames::RBrace },
+  { XK_backslash, KeyNames::Backslash },
+  { XK_Caps_Lock, KeyNames::CapsLock },
+  { XK_A, KeyNames::A },
+  { XK_S, KeyNames::S },
+  { XK_D, KeyNames::D },
+  { XK_F, KeyNames::F },
+  { XK_G, KeyNames::G },
+  { XK_H, KeyNames::H },
+  { XK_J, KeyNames::J },
+  { XK_K, KeyNames::K },
+  { XK_L, KeyNames::L },
+  { XK_semicolon, KeyNames::Semicolon },
+  { XK_apostrophe, KeyNames::Quote },
+  { XK_Return, KeyNames::Return },
+  { XK_Shift_L, KeyNames::LShift },
+  { XK_Z, KeyNames::Z },
+  { XK_X, KeyNames::X },
+  { XK_C, KeyNames::C },
+  { XK_V, KeyNames::V },
+  { XK_B, KeyNames::B },
+  { XK_N, KeyNames::N },
+  { XK_M, KeyNames::M },
+  { XK_comma, KeyNames::Comma },
+  { XK_period, KeyNames::Dot },
+  { XK_slash, KeyNames::Slash },
+  { XK_Shift_R, KeyNames::RShift },
+  { XK_Control_L, KeyNames::Ctrl },
+  { XK_Alt_L, KeyNames::Alt },
+  { XK_space, KeyNames::Space },
+  { XK_Up, KeyNames::Up },
+  { 111, KeyNames::Up },
+  { XK_Down, KeyNames::Down },
+  { 106, KeyNames::Down },
+  { XK_Left, KeyNames::Left },
+  { XK_Right, KeyNames::Right },
+  { XK_Page_Up, KeyNames::PgUp },
+  { XK_Page_Down, KeyNames::PgDn },
+  { XK_Home, KeyNames::Home },
+  { XK_End, KeyNames::End },
+  { XK_grave, KeyNames::Backquote }
+};
 
 /*
  *  x11_redraw_cursor():
@@ -655,7 +743,14 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 					console_makeavail(
 					    m->main_console_handle, text[0]);
 				} else {
-					int x = ke->keycode;
+          int x = ke->keycode;
+          for (int i = 0; i < sizeof(x11_keys) / sizeof(x11_keys[0]); i++) {
+            if (x11_keys[i].keysym == key) {
+              console_makeavail(m->main_console_handle, x11_keys[i].keyname_idx << 8);
+              return;
+            }
+          }
+
 					/*
 					 *  Special key codes:
 					 *
@@ -708,6 +803,7 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 						console_makeavail(m->
 						    main_console_handle, '5');
 						break;
+
 					case 72:	/*  F6  */
 					case 73:	/*  F7  */
 					case 74:	/*  F8  */

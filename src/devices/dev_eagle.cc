@@ -316,16 +316,38 @@ DEVICE_ACCESS(eagle_480)
 
 DEVICE_ACCESS(eagle_830)
 {
-    struct eagle_data *d = (struct eagle_data *) extra;
-    uint64_t idata = 0;
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
 
-    if (writeflag == MEM_WRITE) {
-        idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  }
+
+  fprintf(stderr, "[ unknown-830: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+  return 1;
+}
+
+DEVICE_ACCESS(eagle_850)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  }
+
+  fprintf(stderr, "[ unknown-850: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+
+  if (writeflag == MEM_READ) {
+    if (relative_addr == 2) {
+      idata = 220;
     }
 
-    fprintf(stderr, "[ unknown-830: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
+  }
 
-    return 1;
+  return 1;
 }
 
 DEVICE_ACCESS(eagle_880)
@@ -563,6 +585,10 @@ DEVINIT(eagle)
     memory_device_register(devinit->machine->memory, "830",
         isa_portbase + 0x830, 16, dev_eagle_830_access, d,
         DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "850",
+                           isa_portbase + 0x850, 4, dev_eagle_850_access, d,
+                           DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "880",
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,

@@ -121,6 +121,10 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    (data[6^swizzle] << 8) + data[7^swizzle];
 #endif
 
+  if (addr >= 0xe0000000 && addr < 0xe0100000) {
+    fprintf(stderr, "Read %08x from %08x\n", (int)reg(ic->arg[0]), (int)addr);
+  }
+
 #else	/*  store:  */
 
 #ifdef LS_B
@@ -147,10 +151,12 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     data[6^swizzle] = x >> 8;
     data[7^swizzle] = x; }
 #endif
-  if (addr == 0x80000092) {
+  if ((addr & 0xfffffff0) == 0x80000090) {
     fprintf(stderr, "write %08x to port 92\n", reg(ic->arg[0]));
     cpu->cd.ppc.bytelane_swap_latch = (reg(ic->arg[0]) & 2) >> 1;
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+  } else if (addr >= 0xe0000000 && addr < 0xe0100000) {
+    fprintf(stderr, "Write %08x to %08x\n", (int)reg(ic->arg[0]), (int)addr);
   }
 
 	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
@@ -270,6 +276,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       (page[(addr+6)^offset^swizzle] << 8) + page[(addr+7)^offset^swizzle];
 #endif	/*  LS_D  */
 
+    if (full_addr >= 0xe0000000 && full_addr < 0xe0100000) {
+      fprintf(stderr, "Read %08x from %08x\n", (int)reg(ic->arg[0]), (int)full_addr);
+    }
+
 #else	/*  !LS_LOAD  */
 
 		/*  Store:  */
@@ -298,10 +308,12 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       page[(addr+7)^offset^swizzle] = x; }
 #endif
 
-    if (full_addr == 0x80000092) {
+    if ((full_addr & 0xfffffff0) == 0x80000092) {
       fprintf(stderr, "write %08x to port 92\n", (int)full_addr);
       cpu->cd.ppc.bytelane_swap_latch = (reg(ic->arg[0]) & 2) >> 1;
       ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+    } else if (full_addr >= 0xe0000000 && full_addr < 0xe0100000) {
+      fprintf(stderr, "Write %08x to %08x\n", (int)reg(ic->arg[0]), (int)full_addr);
     }
 #endif	/*  !LS_LOAD  */
 	}

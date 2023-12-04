@@ -2804,7 +2804,7 @@ X(to_be_translated)
     }
 	}
 
-  if (iword == 0x38010138 && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
+  if ((iword == 0x38010138 || iword == 0x09000048) && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
     fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
     cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
     cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;

@@ -283,6 +283,7 @@ static void bus_cold_reset(SCSIBus *bus) {
 }
 
 static void lsi_soft_reset(struct lsi53c895a_data *s);
+static void lsi_set_irq(struct lsi53c895a_data *s, int level);
 
 static void device_cold_reset(struct lsi53c895a_data *device) {
     fprintf(stderr, "lsi: device_cold_reset (myself)\n");
@@ -1008,6 +1009,7 @@ static void lsi_soft_reset(LSIState *s)
     s->sbc = 0;
     s->csbc = 0;
     s->sbr = 0;
+    s->scid = 0;
     assert(!s->queue);
     assert(!s->current);
 }
@@ -2545,6 +2547,7 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
         }
         if (val & LSI_ISTAT0_SRST) {
             device_cold_reset(s);
+            s->istat0 = LSI_ISTAT0_SRST;
         }
         break;
     case 0x16: /* MBOX0 */
@@ -3110,7 +3113,6 @@ DEVINIT(lsi53c895a)
 
     lsi_soft_reset(d);
 
-    d->scid = 7;
     d->macntl = 15;
     d->config[PCI_LATENCY_TIMER] = 0xff;
 

@@ -485,7 +485,7 @@ PCIINIT(lsi53c895a)
      PCI_CLASS_CODE
      (PCI_CLASS_MASS_STORAGE,
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
-      0));
+      0) | 0x26);
 
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
@@ -1443,15 +1443,15 @@ PCIINIT(eagle)
   // Cache line size
   PCI_SET_DATA(0x0c, 8);
   // Memory Starting address 1 (MB)
-  PCI_SET_DATA(0x80, 0);
+  PCI_SET_DATA(0x80, 0x1000);
   // Memory Starting address 2 (MB)
-  PCI_SET_DATA(0x84, 16);
+  PCI_SET_DATA(0x84, 0);
   // Memory ending address 1 0x90 (MB)
-  PCI_SET_DATA(0x90, 16);
+  PCI_SET_DATA(0x90, 0x2010);
   // Memory ending address 2 0x94 (MB)
-  PCI_SET_DATA(0x94, 32);
+  PCI_SET_DATA(0x94, 0);
   // Memory bank enable.
-  PCI_SET_DATA(0xa0, 0);
+  PCI_SET_DATA(0xa0, 3);
   // Error reporting/enabling
   PCI_SET_DATA(0xc0, 1);
 

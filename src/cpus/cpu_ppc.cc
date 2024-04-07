@@ -631,6 +631,49 @@ void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 	cpu->cd.ppc.irq_asserted = 0;
 }
 
+void ppc_branch_conditional_desc(struct cpu *cpu, int bo, int bi, int bh) {
+  static const char *cr_bits[] = {
+    "npzv",
+    "feio",
+    "lgzv",
+    "lgzv",
+    "lgzv",
+    "lgzv",
+    "lgzv",
+    "lgzv",
+  };
+  static const char *bo_desc[] = {
+    "ctr-- != 0 and not ",
+    "ctr-- == 0 and not ",
+    "if false ",
+    "BO%d ",
+    "ctr-- != 0 and ",
+    "ctr-- == 0 and ",
+    "if true ",
+    "BO%d ",
+    "ctr-- != 0 ignoring ",
+    "ctr-- == 0 ignoring ",
+    "always, ignoring ",
+    "BO%d ",
+    "BO%d ",
+    "BO%d ",
+    "BO%d ",
+    "BO%d "
+  };
+
+  int cr_n = bi / 4;
+  int cr_b = cr_bits[cr_n][bi % 4];
+
+  if (cpu->cd.ppc.cr & (1 << (31 - bi))) {
+    cr_b ^= 32;
+  }
+
+  debug(bo_desc[bo/2], bo);
+  debug("CR%d (%c)", cr_n, cr_b);
+  if (bh != -1) {
+    debug(",bh=%d", bh);
+  }
+}
 
 /*
  *  ppc_cpu_disassemble_instr():
@@ -652,6 +695,8 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	int bfa, to, load, wlen, no_rb = 0;
 	uint64_t offset, addr;
 	uint32_t iword;
+  char target_buf[32];
+
 	const char *symbol, *mnem = "ERROR";
 	int power = cpu->cd.ppc.mode == MODE_POWER;
 
@@ -723,7 +768,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		debug("%s%si\t", mnem, l_bit? "d" : "w");
 		if (bf != 0)
 			debug("cr%i,", bf);
-		debug("r%i,%i", ra, imm);
+		debug("r%i,%i\t(%08x)", ra, imm, cpu->cd.ppc.gpr[ra]);
 		break;
 	case PPC_HI6_ADDIC:
 	case PPC_HI6_ADDIC_DOT:
@@ -770,24 +815,25 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		bi = (iword >> 16) & 31;
 		/*  Sign-extend addr:  */
 		addr = (int64_t)(int16_t)(iword & 0xfffc);
-		debug("bc");
+    debug("bc");
 		if (lk_bit)
-			debug("l");
+      debug("l");
 		if (aa_bit)
-			debug("a");
+      debug("a");
 		else
 			addr += dumpaddr;
-		debug("\t%i,%i,", bo, bi);
 		if (cpu->cd.ppc.bits == 32)
 			addr &= 0xffffffff;
 		if (cpu->cd.ppc.bits == 32)
-			debug("0x%" PRIx32, (uint32_t) addr);
+      snprintf(target_buf, sizeof(target_buf), "0x%" PRIx32, (uint32_t) addr);
 		else
-			debug("0x%" PRIx64, (uint64_t) addr);
+      snprintf(target_buf, sizeof(target_buf), "0x%" PRIx64, (uint64_t) addr);
 		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    addr, &offset);
+    debug("\t%i,%i,%s\t ", bo, bi, target_buf);
 		if (symbol != NULL)
-			debug("\t<%s>", symbol);
+			debug("\t<%s>\t; ", symbol);
+    ppc_branch_conditional_desc(cpu, bo, bi, -1);
 		break;
 	case PPC_HI6_SC:
 		lev = (iword >> 5) & 0x7f;
@@ -851,9 +897,8 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			case PPC_19_BCCTR:
 				mnem = power? "bcc" : "bcctr"; break;
 			}
-			debug("%s%s%s\t%i,%i,%i", mnem, lk_bit? "l" : "",
-			    bh? (bh==3? "+" : (bh==2? "-" : "?")) : "",
-			    bo, bi, bh);
+      debug("%s%s%s\t; ", mnem, lk_bit ? "l" : "", bh? (bh==3? "+" : (bh==2? "-" : "?")) : "");
+      ppc_branch_conditional_desc(cpu, bo, bi, bh);
 			break;
 		case PPC_19_ISYNC:
 			debug("%s", power? "ics" : "isync");
@@ -982,7 +1027,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			debug("%s%s\t", mnem, l_bit? "d" : "w");
 			if (bf != 0)
 				debug("cr%i,", bf);
-			debug("r%i,r%i", ra, rb);
+			debug("r%i,r%i\t(%08x,%08x)", ra, rb, cpu->cd.ppc.gpr[ra], cpu->cd.ppc.gpr[rb]);
 			break;
 		case PPC_31_MFCR:
 			rt = (iword >> 21) & 31;

@@ -72,7 +72,15 @@ struct pic8259_data {
 	uint8_t		irr;		/*  interrupt request register  */
 	uint8_t		isr;		/*  interrupt in-service register  */
 	uint8_t		ier;		/*  interrupt enable register  */
+
+  // When chained_from is non-null, there's potentially a waiting interrupt that
+  // was masked before coming from that PIC.  Raise it if it becomes unblocked.
+  struct pic8259_data *chained_to;
+  int chained_int_line;
 };
+
+void dev_8259_assert(struct pic8259_data *d, int line);
+void dev_8259_deassert(struct pic8259_data *d, int line);
 
 /*  dev_dec_ioasic.c:  */
 #define	DEV_DEC_IOASIC_LENGTH		0x80100

@@ -76,6 +76,35 @@ DEVICE_ACCESS(eagle)
 	return 1;
 }
 
+DEVICE_ACCESS(eagle_io_pass)
+{
+	struct eagle_data *d = (struct eagle_data *) extra;
+	uint64_t idata = 0, odata = 0;
+	int bus, dev, func, reg;
+	uint8_t data_buf[4];
+
+	uint32_t real_addr = relative_addr + 0x1000000;
+	if (writeflag == MEM_WRITE) {
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+/*
+ *      cpu             the cpu doing the read/write
+ *      mem             the memory object to use
+ *      vaddr           the virtual address
+ *      data            a pointer to the data to be written to memory, or
+ *                      a placeholder for data when reading from memory
+ *      len             the length of the 'data' buffer
+ *      writeflag       set to MEM_READ or MEM_WRITE
+ *      misc_flags      CACHE_{NONE,DATA,INSTRUCTION} | other flags
+ */
+		// Endian
+		fprintf(stderr, "[ eagle: PCI io passthrough write %08x = %08x ]\n", real_addr, idata);
+		// bus_pci_io_write(cpu, d->pci_data, real_addr, idata, len);
+	} else {
+		// odata = bus_pci_io_read(cpu, d->pci_data, real_addr, len);
+		fprintf(stderr, "[ eagle: PCI io passthrough read %08x -> %08x ]\n", real_addr, odata);
+		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+	}
+}
 
 DEVICE_ACCESS(eagle_800)
 {
@@ -98,13 +127,16 @@ DEVICE_ACCESS(eagle_800)
         // 9.10.2 Equipment Presence Register
         // MSB | D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | LSB
         //       |    |    |    |    |    |    |    |
-        //       |    |    |    |    +----+----+----+---- Reserved
+        //       |    |    |    |    |    |    |    +---- L2 cache absent
+        //       |    |    |    |    |    |    +--------- No proc upgrade
+        //       |    |    |    |    |    +-------------- L2 cache 256k
+        //       |    |    |    |    +------------------- L2 cache copy-back
         //       |    |    |    +------------------------ PCI Presence Detect 1 (0 means present)
         //       |    |    +----------------------------- PCI Presence Detect 2 (0 means present)
         //       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
         //       +--------------------------------------- Reserved
     case 0x0c:
-        if (writeflag == MEM_READ) odata = 0x70;
+        if (writeflag == MEM_READ) odata = 0x7e;
         break;
 
     case 0x10:
@@ -341,7 +373,7 @@ DEVICE_ACCESS(eagle_850)
 
   if (writeflag == MEM_READ) {
     if (relative_addr == 2) {
-      idata = 220;
+      idata = 0xda;
     }
 
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
@@ -594,6 +626,12 @@ DEVINIT(eagle)
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,
         DM_DEFAULT, NULL);
 
+    /*
+    memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
+        isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+        DM_DEFAULT, NULL);
+    */
+    
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 
   switch (devinit->machine->machine_type) {

@@ -45,48 +45,49 @@
 #include "machine.h"
 #include "misc.h"
 
-
 /*
  *  isa_interrupt_common():
  */
-void isa_interrupt_common(struct bus_isa_data *d, int old_isa_assert)
+void isa_interrupt_common(struct bus_isa_data *d, int line, int assert_int)
 {
 	int new_isa_assert, x;
 
-	/*  Any interrupt assertions on PIC2 go to irq 2 on PIC1  */
-	/*  (TODO: don't hardcode this here)  */
-	if (d->pic2->irr & ~d->pic2->ier)
-		d->pic1->irr |= 0x04;
-	else
-		d->pic1->irr &= ~0x04;
+  int orig_irr1 = d->pic1->irr;
+  int orig_irr2 = d->pic2->irr;
+
+  struct pic8259_data *pic_ptr = (line > 7 && d->pic2) ? d->pic2 : d->pic1;
+
+  if (assert_int) {
+    dev_8259_assert(pic_ptr, line & 7);
+  } else {
+    dev_8259_deassert(pic_ptr, line & 7);
+  }
 
 	/*  printf("ISA: irr=%02x%02x ier=%02x%02x\n",
 	    d->pic2->irr, d->pic1->irr, d->pic2->ier, d->pic1->ier);  */
 
 	new_isa_assert = d->pic1->irr & ~d->pic1->ier;
 
-	if (old_isa_assert == new_isa_assert)
-		return;
+  if (line == 13) {
+    fprintf(stderr, "isa_interrupt_common(13) old %02x%02x new %02x%02x assert %d ier %02x%02x\n", orig_irr1, orig_irr2, d->pic1->irr, d->pic2->irr, new_isa_assert, (~d->pic1->ier) & 0xff, (~d->pic2->ier) & 0xff);
+  }
 
-	if (!new_isa_assert) {
-		INTERRUPT_DEASSERT(d->irq);
-		return;
-	}
+	if (assert_int) {
+    for (x=0; x<16; x++) {
+      if (x == 2)
+        continue;
 
-	for (x=0; x<16; x++) {
-		if (x == 2)
-			continue;
+      if (x < 8 && (d->pic1->irr & ~d->pic1->ier & (1 << x)))
+        break;
 
-		if (x < 8 && (d->pic1->irr & ~d->pic1->ier & (1 << x)))
-			break;
+      if (x >= 8 && (d->pic2->irr & ~d->pic2->ier & (1 << (x&7))))
+        break;
+    }
 
-		if (x >= 8 && (d->pic2->irr & ~d->pic2->ier & (1 << (x&7))))
-			break;
-	}
-
-	*d->ptr_to_last_int = x;
-
-	INTERRUPT_ASSERT(d->irq);
+    if (x < 16) {
+      *d->ptr_to_last_int = x;
+    }
+  }
 }
 
 
@@ -98,17 +99,11 @@ void isa_interrupt_common(struct bus_isa_data *d, int old_isa_assert)
 void isa_interrupt_assert(struct interrupt *interrupt)
 {
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
-	int old_isa_assert, line = interrupt->line;
-	int mask = 1 << (line & 7);
+	int line = interrupt->line;
 
-	old_isa_assert = d->pic1->irr & ~d->pic1->ier;
+  fprintf(stderr, "ISA_INTERRUPT_ASSERT(%d)\n", line);
 
-	if (line < 8)
-		d->pic1->irr |= mask;
-	else if (d->pic2 != NULL)
-		d->pic2->irr |= mask;
-
-	isa_interrupt_common(d, old_isa_assert);
+	isa_interrupt_common(d, line, 1);
 }
 
 
@@ -120,24 +115,18 @@ void isa_interrupt_assert(struct interrupt *interrupt)
 void isa_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
-	int line = interrupt->line, mask = 1 << (line & 7);
-	int old_irr1 = d->pic1->irr, old_isa_assert;
+	int line = interrupt->line;
+  fprintf(stderr, "ISA_INTERRUPT_DEASSERT(%d)\n", line);
+	int old_irr1 = d->pic1->irr;
 
-	old_isa_assert = old_irr1 & ~d->pic1->ier;
-
-	if (line < 8)
-		d->pic1->irr &= ~mask;
-	else if (d->pic2 != NULL)
-		d->pic2->irr &= ~mask;
+	isa_interrupt_common(d, line, 0);
 
 	/*  If IRQ 0 has been cleared, then this is a timer interrupt.
 	    Let's ack it here:  */
 	if (old_irr1 & 1 && !(d->pic1->irr & 1) &&
 	    d->ptr_to_pending_timer_interrupts != NULL &&
-            (*d->ptr_to_pending_timer_interrupts) > 0)
-                (*d->ptr_to_pending_timer_interrupts) --;
-
-	isa_interrupt_common(d, old_isa_assert);
+      (*d->ptr_to_pending_timer_interrupts) > 0)
+    (*d->ptr_to_pending_timer_interrupts) --;
 }
 
 
@@ -234,6 +223,8 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 			    interrupt_base_path,(long long)(isa_portbase+0xa0));
 			d->pic2 = machine->isa_pic_data.pic2 = (struct pic8259_data *)
 			    device_add(machine, tmpstr);
+      d->pic2->chained_to = d->pic1;
+      d->pic2->chained_int_line = 2;
 		}
 	} else {
 		bus_isa_flags &= ~BUS_ISA_EXTERNAL_PIC;

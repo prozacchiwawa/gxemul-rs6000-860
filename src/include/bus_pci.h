@@ -161,5 +161,7 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 	struct memory *mem, int bus, int device, int function,
 	const char *name);
 
+void bus_pci_io_write(struct cpu *cpu, struct pci_data *pci_data, uint32_t real_addr, uint64_t data, int len);
+uint64_t bus_pci_io_read(struct cpu *cpu, struct pci_data *pci_data, uint32_t real_addr, int len);
 
 #endif	/*  BUS_PCI_H  */

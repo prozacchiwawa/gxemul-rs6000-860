@@ -48,6 +48,46 @@
 
 /*  #define DEV_8259_DEBUG  */
 
+static void dev_8259_recalc_interrupts(struct pic8259_data *d, int old_irr, int old_ier) {
+  uint8_t old_active = old_irr & ~old_ier;
+  uint8_t new_active = d->irr & ~d->ier;
+
+  if (new_active & ~old_active) {
+    if (d->chained_to) {
+      fprintf(stderr, "8259: chained assert irr %02x vs %02x ier %02x vs %02x\n", old_irr, d->irr, old_ier, d->ier);
+      dev_8259_assert(d->chained_to, d->chained_int_line);
+    } else {
+      fprintf(stderr, "8259: assert %s\n", d->irq.name);
+      INTERRUPT_ASSERT(d->irq);
+    }
+  } else if (old_active & ~new_active) {
+    if (d->chained_to) {
+      fprintf(stderr, "8259: chained deassert irr %02x vs %02x ier %02x vs %02x\n", old_irr, d->irr, old_ier, d->ier);
+      dev_8259_deassert(d->chained_to, d->chained_int_line);
+    } else {
+      fprintf(stderr, "8259: deassert %s\n", d->irq.name);
+      INTERRUPT_DEASSERT(d->irq);
+    }
+  }
+}
+
+void dev_8259_assert(struct pic8259_data *d, int line) {
+  int old_irr = d->irr;
+
+  d->irr |= 1 << line;
+
+  dev_8259_recalc_interrupts(d, old_irr, d->ier);
+}
+
+void dev_8259_deassert(struct pic8259_data *d, int line) {
+  int old_irr = d->irr;
+
+  d->irr &= ~(1 << line);
+
+  fprintf(stderr, "8259: deassert: d->irr %02x -> %02x\n", old_irr, d->irr);
+
+  dev_8259_recalc_interrupts(d, old_irr, d->ier);
+}
 
 DEVICE_ACCESS(8259)
 {
@@ -104,30 +144,20 @@ DEVICE_ACCESS(8259)
 				int old_irr = d->irr;
 				/*  End Of Interrupt  */
 				/*  TODO: in buffered mode, is this an EOI 0? */
-				d->irr &= ~d->isr;
+				// d->irr &= ~d->isr;
 				d->isr = 0;
 				/*  Recalculate interrupt assertions,
 				    if necessary:  */
-				if ((old_irr & ~d->ier) != (d->irr & ~d->ier)) {
-					if (d->irr & ~d->ier)
-						INTERRUPT_ASSERT(d->irq);
-					else
-						INTERRUPT_DEASSERT(d->irq);
-				}
+        dev_8259_recalc_interrupts(d, old_irr, d->ier);
 			} else if ((idata >= 0x21 && idata <= 0x27) ||
 			    (idata >= 0x60 && idata <= 0x67) ||
 			    (idata >= 0xe0 && idata <= 0xe7)) {
 				/*  Specific EOI  */
 				int old_irr = d->irr;
-				d->irr &= ~(1 << (idata & 7));
+        // EOI shouldn't change irr
+				// d->irr &= ~(1 << (idata & 7));
 				d->isr &= ~(1 << (idata & 7));
-				/*  Recalc. int assertions, if necessary:  */
-				if ((old_irr & ~d->ier) != (d->irr & ~d->ier)) {
-					if (d->irr & ~d->ier)
-						INTERRUPT_ASSERT(d->irq);
-					else
-						INTERRUPT_DEASSERT(d->irq);
-				}
+        dev_8259_recalc_interrupts(d, old_irr, d->ier);
 			} else if (idata == 0x68) {
 				/*  Set Special Mask Mode  */
 				/*  TODO  */
@@ -139,16 +169,12 @@ DEVICE_ACCESS(8259)
         fatal("[ 8259: command 2 at %08x ]\n", (unsigned int)cpu->pc);
 				int old_irr = d->irr;
         d->ier = 0xff;
-				d->irr &= ~d->isr;
+				// d->irr &= ~d->isr;
+        fprintf(stderr, "8259: command 2 d->irr %02x -> %02x\n", old_irr, d->irr);
 				d->isr = 0;
 				/*  Recalculate interrupt assertions,
 				    if necessary:  */
-				if ((old_irr & ~d->ier) != (d->irr & ~d->ier)) {
-					if (d->irr & ~d->ier)
-						INTERRUPT_ASSERT(d->irq);
-					else
-						INTERRUPT_DEASSERT(d->irq);
-				}
+        dev_8259_recalc_interrupts(d, old_irr, d->ier);
 			} else {
 				fatal("[ 8259: unimplemented command 0x%02x"
 				    " ]\n", (int)idata);
@@ -226,16 +252,11 @@ DEVICE_ACCESS(8259)
 		if (writeflag == MEM_WRITE) {
 			int old_ier = d->ier;
 			d->ier = idata;
-      fprintf(stderr, "[ 8259: write IER %08x ]\n", d->ier);
+      fprintf(stderr, "[ 8259: write IER %02x (irr %02x) ]\n", d->ier, d->irr);
 
 			/*  Recalculate interrupt assertions,
 			    if necessary:  */
-			if ((d->irr & ~old_ier) != (d->irr & ~d->ier)) {
-				if (d->irr & ~d->ier)
-					INTERRUPT_ASSERT(d->irq);
-				else
-					INTERRUPT_DEASSERT(d->irq);
-			}
+      dev_8259_recalc_interrupts(d, d->irr, old_ier);
 		} else {
 			odata = d->ier;
       fprintf(stderr, "[ 8259: read IER %08x ]\n", d->ier);

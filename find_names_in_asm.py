@@ -12,34 +12,35 @@ def find_names_in_asm(lines):
     result = {}
     for lns in lines:
         l = lns.strip()
-        addr_split = l.split(' ')
+        addr_split = l.split('\t')
         if len(addr_split) < 2:
             continue
 
         code_split = addr_split[1].split('\t')
-        if len(code_split) < 2 or (not addr_split[0].endswith(':')):
+        if not addr_split[0].endswith(':'):
             continue
 
-        addr = int(addr_split[0][:8], 16)
+        address_text = addr_split[0].replace(':','')
+        addr = int(address_text, 16)
         if first_addr is None:
             first_addr = addr
-        data = unhexlify(code_split[0])
+
+        if 'out of bounds' in code_split[0]:
+            continue
+
+        if addr - first_addr != len(data_at):
+            extend_by = (addr - first_addr) - len(data_at)
+            data_at.extend(b'\0' * extend_by)
+        data = unhexlify(code_split[0].replace(' ',''))
         data_at.extend(data)
 
     i = 0
     data = data_at
+    prev = None
     while i < len(data):
         taken_data = data[i:i+4]
-        if taken_data[0] == 0 and taken_data[1] < 40:
-            ending_null_at = i + 2 + taken_data[1]
-            if ending_null_at >= len(data):
-                i += 4
-                continue
-
-            if data[ending_null_at] != 0:
-                i += 4
-                continue
-
+        if taken_data[0] == 0 and taken_data[1] >= 4 and taken_data[1] < 40:
+            ending_null_at = i + taken_data[1] + 2
             letters_between = data[i+2:ending_null_at]
             if len(letters_between) == 0:
                 i += 4
@@ -50,8 +51,21 @@ def find_names_in_asm(lines):
                 continue
 
             name = bytes(letters_between).decode('utf8')
-            # Just list the address of the name block.
-            result[first_addr + i] = name
+            if prev is not None:
+                result[prev] = name
+            else:
+                # Just list the address of the name block.
+                result[first_addr + i] = name
+
+            i = ending_null_at
+
+            while i % 4 != 0:
+                i += 1
+
+            while i < len(data) and data[i] == 0:
+                i += 4
+
+            prev = i
 
         i += 4
 

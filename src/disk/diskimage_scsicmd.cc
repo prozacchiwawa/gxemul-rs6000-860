@@ -746,8 +746,8 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 		ofs *= d->logical_block_size;
 
 		if (xferp->data_out_offset != size) {
-			debug(", data_out == NULL, wanting %i bytes, \n\n",
-			    (int)size);
+			debug(", data_out == NULL, wanting %i bytes (lb=%d), \n\n",
+            (int)size, d->logical_block_size);
 			xferp->data_out_len = size;
 			return 2;
 		}

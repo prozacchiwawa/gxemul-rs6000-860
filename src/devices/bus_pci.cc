@@ -87,7 +87,6 @@ void bus_pci_decompose_1(uint32_t t, int *bus, int *dev, int *func, int *reg)
 		    t & 0xff);
 }
 
-
 /*
  *  bus_pci_data_access():
  *
@@ -435,6 +434,7 @@ PCIINIT(igsfb)
 #define PCI_PRODUCT_S3_VIRGE		0x5631
 #define	PCI_PRODUCT_S3_VIRGE_DX		0x8a01
 #define PCI_PRODUCT_S3_AURORA           0x8812
+#define PCI_PRODUCT_S3_928              0x88b0
 
 PCIINIT(s3_virge)
 {
@@ -473,6 +473,7 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
 PCIINIT(lsi53c895a)
 {
+  uint64_t port, memaddr;
   char tmpstr[1000];
   char irqstr[100];
   int irq = 13;
@@ -494,8 +495,13 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
+  // Was 0xa0000000 and 0x80008000
+	// allocate_device_space(pd, 0x100, 0x800, &port, &memaddr);
+  // fprintf(stderr, "lsi: got port %08x mem %08x\n", (unsigned int)port, (unsigned int)memaddr);
+
   snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
            0xa0000000, irqstr);
+
   device_add(machine, tmpstr);
 }
 

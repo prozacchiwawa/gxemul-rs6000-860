@@ -301,3 +301,24 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	return 0;
 }
 
+void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size) {
+  const char *rw = write ? "write" : "read";
+
+  int epld_port = write && (addr & 0xfffffff0) == 0x80000090;
+  int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);
+  int write_residual = write && addr >= 0x00102C80 && addr < 0x0010968C;
+
+  if (epld_port) {
+    int write_data = *((uint32_t *)data);
+    fprintf(stderr, "%s %08x: port 92\n", rw, write_data);
+    cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
+    ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+  } else if (io_region_arc || write_residual) {
+    fprintf(stderr, "%08x: %s %08x: ", (uint32_t)cpu->pc, rw, (uint32_t)addr);
+    const uint8_t *ptr = (uint8_t *)data;
+    for (int i = 0; i < size; i++) {
+      fprintf(stderr, "%02x", ptr[i]);
+    }
+    fprintf(stderr, "\n");
+  }
+}

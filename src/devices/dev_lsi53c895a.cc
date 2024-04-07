@@ -3119,19 +3119,6 @@ void lsi53c8xx_handle_legacy_cmdline(DeviceState *lsi_dev)
 }
 */
 
-DEVICE_TICK(lsi53c895a)
-{
-    struct lsi53c895a_data *d = (struct lsi53c895a_data *) extra;
-
-    if (d->queue.next != &d->queue) {
-        struct lsi_request *request = get_pending_req(d);
-        if (request) {
-            fprintf(stderr, "lsi: waiting command: tag %08x dma_buf %p dma_len %08x pending %d\n", request->tag, request->dma_buf, request->dma_len, request->pending);
-            ABORT();
-        }
-    }
-}
-
 DEVICE_ACCESS(lsi53c895a_io)
 {
   assert(cpu);
@@ -3192,8 +3179,6 @@ DEVINIT(lsi53c895a)
     QTAILQ_INIT(&d->queue);
     QTAILQ_INIT(&d->bus.queue);
 
-    fprintf(stderr, "Not registering lsi io at %08x\n", devinit->addr);
-
     memory_device_register(devinit->machine->memory, "lsi53c895a (IO)",
                            devinit->addr, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
@@ -3201,8 +3186,6 @@ DEVINIT(lsi53c895a)
     memory_device_register(devinit->machine->memory, "lsi53c895a (ALT)",
                            0x80008000, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
-
-    machine_add_tickfunction(devinit->machine, dev_lsi53c895a_tick, d, LSI_TICK_SHIFT);
 
     return 1;
 }

@@ -63,7 +63,6 @@
 
 extern int verbose;
 
-
 #ifdef UNSTABLE_DEVEL
 #define debug fatal
 #endif
@@ -184,7 +183,6 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
         pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
         dev->name, pci_data->cur_reg, len, (long)*data);
 }
-
 
 /*
  *  bus_pci_setaddr():
@@ -495,12 +493,10 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  // Was 0xa0000000 and 0x80008000
-	// allocate_device_space(pd, 0x100, 0x800, &port, &memaddr);
-  // fprintf(stderr, "lsi: got port %08x mem %08x\n", (unsigned int)port, (unsigned int)memaddr);
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
+           (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000), irqstr);
 
-  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
-           0xa0000000, irqstr);
+  fprintf(stderr, "init string for lsi53c810: %s\n", tmpstr);
 
   device_add(machine, tmpstr);
 }

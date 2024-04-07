@@ -374,6 +374,7 @@ void *device_add(struct machine *machine, const char *name_and_params)
 		}
 	}
 
+  fprintf(stderr, "%s irq %s addr %llx\n", name_and_params, devinit.interrupt_path, devinit.addr);
 
 	/*
 	 *  Call the init function for this device:

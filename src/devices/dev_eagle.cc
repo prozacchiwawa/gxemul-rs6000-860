@@ -96,14 +96,20 @@ DEVICE_ACCESS(eagle_io_pass)
  *      writeflag       set to MEM_READ or MEM_WRITE
  *      misc_flags      CACHE_{NONE,DATA,INSTRUCTION} | other flags
  */
-		// Endian
 		fprintf(stderr, "[ eagle: PCI io passthrough write %08x = %08x ]\n", real_addr, idata);
-		// bus_pci_io_write(cpu, d->pci_data, real_addr, idata, len);
+    data_buf[0] = idata;
+    data_buf[1] = idata >> 8;
+    data_buf[2] = idata >> 16;
+    data_buf[3] = idata >> 24;
+    cpu->memory_rw(cpu, cpu->mem, BUS_PCI_IO_NATIVE_SPACE + real_addr, data_buf, len, MEM_WRITE, PHYSICAL);
 	} else {
-		// odata = bus_pci_io_read(cpu, d->pci_data, real_addr, len);
+    cpu->memory_rw(cpu, cpu->mem, BUS_PCI_IO_NATIVE_SPACE + real_addr, data_buf, len, MEM_READ, PHYSICAL);
+    odata = data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) | (data_buf[3] << 24);
 		fprintf(stderr, "[ eagle: PCI io passthrough read %08x -> %08x ]\n", real_addr, odata);
 		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 	}
+
+  return 1;
 }
 
 DEVICE_ACCESS(eagle_800)
@@ -540,7 +546,7 @@ DEVINIT(eagle)
 	/*  TODO: Make these work like the BE web page stated...  */
 	pci_io_offset  = 0x80000000ULL;
 	pci_mem_offset = 0xc0000000ULL;
-	pci_portbase   = 0x00000000ULL;
+	pci_portbase   = 0x81000000ULL;
 	pci_membase    = 0x00000000ULL;
 	isa_portbase   = 0x80000000ULL;
 	isa_membase    = 0xc0000000ULL;
@@ -626,12 +632,10 @@ DEVINIT(eagle)
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,
         DM_DEFAULT, NULL);
 
-    /*
     memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
         isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
         DM_DEFAULT, NULL);
-    */
-    
+
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 
   switch (devinit->machine->machine_type) {

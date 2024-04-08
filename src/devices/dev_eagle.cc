@@ -84,6 +84,8 @@ DEVICE_ACCESS(eagle_io_pass)
 	uint8_t data_buf[4];
 
 	uint32_t real_addr = relative_addr + 0x1000000;
+  uint64_t target_addr = bus_pci_get_io_target(cpu, d->pci_data, real_addr, len);
+
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
 /*
@@ -101,9 +103,11 @@ DEVICE_ACCESS(eagle_io_pass)
     data_buf[1] = idata >> 8;
     data_buf[2] = idata >> 16;
     data_buf[3] = idata >> 24;
-    cpu->memory_rw(cpu, cpu->mem, BUS_PCI_IO_NATIVE_SPACE + real_addr, data_buf, len, MEM_WRITE, PHYSICAL);
+    if (target_addr) {
+      cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL);
+    }
 	} else {
-    cpu->memory_rw(cpu, cpu->mem, BUS_PCI_IO_NATIVE_SPACE + real_addr, data_buf, len, MEM_READ, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL);
     odata = data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) | (data_buf[3] << 24);
 		fprintf(stderr, "[ eagle: PCI io passthrough read %08x -> %08x ]\n", real_addr, odata);
 		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);

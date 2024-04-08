@@ -67,6 +67,14 @@ extern int verbose;
 #define debug fatal
 #endif
 
+struct pci_space_association {
+  int io_space;
+  uint32_t id;
+  uint64_t allocated_space;
+};
+
+int pci_io_target = 0;
+struct pci_space_association pci_io_allocation[0x100];
 
 /*
  *  bus_pci_decompose_1():
@@ -118,7 +126,7 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 				*data = 0;
 		} else {
 			fatal("[ bus_pci_data_access(): write to non-existant"
-			    " device? ]\n");
+            " device? ]\n");
 		}
 		return;
 	}
@@ -182,6 +190,47 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
         "%i, function %i (%s) register 0x%02x: (len=%i) 0x%08lx ]\n",
         pci_data->cur_bus, pci_data->cur_device, pci_data->cur_func,
         dev->name, pci_data->cur_reg, len, (long)*data);
+}
+
+static uint32_t bus_pci_read_cfg(struct pci_device *dev, int offset) {
+  return dev->cfg_mem[offset] | (dev->cfg_mem[offset + 1] << 8) | (dev->cfg_mem[offset + 2] << 16) | (dev->cfg_mem[offset + 3] << 24);
+}
+
+uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, uint32_t target, int len) {
+	struct pci_device *dev;
+	int i;
+
+	/*  Scan through the list of pci_device entries.  */
+	dev = pci_data->first_device;
+	while (dev != NULL) {
+    // Check bars for a match to target addr.
+    for (i = PCI_MAPREG_START; i < PCI_MAPREG_END; i += 4) {
+      uint32_t id = bus_pci_read_cfg(dev, 0);
+      uint32_t bar = bus_pci_read_cfg(dev, i);
+      if (!bar) {
+        continue;
+      }
+
+      uint32_t bar_addr = PCI_MAPREG_IO_ADDR(bar);
+      uint32_t bar_len = PCI_MAPREG_IO_SIZE(bar);
+
+      fprintf(stderr, "bus_pci_get_io_target: id %08x want %08x bar %08x addr %08x len %08x\n", id, target, bar, bar_addr, bar_len);
+      if (target >= bar_addr && target < bar_addr + bar_len) {
+        // Match: check our recorded mappings.  Exit one way or another so we
+        // can reuse i.
+        for (i = 0; i < pci_io_target; i++) {
+          if (id == pci_io_allocation[i].id) {
+            fprintf(stderr, "bus_pci_get_io_target: translation = %llx\n", pci_io_allocation[i].allocated_space);
+            return pci_io_allocation[i].allocated_space + (target - bar_addr);
+          }
+        }
+        break;
+      }
+    }
+		dev = dev->next;
+	}
+
+  return 0;
 }
 
 /*
@@ -450,18 +499,20 @@ PCIINIT(s3_virge)
 #define PCI_VENDOR_NCR 0x1000
 #define PCI_PRODUCT_NCR_53C810 0x0001
 
-size_t lsi53c895a_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
-  return 0;
-}
-
 int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  uint32_t bar_loc;
   switch (reg) {
   case 0x04: // Status, command
   case 0x0c: // Header type, Latency Timer, Cache Line Size
+    PCI_SET_DATA(reg, value);
+    return 1;
   case 0x10:
-    PCI_SET_DATA(reg, (value & ~0x3ff) | 1);
+    bar_loc = (value + 0xff) & ~0xff;
+    fprintf(stderr, "lsi: set BAR0 %08x\n", bar_loc);
+    PCI_SET_DATA(reg, bar_loc | 1);
     return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
+    fprintf(stderr, "lsi: set INT# %08x\n", value);
     PCI_SET_DATA(reg, value);
     return 1;
   default:
@@ -486,6 +537,8 @@ PCIINIT(lsi53c895a)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0) | 0x26);
 
+  PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
+
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
@@ -493,10 +546,13 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
-           (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000), irqstr);
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 1;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
+  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
 
-  fprintf(stderr, "init string for lsi53c810: %s\n", tmpstr);
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
+           assoc->allocated_space, irqstr);
 
   device_add(machine, tmpstr);
 }

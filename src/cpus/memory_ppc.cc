@@ -28,6 +28,8 @@
  *  Included from cpu_ppc.c.
  */
 
+#define STWBRX_CACHE_SIZE 100000
+uint32_t **stwbrx_cache[1024];
 
 /*
  *  ppc_bat():
@@ -101,11 +103,22 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
 static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
 	uint32_t *lowp, uint32_t cmp)
 {
+  int swizzle, offset;
+  cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
+
 	unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
 	int i;
 
 	for (i=0; i<8; i++) {
-		uint32_t *ep = (uint32_t *) (d + (i << 3)), upper;
+    unsigned char pte[8];
+    fprintf(stderr, "load PTE %d from PTEG slice %08x:", i, (uint32_t)pteg_select);
+    for (int bi = 0; bi < 8; bi++) {
+      pte[bi] = d[bi ^ swizzle];
+      fprintf(stderr, " %02x", pte[bi]);
+    }
+    fprintf(stderr, "\n");
+
+		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;
 		upper = BE32_TO_HOST(upper);
 
@@ -301,24 +314,91 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	return 0;
 }
 
-void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size) {
+void stwbrx_remember(uint32_t addr) {
+  int pl1 = (addr >> 22) & 1023;
+  if (!stwbrx_cache[pl1]) {
+    stwbrx_cache[pl1] = (uint32_t **)calloc(sizeof(uint32_t*), 1024);
+  }
+  int pl2 = (addr >> 12) & 1023;
+  if (!stwbrx_cache[pl1][pl2]) {
+    stwbrx_cache[pl1][pl2] = (uint32_t *)calloc(sizeof(uint32_t), 1024);
+  }
+  int word = (addr & 4095) / 8;
+  int bit = ((addr & 4095) >> 3) % 32;
+  stwbrx_cache[pl1][pl2][word] |= 1 << bit;
+}
+
+void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
   const char *rw = write ? "write" : "read";
 
   int epld_port = write && (addr & 0xfffffff0) == 0x80000090;
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);
-  int write_residual = write && addr >= 0x00102C80 && addr < 0x0010968C;
+
+  if (write) {
+    if (!cpu->cd.ppc.bytelane_swap_latch) {
+      stwbrx_remember(addr);
+    }
+  }
 
   if (epld_port) {
     int write_data = *((uint32_t *)data);
     fprintf(stderr, "%s %08x: port 92\n", rw, write_data);
     cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-  } else if (io_region_arc || write_residual) {
-    fprintf(stderr, "%08x: %s %08x: ", (uint32_t)cpu->pc, rw, (uint32_t)addr);
+  } else if (io_region_arc || write_rev) {
+    /*
+    fprintf(stderr, "R%d %08x: %s %08x: ", write_rev, (uint32_t)cpu->pc, rw, (uint32_t)addr);
     const uint8_t *ptr = (uint8_t *)data;
     for (int i = 0; i < size; i++) {
       fprintf(stderr, "%02x", ptr[i]);
     }
     fprintf(stderr, "\n");
+    */
+  }
+}
+
+void stwbrx_cache_spill(struct cpu *cpu) {
+  uint8_t data[8];
+  uint8_t swapped[8];
+  fprintf(stderr, "%08x CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
+  for (uint32_t pl1 = 0; pl1 < 1024; pl1++) {
+    auto lv1 = stwbrx_cache[pl1];
+    if (lv1) {
+      for (uint32_t pl2 = 0; pl2 < 1024; pl2++) {
+        auto lv2 = lv1[pl2];
+        if (lv2) {
+          for (uint32_t i = 0; i < 4096 / 8; i++) {
+            for (uint32_t j = 1; j; j <<= 1) {
+              if (lv2[i] & j) {
+                // Load the word from memory.
+                uint32_t addr = (pl1 << 22) | (pl2 << 12) | i << 3;
+                if (addr < 0x80000000) {
+                  if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data), MEM_READ, CACHE_DATA)) {
+                    // Swap
+                    for (int k = 0; k < sizeof(swapped); k++) {
+                      swapped[7 - k] = data[k];
+                    }
+
+                    // Store back.
+                    #if 0
+                    fprintf(stderr, "%08x:", addr);
+                    for (int b = 0; b < sizeof(swapped); b++) {
+                      fprintf(stderr, " %02x", swapped[b]);
+                    }
+                    fprintf(stderr, "\n");
+                    #endif
+                    cpu->memory_rw(cpu, cpu->mem, addr, swapped, sizeof(swapped), MEM_WRITE, CACHE_DATA);
+                  }
+                }
+              }
+            }
+          }
+          free(lv2);
+          lv1[pl2] = nullptr;
+        }
+      }
+      free(lv1);
+      stwbrx_cache[pl1] = nullptr;
+    }
   }
 }

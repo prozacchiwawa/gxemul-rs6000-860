@@ -59,7 +59,6 @@ void ppc32_pc_to_pointers(struct cpu *);
 void ppc_irq_interrupt_assert(struct interrupt *interrupt);
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt);
 
-
 /*
  *  ppc_cpu_new():
  *
@@ -368,7 +367,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
     cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | (cpu->cd.ppc.msr & 0x3c00000) | 0x10000;
   }
 
-	if (!quiet_mode)
+	if (!quiet_mode && exception_nr != 5)
 		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" ]\n",
 		    exception_nr, cpu->pc);
 
@@ -717,7 +716,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		debug("%016" PRIx64, (uint64_t) dumpaddr);
 
 	/*  NOTE: Fixed to big-endian.  */
-  if (cpu->cd.ppc.bytelane_swap[0]) {
+  if (cpu->cd.ppc.bytelane_swap[1]) {
     iword = (instr[3] << 24) + (instr[2] << 16) + (instr[1] << 8)
 	    + instr[0];
   } else {

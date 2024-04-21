@@ -101,7 +101,7 @@ void isa_interrupt_assert(struct interrupt *interrupt)
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
 	int line = interrupt->line;
 
-  fprintf(stderr, "ISA_INTERRUPT_ASSERT(%d)\n", line);
+	if (line) { fprintf(stderr, "ISA_INTERRUPT_ASSERT(%d)\n", line); }
 
 	isa_interrupt_common(d, line, 1);
 }

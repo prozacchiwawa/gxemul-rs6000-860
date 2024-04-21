@@ -37,7 +37,7 @@
  *	     (or, for Indexed load/stores: pointer to index register)
  */
 
-extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size);
+extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int swizzle);
 
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
@@ -69,7 +69,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
   swizzle ^= 7;
 #endif
 #endif
-
 	/*  Synchronize the PC:  */
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
 	    / sizeof(struct ppc_instr_call);
@@ -122,7 +121,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    (data[6^swizzle] << 8) + data[7^swizzle];
 #endif
 
-  access_log(cpu, 0, addr^offset, data, sizeof(data));
+  access_log(cpu, 0, addr^offset, data, sizeof(data), swizzle);
 #else	/*  store:  */
 
 #ifdef LS_B
@@ -149,7 +148,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     data[6^swizzle] = x >> 8;
     data[7^swizzle] = x; }
 #endif
-  access_log(cpu, 1, addr^offset, data, sizeof(data));
+  access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
 
 	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
 	    MEM_WRITE, CACHE_DATA)) {
@@ -249,6 +248,8 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
           ((page[addr^offset^swizzle] << 8) + page[(addr+1)^offset^swizzle]);
 #endif	/*  LS_H  */
 #ifdef LS_W
+    // In the case where an stwbrx was previously written we want to
+    // ensure that we load only in BE as would have been intended.
 		reg(ic->arg[0]) =
 #ifndef LS_ZERO
 		    (int32_t)
@@ -268,7 +269,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       (page[(addr+6)^offset^swizzle] << 8) + page[(addr+7)^offset^swizzle];
 #endif	/*  LS_D  */
 
-    access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE);
+    access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #else	/*  !LS_LOAD  */
 
 		/*  Store:  */
@@ -297,7 +298,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       page[(addr+7)^offset^swizzle] = x; }
 #endif
 
-    access_log(cpu, 1, full_addr, (void *)ic->arg[0], LS_SIZE);
+    access_log(cpu, 1, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #endif	/*  !LS_LOAD  */
 	}
 

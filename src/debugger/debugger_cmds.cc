@@ -1190,10 +1190,6 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 	ctrl_c = 0;
 
   int offset = 0;
-  if (c->cd.ppc.msr & PPC_MSR_LE) {
-    offset ^= 1;
-  }
-
 	while (addr < addr_end) {
 		unsigned int i, len;
 		int failed = 0;
@@ -1367,6 +1363,54 @@ static void debugger_cmd_version(struct machine *m, char *cmd_line)
 	printf("%s, %s\n", VERSION, COMPILE_DATE);
 }
 
+static void debugger_cmd_v2p(struct machine *m, char *cmd_line)
+{
+	uint64_t addr, result_addr;
+	struct cpu *c;
+	char *p = NULL;
+	int r;
+
+	if (cmd_line[0] != '\0') {
+		uint64_t tmp;
+		char *tmps;
+
+		CHECK_ALLOCATION(tmps = strdup(cmd_line));
+
+		/*  addr:  */
+		p = strchr(tmps, ' ');
+		if (p != NULL)
+			*p = '\0';
+		r = debugger_parse_expression(m, tmps, 0, &tmp);
+		free(tmps);
+
+		if (r == PARSE_NOMATCH || r == PARSE_MULTIPLE) {
+			printf("Unparsable address: %s\n", cmd_line);
+			return;
+		} else {
+			addr = tmp;
+		}
+
+		p = strchr(cmd_line, ' ');
+	} else {
+    return;
+  }
+
+	if (m->cpus == NULL) {
+		printf("No cpus (?)\n");
+		return;
+	}
+	c = m->cpus[m->bootstrap_cpu];
+	if (c == NULL) {
+		printf("m->cpus[m->bootstrap_cpu] = NULL\n");
+		return;
+	}
+
+  if (ppc_translate_v2p(c, addr, &result_addr, FLAG_INSTR)) {
+    printf("%08x\n", (uint32_t)result_addr);
+  } else {
+    printf("no translation\n");
+  }
+}
 
 /****************************************************************************/
 
@@ -1460,6 +1504,9 @@ static struct cmd cmds[] = {
 
   { "findname", "[addr [endaddr]]", 0, debugger_cmd_findname,
     "if the function has a named tail (PowerPC), display it" },
+
+  { "vp", "", 0, debugger_cmd_v2p,
+    "print vp translation" },
 
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },

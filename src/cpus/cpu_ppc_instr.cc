@@ -36,6 +36,7 @@
 
 #include "float_emul.h"
 
+void stwbrx_cache_spill(struct cpu *cpu);
 
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
@@ -1745,7 +1746,15 @@ X(mftbu) {
  */
 X(mtspr) {
 	/*  TODO: Check permission  */
-	reg(ic->arg[1]) = reg(ic->arg[0]);
+  uint64_t *spr0 = &cpu->cd.ppc.spr[0];
+  int spr = ((uint64_t *)ic->arg[1]) - spr0;
+  if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
+    int sprbank = (spr - SPR_IBAT0U) / 8;
+    int regnr = ((spr - SPR_IBAT0U) / 2) & 3;
+    int lower = (spr - SPR_IBAT0U) & 1;
+    fprintf(stderr, "%08x: %cBAT%c%d = %08x\n", (uint32_t)cpu->pc, sprbank ? 'D' : 'I', lower ? 'L' : 'U', regnr, reg(ic->arg[0]));
+  }
+  reg(ic->arg[1]) = reg(ic->arg[0]);
 }
 X(mtspr_sprg2) {
 	if (cpu->cd.ppc.bits == 32) {
@@ -2750,7 +2759,6 @@ X(to_be_translated)
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
 
   int swizzle = 0, offset = 0;
-
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
 
 	/*  Figure out the (virtual) address of the instruction:  */
@@ -2804,10 +2812,11 @@ X(to_be_translated)
     }
 	}
 
-  if ((iword == 0x38010138 || iword == 0x09000048) && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
+  if ((iword == 0x38010138) && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
     fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
     cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
     cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
+    stwbrx_cache_spill(cpu);
   }
 
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD

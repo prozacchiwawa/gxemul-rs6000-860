@@ -155,7 +155,7 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 		    pci_data->cur_reg >= PCI_MAPREG_START &&
 		    pci_data->cur_reg <= PCI_MAPREG_END - 4) {
 			pci_data->last_was_write_ffffffff = 1;
-			return;
+			// return;
 		}
 
 		if (dev->cfg_reg_write == NULL ||
@@ -537,13 +537,18 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, value);
     return 1;
   case 0x10:
-    bar_loc = (value + 0xff) & ~0xff;
+    bar_loc = value & ~0xff;
     fprintf(stderr, "lsi: set BAR0 %08x\n", bar_loc);
     PCI_SET_DATA(reg, bar_loc | 1);
     return 1;
+  case 0x14:
+    bar_loc = value & ~0xfff;
+    fprintf(stderr, "lsi: set BAR1 %08x\n", bar_loc);
+    PCI_SET_DATA(reg, bar_loc | 2);
+    return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
     fprintf(stderr, "lsi: set INT# %08x\n", value);
-    PCI_SET_DATA(reg, value);
+    // PCI_SET_DATA(reg, (value);
     return 1;
   default:
     return 0;
@@ -568,6 +573,7 @@ PCIINIT(lsi53c895a)
       0) | 0x26);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
+  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x80008002);
 
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 

@@ -111,12 +111,9 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
 
 	for (i=0; i<8; i++) {
     unsigned char pte[8];
-    fprintf(stderr, "load PTE %d from PTEG slice %08x:", i, (uint32_t)pteg_select);
     for (int bi = 0; bi < 8; bi++) {
       pte[bi] = d[bi ^ swizzle];
-      fprintf(stderr, " %02x", pte[bi]);
     }
-    fprintf(stderr, "\n");
 
 		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;

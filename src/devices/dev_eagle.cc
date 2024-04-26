@@ -76,14 +76,9 @@ DEVICE_ACCESS(eagle)
 	return 1;
 }
 
-DEVICE_ACCESS(eagle_io_pass)
-{
-	struct eagle_data *d = (struct eagle_data *) extra;
+int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space, uint32_t real_addr, uint8_t *data, int len) {
 	uint64_t idata = 0, odata = 0;
-	int bus, dev, func, reg;
 	uint8_t data_buf[4];
-
-	uint32_t real_addr = relative_addr + 0x1000000;
   uint64_t target_addr = bus_pci_get_io_target(cpu, d->pci_data, true, real_addr, len);
 
 	if (writeflag == MEM_WRITE) {
@@ -114,6 +109,14 @@ DEVICE_ACCESS(eagle_io_pass)
 	}
 
   return 1;
+}
+
+DEVICE_ACCESS(eagle_io_pass)
+{
+	struct eagle_data *d = (struct eagle_data *) extra;
+
+	uint32_t real_addr = relative_addr + 0x1000000;
+  return io_pass(cpu, d, writeflag, true, real_addr, data, len);
 }
 
 DEVICE_ACCESS(eagle_800)
@@ -637,8 +640,8 @@ DEVINIT(eagle)
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
-        isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
-        DM_DEFAULT, NULL);
+                           isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+                           DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 

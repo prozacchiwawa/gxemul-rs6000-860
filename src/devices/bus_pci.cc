@@ -491,7 +491,7 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
   case 0x10:
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    PCI_SET_DATA(reg, value);
+    PCI_SET_DATA(reg, value & ~0xffffff);
     return 1;
 
   case 0x30:
@@ -516,11 +516,6 @@ PCIINIT(s3_virge)
   PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
 
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
-
-  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
-  assoc->io_space = 1;
-  assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
-  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 
 	dev_vga_init(machine, mem, 0xc4000000,
 	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);

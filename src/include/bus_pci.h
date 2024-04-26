@@ -163,6 +163,6 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 
 /*  Get the target address for a device mapped by IO BAR, allowing it to be matched
     dynamically. */
-uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, uint32_t target, int len);
+uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool io_space, uint32_t target, int len);
 
 #endif	/*  BUS_PCI_H  */

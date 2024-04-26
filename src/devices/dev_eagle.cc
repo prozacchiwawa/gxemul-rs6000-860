@@ -84,7 +84,7 @@ DEVICE_ACCESS(eagle_io_pass)
 	uint8_t data_buf[4];
 
 	uint32_t real_addr = relative_addr + 0x1000000;
-  uint64_t target_addr = bus_pci_get_io_target(cpu, d->pci_data, real_addr, len);
+  uint64_t target_addr = bus_pci_get_io_target(cpu, d->pci_data, true, real_addr, len);
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);

@@ -68,7 +68,7 @@ extern int verbose;
 #endif
 
 struct pci_space_association {
-  int io_space;
+  bool io_space;
   uint32_t id;
   uint64_t allocated_space;
 };
@@ -196,7 +196,7 @@ static uint32_t bus_pci_read_cfg(struct pci_device *dev, int offset) {
   return dev->cfg_mem[offset] | (dev->cfg_mem[offset + 1] << 8) | (dev->cfg_mem[offset + 2] << 16) | (dev->cfg_mem[offset + 3] << 24);
 }
 
-uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, uint32_t target, int len) {
+uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool io, uint32_t target, int len) {
 	struct pci_device *dev;
 	int i;
 
@@ -219,7 +219,7 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, uint3
         // Match: check our recorded mappings.  Exit one way or another so we
         // can reuse i.
         for (i = 0; i < pci_io_target; i++) {
-          if (id == pci_io_allocation[i].id) {
+          if (id == pci_io_allocation[i].id && pci_io_allocation[i].io_space == io) {
             fprintf(stderr, "bus_pci_get_io_target: translation = %llx\n", pci_io_allocation[i].allocated_space);
             return pci_io_allocation[i].allocated_space + (target - bar_addr);
           }

@@ -106,14 +106,16 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
 
-	unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
-	int i;
+  unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
+  int i;
 
-	for (i=0; i<8; i++) {
-    unsigned char pte[8];
-    for (int bi = 0; bi < 8; bi++) {
-      pte[bi] = d[bi ^ swizzle];
-    }
+  unsigned char pte[64];
+
+  for (int bi = 0; bi < 64; bi++) {
+    pte[bi] = d[bi ^ swizzle];
+  }
+
+  for (i=0; i<8; i++) {
 
 		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;

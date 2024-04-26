@@ -518,7 +518,7 @@ PCIINIT(s3_virge)
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
-  assoc->io_space = 1;
+  assoc->io_space = 0;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 

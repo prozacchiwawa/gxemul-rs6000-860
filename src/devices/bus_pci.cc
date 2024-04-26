@@ -517,7 +517,12 @@ PCIINIT(s3_virge)
 
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
 
-	dev_vga_init(machine, mem, 0xc4000000,
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 1;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+
+	dev_vga_init(machine, mem, assoc->allocated_space,
 	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 

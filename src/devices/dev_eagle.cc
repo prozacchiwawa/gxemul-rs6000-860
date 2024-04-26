@@ -119,6 +119,14 @@ DEVICE_ACCESS(eagle_io_pass)
   return io_pass(cpu, d, writeflag, true, real_addr, data, len);
 }
 
+DEVICE_ACCESS(eagle_mem_pass)
+{
+	struct eagle_data *d = (struct eagle_data *) extra;
+
+	uint32_t real_addr = relative_addr;
+  return io_pass(cpu, d, writeflag, false, real_addr, data, len);
+}
+
 DEVICE_ACCESS(eagle_800)
 {
     struct eagle_data *d = (struct eagle_data *) extra;
@@ -641,6 +649,10 @@ DEVINIT(eagle)
 
     memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
                            isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+                           DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
+                           0xc0000000, 0x3ff00000, dev_eagle_mem_pass_access, d,
                            DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);

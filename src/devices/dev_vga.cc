@@ -1742,12 +1742,12 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
                          dev_vga_graphics_access, d, DM_DEFAULT |
                          DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
 
-	memory_device_register(mem, "vga_gfx", 0xc0000000, 0xc0000,
-                         dev_vga_graphics_access, d, DM_DEFAULT |
-                         DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
+	// memory_device_register(mem, "vga_gfx", 0xc0000000, 0xc0000,
+  //                        dev_vga_graphics_access, d, DM_DEFAULT |
+  //                        DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
 
-//  memory_device_register(mem, "vga_rom", 0xc00c0000,
-//      65536, dev_vga_option_rom_access, d, DM_DEFAULT, NULL);
+  // memory_device_register(mem, "vga_rom", 0xc00c0000,
+  //     65536, dev_vga_option_rom_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_ctrl", control_base,
 	    32, dev_vga_ctrl_access, d, DM_DEFAULT, NULL);

@@ -158,7 +158,7 @@ X(jsr_0)
  */
 X(jsr_0_trace)
 {
-	cpu_functioncall_trace_return(cpu);
+	cpu_functioncall_trace_return(cpu, nullptr);
 	instr(jsr_0)(cpu, ic);
 }
 

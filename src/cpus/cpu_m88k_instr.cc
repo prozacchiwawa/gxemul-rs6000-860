@@ -336,7 +336,7 @@ X(jmp_n)
 X(jmp_trace)
 {
 	cpu->pc = reg(ic->arg[2]) & ~3;
-	cpu_functioncall_trace_return(cpu);
+	cpu_functioncall_trace_return(cpu, nullptr);
 	quick_pc_to_pointers(cpu);
 }
 X(jmp_n_trace)
@@ -349,7 +349,7 @@ X(jmp_n_trace)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		cpu_functioncall_trace_return(cpu);
+		cpu_functioncall_trace_return(cpu, nullptr);
 		quick_pc_to_pointers(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;

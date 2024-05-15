@@ -286,8 +286,14 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
  *  TODO: Print return value? This could be implemented similar to the
  *  cpu->functioncall_trace function call above.
  */
-void cpu_functioncall_trace_return(struct cpu *cpu)
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *return_reg)
 {
+	if (return_reg) {
+		for (int i=0; i<cpu->trace_tree_depth; i++)
+			fatal("  ");
+		fatal("<%08x return %08x>\n", (uint32_t)cpu->pc, (uint32_t)*return_reg);
+	}
+
 	cpu->trace_tree_depth --;
 	if (cpu->trace_tree_depth < 0)
 		cpu->trace_tree_depth = 0;

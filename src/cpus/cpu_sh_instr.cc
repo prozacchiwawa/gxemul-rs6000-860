@@ -2167,7 +2167,7 @@ X(rts_trace)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->pc = target;
-		cpu_functioncall_trace_return(cpu);
+		cpu_functioncall_trace_return(cpu, nullptr);
 		cpu->delay_slot = NOT_DELAYED;
 		quick_pc_to_pointers(cpu);
 	} else

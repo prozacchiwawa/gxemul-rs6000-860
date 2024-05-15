@@ -199,7 +199,7 @@ X(bclr)
 		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		/*  TODO: trace in separate (duplicate) function?  */
 		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu);
+			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
@@ -245,7 +245,7 @@ X(bclr_l)
 		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		/*  TODO: trace in separate (duplicate) function?  */
 		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu);
+			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 		if (cpu->machine->show_trace_tree)
 			cpu_functioncall_trace(cpu, cpu->pc);
 		if ((old_pc  & ~mask_within_page) ==
@@ -283,7 +283,7 @@ X(bcctr)
 		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		/*  TODO: trace in separate (duplicate) function?  */
 		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu);
+			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
@@ -2078,8 +2078,10 @@ X(extsw) {
 #endif
 }
 DOT2(extsw)
-X(slw) {	reg(ic->arg[2]) = (uint64_t)reg(ic->arg[0])
-		    << (reg(ic->arg[1]) & 31); }
+X(slw) {
+	int shift = (reg(ic->arg[1]) & 31);
+  uint32_t mask = (reg(ic->arg[1]) & 32) ? 0 : 0xffffffff << shift;
+  reg(ic->arg[2]) = ((uint64_t)reg(ic->arg[0]) << shift) & mask; }
 DOT2(slw)
 X(sld) {int sa = reg(ic->arg[1]) & 127;
 	if (sa >= 64)	reg(ic->arg[2]) = 0;
@@ -2105,8 +2107,10 @@ X(sraw)
 	reg(ic->arg[2]) = (int64_t)(int32_t)tmp;
 }
 DOT2(sraw)
-X(srw) {	reg(ic->arg[2]) = (uint64_t)reg(ic->arg[0])
-		    >> (reg(ic->arg[1]) & 31); }
+X(srw) {
+  int shift = (reg(ic->arg[1]) & 31);
+  uint32_t mask = (reg(ic->arg[1]) & 32) ? 0 : 0xffffffff >> shift;
+  reg(ic->arg[2]) = ((uint64_t)reg(ic->arg[0]) >> shift) & mask; }
 DOT2(srw)
 X(and) {	reg(ic->arg[2]) = reg(ic->arg[0]) & reg(ic->arg[1]); }
 DOT2(and)
@@ -2677,7 +2681,7 @@ X(openfirmware)
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_LR];
 	if (cpu->machine->show_trace_tree)
-		cpu_functioncall_trace_return(cpu);
+		cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 
 	quick_pc_to_pointers(cpu);
 }

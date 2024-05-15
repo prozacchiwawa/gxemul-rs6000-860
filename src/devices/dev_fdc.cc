@@ -62,6 +62,7 @@
 #define STATE_EMPTY 0
 #define STATE_VERSION 1
 #define STATE_SPECIFY 0x03
+#define STATE_CHECK_DRIVE_STATUS 0x04
 #define STATE_RECAL 0x07
 #define SENSE_INTERRUPT 0x08
 #define STATE_SEEK 0x0f
@@ -80,6 +81,7 @@ struct fdc_data {
     int			status_read;
     bool    asserting_interrupt;
     bool    just_reset;
+    bool    recal_interrupt;
 	struct interrupt	irq;
 };
 
@@ -117,7 +119,13 @@ DEVICE_ACCESS(fdc)
 	uint64_t idata = 0, read_addr = 0, read_len = 0, offset = 0;
 	int oldstate = d->state;
 	size_t i;
+  int was_interrupt = 0;
   unsigned char eagle_dma_2[8], sector[512];
+
+  if (d->asserting_interrupt) {
+    was_interrupt = 1;
+    fprintf(stderr, "[ fdc: %s (%x) access while interrupt asserted ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
+  }
 
   deassert_interrupt(d);
 	d->state = 0;
@@ -173,7 +181,9 @@ DEVICE_ACCESS(fdc)
 					case STATE_RECAL:
             d->command_result = 0;
 						d->state = STATE_RECAL;
-            // maybe_interrupt(d);
+            if (d->recal_interrupt) {
+              maybe_interrupt(d);
+            }
 						break;
 
 					case STATE_SPECIFY:
@@ -181,6 +191,13 @@ DEVICE_ACCESS(fdc)
 						d->state = STATE_EMPTY;
             maybe_interrupt(d);
 						break;
+
+          case STATE_CHECK_DRIVE_STATUS:
+            d->command_result = 1;
+            d->command_bytes[1] = 0x28 | (d->command_bytes[1] & 7);
+            d->state = STATE_CHECK_DRIVE_STATUS | STATE_CMD_QUEUE;
+            maybe_interrupt(d);
+            break;
 
 					case STATE_CONFIGURE:
             d->command_result = 0;
@@ -191,7 +208,8 @@ DEVICE_ACCESS(fdc)
 					case STATE_READ_ID:
 						d->state = STATE_READ_ID | STATE_CMD_QUEUE;
 						d->command_result = 7;
-						d->command_bytes[6] = 0x20;
+						d->command_bytes[6] = d->seek_head ? 4 : 0;
+;
 						d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
@@ -209,7 +227,7 @@ DEVICE_ACCESS(fdc)
 						d->eot_sector = d->command_bytes[2];
 						fprintf(stderr, "[ fdc: read C%d H%d S%d ]\n", d->seek_track, d->seek_head, d->read_sector);
 						d->command_result = 7;
-						d->command_bytes[6] = 0;
+						d->command_bytes[6] = d->seek_head ? 4 : 0 | d->seek_track == 0 ? 32 : 0;
 						d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
@@ -228,7 +246,7 @@ DEVICE_ACCESS(fdc)
             low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8));
             read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0x7fffffff;
             // Read len programmed into DMA 2
-            read_len = ((eagle_dma_2[4] & 0xff) | ((eagle_dma_2[5] & 0xff) << 8)) + 1;
+            read_len = (((eagle_dma_2[4] & 0xff) | ((eagle_dma_2[5] & 0xff) << 8)) + 1) & ~1;
 
             fprintf(stderr, "[ fdc: read to %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
             if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
@@ -272,6 +290,8 @@ DEVICE_ACCESS(fdc)
 				}
 			} else {
 				// New command
+        fprintf(stderr, "[ fdc: new command %02x ]\n", idata);
+
 				switch (idata & 0x1f) {
 				case STATE_SPECIFY:
 					fprintf(stderr, "[ fdc: specify, NDMA=%d ]\n", d->command_bytes[1] & 1);
@@ -279,10 +299,17 @@ DEVICE_ACCESS(fdc)
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SPECIFY;
 					break;
 
+        case STATE_CHECK_DRIVE_STATUS:
+          fprintf(stderr, "[ fdc: check drive status ]\n");
+          d->command_size = 1;
+          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_CHECK_DRIVE_STATUS;
+          break;
+
 				case STATE_RECAL:
 					fprintf(stderr, "[ fdc: recalibrate ]\n");
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_RECAL;
 					d->command_size = 1;
+          d->recal_interrupt = oldstate == 6;
 					break;
 
 				case SENSE_INTERRUPT:
@@ -322,6 +349,9 @@ DEVICE_ACCESS(fdc)
 					d->command_size = 8;
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_READ_NORMAL_DATA;
 					break;
+        default:
+          fprintf(stderr, "[ fdc: UNKNOWN COMMAND %02x ]\n", idata & 0x1f);
+          break;
 				}
 			}
 		} else {
@@ -363,9 +393,10 @@ DEVICE_ACCESS(fdc)
 
   case 0:
     if (writeflag == MEM_READ) {
-      int result = d->reg[0];
+      int result = d->reg[0] | (was_interrupt ? 0x80 : 0);
       d->reg[0] &= 0x7f;
-      fatal("[ fdc: read from reg STA: %02x ]\n", d->reg[0]);
+      d->state = oldstate;
+      fatal("[ fdc: read from reg STA: %02x ]\n", result);
 			memory_writemax64(cpu, data, len, result);
     }
     break;

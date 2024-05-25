@@ -85,8 +85,11 @@ struct mc_data {
 
 	int		ugly_netbsd_prep_hack_done;
 	int		ugly_netbsd_prep_hack_sec;
+
+  int   ticks;
 };
 
+static void mc146818_update_time(struct mc_data *d);
 
 /*
  *  Ugly hack to fool NetBSD/prep to accept the clock.  (See mcclock_isa_match
@@ -122,6 +125,11 @@ DEVICE_TICK(mc146818)
     if (--eagle_comm.want_timer_int == 0) {
       pti++;
     }
+  }
+
+  if (d->ticks++ >= 0x1000) {
+    d->ticks = 0;
+    d->reg[MC_SEC * 4]++;
   }
 
 	if ((d->reg[MC_REGB * 4] & MC_REGB_PIE) && pti > 0) {

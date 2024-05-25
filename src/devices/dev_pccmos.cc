@@ -47,6 +47,7 @@
 #include "memory.h"
 #include "misc.h"
 #include "diskimage.h"
+#include "thirdparty/mc146818reg.h"
 
 extern int verbose;
 
@@ -100,15 +101,38 @@ DEVICE_ACCESS(pccmos)
      */
 
     if (relative_addr == 1) {
-        if (writeflag == MEM_WRITE) {
-            d->select = idata;
-        } else if (d->select == 0x80) {
+        int register_map_13[][2] = {
+            { 0, MC_SEC },
+            { 2, MC_MIN },
+            { 4, MC_HOUR },
+            { 7, MC_DOM },
+            { 8, MC_MONTH },
+            { 9, MC_YEAR },
+            { -1, -1 }
+        };
+        if (d->select == 0x80) {
             fprintf(stderr, "[ pccmos: faking selector 0x80 ]\n");
             odata = ++d->ram[0x80];
-        } else {
-            odata = d->select;
-            if (d->select == 13) {
-                odata = 0x80;
+        } else if (d->select == 10) {
+            odata = 0x40;
+        } else if (d->select == 11) {
+            odata = 0xff;
+        } else if (d->select == 13) {
+            odata = 0xff;
+        } else if (d->select <= 0x0d) {
+            if (writeflag == MEM_WRITE) {
+                r = cpu->memory_rw(cpu, cpu->mem,
+                                   PCCMOS_MC146818_FAKE_ADDR + 4 * d->select, &b, 1,
+                                   MEM_WRITE, PHYSICAL);
+            } else {
+                debug("[ pccmos delegating read to mc146818 (select %d) ]\n", d->select);
+                int i = 0;
+                for (i = 0; register_map_13[i][0] >= 0 && register_map_13[i][0] != d->select; i++);
+                fprintf(stderr, "[ pccmos mapped register %d to mc146818 register %d ]\n", d->select, register_map_13[i][1]);
+                r = cpu->memory_rw(cpu, cpu->mem,
+                                   PCCMOS_MC146818_FAKE_ADDR + 4 * register_map_13[i][1], &b, 1,
+                                   MEM_READ, PHYSICAL);
+                odata = b;
             }
         }
     } else if (relative_addr == 0 && writeflag == MEM_WRITE) {
@@ -173,25 +197,7 @@ DEVICE_ACCESS(pccmos)
             debug("[ read cmos upper half: relative addr %d, %02x ]\n", relative_addr+8, (int)(odata & 0xff));
         }
     } else {
-        if (d->select == 10) {
-            odata = 0x40;
-        } else if (d->select <= 0x0d) {
-            if (writeflag == MEM_WRITE) {
-                r = cpu->memory_rw(cpu, cpu->mem,
-                                   PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
-                                   MEM_WRITE, PHYSICAL);
-            } else {
-                debug("[ pccmos delegating read to mc146818 (select %d) ]\n", d->select);
-                r = cpu->memory_rw(cpu, cpu->mem,
-                                   PCCMOS_MC146818_FAKE_ADDR + 1, &b, 1,
-                                   MEM_READ, PHYSICAL);
-                odata = b;
-            }
-        } else if (d->select == 13) {
-            odata = 0xff;
-        } else {
-            odata = d->ram[d->select];
-        }
+        odata = d->ram[d->select];
     }
 
     if (r == 0)
@@ -235,6 +241,7 @@ DEVINIT(pccmos)
 	case MACHINE_COBALT:
 	case MACHINE_PREP:
         if (devinit->machine->machine_subtype == MACHINE_PREP_IBM860) {
+            type = MC146818_SGI;
             len = DEV_PCCMOS_IBM_LENGTH;
             d->extended_size = DEV_PCCMOS_IBM_NVRAM_LENGTH;
             struct diskimage *nvdisk = find_nvram_disk(devinit->machine);
@@ -260,8 +267,9 @@ DEVINIT(pccmos)
 	    devinit->addr, len, dev_pccmos_access, (void *)d,
 	    DM_DEFAULT, NULL);
 
-	dev_mc146818_init(devinit->machine, devinit->machine->memory,
-	    PCCMOS_MC146818_FAKE_ADDR, devinit->interrupt_path, type, 1);
+	dev_mc146818_init(
+      devinit->machine, devinit->machine->memory,
+      PCCMOS_MC146818_FAKE_ADDR, devinit->interrupt_path, type, 1);
 
 	return 1;
 }

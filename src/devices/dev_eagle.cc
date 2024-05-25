@@ -6,8 +6,8 @@
  *
  *  1. Redistributions of source code must retain the above copyright
  *     notice, this list of conditions and the following disclaimer.
- *  2. Redistributions in binary form must reproduce the above copyright  
- *     notice, this list of conditions and the following disclaimer in the 
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
  *     documentation and/or other materials provided with the distribution.
  *  3. The name of the author may not be used to endorse or promote products
  *     derived from this software without specific prior written permission.
@@ -15,7 +15,7 @@
  *  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  *  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- *  ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE   
+ *  ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  *  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  *  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  *  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -66,12 +66,12 @@ DEVICE_ACCESS(eagle)
 
 	case 4:	/*  Data:  */
 		bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
-		    &odata : &idata, len, writeflag);
+                        &odata : &idata, len, writeflag);
 		break;
 	}
 
 	if (writeflag == MEM_READ)
-      memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
 
 	return 1;
 }
@@ -93,19 +93,24 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
  *      writeflag       set to MEM_READ or MEM_WRITE
  *      misc_flags      CACHE_{NONE,DATA,INSTRUCTION} | other flags
  */
-		fprintf(stderr, "[ eagle: PCI io passthrough write %08x = %08x ]\n", real_addr, idata);
     data_buf[0] = idata;
     data_buf[1] = idata >> 8;
     data_buf[2] = idata >> 16;
     data_buf[3] = idata >> 24;
     if (target_addr) {
       cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL);
+    } else {
+      fprintf(stderr, "[ eagle: PCI %s passthrough write %08x = %08x ]\n", io_space ? "io" : "mem", real_addr, idata);
     }
 	} else {
     cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL);
     odata = data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) | (data_buf[3] << 24);
-		fprintf(stderr, "[ eagle: PCI io passthrough read %08x -> %08x ]\n", real_addr, odata);
-		memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+    if (target_addr) {
+      memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+    } else {
+      fprintf(stderr, "[ eagle: PCI %s passthrough read %08x -> %08x ]\n", io_space ? "io" : "mem", real_addr, odata);
+      return 0;
+    }
 	}
 
   return 1;
@@ -117,6 +122,31 @@ DEVICE_ACCESS(eagle_io_pass)
 
 	uint32_t real_addr = relative_addr + 0x1000000;
   return io_pass(cpu, d, writeflag, true, real_addr, data, len);
+}
+
+DEVICE_ACCESS(eagle_pci_config)
+{
+	struct eagle_data *d = (struct eagle_data *) extra;
+	uint64_t idata = 0, odata = 0;
+	int bus, dev, func, reg;
+
+	if (writeflag == MEM_WRITE) {
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    fprintf(stderr, "[ eagle pci config space mapped access at %08x (write %08x) ]\n", relative_addr, (uint32_t)idata);
+  }
+
+
+  bus_pci_decompose_1(relative_addr, &bus, &dev, &func, &reg);
+  bus_pci_setaddr(cpu, d->pci_data, bus, dev, func, reg);
+  bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
+                      &odata : &idata, len, writeflag);
+
+	if (writeflag == MEM_READ) {
+    fprintf(stderr, "[ eagle pci config space mapped access at %08x (read %08x) ]\n", relative_addr, (uint32_t)odata);
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+  }
+
+  return 1;
 }
 
 DEVICE_ACCESS(eagle_mem_pass)
@@ -647,11 +677,15 @@ DEVINIT(eagle)
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,
         DM_DEFAULT, NULL);
 
-    memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
-                           isa_portbase + 0x1000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+    memory_device_register(devinit->machine->memory, "PCI Config Space",
+                           isa_portbase + 0x00800800, 0x01000000 - 0x00800800, dev_eagle_pci_config_access, d,
                            DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
+                           isa_portbase + 0x01000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+                           DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "PCI MEM Passthrough",
                            0xc0000000, 0x3ff00000, dev_eagle_mem_pass_access, d,
                            DM_DEFAULT, NULL);
 

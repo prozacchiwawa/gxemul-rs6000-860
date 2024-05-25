@@ -70,6 +70,7 @@ extern int verbose;
 struct pci_space_association {
   bool io_space;
   uint32_t id;
+  uint32_t size;
   uint64_t allocated_space;
 };
 
@@ -214,13 +215,11 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
       uint32_t bar_addr = PCI_MAPREG_IO_ADDR(bar);
       uint32_t bar_len = PCI_MAPREG_IO_SIZE(bar);
 
-      fprintf(stderr, "bus_pci_get_io_target: id %08x want %08x bar %08x addr %08x len %08x\n", id, target, bar, bar_addr, bar_len);
       if (target >= bar_addr && target < bar_addr + bar_len) {
         // Match: check our recorded mappings.  Exit one way or another so we
         // can reuse i.
         for (i = 0; i < pci_io_target; i++) {
-          if (id == pci_io_allocation[i].id && pci_io_allocation[i].io_space == io) {
-            fprintf(stderr, "bus_pci_get_io_target: translation = %llx\n", pci_io_allocation[i].allocated_space);
+          if (id == pci_io_allocation[i].id && pci_io_allocation[i].io_space == io && target < bar_addr + pci_io_allocation[i].size) {
             return pci_io_allocation[i].allocated_space + (target - bar_addr);
           }
         }
@@ -229,6 +228,8 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
     }
 		dev = dev->next;
 	}
+
+  fprintf(stderr, "bus_pci_get_io_target: pci addr %08x failed\n", target);
 
   return 0;
 }
@@ -519,6 +520,7 @@ PCIINIT(s3_virge)
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 0;
+  assoc->size = 16 * 1024 * 1024;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 
@@ -537,14 +539,14 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, value);
     return 1;
   case 0x10:
-    bar_loc = value & ~0xff;
+    bar_loc = value & ~0xfff;
     fprintf(stderr, "lsi: set BAR0 %08x\n", bar_loc);
     PCI_SET_DATA(reg, bar_loc | 1);
     return 1;
   case 0x14:
     bar_loc = value & ~0xfff;
     fprintf(stderr, "lsi: set BAR1 %08x\n", bar_loc);
-    PCI_SET_DATA(reg, bar_loc | 2);
+    PCI_SET_DATA(reg, bar_loc);
     return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
     fprintf(stderr, "lsi: set INT# %08x\n", value);
@@ -573,7 +575,7 @@ PCIINIT(lsi53c895a)
       0) | 0x26);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
-  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x80008002);
+  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x8008000);
 
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
@@ -584,6 +586,7 @@ PCIINIT(lsi53c895a)
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 1;
+  assoc->size = 
   assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
 

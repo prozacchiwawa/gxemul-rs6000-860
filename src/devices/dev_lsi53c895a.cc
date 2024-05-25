@@ -3183,6 +3183,10 @@ DEVINIT(lsi53c895a)
                            devinit->addr, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
 
+    memory_device_register(devinit->machine->memory, "lsi53c895a (MEM)",
+                           devinit->addr + 0x10000, 0x2000,
+                           dev_lsi53c895a_mem_access, d, DM_DEFAULT, NULL);
+
     memory_device_register(devinit->machine->memory, "lsi53c895a (ALT)",
                            0x80008000, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);

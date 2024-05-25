@@ -458,7 +458,7 @@ int cpu_disassemble_instr(struct machine *m, struct cpu *cpu,
 	unsigned char *instr, int running, uint64_t addr);
 
 void cpu_functioncall_trace(struct cpu *cpu, uint64_t f);
-void cpu_functioncall_trace_return(struct cpu *cpu);
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *reg);
 
 void cpu_create_or_reset_tc(struct cpu *cpu);
 

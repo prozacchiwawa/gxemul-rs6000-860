@@ -263,7 +263,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 	single_step = ENTER_SINGLE_STEPPING;
 #endif
 
-#if 0
+//#if 0
 {
 	static FILE *f = NULL;
 	if (f == NULL)
@@ -277,7 +277,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		fflush(f);
 	}
 }
-#endif
+//#endif
 
   uint8_t buf[256];
   uint8_t *old_ptr;
@@ -313,12 +313,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		/*  Return values:  */
 		retlen = xferp->cmd[4];
-    /*
-		if (retlen < 36) {
-			fatal("WARNING: SCSI inquiry len=%i, <36!\n", retlen);
-			retlen = 36;
+		if (retlen > 96) {
+			fatal("WARNING: SCSI inquiry len=%i, >96?\n", retlen);
+			retlen = 96;
 		}
-    */
 
 		/*  Return data:  */
     fprintf(stderr, "SCSI: Allocate data buf\n");
@@ -332,11 +330,9 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		xferp->data_in[0] = 0x00;  /*  0x00 = Direct-access disk  */
 		xferp->data_in[1] = 0x00;  /*  0x00 = non-removable  */
 		xferp->data_in[2] = 0x02;  /*  SCSI-2  */
-#if 0
-xferp->data_in[3] = 0x02;	/*  Response data format = SCSI-2  */
-#endif
-		xferp->data_in[4] = retlen - 4;	/*  Additional length  */
-xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
+    xferp->data_in[3] = 0x02;	/*  Response data format = SCSI-2  */
+		// xferp->data_in[4] = retlen - 4;	/*  Additional length  */
+    xferp->data_in[4] = 91;	/*  Additional length  */
 		xferp->data_in[6] = 0x04;  /*  ACKREQQ  */
 		xferp->data_in[7] = 0x60;  /*  WBus32, WBus16  */
 
@@ -453,6 +449,8 @@ xferp->data_in[4] = 0x2c - 4;	/*  Additional length  */
 		size = d->total_size / d->logical_block_size;
 		if (d->total_size & (d->logical_block_size-1))
 			size ++;
+
+    size--; // Returns the LBA of the last block.
 
 		xferp->data_in[0] = (size >> 24) & 255;
 		xferp->data_in[1] = (size >> 16) & 255;

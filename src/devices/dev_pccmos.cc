@@ -102,11 +102,6 @@ DEVICE_ACCESS(pccmos)
     if (relative_addr == 1) {
         if (writeflag == MEM_WRITE) {
             d->select = idata;
-            if (idata <= 0x0d) {
-                r = cpu->memory_rw(cpu, cpu->mem,
-                                   PCCMOS_MC146818_FAKE_ADDR, &b, 1,
-                                   MEM_WRITE, PHYSICAL);
-            }
         } else if (d->select == 0x80) {
             fprintf(stderr, "[ pccmos: faking selector 0x80 ]\n");
             odata = ++d->ram[0x80];

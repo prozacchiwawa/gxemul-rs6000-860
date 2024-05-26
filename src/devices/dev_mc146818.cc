@@ -55,7 +55,7 @@
 #define	to_bcd(x)	( ((x)/10) * 16 + ((x)%10) )
 #define	from_bcd(x)	( ((x)>>4) * 10 + ((x)&15) )
 
-#define MC146818_DEBUG  1
+// #define MC146818_DEBUG  1
 
 #define	MC146818_TICK_SHIFT	14
 
@@ -298,7 +298,9 @@ DEVICE_ACCESS(mc146818)
   uint64_t idata;
 
 	/*  NOTE/TODO: This access function only handles 8-bit accesses!  */
+#ifdef MC146818_DEBUG
   fprintf(stderr, "[ mc146818 access type %s relative_addr %04x ]\n", (writeflag == MEM_WRITE) ? "write" : "read", relative_addr);
+#endif
 	relative_addr /= d->addrdiv;
 
 	/*  Different ways of accessing the registers:  */

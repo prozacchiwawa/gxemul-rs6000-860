@@ -67,6 +67,7 @@ struct pccmos_data {
     struct diskimage *extended_nvram_disk;
 
     unsigned char upper_half[8];
+    int update_in_progress_cycle;
 };
 
 // Find the NVRAM disk if it exists.
@@ -110,11 +111,10 @@ DEVICE_ACCESS(pccmos)
             { 9, MC_YEAR },
             { -1, -1 }
         };
-        if (d->select == 0x80) {
-            fprintf(stderr, "[ pccmos: faking selector 0x80 ]\n");
-            odata = ++d->ram[0x80];
-        } else if (d->select == 10) {
+        if (d->select == 10) {
             odata = 0x40;
+            d->update_in_progress_cycle++;
+            odata |= d->update_in_progress_cycle & 0x80;
         } else if (d->select == 11) {
             odata = 0xff;
         } else if (d->select == 13) {
@@ -125,10 +125,9 @@ DEVICE_ACCESS(pccmos)
                                    PCCMOS_MC146818_FAKE_ADDR + 4 * d->select, &b, 1,
                                    MEM_WRITE, PHYSICAL);
             } else {
-                debug("[ pccmos delegating read to mc146818 (select %d) ]\n", d->select);
                 int i = 0;
                 for (i = 0; register_map_13[i][0] >= 0 && register_map_13[i][0] != d->select; i++);
-                fprintf(stderr, "[ pccmos mapped register %d to mc146818 register %d ]\n", d->select, register_map_13[i][1]);
+                // fprintf(stderr, "[ pccmos mapped register %d to mc146818 register %d ]\n", d->select, register_map_13[i][1]);
                 r = cpu->memory_rw(cpu, cpu->mem,
                                    PCCMOS_MC146818_FAKE_ADDR + 4 * register_map_13[i][1], &b, 1,
                                    MEM_READ, PHYSICAL);
@@ -136,7 +135,7 @@ DEVICE_ACCESS(pccmos)
             }
         }
     } else if (relative_addr == 0 && writeflag == MEM_WRITE) {
-        d->select = idata;
+        d->select = idata & 0x7f;
         // IBM machines have an extra 16k nvram (which appears in 4 copies)
         // in the 64k address space.  These will only be alive if we initialized
         // the size of the CMOS ISA device at 8 ports.

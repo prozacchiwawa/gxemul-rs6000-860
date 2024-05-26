@@ -1299,6 +1299,9 @@ X(llsc)
 		break;
 	}
 
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, len, 1, &swizzle, &offset);
+
 	rt = (iw >> 21) & 31;
 	ra = (iw >> 16) & 31;
 	rb = (iw >> 11) & 31;
@@ -1312,23 +1315,33 @@ X(llsc)
 			fatal("ll: rc-bit set?\n");
 			exit(1);
 		}
-		if (cpu->memory_rw(cpu, cpu->mem, addr, d, len,
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len,
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			fatal("ll: error: TODO\n");
-			exit(1);
+			return; // exit(1);
 		}
 
-		value = 0;
-		for (i=0; i<len; i++) {
-			value <<= 8;
-			if (cpu->byte_order == EMUL_BIG_ENDIAN)
-				value |= d[i];
-			else
-				value |= d[len - 1 - i];
-		}
+    // Like in cpu_ppc_instr_loadstore
+    if (len == 8) {
+      cpu->cd.ppc.gpr[rt] =
+        (d[0^swizzle] << 56) +
+        (d[1^swizzle] << 48) +
+        (d[2^swizzle] << 40) +
+        (d[3^swizzle] << 32) +
+        (d[4^swizzle] << 24) +
+        (d[5^swizzle] << 16) +
+        (d[6^swizzle] <<  8) +
+        d[7^swizzle];
+    } else {
+      cpu->cd.ppc.gpr[rt] =
+        (d[0^swizzle] << 24) +
+        (d[1^swizzle] << 16) +
+        (d[2^swizzle] <<  8) +
+        d[3^swizzle];
+    }
 
-		cpu->cd.ppc.gpr[rt] = value;
 		cpu->cd.ppc.ll_addr = addr;
+    fprintf(stderr, "%08x: lwarx @ %08x\n", cpu->pc, cpu->cd.ppc.ll_addr);
 		cpu->cd.ppc.ll_bit = 1;
 	} else {
 		uint32_t old_so = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_SO;
@@ -1351,6 +1364,23 @@ X(llsc)
 			return;
 		}
 
+    // Like in cpu_ppc_instr_loadstore.
+    if (len == 8) {
+      d[0^swizzle] = value >> 56;
+      d[1^swizzle] = value >> 48;
+      d[2^swizzle] = value >> 40;
+      d[3^swizzle] = value >> 32;
+      d[4^swizzle] = value >> 24;
+      d[5^swizzle] = value >> 16;
+      d[6^swizzle] = value >> 8;
+      d[7^swizzle] = value;
+    } else {
+      d[0^swizzle] = value >> 24;
+      d[1^swizzle] = value >> 16;
+      d[2^swizzle] = value >> 8;
+      d[3^swizzle] = value;
+    }
+
 		for (i=0; i<len; i++) {
 			if (cpu->byte_order == EMUL_BIG_ENDIAN)
 				d[len - 1 - i] = value >> (8*i);
@@ -1358,7 +1388,7 @@ X(llsc)
 				d[i] = value >> (8*i);
 		}
 
-		if (cpu->memory_rw(cpu, cpu->mem, addr, d, len,
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			fatal("sc: error: TODO\n");
 			exit(1);
@@ -1757,13 +1787,7 @@ X(mtspr) {
   reg(ic->arg[1]) = reg(ic->arg[0]);
 }
 X(mtspr_sprg2) {
-	if (cpu->cd.ppc.bits == 32) {
-		// Ignore for now. FreeBSD/powerpc seems to write 0xffffffe0
-		// here, and read it back. If it is non-zero, it assumes a 64-bit
-		// cpu.
-	} else {
-		reg(ic->arg[1]) = reg(ic->arg[0]);
-	}
+	reg(ic->arg[1]) = reg(ic->arg[0]);
 }
 X(mtlr) {
 	cpu->cd.ppc.spr[SPR_LR] = reg(ic->arg[0]);

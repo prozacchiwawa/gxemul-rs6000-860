@@ -52,20 +52,22 @@ static void dev_8259_recalc_interrupts(struct pic8259_data *d, int old_irr, int 
   uint8_t old_active = old_irr & ~old_ier;
   uint8_t new_active = d->irr & ~d->ier;
 
-  if (new_active & ~old_active) {
+  fprintf(stderr, "8259(%d) old_active %02x new_active %02x\n", d->irq_base, old_active, new_active);
+
+  if (new_active) {
     if (d->chained_to) {
-      fprintf(stderr, "8259: chained assert irr %02x vs %02x ier %02x vs %02x\n", old_irr, d->irr, old_ier, d->ier);
+      fprintf(stderr, "8259(%d): chained assert irr %02x vs %02x ier %02x vs %02x\n", d->irq_base, old_irr, d->irr, old_ier, d->ier);
       dev_8259_assert(d->chained_to, d->chained_int_line);
     } else {
-      fprintf(stderr, "8259: assert %s\n", d->irq.name);
+      fprintf(stderr, "8259(%d): assert %s\n", d->irq_base, d->irq.name);
       INTERRUPT_ASSERT(d->irq);
     }
-  } else if (old_active & ~new_active) {
+  } else if (!new_active) {
     if (d->chained_to) {
-      fprintf(stderr, "8259: chained deassert irr %02x vs %02x ier %02x vs %02x\n", old_irr, d->irr, old_ier, d->ier);
+      fprintf(stderr, "8259(%d): chained deassert irr %02x vs %02x ier %02x vs %02x\n", d->irq_base, old_irr, d->irr, old_ier, d->ier);
       dev_8259_deassert(d->chained_to, d->chained_int_line);
     } else {
-      fprintf(stderr, "8259: deassert %s\n", d->irq.name);
+      fprintf(stderr, "8259(%d): deassert %s\n", d->irq_base, d->irq.name);
       INTERRUPT_DEASSERT(d->irq);
     }
   }
@@ -76,6 +78,8 @@ void dev_8259_assert(struct pic8259_data *d, int line) {
 
   d->irr |= 1 << line;
 
+  fprintf(stderr, "8259(%d): assert(%d): d->irr %02x -> %02x\n", d->irq_base, line, old_irr, d->irr);
+
   dev_8259_recalc_interrupts(d, old_irr, d->ier);
 }
 
@@ -84,7 +88,7 @@ void dev_8259_deassert(struct pic8259_data *d, int line) {
 
   d->irr &= ~(1 << line);
 
-  fprintf(stderr, "8259: deassert: d->irr %02x -> %02x\n", old_irr, d->irr);
+  fprintf(stderr, "8259(%d): deassert(%d): d->irr %02x -> %02x\n", d->irq_base, line, old_irr, d->irr);
 
   dev_8259_recalc_interrupts(d, old_irr, d->ier);
 }
@@ -100,10 +104,10 @@ DEVICE_ACCESS(8259)
 
 #ifdef DEV_8259_DEBUG
 	if (writeflag == MEM_READ)
-		fatal("[ 8259: read from 0x%x ]\n", (int)relative_addr);
+		fatal("[ 8259(%d): read from 0x%x ]\n", d->irq_base, (int)relative_addr);
 	else
-		fatal("[ 8259: write to 0x%x: 0x%x ]\n",
-		    (int)relative_addr, (int)idata);
+		fatal("[ 8259(%d): write to 0x%x: 0x%x ]\n",
+          d->irq_base, (int)relative_addr, (int)idata);
 #endif
 
 	switch (relative_addr) {
@@ -252,14 +256,14 @@ DEVICE_ACCESS(8259)
 		if (writeflag == MEM_WRITE) {
 			int old_ier = d->ier;
 			d->ier = idata;
-      fprintf(stderr, "[ 8259: write IER %02x (irr %02x) ]\n", d->ier, d->irr);
+      fprintf(stderr, "[ 8259(%d): write IER %02x (irr %02x) ]\n", d->irq_base, d->ier, d->irr);
 
 			/*  Recalculate interrupt assertions,
 			    if necessary:  */
       dev_8259_recalc_interrupts(d, d->irr, old_ier);
 		} else {
 			odata = d->ier;
-      fprintf(stderr, "[ 8259: read IER %08x ]\n", d->ier);
+      fprintf(stderr, "[ 8259(%d): read IER %08x ]\n", d->irq_base, d->ier);
 		}
 		break;
 	default:

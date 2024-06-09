@@ -157,6 +157,7 @@
 #define	  PPC_31_CLI		  502
 #define	  PPC_31_SUBFCO		  520
 #define	  PPC_31_ADDCO		  522
+#define   PPC_31_LSWX       533
 #define	  PPC_31_LWBRX		  534
 #define	  PPC_31_LFSX		  535
 #define	  PPC_31_SRW		  536
@@ -171,6 +172,7 @@
 #define	  PPC_31_SUBFEO		  648
 #define	  PPC_31_ADDEO		  650
 #define	  PPC_31_MFSRIN		  659
+#define   PPC_31_STSWX      661
 #define	  PPC_31_STWBRX		  662
 #define	  PPC_31_STFSX		  663
 #define	  PPC_31_SUBFZEO	  712

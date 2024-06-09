@@ -480,6 +480,12 @@ X(bcl_samepage)
  */
 X(bl)
 {
+  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 2048) & 0xffffffff;
+  if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
+    cpu->cd.ppc.spr[SPR_TBU]++;
+  }
+
 	/*  Calculate LR and new PC:  */
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc + ic->arg[1];
@@ -1759,8 +1765,11 @@ X(mfspr_pmc1) {
 X(mftb) {
 	/*  NOTE/TODO: This increments the time base (slowly) if it
 	    is being polled.  */
-	if (++cpu->cd.ppc.spr[SPR_TBL] == 0)
+  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 80) & 0xffffffff;
+	if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
 		cpu->cd.ppc.spr[SPR_TBU] ++;
+  }
 	reg(ic->arg[0]) = cpu->cd.ppc.spr[SPR_TBL];
 }
 X(mftbu) {
@@ -2610,6 +2619,33 @@ X(stvx)
 
 
 /*
+ * tw: Trap Word
+ *
+ * arg[0] = r<a>
+ * arg[1] = r<b>
+ * arg[2] = TO
+ */
+X(tw)
+{
+  int32_t regvala = *((int32_t *)ic->arg[0]);
+  uint32_t uregvala = *((uint32_t *)ic->arg[0]);
+  int32_t regvalb = *((int32_t *)ic->arg[1]);
+  uint32_t uregvalb = *((uint32_t *)ic->arg[1]);
+
+  uint32_t to = ic->arg[2];
+  int do_trap = ((regvala < regvalb) && ((to & 16) != 0))
+    || ((regvala > regvalb) && ((to & 8) != 0))
+    || ((regvala == regvalb) && ((to & 4) != 0))
+    || ((uregvala < uregvalb) && ((to & 2) != 0))
+    || ((uregvala > uregvalb) && ((to & 1) != 0));
+
+  if (do_trap) {
+    ppc_exception(cpu, PPC_EXCEPTION_PRG);
+  }
+}
+
+
+/*
  * twi: Trap Word Immediate
  *
  * arg[0] = r<n>
@@ -2690,6 +2726,89 @@ X(sc)
 	    to worry about the next instruction being an end_of_page.  */
 }
 
+
+/*
+ *  lswx
+ *
+ *  ra = arg[0]
+ *  rb = arg[1]
+ *  rt = arg[2]
+ */
+X(lswx)
+{
+  uint32_t xer = cpu->cd.ppc.spr[SPR_XER] & 0x7f;
+  if (xer == 0) {
+    return;
+  }
+
+  uint32_t ra = reg(ic->arg[0]);
+  uint32_t rb = reg(ic->arg[1]);
+  int rt = ic->arg[2];
+  uint8_t d[4];
+
+  ra += rb;
+
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
+
+  for (int nr = (xer + 3) / 4; nr > 0; xer -= 4, ra += 4, nr--, rt++) {
+    if (cpu->memory_rw(cpu, cpu->mem, ra ^ offset, d, 4, MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
+      return;
+    }
+
+    if (xer && xer < 4) {
+      memset(d + xer, 0, 4 - xer);
+    }
+
+    cpu->cd.ppc.gpr[rt & 31] =
+      (d[0^swizzle] << 24) +
+      (d[1^swizzle] << 16) +
+      (d[2^swizzle] <<  8) +
+      d[3^swizzle];
+  }
+}
+
+
+/*
+ *  stswx
+ *
+ *  ra = arg[0]
+ *  rb = arg[1]
+ *  rt = arg[2]
+ */
+X(stswx)
+{
+  uint32_t xer = cpu->cd.ppc.spr[SPR_XER] & 0x7f;
+  if (xer == 0) {
+    return;
+  }
+
+  uint32_t ra = reg(ic->arg[0]);
+  uint32_t rb = reg(ic->arg[1]);
+  uint32_t rtval;
+  int rt = ic->arg[2];
+  uint8_t d[4];
+  ra += rb;
+
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
+
+  for (int nr = (xer + 3) / 4; nr > 0; xer -= 4, ra += 4, nr--, rt++) {
+    rtval = cpu->cd.ppc.gpr[rt & 31];
+    d[0^swizzle] = rtval >> 24;
+    d[1^swizzle] = rtval >> 16;
+    d[2^swizzle] = rtval >> 8;
+    d[3^swizzle] = rtval;
+
+    if (xer && xer < 4) {
+      memset(d + xer, 0, 4 - xer);
+    }
+
+    if (cpu->memory_rw(cpu, cpu->mem, ra ^ offset, d, 4, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+      return;
+    }
+  }
+}
 
 /*
  *  openfirmware:
@@ -3360,6 +3479,15 @@ X(to_be_translated)
 			ic->arg[2] = 28 - 4*bf;
 			break;
 
+    case PPC_31_TW:
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->arg[2] = (iword >> 21) & 31;
+      ic->f = instr(tw);
+      break;
+
 		case PPC_31_CNTLZW:
 			rs = (iword >> 21) & 31;
 			ra = (iword >> 16) & 31;
@@ -3618,6 +3746,20 @@ X(to_be_translated)
 			ic->f = instr(nop);
 			break;
 
+    case PPC_31_LSWX:
+      rt = (iword >> 21) & 31;
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      if (ra == 0) {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->arg[2] = rt;
+			ic->f = instr(lswx);
+      break;
+
 		case PPC_31_LBZX:
 		case PPC_31_LBZUX:
 		case PPC_31_LHAX:
@@ -3706,6 +3848,20 @@ X(to_be_translated)
 				goto bad;
 			}
 			break;
+
+    case PPC_31_STSWX:
+      rt = (iword >> 21) & 31;
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      if (ra == 0) {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->arg[2] = rt;
+			ic->f = instr(stswx);
+      break;
 
 		case PPC_31_EXTSB:
 		case PPC_31_EXTSH:

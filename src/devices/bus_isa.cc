@@ -55,7 +55,7 @@ void isa_interrupt_common(struct bus_isa_data *d, int line, int assert_int)
   int orig_irr1 = d->pic1->irr;
   int orig_irr2 = d->pic2->irr;
 
-  struct pic8259_data *pic_ptr = (line > 7 && d->pic2) ? d->pic2 : d->pic1;
+  struct pic8259_data *pic_ptr = ((line > 7) && d->pic2) ? d->pic2 : d->pic1;
 
   if (assert_int) {
     dev_8259_assert(pic_ptr, line & 7);
@@ -225,6 +225,7 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 			    device_add(machine, tmpstr);
       d->pic2->chained_to = d->pic1;
       d->pic2->chained_int_line = 2;
+      fprintf(stderr, "set up chained 8259\n");
 		}
 	} else {
 		bus_isa_flags &= ~BUS_ISA_EXTERNAL_PIC;

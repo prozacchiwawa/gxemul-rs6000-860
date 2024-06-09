@@ -297,6 +297,9 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: specify, NDMA=%d ]\n", d->command_bytes[1] & 1);
 					d->command_size = 2;
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SPECIFY;
+          if (!(d->command_bytes[1] & 1)) {
+            d->reg[2] &= ~8;
+          }
 					break;
 
         case STATE_CHECK_DRIVE_STATUS:

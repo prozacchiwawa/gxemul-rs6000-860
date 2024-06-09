@@ -76,7 +76,7 @@ DEVINIT(prep)
 	memset(d, 0, sizeof(struct prep_data));
 
 	memory_device_register(devinit->machine->memory, devinit->name,
-	    0xbffff000, 0x1000, dev_prep_access, d, DM_DEFAULT, NULL);
+	    0xbffffff0, 0x10, dev_prep_access, d, DM_DEFAULT, NULL);
 
     switch (devinit->machine->machine_subtype) {
     case MACHINE_PREP_IBM860:

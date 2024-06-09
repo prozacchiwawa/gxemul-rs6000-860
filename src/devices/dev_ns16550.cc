@@ -179,7 +179,7 @@ DEVICE_ACCESS(ns16550)
 				/*  Set the high byte of the divisor:  */
 				d->divisor = (d->divisor & 0xff) | (idata << 8);
 				debug("[ ns16550 (%s): speed set to %i bps ]\n",
-				    d->name, (int)(115200 / d->divisor));
+              d->name, d->divisor ? ((int)(115200 / d->divisor)) : 0);
 			} else
 				odata = d->divisor >> 8;
 			break;

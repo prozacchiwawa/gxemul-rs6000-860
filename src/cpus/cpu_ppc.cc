@@ -355,6 +355,12 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
  */
 void ppc_exception(struct cpu *cpu, int exception_nr)
 {
+  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[SPR_TBL] += 1000;
+  if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
+    cpu->cd.ppc.spr[SPR_TBU]++;
+  }
+
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
 

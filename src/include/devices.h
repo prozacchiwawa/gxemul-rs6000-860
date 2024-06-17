@@ -64,11 +64,15 @@ struct pic8259_data {
 	struct interrupt irq;
 
 	int		irq_base;
-	int		current_command;
-
 	int		init_state;
+  int   icw[4];
 
-	int		priority_reg;
+  int   rotate;
+  int   rotation_pri;
+  int   read_ir_is;
+  int   special_mask_mode;
+  int   poll_cmd;
+
 	uint8_t		irr;		/*  interrupt request register  */
 	uint8_t		isr;		/*  interrupt in-service register  */
 	uint8_t		ier;		/*  interrupt enable register  */

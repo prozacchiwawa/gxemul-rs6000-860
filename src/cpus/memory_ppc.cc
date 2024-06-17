@@ -344,15 +344,6 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     fprintf(stderr, "%s %08x: port 92\n", rw, write_data);
     cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-  } else if (io_region_arc || write_rev) {
-    /*
-    fprintf(stderr, "R%d %08x: %s %08x: ", write_rev, (uint32_t)cpu->pc, rw, (uint32_t)addr);
-    const uint8_t *ptr = (uint8_t *)data;
-    for (int i = 0; i < size; i++) {
-      fprintf(stderr, "%02x", ptr[i]);
-    }
-    fprintf(stderr, "\n");
-    */
   }
 }
 

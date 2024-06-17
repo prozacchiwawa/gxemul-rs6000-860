@@ -244,8 +244,8 @@ X(bclr_l)
 		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		/*  TODO: trace in separate (duplicate) function?  */
-		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+		//if (cpu->machine->show_trace_tree)
+		//	cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 		if (cpu->machine->show_trace_tree)
 			cpu_functioncall_trace(cpu, cpu->pc);
 		if ((old_pc  & ~mask_within_page) ==
@@ -481,7 +481,7 @@ X(bcl_samepage)
 X(bl)
 {
   auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 2048) & 0xffffffff;
+  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 4) & 0xffffffff;
   if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
     cpu->cd.ppc.spr[SPR_TBU]++;
   }
@@ -1347,7 +1347,6 @@ X(llsc)
     }
 
 		cpu->cd.ppc.ll_addr = addr;
-    fprintf(stderr, "%08x: lwarx @ %08x\n", cpu->pc, cpu->cd.ppc.ll_addr);
 		cpu->cd.ppc.ll_bit = 1;
 	} else {
 		uint32_t old_so = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_SO;

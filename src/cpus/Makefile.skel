@@ -2,7 +2,10 @@
 #  Makefile for GXemul src/cpus
 #
 
-CXXFLAGS=$(CWARNINGS) $(COPTIM) $(DINCLUDE)
+SOFTFLOATDIR=src/thirdparty/softfloat/build/Linux-x86_64-GCC
+CXXFLAGS=$(CWARNINGS) $(COPTIM) $(DINCLUDE) -I../../src/thirdparty/softfloat/source/include -DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 \
+  -DSOFTFLOAT_FAST_DIV64TO32
+
 
 OBJS=cpu.o $(CPU_ARCHS) $(CPU_BACKENDS)
 TOOLS=generate_head generate_tail $(CPU_TOOLS)

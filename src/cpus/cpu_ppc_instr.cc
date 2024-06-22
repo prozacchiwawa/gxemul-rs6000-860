@@ -36,8 +36,6 @@
 
 #include "float_emul.h"
 
-void stwbrx_cache_spill(struct cpu *cpu);
-
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
 #define DOT1(n) X(n ## _dot) { instr(n)(cpu,ic); \
@@ -939,28 +937,11 @@ X(fneg)
  */
 X(fcmpu)
 {
-	struct ieee_float_value fra, frb;
-	int bf_shift = ic->arg[0], c = 0;
-
-	CHECK_FOR_FPU_EXCEPTION;
-
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[1], &fra, IEEE_FMT_D);
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[2], &frb, IEEE_FMT_D);
-	if (fra.nan | frb.nan) {
-		c = 1;
-	} else {
-		if (fra.f < frb.f)
-			c = 8;
-		else if (fra.f > frb.f)
-			c = 4;
-		else
-			c = 2;
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
+  base_cmp(cpu, ic, (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
+	int bf_shift = ic->arg[0];
+  int c = (cpu->cd.ppc.fpscr >> PPC_FPSCR_FPCC_SHIFT) & 0xf;
 	cpu->cd.ppc.cr &= ~(0xf << bf_shift);
-	cpu->cd.ppc.cr |= ((c&0xe) << bf_shift);
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
-	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
+	cpu->cd.ppc.cr |= (c << bf_shift);
 }
 
 
@@ -991,7 +972,7 @@ X(frsp)
 			c = 2;
 	}
 	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
+	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXSNAN);
 	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
 	(*(uint64_t *)ic->arg[1]) =
 	    ieee_store_float_value(fl, IEEE_FMT_D, frb.nan);
@@ -1024,7 +1005,6 @@ X(fctiwz)
 	*(uint64_t *)ic->arg[1] = (uint32_t)res;
 }
 
-
 /*
  *  fmul:  Floating-point Multiply
  *
@@ -1034,36 +1014,16 @@ X(fctiwz)
  */
 X(fmul)
 {
-	struct ieee_float_value fra;
-	struct ieee_float_value frc;
-	double result = 0.0;
-	int c, nan = 0;
-
 	CHECK_FOR_FPU_EXCEPTION;
-
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[1], &fra, IEEE_FMT_D);
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[2], &frc, IEEE_FMT_D);
-	if (fra.nan || frc.nan)
-		nan = 1;
-	else
-		result = fra.f * frc.f;
-	if (nan)
-		c = 1;
-	else {
-		if (result < 0.0)
-			c = 8;
-		else if (result > 0.0)
-			c = 4;
-		else
-			c = 2;
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
-	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
-
-	(*(uint64_t *)ic->arg[0]) =
-	    ieee_store_float_value(result, IEEE_FMT_D, nan);
+	base_fmul(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 }
+X(fmul_dot)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+	base_fmul(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
+	fpu_update_cr1(cpu);
+}
+
 X(fmuls)
 {
 	/*  TODO  */
@@ -1108,7 +1068,7 @@ X(fmadd)
 			cc = 2;
 	}
 	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
+	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXSNAN);
 	cpu->cd.ppc.fpscr |= (cc << PPC_FPSCR_FPCC_SHIFT);
 
 	(*(uint64_t *)ic->arg[0]) =
@@ -1153,7 +1113,7 @@ X(fmsub)
 			cc = 2;
 	}
 	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
+	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXSNAN);
 	cpu->cd.ppc.fpscr |= (cc << PPC_FPSCR_FPCC_SHIFT);
 
 	(*(uint64_t *)ic->arg[0]) =
@@ -1170,36 +1130,16 @@ X(fmsub)
  */
 X(fadd)
 {
-	struct ieee_float_value fra;
-	struct ieee_float_value frb;
-	double result = 0.0;
-	int nan = 0, c;
-
 	CHECK_FOR_FPU_EXCEPTION;
-
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[0], &fra, IEEE_FMT_D);
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[1], &frb, IEEE_FMT_D);
-	if (fra.nan || frb.nan)
-		nan = 1;
-	else
-		result = fra.f + frb.f;
-	if (nan)
-		c = 1;
-	else {
-		if (result < 0.0)
-			c = 8;
-		else if (result > 0.0)
-			c = 4;
-		else
-			c = 2;
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
-	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
-
-	(*(uint64_t *)ic->arg[2]) =
-	    ieee_store_float_value(result, IEEE_FMT_D, nan);
+	base_fadd(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 }
+X(fadd_dot)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+	base_fadd(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
+	fpu_update_cr1(cpu);
+}
+
 X(fadds)
 {
 	/*  TODO  */
@@ -1207,35 +1147,12 @@ X(fadds)
 }
 X(fsub)
 {
-	struct ieee_float_value fra;
-	struct ieee_float_value frb;
-	double result = 0.0;
-	int nan = 0, c;
-
-	CHECK_FOR_FPU_EXCEPTION;
-
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[0], &fra, IEEE_FMT_D);
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[1], &frb, IEEE_FMT_D);
-	if (fra.nan || frb.nan)
-		nan = 1;
-	else
-		result = fra.f - frb.f;
-	if (nan)
-		c = 1;
-	else {
-		if (result < 0.0)
-			c = 8;
-		else if (result > 0.0)
-			c = 4;
-		else
-			c = 2;
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
-	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
-
-	(*(uint64_t *)ic->arg[2]) =
-	    ieee_store_float_value(result, IEEE_FMT_D, nan);
+  base_fsub(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
+}
+X(fsub_dot)
+{
+  base_fsub(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
+  fpu_update_cr1(cpu);
 }
 X(fsubs)
 {
@@ -1244,35 +1161,12 @@ X(fsubs)
 }
 X(fdiv)
 {
-	struct ieee_float_value fra;
-	struct ieee_float_value frb;
-	double result = 0.0;
-	int nan = 0, c;
-
-	CHECK_FOR_FPU_EXCEPTION;
-
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[0], &fra, IEEE_FMT_D);
-	ieee_interpret_float_value(*(uint64_t *)ic->arg[1], &frb, IEEE_FMT_D);
-	if (fra.nan || frb.nan || frb.f == 0)
-		nan = 1;
-	else
-		result = fra.f / frb.f;
-	if (nan)
-		c = 1;
-	else {
-		if (result < 0.0)
-			c = 8;
-		else if (result > 0.0)
-			c = 4;
-		else
-			c = 2;
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXNAN);
-	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
-
-	(*(uint64_t *)ic->arg[2]) =
-	    ieee_store_float_value(result, IEEE_FMT_D, nan);
+  base_fdiv(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
+}
+X(fdiv_dot)
+{
+  base_fdiv(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
+  fpu_update_cr1(cpu);
 }
 X(fdivs)
 {
@@ -4089,33 +3983,48 @@ X(to_be_translated)
 		rs = (iword >>  6) & 31;	/*  actually frc  */
 		rc = iword & 1;
 
-		if (rc) {
-			if (!cpu->translation_readahead)
-				fatal("Floating point (63) "
-				    "with rc bit! TODO\n");
-			goto bad;
-		}
-
 		/*  NOTE: Some floating-point instructions are selected
 		    using only the lowest 5 bits, not all 10!  */
 		switch (xo & 31) {
 		case PPC_63_FDIV:
+      if (rc) {
+        ic->f = instr(fdiv_dot);
+      } else {
+        ic->f = instr(fdiv);
+      }
+			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
+			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+      break;
 		case PPC_63_FSUB:
+      if (rc) {
+        ic->f = instr(fsub_dot);
+      } else {
+        ic->f = instr(fsub);
+      }
+			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
+			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+      break;
 		case PPC_63_FADD:
-			switch (xo & 31) {
-			case PPC_63_FDIV: ic->f = instr(fdiv); break;
-			case PPC_63_FSUB: ic->f = instr(fsub); break;
-			case PPC_63_FADD: ic->f = instr(fadd); break;
-			}
+      if (rc) {
+        ic->f = instr(fadd_dot);
+      } else {
+        ic->f = instr(fadd);
+      }
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			break;
 		case PPC_63_FMUL:
-			ic->f = instr(fmul);
+			if (rc) {
+				ic->f = instr(fmul_dot);
+			} else {
+				ic->f = instr(fmul);
+			}
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
-			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rs]); /* frc */
+			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rs]);
 			break;
 		case PPC_63_FMSUB:
 		case PPC_63_FMADD:

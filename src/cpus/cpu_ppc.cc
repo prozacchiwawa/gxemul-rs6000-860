@@ -44,20 +44,18 @@
 #include "ppc_spr_strings.h"
 #include "settings.h"
 #include "symbol.h"
+#include "float_emul.h"
 
 #include "thirdparty/ppc_bat.h"
 #include "thirdparty/ppc_pte.h"
 #include "thirdparty/ppc_spr.h"
+extern "C" {
+#include "softfloat.h"
+}
 
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-
-void ppc_pc_to_pointers(struct cpu *);
-void ppc32_pc_to_pointers(struct cpu *);
-
-void ppc_irq_interrupt_assert(struct interrupt *interrupt);
-void ppc_irq_interrupt_deassert(struct interrupt *interrupt);
 
 /*
  *  ppc_cpu_new():
@@ -1926,6 +1924,19 @@ void update_cr0(struct cpu *cpu, uint64_t value)
 	cpu->cd.ppc.cr |= ((uint32_t)c << 28);
 }
 
+/*
+ *  update_cr1():
+ *
+ *  Sets the next top 4 bits of the CR register.
+ */
+void fpu_update_cr1(struct cpu *cpu)
+{
+  uint64_t c = (cpu->cd.ppc.fpscr >> 28) & 0xf;
+	cpu->cd.ppc.cr &= ~((uint32_t)0xf << 24);
+	cpu->cd.ppc.cr |= ((uint32_t)c << 24);
+  fprintf(stderr, "%x => %08x\n", c, (uint32_t)cpu->cd.ppc.cr);
+}
+
 void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset) {
   int le_mode = cpu->cd.ppc.msr & PPC_MSR_LE;
   if (le_mode != cpu->cd.ppc.bytelane_swap[code]) {
@@ -1939,6 +1950,302 @@ void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, i
   } else {
     *swizzle = 0;
   }
+}
+
+#define EXP_BITS 11
+#define EXP_MASK ((1 << EXP_BITS) - 1)
+#define MANTISSA_BITS 52
+#define MANTISSA_MASK ((1ull << MANTISSA_BITS) - 1)
+
+float64_t pos_zero = { 0 };
+float64_t neg_zero = { 0x8000000000000000ull };
+
+void float80_fmt(char *res, const void *u, size_t size) {
+  const uint8_t *p = (uint8_t *)u;
+  uint64_t mantissa;
+  memcpy(&mantissa, p + 2, sizeof(mantissa));
+  int16_t exponent;
+  memcpy(&exponent, p, sizeof(exponent));
+  int sign = *p >> 7;
+  // Sign extend exponent
+  exponent &= ~32768;
+  if (exponent & 16384) {
+    exponent |= 32768;
+  }
+  sprintf(res, "%c m %" PRIx64 " e %d", sign ? '-' : '+', mantissa, (int)exponent);
+}
+
+int f64_iszero(float64_t f) {
+  return f.v == pos_zero.v || f.v == neg_zero.v;
+}
+
+int f64_isinf(float64_t f) {
+  uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
+  uint64_t mantissa = f.v & MANTISSA_MASK;
+  return exp == EXP_MASK && mantissa == 0;
+}
+
+// Zero exponent means denormalized.
+int f64_denormalized(float64_t f) {
+  return ((f.v >> MANTISSA_BITS) & EXP_MASK) == 0;
+}
+
+int f64_isnan(float64_t f) {
+  uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
+  uint64_t mantissa = f.v & MANTISSA_MASK;
+  return exp == EXP_MASK && mantissa != 0;
+}
+
+#ifndef CHECK_FOR_FPU_EXCEPTION
+#define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
+      /*  Synchronize the PC, and cause an FPU exception:  */           \
+      uint64_t low_pc = ((size_t)ic -                                   \
+                         (size_t)cpu->cd.ppc.cur_ic_page)               \
+		    / sizeof(struct ppc_instr_call);                                \
+      cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
+                                                            PPC_INSTR_ALIGNMENT_SHIFT); \
+      ppc_exception(cpu, PPC_EXCEPTION_FPU);                            \
+      return; } }
+#endif
+
+#define FPU_EXN { if (cpu->cd.ppc.msr & (PPC_MSR_FE0 | PPC_MSR_FE1)) {  \
+      /*  Synchronize the PC, and cause an FPU exception:  */           \
+      uint64_t low_pc = ((size_t)ic -                                   \
+                         (size_t)cpu->cd.ppc.cur_ic_page)               \
+		    / sizeof(struct ppc_instr_call);                                \
+      cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
+                                                            PPC_INSTR_ALIGNMENT_SHIFT); \
+      ppc_exception(cpu, PPC_EXCEPTION_PRG);                            \
+      return; } }
+
+#define FP_SET_BIT(X) { \
+    cpu->cd.ppc.fpscr |= (X);                    \
+  }
+
+#define FP_CLEAR_BITS(X) { \
+    cpu->cd.ppc.fpscr &= ~(X);                   \
+  }
+
+#define FP_CHECK_BIT(X) (((cpu->cd->cd.ppc.fpscr & (X)) != 0)
+
+void fpu_clear_non_sticky(struct cpu *cpu) {
+  FP_CLEAR_BITS(PPC_FPSCR_FEX | PPC_FPSCR_VX | PPC_FPSCR_FR | PPC_FPSCR_FI | (0x1f << 12));
+}
+
+int fpu_vsoft(struct cpu *cpu) {
+  return (cpu->cd.ppc.fpscr & PPC_FPSCR_VXSOFT);
+}
+
+void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
+  uint64_t fpscr = cpu->cd.ppc.fpscr;
+
+  if (source) {
+    // Check for FI
+    // XXX handle FR
+    extFloat80_t re_converted;
+    f64_to_extF80M(*result, &re_converted);
+    if (memcmp(&re_converted, source, sizeof(re_converted))) {
+      fpscr |= PPC_FPSCR_FI;
+    }
+  }
+
+  fpscr |= (fpscr & (PPC_FPSCR_FI | PPC_FPSCR_FR)) ? PPC_FPSCR_XX : 0;
+
+  if (f64_isinf(*result)) {
+    fprintf(stderr, "is infinite\n");
+    fpscr |= PPC_FPSCR_OX;
+  }
+
+  bool isnan = f64_isnan(*result);
+  bool qnan = !f64_isSignalingNaN(*result) && isnan;
+  fprintf(stderr, "isnan %d qnan %d\n", isnan, qnan);
+
+  if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
+    fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
+  }
+
+  // Propogate exceptions to fex.
+  uint32_t o = (fpscr & PPC_FPSCR_OE) && (fpscr & PPC_FPSCR_OX);
+  uint32_t u = (fpscr & PPC_FPSCR_UE) && (fpscr & PPC_FPSCR_UX);
+  uint32_t v = (fpscr & PPC_FPSCR_VE) && (fpscr & PPC_FPSCR_VX);
+  uint32_t z = (fpscr & PPC_FPSCR_ZE) && (fpscr & PPC_FPSCR_ZX);
+  uint32_t x = (fpscr & PPC_FPSCR_XE) && (fpscr & PPC_FPSCR_XX);
+
+  fprintf(stderr, "o %x u %x v %x z %x x %x\n", o, u, v, z, x);
+  bool fex = o | u | v | z | x;
+  fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
+
+  if (qnan || f64_denormalized(*result) || !memcmp(result, &neg_zero, sizeof(neg_zero))) {
+    fpscr |= PPC_FPSCR_CLASS;
+  }
+
+  if (f64_lt(*result, pos_zero)) {
+    fpscr |= PPC_FPSCR_FL;
+  }
+  if (f64_lt(pos_zero, *result)) {
+    fpscr |= PPC_FPSCR_FG;
+  }
+  if (f64_eq(*result, pos_zero)) {
+    fpscr |= PPC_FPSCR_FE;
+  }
+  if (isnan) {
+    fpscr |= PPC_FPSCR_FU;
+  }
+
+  fprintf(stderr, "final fpscr %08x\n", fpscr);
+  cpu->cd.ppc.fpscr = fpscr;
+}
+
+#define FPINST_PRELUDE() {                                      \
+    CHECK_FOR_FPU_EXCEPTION;                                    \
+                                                                \
+    if (fpu_vsoft(cpu)) {                                       \
+      FPU_EXN;                                                  \
+    }                                                           \
+                                                                \
+    if (f64_isSignalingNaN(fra) || f64_isSignalingNaN(frc)) {   \
+      FP_SET_BIT(PPC_FPSCR_VXSNAN);                             \
+      FPU_EXN;                                                  \
+    }                                                           \
+                                                                \
+    fpu_clear_non_sticky(cpu);                                  \
+  }
+
+void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc) {
+  float64_t fra = { *pfra };
+  float64_t frc = { *pfrc };
+
+  FPINST_PRELUDE();
+
+  // Multiplying inf by 0 is an invalid multiplication.
+  if ((f64_isnan(fra) && f64_iszero(frc)) ||
+      (f64_iszero(fra) && f64_isnan(frc))) {
+    FP_SET_BIT(PPC_FPSCR_VXIMZ | PPC_FPSCR_VX);
+    FPU_EXN;
+  }
+
+  extFloat80_t efra;
+  f64_to_extF80M(fra, &efra);
+  extFloat80_t efrc;
+  f64_to_extF80M(frc, &efrc);
+  extFloat80_t result;
+  extF80M_mul(&efra, &efrc, &result);
+  float64_t result_64 = extF80M_to_f64(&result);
+  fpu_epilog(cpu, &result, &result_64);
+  *ptarget = result_64.v;
+}
+
+void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc) {
+  float64_t fra = { *pfra };
+  float64_t frc = { *pfrc };
+
+  FPINST_PRELUDE();
+
+  // Divide by zero.
+  if (f64_iszero(fra) && f64_iszero(frc)) {
+    FP_SET_BIT(PPC_FPSCR_VXZDZ);
+    FPU_EXN;
+  }
+
+  if (f64_isinf(fra) && f64_isinf(frc)) {
+    FP_SET_BIT(PPC_FPSCR_VXIDI | PPC_FPSCR_UX);
+    FPU_EXN;
+  }
+
+  extFloat80_t efra;
+  f64_to_extF80M(fra, &efra);
+  extFloat80_t efrc;
+  f64_to_extF80M(frc, &efrc);
+  extFloat80_t result;
+  extF80M_div(&efra, &efrc, &result);
+  char efra_str[100], efrc_str[100], result_str[100];
+  float80_fmt(efra_str, &efra, sizeof(efra));
+  float80_fmt(efrc_str, &efrc, sizeof(efrc));
+  float80_fmt(result_str, &result, sizeof(result));
+  fprintf(stderr, "fdiv: %s / %s = %s\n", efra_str, efrc_str, result_str);
+  float64_t result_64 = extF80M_to_f64(&result);
+  fpu_epilog(cpu, &result, &result_64);
+  fprintf
+    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
+     fra.v, frc.v, result_64.v);
+  *ptarget = result_64.v;
+}
+
+void base_fadd(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc) {
+  float64_t fra = { *pfra };
+  float64_t frc = { *pfrc };
+
+  FPINST_PRELUDE();
+
+  // XXX detect addition of different infinities.
+
+  extFloat80_t efra;
+  f64_to_extF80M(fra, &efra);
+  extFloat80_t efrc;
+  f64_to_extF80M(frc, &efrc);
+  extFloat80_t result;
+  extF80M_add(&efra, &efrc, &result);
+  char efra_str[100], efrc_str[100], result_str[100];
+  float80_fmt(efra_str, &efra, sizeof(efra));
+  float80_fmt(efrc_str, &efrc, sizeof(efrc));
+  float80_fmt(result_str, &result, sizeof(result));
+  fprintf(stderr, "fadd: %s + %s = %s\n", efra_str, efrc_str, result_str);
+  float64_t result_64 = extF80M_to_f64(&result);
+  fpu_epilog(cpu, &result, &result_64);
+  fprintf
+    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
+     fra.v, frc.v, result_64.v);
+  *ptarget = result_64.v;
+}
+
+void base_fsub(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc) {
+  float64_t fra = { *pfra };
+  float64_t frc = { *pfrc };
+
+  FPINST_PRELUDE();
+
+  // XXX detect addition of different infinities.
+
+  extFloat80_t efra;
+  f64_to_extF80M(fra, &efra);
+  extFloat80_t efrc;
+  f64_to_extF80M(frc, &efrc);
+  extFloat80_t result;
+  extF80M_sub(&efra, &efrc, &result);
+  char efra_str[100], efrc_str[100], result_str[100];
+  float80_fmt(efra_str, &efra, sizeof(efra));
+  float80_fmt(efrc_str, &efrc, sizeof(efrc));
+  float80_fmt(result_str, &result, sizeof(result));
+  fprintf(stderr, "fsub: %s - %s = %s\n", efra_str, efrc_str, result_str);
+  float64_t result_64 = extF80M_to_f64(&result);
+  fpu_epilog(cpu, &result, &result_64);
+  fprintf
+    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
+     fra.v, frc.v, result_64.v);
+  *ptarget = result_64.v;
+}
+
+void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64_t *pfrc) {
+  float64_t fra = { *pfra };
+  float64_t frc = { *pfrc };
+
+  FPINST_PRELUDE();
+
+  if (f64_iszero(frc)) {
+    FP_SET_BIT(PPC_FPSCR_VX);
+    FPU_EXN;
+  }
+
+  extFloat80_t efra;
+  f64_to_extF80M(fra, &efra);
+  extFloat80_t efrc;
+  f64_to_extF80M(frc, &efrc);
+  extFloat80_t result;
+  extF80M_sub(&efra, &efrc, &result);
+  float64_t result_64 = extF80M_to_f64(&result);
+  fpu_epilog(cpu, &result, &result_64);
 }
 
 #include "memory_ppc.cc"

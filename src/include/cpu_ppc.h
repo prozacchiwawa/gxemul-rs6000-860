@@ -177,15 +177,39 @@ struct ppc_cpu {
 #define	PPC_FPSCR_FX	(1 << 31)	/*  Exception summary  */
 #define	PPC_FPSCR_FEX	(1 << 30)	/*  Enabled Exception summary  */
 #define	PPC_FPSCR_VX	(1 << 29)	/*  Invalid Operation summary  */
-/*  .. TODO  */
-#define	PPC_FPSCR_VXNAN	(1 << 24)
-/*  .. TODO  */
+#define PPC_FPSCR_OX  (1 << 28) /*  Overflow exception */
+#define PPC_FPSCR_UX  (1 << 27) /*  Underflow exception */
+#define PPC_FPSCR_ZX  (1 << 26) /*  Zero divide exception */
+#define PPC_FPSCR_XX  (1 << 25) /*  Inexact exception */
+#define PPC_FPSCR_VXSNAN (1 << 24) /* Signalling nan present */
+#define PPC_FPSCR_VXISI (1 << 23) /* Inf - Inf */
+#define PPC_FPSCR_VXIDI (1 << 22) /* inf / Inf */
+#define PPC_FPSCR_VXZDZ (1 << 21) /* 0 / 0 */
+#define PPC_FPSCR_VXIMZ (1 << 20) /* Inf * 0 */
+#define PPC_FPSCR_VXVC (1 << 19) /* Invalid compare */
+#define PPC_FPSCR_FR (1 << 18) /* Rounding */
+#define PPC_FPSCR_FI (1 << 17) /* Inexact */
+#define PPC_FPSCR_CLASS (1 << 16) /* fpcc class */
 #define	PPC_FPSCR_FPCC	0x0000f000
 #define	PPC_FPSCR_FPCC_SHIFT	12
 #define	PPC_FPSCR_FL	(1 << 15)	/*  Less than  */
 #define	PPC_FPSCR_FG	(1 << 14)	/*  Greater than  */
 #define	PPC_FPSCR_FE	(1 << 13)	/*  Equal or Zero  */
 #define	PPC_FPSCR_FU	(1 << 12)	/*  Unordered or NaN  */
+#define PPC_FPSCR_VXSOFT (1 << 10) /* Trigger soft exception */
+#define PPC_FPSCR_VXSQRT (1 << 9) /* Invalid square root */
+#define PPC_FPSCR_VXCVI (1 << 8) /* Invalid integer conversion */
+#define PPC_FPSCR_VE (1 << 7) /* Enable invalid operation exception tracking */
+#define PPC_FPSCR_OE (1 << 6) /* Enable overflow tracking */
+#define PPC_FPSCR_UE (1 << 5) /* Enable underflow tracking */
+#define PPC_FPSCR_ZE (1 << 4) /* Enable zero divide tracking */
+#define PPC_FPSCR_XE (1 << 3) /* Enable exactness tracking */
+#define PPC_FPSCR_NI (1 << 2) /* Non-ieee mode */
+
+#define PPC_FPSCR_ROUND_NEAREST 0
+#define PPC_FPSCR_ROUND_TO_ZERO 1
+#define PPC_FPSCR_ROUND_TO_PINF 2
+#define PPC_FPSCR_ROUND_TO_NINF 3
 
 /*  Exceptions:  */
 #define	PPC_EXCEPTION_DSI	0x3	/*  Data Storage Interrupt  */
@@ -200,7 +224,6 @@ struct ppc_cpu {
 #define	PPC_XER_SO	(1UL << 31)	/*  Summary Overflow  */
 #define	PPC_XER_OV	(1 << 30)	/*  Overflow  */
 #define	PPC_XER_CA	(1 << 29)	/*  Carry  */
-
 
 /*  cpu_ppc.c:  */
 int ppc_run_instr(struct cpu *cpu);
@@ -224,5 +247,16 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	uint64_t *return_addr, int flags);
 
 void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset);
+
+void ppc_pc_to_pointers(struct cpu *);
+void ppc32_pc_to_pointers(struct cpu *);
+
+void ppc_irq_interrupt_assert(struct interrupt *interrupt);
+void ppc_irq_interrupt_deassert(struct interrupt *interrupt);
+
+void stwbrx_cache_spill(struct cpu *cpu);
+int base_fadd(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
+int base_fmul(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
+int base_fdiv(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
 
 #endif	/*  CPU_PPC_H  */

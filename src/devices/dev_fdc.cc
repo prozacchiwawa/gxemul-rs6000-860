@@ -60,12 +60,13 @@
 #define STATE_CMD_DMA 0x2000
 #define STATE_CMD_BUSY 0x1000
 #define STATE_EMPTY 0
-#define STATE_VERSION 1
+#define STATE_VERSION_RES 1
 #define STATE_SPECIFY 0x03
 #define STATE_CHECK_DRIVE_STATUS 0x04
 #define STATE_RECAL 0x07
 #define SENSE_INTERRUPT 0x08
 #define STATE_SEEK 0x0f
+#define STATE_VERSION 0x10
 #define STATE_CONFIGURE 0x13
 #define STATE_READ_ID 0x0a
 #define STATE_READ_NORMAL_DATA 0x06
@@ -337,13 +338,21 @@ DEVICE_ACCESS(fdc)
               d->command_bytes[1] = 0x20;
           }
           d->command_bytes[0] = d->seek_track;
-					d->state = STATE_VERSION | STATE_CMD_QUEUE;
+					d->state = STATE_VERSION_RES | STATE_CMD_QUEUE;
 					break;
 
 				case STATE_SEEK:
 					fprintf(stderr, "[ fdc: seek ]\n");
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SEEK;
 					d->command_size = 2;
+					break;
+
+				case STATE_VERSION:
+					fprintf(stderr, "[ fdc: version ]\n");
+					d->command_result = 1;
+					d->command_bytes[0] = 0x90;
+					d->state = STATE_VERSION | STATE_CMD_QUEUE;
+					maybe_interrupt(d);
 					break;
 
 				case STATE_CONFIGURE:

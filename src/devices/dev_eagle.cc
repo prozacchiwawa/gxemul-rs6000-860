@@ -57,7 +57,7 @@ DEVICE_ACCESS(eagle)
 	 *  Pass accesses to ISA ports 0xcf8 and 0xcfc onto bus_pci_*:
 	 */
 
-	switch (relative_addr) {
+	switch (relative_addr & ~3) {
 
 	case 0:	/*  Address:  */
 		bus_pci_decompose_1(idata, &bus, &dev, &func, &reg);
@@ -65,8 +65,26 @@ DEVICE_ACCESS(eagle)
 		break;
 
 	case 4:	/*  Data:  */
-		bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
-                        &odata : &idata, len, writeflag);
+    // Deal properly with misaligned write.
+    if (len < 4 && writeflag == MEM_WRITE) {
+      uint64_t prev_value;
+      odata = idata;
+      bus_pci_data_access
+        (cpu,
+         d->pci_data,
+         &prev_value,
+         4,
+         MEM_READ);
+      int shift = (relative_addr % 4) * 8;
+      uint32_t mask = (1 << (len * 8)) - 1;
+      idata = (prev_value & ~(mask << shift)) | ((idata & mask) << shift);
+      fprintf(stderr, "[ dev_eagle: small pci write: len %d relative_addr %d, original write %08x, prev value %08x, write value %08x ]\n", len, relative_addr, (unsigned int)odata, (unsigned int)prev_value, (unsigned int)idata);
+    }
+    bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
+                        &odata : &idata, len > 4 ? len : 4, writeflag);
+    if (writeflag != MEM_WRITE) {
+      odata >>= 8 * (relative_addr & 3);
+    }
 		break;
 	}
 
@@ -108,8 +126,8 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
     if (target_addr) {
       memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
     } else {
+      odata = 0;
       fprintf(stderr, "[ eagle: PCI %s passthrough read %08x -> %08x ]\n", io_space ? "io" : "mem", real_addr, odata);
-      return 0;
     }
 	}
 
@@ -187,7 +205,7 @@ DEVICE_ACCESS(eagle_800)
         //       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
         //       +--------------------------------------- Reserved
     case 0x0c:
-        if (writeflag == MEM_READ) odata = 0x7e;
+        if (writeflag == MEM_READ) odata = 0x7c;
         break;
 
     case 0x10:

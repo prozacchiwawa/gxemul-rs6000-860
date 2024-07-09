@@ -87,12 +87,10 @@ void bus_pci_decompose_1(uint32_t t, int *bus, int *dev, int *func, int *reg)
 	*bus  = (t >> 16) & 0xff;
 	*dev  = (t >> 11) & 0x1f;
 	*func = (t >>  8) &  0x7;
-	*reg  =  t        & 0xff;
+	*reg  =  t        & 0xfc;
 
-	/*  Warn about unaligned register access:  */
-	if (t & 3)
-		fatal("[ bus_pci_decompose_1: WARNING: reg = 0x%02x ]\n",
-		    t & 0xff);
+  // The low bits are masked.
+  fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
 }
 
 /*
@@ -150,8 +148,7 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 
 	/*  Register write:  */
 	if (writeflag == MEM_WRITE) {
-		debug("[ bus_pci: write to PCI DATA: data = 0x%08llx ]\n",
-		    (long long)idata);
+		debug("[ bus_pci: write to PCI DATA: data = 0x%08llx ]\n", (long long)idata);
 		if (idata == 0xffffffffULL &&
 		    pci_data->cur_reg >= PCI_MAPREG_START &&
 		    pci_data->cur_reg <= PCI_MAPREG_END - 4) {
@@ -487,7 +484,7 @@ PCIINIT(igsfb)
 int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
   case 0x04:
-    PCI_SET_DATA(reg, 0);
+    PCI_SET_DATA(reg, value);
     return 1;
 
   case 0x10:
@@ -497,6 +494,7 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
   case 0x30:
     fprintf(stderr, "vga: set option rom address to %08x\n", value);
+    // PCI_SET_DATA(reg, value & 0xffff8000);
     PCI_SET_DATA(reg, 0);
     return 1;
 

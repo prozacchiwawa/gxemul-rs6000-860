@@ -79,6 +79,7 @@ struct fdc_data {
     int			seek_head, seek_track;
     int			read_sector, eot_sector;
     int			status_read;
+    int     assumed_spt;
     bool    asserting_interrupt;
     bool    just_reset;
     bool    recal_interrupt;
@@ -110,6 +111,7 @@ static void maybe_interrupt(struct fdc_data *d)
     if (d->reg[2] & 8) {
         assert_interrupt(d);
     }
+    d->reg[0] |= 0x80;
 }
 
 
@@ -137,6 +139,14 @@ DEVICE_ACCESS(fdc)
 	}
 
 	switch (relative_addr) {
+    // TDR
+  case 0x03:
+    if (writeflag == MEM_READ) {
+      idata = 0x80;
+      memory_writemax64(cpu, data, len, idata);
+    }
+    break;
+
 	case 0x04:
 		if (writeflag == MEM_WRITE) {
 			fprintf(stderr, "[ fdc: Status write %02x ]\n", (int)idata);
@@ -169,7 +179,7 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "execute command %02x (reg2 %02x)\n", oldstate & 0xff, d->reg[2] & 0xff);
 					switch (command) {
 					case STATE_SEEK:
-						d->seek_head = d->command_bytes[1] >> 1;
+						d->seek_head = (d->command_bytes[1] >> 1) & 1;
 						d->seek_track = d->command_bytes[0];
             d->command_bytes[1] = 0x20;
             d->command_bytes[0] = d->seek_track;
@@ -206,6 +216,7 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_READ_ID:
+            fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
 						d->state = STATE_READ_ID | STATE_CMD_QUEUE;
 						d->command_result = 7;
 						d->command_bytes[6] = d->seek_head ? 4 : 0;
@@ -227,7 +238,7 @@ DEVICE_ACCESS(fdc)
 						d->eot_sector = d->command_bytes[2];
 						fprintf(stderr, "[ fdc: read C%d H%d S%d ]\n", d->seek_track, d->seek_head, d->read_sector);
 						d->command_result = 7;
-						d->command_bytes[6] = d->seek_head ? 4 : 0 | d->seek_track == 0 ? 32 : 0;
+						d->command_bytes[6] = (d->seek_head ? 4 : 0) | 32;
 						d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
@@ -252,7 +263,7 @@ DEVICE_ACCESS(fdc)
             if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
               // LBA = (cylinder * number_of_heads + head) * sectors_per_track + sector - 1
               // offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 18) + d->read_sector - 1);
-              offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 36) + (d->read_sector - 1));
+              offset = 512 * ((((d->seek_track * 2) + d->seek_head) * d->assumed_spt) + (d->read_sector - 1));
 
               while (read_len > 0) {
                 fprintf(stderr, "[ fdc: read diskette from %08x to addr %08" PRIx64" len %08" PRIx64" ]\n", offset, read_addr, read_len);
@@ -431,10 +442,11 @@ DEVICE_ACCESS(fdc_3f7)
 
 	if (writeflag == MEM_WRITE) {
       fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
+      d->assumed_spt = (idata & 3) == 3 ? 36 : 18;
       deassert_interrupt(d);
       assert_interrupt(d);
 	} else {
-	    idata = 3;
+	    idata = 2;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);
 	    memory_writemax64(cpu, data, len, idata);
 	}
@@ -448,6 +460,8 @@ DEVINIT(fdc)
 
 	CHECK_ALLOCATION(d = (struct fdc_data *) malloc(sizeof(struct fdc_data)));
 	memset(d, 0, sizeof(struct fdc_data));
+
+  d->assumed_spt = 36;
 
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 

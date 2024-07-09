@@ -142,7 +142,8 @@ void diskimage_add_overlay(struct diskimage *d, char *overlay_basename)
 	if (overlay.f_bitmap == NULL) {
 		perror(bitmap_name);
 		fprintf(stderr, "Please create the map file first.\n");
-		exit(1);
+    while (sleep(100) == 0);
+		// exit(1);
 	}
 
 	d->nr_of_overlays ++;
@@ -664,7 +665,7 @@ int diskimage_add(struct machine *machine, char *fname)
 	char *cp;
 	int prefix_b=0, prefix_c=0, prefix_d=0, prefix_f=0, prefix_g=0;
 	int prefix_i=0, prefix_r=0, prefix_s=0, prefix_t=0, prefix_id=-1;
-	int prefix_o=0, prefix_V=0, prefix_n=0, prefix_R=0;
+	int prefix_o=0, prefix_V=0, prefix_n=0, prefix_R=0, prefix_v=0;
 
 	if (fname == NULL) {
 		fprintf(stderr, "diskimage_add(): NULL ptr\n");
@@ -755,6 +756,9 @@ int diskimage_add(struct machine *machine, char *fname)
 			case 'V':
 				prefix_V = 1;
 				break;
+      case 'v':
+        prefix_v = 1;
+        break;
 			case ':':
 				break;
 			default:
@@ -794,6 +798,8 @@ int diskimage_add(struct machine *machine, char *fname)
     d->type = DISKIMAGE_NVRAM;
   if (prefix_R)
     d->type = DISKIMAGE_ROM;
+  if (prefix_v)
+    d->type = DISKIMAGE_VGA_ROM;
 
 	/*  Special case: Add an overlay for an already added disk image:  */
 	if (prefix_V) {
@@ -905,11 +911,11 @@ int diskimage_add(struct machine *machine, char *fname)
 		d->sectors_per_track = d->total_size / (d->cylinders *
 		    d->heads * 512);
 		break;
-    case DISKIMAGE_NVRAM:
-        d->cylinders = 1;
-        d->heads = 1;
-        d->sectors_per_track = d->total_size;
-        break;
+  case DISKIMAGE_NVRAM:
+    d->cylinders = 1;
+    d->heads = 1;
+    d->sectors_per_track = d->total_size;
+    break;
 	default:/*  Non-floppies:  */
 		d->heads = 16;
 		d->sectors_per_track = 63;
@@ -989,6 +995,40 @@ int diskimage_add(struct machine *machine, char *fname)
 	d->id = id;
 
 	return id;
+}
+
+
+int diskimage_switch_floppy(struct machine *m, const char *file) {
+  for (struct diskimage *d = m->first_diskimage; d; d = d->next) {
+    if (d->type == DISKIMAGE_FLOPPY) {
+      FILE *f = fopen(file, "rb+");
+      if (!f) {
+        return -1;
+      }
+      free(d->fname);
+      d->fname = strdup(file);
+      fclose(d->f);
+      d->f = f;
+      d->change = true;
+      break;
+    }
+  }
+
+  return 0;
+}
+
+
+int diskimage_detect_floppy_change(struct machine *m) {
+  for (struct diskimage *d = m->first_diskimage; d; d = d->next) {
+    if (d->type == DISKIMAGE_FLOPPY) {
+      if (d->change) {
+        d->change = 0;
+        return 1;
+      }
+    }
+  }
+
+  return 0;
 }
 
 
@@ -1118,12 +1158,15 @@ void diskimage_dump_info(struct machine *machine)
 		case DISKIMAGE_FLOPPY:
 			debug("FLOPPY");
 			break;
-        case DISKIMAGE_NVRAM:
-            debug("NVRAM");
-            break;
-        case DISKIMAGE_ROM:
-            debug("ROM");
-            break;
+    case DISKIMAGE_NVRAM:
+      debug("NVRAM");
+      break;
+    case DISKIMAGE_ROM:
+      debug("ROM");
+      break;
+    case DISKIMAGE_VGA_ROM:
+      debug("VGA-ROM");
+      break;
 		default:
 			debug("UNKNOWN type %i", d->type);
 		}

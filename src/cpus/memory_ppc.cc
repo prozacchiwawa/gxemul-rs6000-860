@@ -242,11 +242,6 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		return 2;
 	}
 
-  if (vaddr == 0xbffffff0) {
-    *return_paddr = vaddr;
-    return 1;
-  }
-
 	if (cpu->cd.ppc.cpu_type.flags & PPC_601) {
 		fatal("ppc_translate_v2p(): TODO: 601\n");
 		exit(1);

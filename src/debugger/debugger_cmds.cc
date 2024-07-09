@@ -1412,6 +1412,34 @@ static void debugger_cmd_v2p(struct machine *m, char *cmd_line)
   }
 }
 
+static void debugger_cmd_swap_floppy(struct machine *m, char *cmd_line)
+{
+	uint64_t addr, result_addr;
+	struct cpu *c;
+	char *p = NULL;
+	int r;
+
+	if (cmd_line[0] != '\0') {
+		uint64_t tmp;
+		char *tmps;
+
+		CHECK_ALLOCATION(tmps = strdup(cmd_line));
+
+		/* new file  */
+		p = strchr(tmps, ' ');
+    if (p) {
+      *p = 0;
+    }
+
+    int switch_res = diskimage_switch_floppy(m, tmps);
+    free(tmps);
+    if (switch_res == -1) {
+      perror("could not switch floppy");
+      return;
+    }
+  }
+}
+
 /****************************************************************************/
 
 
@@ -1507,6 +1535,9 @@ static struct cmd cmds[] = {
 
   { "vp", "", 0, debugger_cmd_v2p,
     "print vp translation" },
+
+  { "fswap", "new file name", 0, debugger_cmd_swap_floppy,
+    "swap floppy to new filename" },
 
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },

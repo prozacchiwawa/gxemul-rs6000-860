@@ -190,6 +190,7 @@ struct eagle_data {
 
   int want_error;
   int l2_cache;
+  int discontiguous;
 };
 
 struct eagle_glob {

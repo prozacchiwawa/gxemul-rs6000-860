@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "cpu.h"
 #include "device.h"
@@ -400,6 +401,8 @@ DEVINIT(8259)
 		strlcat(name2, " [secondary]", nlen);
 		d->irq_base = 8;
 	}
+
+  assert(devinit->addr > 0x808680000000ull);
 
 	memory_device_register(devinit->machine->memory, name2,
 	    devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,

@@ -1659,7 +1659,7 @@ X(mftb) {
 	/*  NOTE/TODO: This increments the time base (slowly) if it
 	    is being polled.  */
   auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 80) & 0xffffffff;
+  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 80000) & 0xffffffff;
 	if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
 		cpu->cd.ppc.spr[SPR_TBU] ++;
   }
@@ -3528,6 +3528,7 @@ X(to_be_translated)
 		case PPC_31_DCBF:
 		case PPC_31_DCBT:
 		case PPC_31_ICBI:
+    case PPC_31_DCBI:
 			ic->f = instr(nop);
 			break;
 

@@ -54,6 +54,8 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 	char *interrupt_base_path, uint32_t bus_isa_flags,
 	uint64_t isa_portbase, uint64_t isa_membase);
 
+#define VIRTUAL_ISA_PORTBASE 0x808600000000ull
+
 /*  ISA bus flags:  */
 #define	BUS_ISA_IDE0			1
 #define	BUS_ISA_IDE1			2

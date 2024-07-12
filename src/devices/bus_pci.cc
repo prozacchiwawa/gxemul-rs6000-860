@@ -584,7 +584,7 @@ PCIINIT(lsi53c895a)
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 1;
-  assoc->size = 
+  assoc->size = 0x80;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
 

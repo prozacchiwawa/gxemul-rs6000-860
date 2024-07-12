@@ -1372,6 +1372,7 @@ if (x&1)
 				break;
 			case 0xae:
 				d->cmdbyte &= ~KC8_KDISABLE;
+        d->state = STATE_NORMAL;
 				break;
 			case 0xd0:
 				d->state = STATE_RDOUTPUT;

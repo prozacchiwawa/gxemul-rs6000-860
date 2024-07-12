@@ -325,20 +325,12 @@ void stwbrx_remember(uint32_t addr) {
 void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
   const char *rw = write ? "write" : "read";
 
-  int epld_port = write && (addr & 0xfffffff0) == 0x80000090;
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);
 
   if (write) {
     if (!cpu->cd.ppc.bytelane_swap_latch) {
       stwbrx_remember(addr);
     }
-  }
-
-  if (epld_port) {
-    int write_data = *((uint32_t *)data);
-    fprintf(stderr, "%s %08x: port 92\n", rw, write_data);
-    cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
-    ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
 }
 

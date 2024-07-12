@@ -41,6 +41,7 @@
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
+#include "bus_isa.h"
 
 #include "vga.h"
 
@@ -1692,7 +1693,7 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	    CONSOLE_OUTPUT_ONLY);
 
 	d->videomem_base  = videomem_base;
-	d->control_base   = control_base;
+	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
 	d->max_x          = 100;
 	d->max_y          = 38;
 	d->cur_mode       = MODE_CHARCELL;
@@ -1752,40 +1753,40 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	memory_device_register(mem, "vga_ctrl", control_base,
 	    32, dev_vga_ctrl_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_control", 0x80009ae8, 4,
+  memory_device_register(mem, "vga_s3_control", VIRTUAL_ISA_PORTBASE | 0x80009ae8, 4,
       dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
 
-	memory_device_register(mem, "vga_s3_curx", 0x800086e8, 4,
+	memory_device_register(mem, "vga_s3_curx", VIRTUAL_ISA_PORTBASE | 0x800086e8, 4,
 	    dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);
 
-	memory_device_register(mem, "vga_s3_cury", 0x800082e8, 4,
+	memory_device_register(mem, "vga_s3_cury", VIRTUAL_ISA_PORTBASE | 0x800082e8, 4,
 	    dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
 
-	memory_device_register(mem, "vga_s3_major_axis_len", 0x800096e8, 4,
+	memory_device_register(mem, "vga_s3_major_axis_len", VIRTUAL_ISA_PORTBASE | 0x800096e8, 4,
 	    dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
 
-	memory_device_register(mem, "vga_s3_pix_transfer", 0x8000e2e8, 4,
+	memory_device_register(mem, "vga_s3_pix_transfer", VIRTUAL_ISA_PORTBASE | 0x8000e2e8, 4,
 	    dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_bg_color", 0x8000a2e8, 4,
+  memory_device_register(mem, "vga_s3_bg_color", VIRTUAL_ISA_PORTBASE | 0x8000a2e8, 4,
       dev_vga_s3_bg_color_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_fg_color", 0x8000a6e8, 4,
+  memory_device_register(mem, "vga_s3_fg_color", VIRTUAL_ISA_PORTBASE | 0x8000a6e8, 4,
       dev_vga_s3_fg_color_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_color_compare", 0x8000b2e8, 4,
+  memory_device_register(mem, "vga_s3_color_compare", VIRTUAL_ISA_PORTBASE | 0x8000b2e8, 4,
       dev_vga_s3_color_compare_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_fg_color_mix", 0x8000bae8, 4,
+  memory_device_register(mem, "vga_s3_fg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000bae8, 4,
                          dev_vga_s3_fg_color_mix_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_destx", 0x80008ee8, 4,
+  memory_device_register(mem, "vga_s3_destx", VIRTUAL_ISA_PORTBASE | 0x80008ee8, 4,
                          dev_vga_s3_destx_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_desty", 0x80008ae8, 4,
+  memory_device_register(mem, "vga_s3_desty", VIRTUAL_ISA_PORTBASE | 0x80008ae8, 4,
                          dev_vga_s3_desty_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_pio_cmd", 0x8000bee8, 4,
+  memory_device_register(mem, "vga_s3_pio_cmd", VIRTUAL_ISA_PORTBASE | 0x8000bee8, 4,
       dev_vga_s3_pio_cmd_access, d, DM_DEFAULT, NULL);
 
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,

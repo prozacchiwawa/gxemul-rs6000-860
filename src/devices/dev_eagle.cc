@@ -148,6 +148,12 @@ DEVICE_ACCESS(eagle_pci_config)
 	uint64_t idata = 0, odata = 0;
 	int bus, dev, func, reg;
 
+  // Special handling for scsi which is 'builtin device 1'
+  if (relative_addr >= 0x800 && relative_addr < 0x1800) {
+      fprintf(stderr, "[ eagle: scsi pass %08x ]\n", (unsigned int)relative_addr);
+      relative_addr += 0x0d000 - 0x800;
+  }
+
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     fprintf(stderr, "[ eagle pci config space mapped access at %08x (write %08x) ]\n", relative_addr, (uint32_t)idata);
@@ -167,12 +173,51 @@ DEVICE_ACCESS(eagle_pci_config)
   return 1;
 }
 
-DEVICE_ACCESS(eagle_mem_pass)
+DEVICE_ACCESS(eagle_8mb)
 {
 	struct eagle_data *d = (struct eagle_data *) extra;
+	uint64_t real_addr, idata;
 
-	uint32_t real_addr = relative_addr;
-  return io_pass(cpu, d, writeflag, false, real_addr, data, len);
+  if (d->discontiguous) {
+    relative_addr &= 0xffffff;
+    uint64_t page = relative_addr >> 12;
+    uint64_t subaddr = relative_addr & 0x1f;
+    real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
+  } else {
+    real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
+  }
+
+  if (writeflag == MEM_READ) {
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL);
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
+  } else {
+      idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL);
+  }
+
+  return 1;
+}
+
+DEVICE_ACCESS(eagle_mem_pass)
+{
+    struct eagle_data *d = (struct eagle_data *) extra;
+
+    uint32_t real_addr = relative_addr;
+    return io_pass(cpu, d, writeflag, false, real_addr, data, len);
+}
+
+DEVICE_ACCESS(eagle_92)
+{
+    struct eagle_data *d = (struct eagle_data *) extra;
+    if (writeflag == MEM_WRITE) {
+        uint64_t write_data = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+        fprintf(stderr, "%s %08x: port 92\n", "write", (unsigned int)cpu->pc);
+        cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
+        ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+    } else {
+        memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, 0);
+    }
+    return 1;
 }
 
 DEVICE_ACCESS(eagle_800)
@@ -441,11 +486,18 @@ DEVICE_ACCESS(eagle_850)
   fprintf(stderr, "[ unknown-850: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
 
   if (writeflag == MEM_READ) {
-    if (relative_addr == 2) {
+    if (relative_addr == 0) {
+      idata = d->discontiguous ? 0 : 1;
+    } else if (relative_addr == 2) {
       idata = 0xda;
     }
 
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
+  } else {
+    if (relative_addr == 0) {
+      d->discontiguous = !(idata & 1);
+      fprintf(stderr, "[ eagle: discontiguous io %d ]\n", d->discontiguous);
+    }
   }
 
   return 1;
@@ -583,6 +635,8 @@ DEVINIT(eagle)
 	CHECK_ALLOCATION(d = (struct eagle_data *) malloc(sizeof(struct eagle_data)));
 	memset(d, 0, sizeof(struct eagle_data));
 
+  d->discontiguous = 0;
+
 	/*  The interrupt path to the CPU at which we are connected:  */
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 
@@ -632,16 +686,39 @@ DEVINIT(eagle)
 	d->pci_data = bus_pci_init(devinit->machine, devinit->interrupt_path,
 	    pci_io_offset, pci_mem_offset,
 	    pci_portbase, pci_membase, pci_irq_base,
-	    isa_portbase, isa_membase, isa_irq_base);
+	    VIRTUAL_ISA_PORTBASE | isa_portbase, isa_membase, isa_irq_base);
 
 	/*  Add the PCI glue for the controller itself:  */
 	bus_pci_add(devinit->machine, d->pci_data,
 	    devinit->machine->memory, 0, 0, 0, "eagle");
 
+  // Address space areas designated by the eagle
+  memory_device_register(devinit->machine->memory, "isa 8mb window",
+                         0x80000000, 8 * 1024 * 1024, dev_eagle_8mb_access, d,
+                         DM_DEFAULT, NULL);
+
+  memory_device_register(devinit->machine->memory, "PCI Config Space",
+                         isa_portbase + 0x00800800, 0x01000000 - 0x00800800, dev_eagle_pci_config_access, d,
+                         DM_DEFAULT, NULL);
+
+  memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
+                         isa_portbase + 0x01000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+                         DM_DEFAULT, NULL);
+
+  memory_device_register(devinit->machine->memory, "PCI MEM Passthrough",
+                         0xc0000000, 0x3ff00000, dev_eagle_mem_pass_access, d,
+                         DM_DEFAULT, NULL);
+
+  isa_portbase |= VIRTUAL_ISA_PORTBASE;
+
 	/*  ADDR and DATA configuration ports in ISA space:  */
 	memory_device_register(devinit->machine->memory, "eagle",
-	    isa_portbase + BUS_PCI_ADDR, 8, dev_eagle_access, d,
-	    DM_DEFAULT, NULL);
+                         isa_portbase + BUS_PCI_ADDR, 8, dev_eagle_access, d,
+                         DM_DEFAULT, NULL);
+
+  memory_device_register(devinit->machine->memory, "endian port 92",
+                         isa_portbase + 0x92, 4, dev_eagle_92_access, d,
+                         DM_DEFAULT, NULL);
 
   memory_device_register(devinit->machine->memory, "eagle feature control",
         isa_portbase + 0x800, 0x20, dev_eagle_800_access, d,
@@ -694,18 +771,6 @@ DEVINIT(eagle)
     memory_device_register(devinit->machine->memory, "880",
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,
         DM_DEFAULT, NULL);
-
-    memory_device_register(devinit->machine->memory, "PCI Config Space",
-                           isa_portbase + 0x00800800, 0x01000000 - 0x00800800, dev_eagle_pci_config_access, d,
-                           DM_DEFAULT, NULL);
-
-    memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
-                           isa_portbase + 0x01000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
-                           DM_DEFAULT, NULL);
-
-    memory_device_register(devinit->machine->memory, "PCI MEM Passthrough",
-                           0xc0000000, 0x3ff00000, dev_eagle_mem_pass_access, d,
-                           DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 

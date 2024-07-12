@@ -26,6 +26,7 @@
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
+#include "bus_isa.h"
 // #include "qemu/osdep.h"
 
 // #include "hw/irq.h"
@@ -3188,7 +3189,7 @@ DEVINIT(lsi53c895a)
                            dev_lsi53c895a_mem_access, d, DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "lsi53c895a (ALT)",
-                           0x80008000, DEV_LSI53C895A_LENGTH,
+                           VIRTUAL_ISA_PORTBASE | 0x80008000, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
 
     return 1;

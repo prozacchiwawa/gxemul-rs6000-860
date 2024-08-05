@@ -38,6 +38,7 @@
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
+#include "bus_isa.h"
 
 #include "thirdparty/wdcreg.h"
 
@@ -47,7 +48,8 @@
 #define	WDC_MAX_SECTORS		512
 #define	WDC_INBUF_SIZE		(512*(WDC_MAX_SECTORS+1))
 
-extern int quiet_mode;
+// extern int quiet_mode;
+#define quiet_mode 0
 
 /*  #define debug fatal  */
 
@@ -929,6 +931,15 @@ DEVINIT(wdc)
 	case MACHINE_MACPPC:
 		alt_status_addr = devinit->addr + 0x160;
 		break;
+
+  case MACHINE_PREP:
+    if ((devinit->addr & 0xfff) == 0x1f0) {
+      alt_status_addr = VIRTUAL_ISA_PORTBASE + 0x800003f6;
+    } else {
+      alt_status_addr = VIRTUAL_ISA_PORTBASE + 0x80000376;
+    };
+    break;
+
 	case MACHINE_HPCMIPS:
 		/*  TODO: Fix  */
 		if (devinit->addr == 0x14000180)
@@ -940,17 +951,19 @@ DEVINIT(wdc)
 	}
 
 	/*  Get disk geometries:  */
-	for (i=0; i<2; i++)
+	for (i=0; i<2; i++) {
 		if (diskimage_exist(devinit->machine, d->base_drive +i,
-		    DISKIMAGE_IDE))
+        DISKIMAGE_IDE)) {
 			diskimage_getchs(devinit->machine, d->base_drive + i,
 			    DISKIMAGE_IDE, &d->cyls[i], &d->heads[i],
 			    &d->sectors_per_track[i]);
+    }
+  }
 
 	memory_device_register(devinit->machine->memory, "wdc_altstatus",
-	    alt_status_addr, 2, dev_wdc_altstatus_access, d, DM_DEFAULT, NULL);
+	    alt_status_addr, 1, dev_wdc_altstatus_access, d, DM_DEFAULT, NULL);
 	memory_device_register(devinit->machine->memory, devinit->name,
-	    devinit->addr, DEV_WDC_LENGTH * devinit->addr_mult, dev_wdc_access,
+      devinit->addr, (DEV_WDC_LENGTH + 1) * devinit->addr_mult, dev_wdc_access,
 	    d, DM_DEFAULT, NULL);
 
 	machine_add_tickfunction(devinit->machine, dev_wdc_tick,

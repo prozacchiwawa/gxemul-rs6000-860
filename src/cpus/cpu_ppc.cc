@@ -337,7 +337,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		*valuep = cpu->cd.ppc.msr;
   }
 
-	if (check_for_interrupts && cpu->cd.ppc.msr & PPC_MSR_EE) {
+	if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
 		if (cpu->cd.ppc.dec_intr_pending &&
 		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 			ppc_exception(cpu, PPC_EXCEPTION_DEC);

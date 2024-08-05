@@ -1200,14 +1200,16 @@ X(llsc)
 	}
 
   int swizzle = 0, offset = 0;
-  cpu_ppc_swizzle_offset(cpu, len, 1, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, len, 0, &swizzle, &offset);
 
 	rt = (iw >> 21) & 31;
 	ra = (iw >> 16) & 31;
 	rb = (iw >> 11) & 31;
 
-	if (ra != 0)
+	if (ra != 0) {
 		addr = cpu->cd.ppc.gpr[ra];
+  }
+
 	addr += cpu->cd.ppc.gpr[rb];
 
 	if (load) {
@@ -1238,6 +1240,7 @@ X(llsc)
         (d[1^swizzle] << 16) +
         (d[2^swizzle] <<  8) +
         d[3^swizzle];
+      fprintf(stderr, "lwarx offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt]);
     }
 
 		cpu->cd.ppc.ll_addr = addr;
@@ -1257,8 +1260,9 @@ X(llsc)
 		    4 of Condition Register Field 0.  */
 		if (!cpu->cd.ppc.ll_bit || cpu->cd.ppc.ll_addr != addr) {
 			cpu->cd.ppc.cr &= 0x0fffffff;
-			if (old_so)
+			if (old_so) {
 				cpu->cd.ppc.cr |= 0x10000000;
+      }
 			cpu->cd.ppc.ll_bit = 0;
 			return;
 		}
@@ -1274,18 +1278,12 @@ X(llsc)
       d[6^swizzle] = value >> 8;
       d[7^swizzle] = value;
     } else {
+      fprintf(stderr, "stwcx. offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)value);
       d[0^swizzle] = value >> 24;
       d[1^swizzle] = value >> 16;
       d[2^swizzle] = value >> 8;
       d[3^swizzle] = value;
     }
-
-		for (i=0; i<len; i++) {
-			if (cpu->byte_order == EMUL_BIG_ENDIAN)
-				d[len - 1 - i] = value >> (8*i);
-			else
-				d[i] = value >> (8*i);
-		}
 
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -1295,12 +1293,14 @@ X(llsc)
 
 		cpu->cd.ppc.cr &= 0x0fffffff;
 		cpu->cd.ppc.cr |= 0x20000000;	/*  success!  */
-		if (old_so)
+		if (old_so) {
 			cpu->cd.ppc.cr |= 0x10000000;
+    }
 
 		/*  Clear _all_ CPUs' ll_bits:  */
-		for (i=0; i<cpu->machine->ncpus; i++)
+		for (i=0; i<cpu->machine->ncpus; i++) {
 			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
+    }
 	}
 }
 

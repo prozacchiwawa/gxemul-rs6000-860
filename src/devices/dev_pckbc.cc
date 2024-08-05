@@ -106,6 +106,8 @@ struct pckbc_data {
 
   int mouse_ena;
   int mouse_last_x, mouse_last_y, mouse_last_but;
+
+  int mouse_timeout;
 };
 
 #define	STATE_NORMAL			0
@@ -1042,6 +1044,8 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
       case 0xf2:
         pckbc_add_code(d, 0xfa, port_nr);
         pckbc_add_code(d, 0, port_nr);
+
+        d->mouse_timeout = 2;
         break;
 
       case 0xe2:
@@ -1328,6 +1332,14 @@ if (x&1)
 				odata |= KBS_OCMD;
 
 			odata |= KBS_NOSEC;
+
+      if (d->mouse_timeout) {
+        d->mouse_timeout--;
+        if (!d->mouse_timeout) {
+          fprintf(stderr, "[ mouse timeout ]\n");
+          odata |= 0x20;
+        }
+      }
       if (odata != 0x10) {
         debug("[ pckbc: read from CTL status port: "
               "0x%02x ]\n", (int)odata);
@@ -1356,7 +1368,6 @@ if (x&1)
 				break;
 			case 0xa8:
 				d->cmdbyte &= ~KC8_MDISABLE;
-        pckbc_add_code(d, 0xfa, 0);
 				break;
 			case 0xa9:	/*  test auxiliary port  */
         pckbc_add_code(d, 0x00, 0);

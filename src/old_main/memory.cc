@@ -191,12 +191,19 @@ int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
 	int min_string_length)
 {
 	int cur_length = 0;
+  int mz = 0;
 	unsigned char c;
 
 	for (;;) {
 		c = '\0';
 		cpu->memory_rw(cpu, mem, addr+cur_length,
 		    &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (c == 'M' && mz == 0) {
+      mz++;
+    }
+    if (c == 'Z' && mz == 1) {
+      return 0;
+    }
 		if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
 			cur_length ++;
 			if (cur_length >= min_string_length)
@@ -221,35 +228,45 @@ char *memory_conv_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
 	char *buf, int bufsize)
 {
 	int len = 0;
-	int output_index = 0;
 	unsigned char c, p='\0';
 
-	while (output_index < bufsize-1) {
-		c = '\0';
-		cpu->memory_rw(cpu, mem, addr+len, &c, sizeof(c), MEM_READ,
-		    CACHE_NONE | NO_EXCEPTIONS);
-		buf[output_index] = c;
-		if (c>=' ' && c<127) {
-			len ++;
-			output_index ++;
-		} else if (c=='\n' || c=='\r' || c=='\t') {
-			len ++;
-			buf[output_index] = '\\';
-			output_index ++;
-			switch (c) {
-			case '\n':	p = 'n'; break;
-			case '\r':	p = 'r'; break;
-			case '\t':	p = 't'; break;
-			}
-			if (output_index < bufsize-1) {
-				buf[output_index] = p;
-				output_index ++;
-			}
-		} else {
-			buf[output_index] = '\0';
-			return buf;
-		}
-	}
+  for (int stride = 1; stride <= 2; stride++) {
+    int output_index = 0;
+
+    while (output_index < bufsize-1) {
+      c = '\0';
+      cpu->memory_rw(cpu, mem, addr+len, &c, sizeof(c), MEM_READ,
+                     CACHE_NONE | NO_EXCEPTIONS);
+      buf[output_index] = c;
+      if (c == 0 && output_index == 1) {
+        break;
+      }
+      if (c>=' ' && c<127) {
+        len += stride;
+        output_index ++;
+      } else if (c=='\n' || c=='\r' || c=='\t') {
+        len += stride;
+        buf[output_index] = '\\';
+        output_index ++;
+        switch (c) {
+        case '\n':	p = 'n'; break;
+        case '\r':	p = 'r'; break;
+        case '\t':	p = 't'; break;
+        }
+        if (output_index < bufsize-1) {
+          buf[output_index] = p;
+          output_index ++;
+        }
+      } else {
+        buf[output_index] = '\0';
+        return buf;
+      }
+    }
+
+    if (output_index == bufsize - 1) {
+      break;
+    }
+  }
 
 	buf[bufsize-1] = '\0';
 	return buf;

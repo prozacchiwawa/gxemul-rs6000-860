@@ -375,6 +375,9 @@ void *device_add(struct machine *machine, const char *name_and_params)
 	}
 
   fprintf(stderr, "%s irq %s addr %llx\n", name_and_params, devinit.interrupt_path, devinit.addr);
+  if (!strcmp(name_and_params, "wdc irq=machine[0].cpu[0].isa.13 addr=0x8086800001f0")) {
+    abort();
+  }
 
 	/*
 	 *  Call the init function for this device:

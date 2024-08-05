@@ -233,9 +233,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			mips_cpu_exception(cpu, EXCEPTION_INT, 0, 0, 0, 0, 0,0);
 #endif
 #ifdef DYNTRANS_PPC
-		if (cpu->cd.ppc.dec_intr_pending && cpu->cd.ppc.msr & PPC_MSR_EE) {
-			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC))
+		if (cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
+			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 				ppc_exception(cpu, PPC_EXCEPTION_DEC);
+      }
 			cpu->cd.ppc.dec_intr_pending = 0;
 		}
 		if (cpu->cd.ppc.irq_asserted && cpu->cd.ppc.msr & PPC_MSR_EE)
@@ -434,8 +435,9 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		uint32_t old = cpu->cd.ppc.spr[SPR_DEC];
 		cpu->cd.ppc.spr[SPR_DEC] = (uint32_t) (old - n_instrs);
 		if ((old >> 31) == 0 && (cpu->cd.ppc.spr[SPR_DEC] >> 31) == 1
-		    && !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC))
+		    && !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 			cpu->cd.ppc.dec_intr_pending = 1;
+    }
 		old = cpu->cd.ppc.spr[SPR_TBL];
 		cpu->cd.ppc.spr[SPR_TBL] += n_instrs;
 		if ((old >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0)
@@ -463,7 +465,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 {
 	int show_symbolic_function_name = 1;
-        char strbuf[50];
+        char strbuf[100];
 	char *symbol;
 	uint64_t ot;
 	int x, print_dots = 1, n_args_to_print =
@@ -528,7 +530,7 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 
 		if (d > -256 && d < 256)
 			fatal("%i", (int)d);
-		else if (memory_points_to_string(cpu, cpu->mem, d, 1))
+		else if (memory_points_to_string(cpu, cpu->mem, d, 2))
 			fatal("\"%s\"", memory_conv_to_string(cpu,
 			    cpu->mem, d, strbuf, sizeof(strbuf)));
 		else if (symbol != NULL && ot == 0 &&

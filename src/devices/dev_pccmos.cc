@@ -50,6 +50,7 @@
 #include "thirdparty/mc146818reg.h"
 
 extern int verbose;
+#define verbose 0
 
 #define	DEV_PCCMOS_LENGTH		2
 #define	PCCMOS_MC146818_FAKE_ADDR	0x1d00000000ULL
@@ -141,7 +142,11 @@ DEVICE_ACCESS(pccmos)
         // the size of the CMOS ISA device at 8 ports.
     } else if (relative_addr == 4) {
         if (writeflag == MEM_WRITE) {
-            d->extended_select = (d->extended_select & 0xff00) | idata;
+            if (len == 2) {
+                d->extended_select = ((idata >> 8) & 0xff) | ((idata & 0xff) << 8);
+            } else {
+                d->extended_select = (d->extended_select & 0xff00) | idata;
+            }
         } else {
             odata = d->extended_select & 0xff;
         }

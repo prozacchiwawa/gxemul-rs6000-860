@@ -81,7 +81,7 @@ DEVICE_ACCESS(eagle)
       fprintf(stderr, "[ dev_eagle: small pci write: len %d relative_addr %d, original write %08x, prev value %08x, write value %08x ]\n", len, relative_addr, (unsigned int)odata, (unsigned int)prev_value, (unsigned int)idata);
     }
     bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
-                        &odata : &idata, len > 4 ? len : 4, writeflag);
+                        &odata : &idata, len > 4 ? len : 4, writeflag == MEM_WRITE);
     if (writeflag != MEM_WRITE) {
       odata >>= 8 * (relative_addr & 3);
     }
@@ -118,7 +118,7 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
     if (target_addr) {
       cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL);
     } else {
-      fprintf(stderr, "[ eagle: PCI %s passthrough write %08x = %08x ]\n", io_space ? "io" : "mem", real_addr, idata);
+      fprintf(stderr, "[ eagle: PCI %s passthrough write %08x = %08x @ %08x ]\n", io_space ? "io" : "mem", real_addr, idata, (unsigned int)cpu->pc);
     }
 	} else {
     cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL);
@@ -148,12 +148,6 @@ DEVICE_ACCESS(eagle_pci_config)
 	uint64_t idata = 0, odata = 0;
 	int bus, dev, func, reg;
 
-  // Special handling for scsi which is 'builtin device 1'
-  if (relative_addr >= 0x800 && relative_addr < 0x1800) {
-      fprintf(stderr, "[ eagle: scsi pass %08x ]\n", (unsigned int)relative_addr);
-      relative_addr += 0x0d000 - 0x800;
-  }
-
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     fprintf(stderr, "[ eagle pci config space mapped access at %08x (write %08x) ]\n", relative_addr, (uint32_t)idata);
@@ -161,6 +155,19 @@ DEVICE_ACCESS(eagle_pci_config)
 
 
   bus_pci_decompose_1(relative_addr, &bus, &dev, &func, &reg);
+
+  // Special handling for scsi which is 'builtin device 1'
+  // This address starts at +0x800, so these addresses here are odd.
+  if (relative_addr < 0x800) {
+    fprintf(stderr, "[ eagle: sio pass %08x ]\n", (unsigned int)relative_addr);
+    bus = 0;
+    dev = 11;
+  } else if (relative_addr < 0x1000) {
+    fprintf(stderr, "[ eagle: scsi pass %08x ]\n", (unsigned int)relative_addr);
+    bus = 0;
+    dev = 13;
+  }
+
   bus_pci_setaddr(cpu, d->pci_data, bus, dev, func, reg);
   bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
                       &odata : &idata, len, writeflag);
@@ -178,20 +185,20 @@ DEVICE_ACCESS(eagle_8mb)
 	struct eagle_data *d = (struct eagle_data *) extra;
 	uint64_t real_addr, idata;
 
-  if (d->discontiguous) {
+  if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     relative_addr &= 0xffffff;
     uint64_t page = relative_addr >> 12;
     uint64_t subaddr = relative_addr & 0x1f;
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
   } else {
-    real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
+      real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
 
   if (writeflag == MEM_READ) {
     cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL);
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
   } else {
-      idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL);
   }
 
@@ -250,7 +257,7 @@ DEVICE_ACCESS(eagle_800)
         //       |    +---------------------------------- SCSI Fuse (0 means blown, 1 means good)
         //       +--------------------------------------- Reserved
     case 0x0c:
-        if (writeflag == MEM_READ) odata = 0x7c;
+        if (writeflag == MEM_READ) odata = 0x7f;
         break;
 
     case 0x10:
@@ -278,7 +285,7 @@ DEVICE_ACCESS(eagle_800)
       break;
     }
 
-    fprintf(stderr, "[ unknown-800 %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
+    fprintf(stderr, "[ unknown-800 %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata, (unsigned int)cpu->pc);
 
     if (writeflag == MEM_READ)
         memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);

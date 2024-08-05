@@ -203,7 +203,8 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 
 	if (machine->machine_type == MACHINE_PREP) {
 		/*  PReP with obio controller has both WDCs on irq 13!  */
-		wdc0_irq = wdc1_irq = 13;
+		wdc0_irq = 14;
+    wdc1_irq = 15;
 	}
 
 	if (!(bus_isa_flags & BUS_ISA_EXTERNAL_PIC)) {

@@ -325,6 +325,11 @@ void stwbrx_remember(uint32_t addr) {
 void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
   const char *rw = write ? "write" : "read";
 
+  if (write && (cpu->cd.ppc.ll_addr == addr)) {
+    fprintf(stderr, "Cancel reserve %08x due to other access\n", (unsigned int)addr);
+    cpu->cd.ppc.ll_bit = 0;
+  }
+
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);
 
   if (write) {

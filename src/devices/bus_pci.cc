@@ -131,12 +131,7 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 	}
 
 	/*  Return normal config data, or length data?  */
-	if (pci_data->last_was_write_ffffffff &&
-	    pci_data->cur_reg >= PCI_MAPREG_START &&
-	    pci_data->cur_reg <= PCI_MAPREG_END - 4)
-		cfg_base = dev->cfg_mem_size;
-	else
-		cfg_base = dev->cfg_mem;
+  cfg_base = dev->cfg_mem;
 
 	/*  Read data as little-endian:  */
 	x = 0;
@@ -148,7 +143,7 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 
 	/*  Register write:  */
 	if (writeflag == MEM_WRITE) {
-		debug("[ bus_pci: write to PCI DATA: data = 0x%08llx ]\n", (long long)idata);
+		debug("[ bus_pci: write to PCI DATA: cur_reg %08x data = 0x%08llx ]\n", (unsigned int)pci_data->cur_reg, (long long)idata);
 		if (idata == 0xffffffffULL &&
 		    pci_data->cur_reg >= PCI_MAPREG_START &&
 		    pci_data->cur_reg <= PCI_MAPREG_END - 4) {
@@ -513,6 +508,7 @@ PCIINIT(s3_virge)
 	    PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0000010f);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
 
@@ -533,17 +529,19 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   uint32_t bar_loc;
   switch (reg) {
   case 0x04: // Status, command
+    PCI_SET_DATA(reg, value);
+    return 1;
   case 0x0c: // Header type, Latency Timer, Cache Line Size
     PCI_SET_DATA(reg, value);
     return 1;
   case 0x10:
-    bar_loc = value & ~0xfff;
+    bar_loc = value & ~0xff;
     fprintf(stderr, "lsi: set BAR0 %08x\n", bar_loc);
     PCI_SET_DATA(reg, bar_loc | 1);
     return 1;
   case 0x14:
-    bar_loc = value & ~0xfff;
-    fprintf(stderr, "lsi: set BAR1 %08x\n", bar_loc);
+    bar_loc = value & ~0xff;
+    fprintf(stderr, "lsi: set BAR1 %08x (raw %08x)\n", bar_loc, value);
     PCI_SET_DATA(reg, bar_loc);
     return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
@@ -572,8 +570,10 @@ PCIINIT(lsi53c895a)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0) | 0x26);
 
+  PCI_SET_DATA(4, 7);
+
   PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
-  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x8008000);
+  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x8000);
 
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
@@ -590,6 +590,7 @@ PCIINIT(lsi53c895a)
 
   snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
            assoc->allocated_space, irqstr);
+  fprintf(stderr, "lsi53c895a: add with string %s\n", tmpstr);
 
   device_add(machine, tmpstr);
 }
@@ -859,8 +860,8 @@ PCIINIT(i31244)
 	    diskimage_exist(machine, 1, DISKIMAGE_IDE)) {
 		char tmpstr[150];
 		snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x%llx irq=%s.%i",
-		    (long long)(pd->pcibus->pci_actual_io_offset + 0),
-		    pd->pcibus->irq_path_pci, irq & 255);
+             (long long)(pd->pcibus->pci_actual_io_offset + 0),
+             pd->pcibus->irq_path_pci, irq & 255);
 		device_add(machine, tmpstr);
 	}
 }
@@ -918,6 +919,7 @@ PCIINIT(i82378zb)
 	PCI_SET_DATA(PCI_BHLC_REG,
 	    PCI_BHLC_CODE(0,0, 1 /* multi-function */, 0x40,0));
 
+  PCI_SET_DATA(0x10, 0x10000);
 	PCI_SET_DATA(0x40, 0x20);
 
 	/*  PIRQ[0]=10 PIRQ[1]=11 PIRQ[2]=14 PIRQ[3]=15  */

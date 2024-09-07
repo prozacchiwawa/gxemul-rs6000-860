@@ -47,6 +47,7 @@
 #include "memory.h"
 #include "misc.h"
 #include "diskimage.h"
+#include "bus_isa.h"
 #include "thirdparty/mc146818reg.h"
 
 extern int verbose;
@@ -268,7 +269,7 @@ DEVINIT(pccmos)
 	}
 
 	memory_device_register(devinit->machine->memory, devinit->name,
-	    devinit->addr, len, dev_pccmos_access, (void *)d,
+      VIRTUAL_ISA_PORTBASE | devinit->addr, len, dev_pccmos_access, (void *)d,
 	    DM_DEFAULT, NULL);
 
 	dev_mc146818_init(

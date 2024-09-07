@@ -265,6 +265,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
 	    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
 
+  if (GdblibCheckWaiting(cpu)) {
+    GdblibSerialInterrupt(cpu);
+  }
+
 	if (single_step || cpu->machine->instruction_trace
 	    || cpu->machine->register_dump) {
 		/*
@@ -1753,6 +1757,10 @@ cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
 				goto stop_running_translated;
 			}
 	}
+
+  if (GdblibCheckWaiting(cpu)) {
+      GdblibSerialInterrupt(cpu);
+  }
 #endif	/*  DYNTRANS_TO_BE_TRANSLATED_HEAD  */
 
 
@@ -1911,6 +1919,9 @@ bad:	/*
 
 	/*  Note: Single-stepping can jump here.  */
 stop_running_translated:
+
+  /* Simple evaluator here? to make tracepoints? */
+  
 
 	debugger_n_steps_left_before_interaction = 0;
 

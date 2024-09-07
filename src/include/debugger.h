@@ -64,4 +64,8 @@ int  debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct i
 int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 	uint64_t *valuep);
 
+extern void GdblibSetup();
+extern int GdblibCheckWaiting(struct cpu *cpu);
+extern void GdblibSerialInterrupt(struct cpu *cpu);
+
 #endif	/*  DEBUGGER_H  */

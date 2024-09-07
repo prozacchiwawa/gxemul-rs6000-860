@@ -908,6 +908,22 @@ PCIINIT(piix4_isa)
 	pd->cfg_reg_write = piix_isa_cfg_reg_write;
 }
 
+int i82378zb_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  switch (reg) {
+  case 0x10:
+    fprintf(stderr, "isa: set BAR0 %08x\n", (unsigned int)value);
+    PCI_SET_DATA(0x10, value & ~0xffff);
+    return 1;
+
+  case 0x14:
+    fprintf(stderr, "isa: set BAR1 %08x\n", (unsigned int)value);
+    PCI_SET_DATA(0x14, value & ~0xffffff);
+    return 1;
+  }
+
+  return 0;
+}
+
 PCIINIT(i82378zb)
 {
 	PCI_SET_DATA(PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_INTEL,
@@ -919,11 +935,15 @@ PCIINIT(i82378zb)
 	PCI_SET_DATA(PCI_BHLC_REG,
 	    PCI_BHLC_CODE(0,0, 1 /* multi-function */, 0x40,0));
 
-  PCI_SET_DATA(0x10, 0x10000);
+  PCI_SET_DATA(0x10, 0x80000000);
+  PCI_SET_DATA(0x14, 0xc0000000);
+
 	PCI_SET_DATA(0x40, 0x20);
 
 	/*  PIRQ[0]=10 PIRQ[1]=11 PIRQ[2]=14 PIRQ[3]=15  */
 	PCI_SET_DATA(0x60, 0x0f0e0b0a);
+
+	pd->cfg_reg_write = i82378zb_cfg_reg_write;
 }
 
 struct piix_ide_extra {

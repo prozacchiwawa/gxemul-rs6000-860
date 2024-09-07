@@ -48,7 +48,7 @@
 #include "settings.h"
 #include "timer.h"
 #include "UnitTest.h"
-
+#include "debugger.h"
 
 extern int single_step;
 extern int force_debugger_at_exit;
@@ -829,6 +829,8 @@ int main(int argc, char *argv[])
 	device_init();
 	machine_init();
 	timer_init();
+
+  GdblibSetup();
 
 	/*  Create a simple emulation setup:  */
 	emul = emul_new(NULL);

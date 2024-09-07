@@ -183,7 +183,7 @@ DEVICE_ACCESS(eagle_pci_config)
 DEVICE_ACCESS(eagle_8mb)
 {
 	struct eagle_data *d = (struct eagle_data *) extra;
-	uint64_t real_addr, idata;
+	uint64_t real_addr = relative_addr, idata;
 
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     relative_addr &= 0xffffff;
@@ -191,7 +191,7 @@ DEVICE_ACCESS(eagle_8mb)
     uint64_t subaddr = relative_addr & 0x1f;
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
   } else {
-      real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
+    real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
 
   if (writeflag == MEM_READ) {
@@ -701,7 +701,7 @@ DEVINIT(eagle)
 
   // Address space areas designated by the eagle
   memory_device_register(devinit->machine->memory, "isa 8mb window",
-                         0x80000000, 8 * 1024 * 1024, dev_eagle_8mb_access, d,
+                         isa_portbase, 8 * 1024 * 1024, dev_eagle_8mb_access, d,
                          DM_DEFAULT, NULL);
 
   memory_device_register(devinit->machine->memory, "PCI Config Space",

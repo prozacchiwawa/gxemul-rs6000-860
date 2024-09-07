@@ -934,9 +934,9 @@ DEVINIT(wdc)
 
   case MACHINE_PREP:
     if ((devinit->addr & 0xfff) == 0x1f0) {
-      alt_status_addr = VIRTUAL_ISA_PORTBASE + 0x800003f6;
+      alt_status_addr = VIRTUAL_ISA_PORTBASE | 0x800003f6;
     } else {
-      alt_status_addr = VIRTUAL_ISA_PORTBASE + 0x80000376;
+      alt_status_addr = VIRTUAL_ISA_PORTBASE | 0x80000376;
     };
     break;
 

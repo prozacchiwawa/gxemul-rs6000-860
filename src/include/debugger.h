@@ -65,7 +65,12 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 	uint64_t *valuep);
 
 extern void GdblibSetup();
+extern int GdblibActive();
+extern void GdblibTakeException(struct cpu *cpu, int n);
 extern int GdblibCheckWaiting(struct cpu *cpu);
 extern void GdblibSerialInterrupt(struct cpu *cpu);
+
+extern void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen);
+extern void breakpoint_delete(struct machine *m, uint64_t addr);
 
 #endif	/*  DEBUGGER_H  */

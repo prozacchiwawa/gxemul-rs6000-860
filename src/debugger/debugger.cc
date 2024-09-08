@@ -101,6 +101,61 @@ static char repeat_cmd[MAX_CMD_BUFLEN];
 static uint64_t last_dump_addr = MAGIC_UNTOUCHED;
 static uint64_t last_unasm_addr = MAGIC_UNTOUCHED;
 
+static void breakpoint_delete_number(struct machine *m, int x) {
+  free(m->breakpoints.string[x]);
+
+  for (int i=x; i<m->breakpoints.n-1; i++) {
+    m->breakpoints.addr[i]   = m->breakpoints.addr[i+1];
+    m->breakpoints.string[i] = m->breakpoints.string[i+1];
+  }
+  m->breakpoints.n --;
+
+  /*  Clear translations:  */
+  for (int i=0; i<m->ncpus; i++)
+    if (m->cpus[i]->translation_cache != NULL)
+      cpu_create_or_reset_tc(m->cpus[i]);
+}
+
+void breakpoint_delete(struct machine *m, uint64_t addr) {
+  int which_bp = -1;
+  for (int i = 0; i < m->breakpoints.n; i++) {
+    if (m->breakpoints.addr[i] == addr) {
+      which_bp = i;
+    }
+  }
+
+  if (which_bp == -1) {
+    return;
+  }
+
+  breakpoint_delete_number(m, which_bp);
+}
+
+void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen) {
+  CHECK_ALLOCATION(m->breakpoints.string = (char **) realloc(
+                                                             m->breakpoints.string, sizeof(char *) *
+                                                             (m->breakpoints.n + 1)));
+  CHECK_ALLOCATION(m->breakpoints.addr = (uint64_t *) realloc(
+                                                              m->breakpoints.addr, sizeof(uint64_t) *
+                                                              (m->breakpoints.n + 1)));
+
+  int i = m->breakpoints.n;
+
+  CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)
+                   malloc(namelen));
+  strlcpy(m->breakpoints.string[i], name,
+          namelen);
+  m->breakpoints.addr[i] = addr;
+
+  m->breakpoints.n ++;
+
+  /*  Clear translations:  */
+  for (i=0; i<m->ncpus; i++) {
+    if (m->cpus[i]->translation_cache != NULL) {
+      cpu_create_or_reset_tc(m->cpus[i]);
+    }
+  }
+}
 
 /*
  *  debugger_readchar():
@@ -690,10 +745,28 @@ void debugger(void)
 			    debugger_machine->cpus[i], 0, INVALIDATE_ALL);
 		}
 
+  exit_debugger = 0;
+
 	/*  Stop timers while interacting with the user:  */
 	timer_stop();
 
-	exit_debugger = 0;
+  if (GdblibActive()) {
+    debugger_machine->instruction_trace = 0;
+    debugger_machine->show_trace_tree = 0;
+
+    GdblibTakeException(debugger_machine->cpus[0], 7);
+    timer_start();
+
+    for (i=0; i<debugger_machine->ncpus; i++) {
+      gettimeofday(&debugger_machine->cpus[i]->starttime, NULL);
+      debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
+    }
+
+    fprintf(stderr, "resume from gdb\n");
+    single_step = NOT_SINGLE_STEPPING;
+    exit_debugger = 1;
+    return;
+  }
 
 	while (!exit_debugger) {
 		/*  Read a line from the terminal:  */

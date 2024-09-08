@@ -91,6 +91,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <string.h>
 #include "cpu.h"
 #include "memory.h"
 #include "thirdparty/ppc_spr.h"
@@ -182,7 +183,6 @@ int rdy(struct cpu *cpu, int wait)
         struct sockaddr_in sa = { };
         socklen_t len = sizeof(sa);
         gdbstub_socket = accept(gdbstub_listen, (struct sockaddr *)&sa, &len);
-        Wait(cpu);
     }
 
     return result;
@@ -234,6 +234,11 @@ void GdblibSetup()
     atexit(close_ports);
 }
 
+int GdblibActive()
+{
+    return gdbstub_socket != -1;
+}
+
 int GdblibCheckWaiting(struct cpu *cpu) {
     return rdy(cpu, 0);
 }
@@ -250,6 +255,7 @@ static void Wait(struct cpu *cpu)
             GdblibSerialInterrupt(cpu);
         }
     }
+    fprintf(stderr, "gdblib wait done\n");
 }
 
 void SerialWrite(int ch)
@@ -287,14 +293,22 @@ void PacketWriteChar(int ch)
     DataOutBuffer[DataOutAddr++] = ch;
 }
 
-int PacketWriteHexNumber(int hnum, int dig)
+int PacketWriteHexNumber(int hnum, int dig, int little_endian)
 {
     int i;
-    hnum <<= (8 - dig) * 4;
-    for (i = 0; i < dig; i++)
-    {
-        PacketWriteChar(hex[(hnum >> 28) & 15]);
-        hnum <<= 4;
+    if (little_endian) {
+        for (i = 0; i < dig / 2; i++) {
+            PacketWriteChar(hex[(hnum >> 4) & 15]);
+            PacketWriteChar(hex[hnum & 15]);
+            hnum >>= 8;
+        }
+    } else {
+        hnum <<= (8 - dig) * 4;
+        for (i = 0; i < dig; i++)
+        {
+            PacketWriteChar(hex[(hnum >> 28) & 15]);
+            hnum <<= 4;
+        }
     }
     return i;
 }
@@ -303,6 +317,10 @@ void PacketStart()
 {
     DataOutCsum = 0;
     DataOutAddr = 0;
+}
+
+void PacketEnd()
+{
 }
 
 void PacketFinish(struct cpu *cpu)
@@ -348,7 +366,7 @@ void PacketWriteSignal(struct cpu *cpu, int code)
 {
     PacketStart();
     PacketWriteChar('S');
-    PacketWriteHexNumber(code, 2);
+    PacketWriteHexNumber(code, 2, 0);
     PacketFinish(cpu);
 }
 
@@ -356,14 +374,15 @@ void PacketWriteError(struct cpu *cpu, int code)
 {
     PacketStart();
     PacketWriteChar('E');
-    PacketWriteHexNumber(code, 2);
+    PacketWriteHexNumber(code, 2, 0);
     PacketFinish(cpu);
 }
 
 void GotPacket(struct cpu *cpu)
 {
     int i, memaddr, memsize;
-    uint8_t membuf[128];
+    uint8_t membuf[4];
+    char namebuf[10];
     auto OldSaveArea = RegisterSaveArea;
     RegisterSaveArea = cpu;
 
@@ -373,23 +392,30 @@ void GotPacket(struct cpu *cpu)
         PacketStart();
         // Copy out 108 registers
         for (i = 0; i < 32; i++) {
-            PacketWriteHexNumber(RegisterSaveArea->cd.ppc.gpr[i], 8);
+            PacketWriteHexNumber(RegisterSaveArea->cd.ppc.gpr[i], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         }
         for (i = 0; i < 32; i++) {
-            PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpr[i], 8);
+            PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpr[i], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         }
         for (i = 0; i < 32; i++) {
-            PacketWriteHexNumber(0, 8);
+            PacketWriteHexNumber(0, 8, 0);
         }
-        PacketWriteHexNumber(RegisterSaveArea->pc, 8);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.msr, 8);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[8], 8);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[9], 8);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpscr, 8);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.cr, 4);
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[1], 4);
-        for (i = 0; i < 5; i++) {
-            PacketWriteHexNumber(0, 8);
+        // [x] 0xfe019d70
+        PacketWriteHexNumber(RegisterSaveArea->pc, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // [x] 0x13031
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.msr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // [?] 0x0 fpscr
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[1], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // [?] 0x0 (ctr)
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[9], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // [?] 0x0
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpscr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // 0xfe037d60 (lr)
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[8], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        // 0x28280288
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.cr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        for (i = 0; i < 4; i++) {
+            PacketWriteHexNumber(0, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         }
         PacketFinish(cpu);
         break;
@@ -404,7 +430,7 @@ void GotPacket(struct cpu *cpu)
 
     case 'p':
         PacketStart();
-        PacketWriteHexNumber(0, 8);
+        PacketWriteHexNumber(0, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         PacketFinish(cpu);
         break;
 
@@ -416,14 +442,17 @@ void GotPacket(struct cpu *cpu)
 
         while(memsize > 0)
         {
-            int readsize = memsize > 128 ? 128 : memsize;
+            int readsize = memsize > sizeof(membuf) ? sizeof(membuf) : memsize;
 
-            cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+            if (cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+                break;
+            }
+
             memsize -= readsize;
             memaddr += readsize;
 
             for (int i = 0; i < readsize; i++) {
-                PacketWriteHexNumber(membuf[i], 2);
+                PacketWriteHexNumber(membuf[i], 2, cpu->cd.ppc.msr & PPC_MSR_LE);
             }
         }
 
@@ -446,8 +475,8 @@ void GotPacket(struct cpu *cpu)
         PacketWriteSignal(cpu, Signal);
         break;
 
+    case 'C':
     case 'c':
-        PacketOk(cpu);
         Continue = 1;
         break;
 
@@ -459,6 +488,23 @@ void GotPacket(struct cpu *cpu)
 
     case 'v':
         PacketEmpty(cpu);
+        break;
+
+    case 'z': // Delete breakpoint
+        PacketReadHexNumber(1);
+        DataInAddr++;
+        memaddr = PacketReadHexNumber(8);
+        breakpoint_delete(cpu->machine, memaddr);
+        PacketOk(cpu);
+        break;
+
+    case 'Z': // Add breakpoint
+        PacketReadHexNumber(1);
+        DataInAddr++;
+        memaddr = PacketReadHexNumber(8);
+        sprintf(namebuf, "%08x", memaddr);
+        breakpoint_add(cpu->machine, memaddr, namebuf, strlen(namebuf));
+        PacketOk(cpu);
         break;
 
     case 'q':
@@ -495,7 +541,7 @@ void GotPacket(struct cpu *cpu)
 
             PacketStart();
             PacketWriteString("m");
-            PacketWriteHexNumber(0,1);
+            PacketWriteHexNumber(0,1, cpu->cd.ppc.msr & PPC_MSR_LE);
             PacketFinish(cpu);
             break;
 
@@ -580,18 +626,22 @@ void GdblibSerialInterrupt(struct cpu *cpu)
     }
 }
 
-void TakeException(struct cpu *cpu, int n, void *tf)
+void GdblibTakeException(struct cpu *cpu, int n)
 {
+    fprintf(stderr, "report exception %d to gdb\n", n);
     Signal = n;
+    SendSignal = 1;
     auto OldSaveArea = RegisterSaveArea;
-    RegisterSaveArea = ((ppc_trap_frame_t*)tf);
+    RegisterSaveArea = cpu;
     if (SendSignal) {
+        fprintf(stderr, "send signal packet\n");
         PacketWriteSignal(cpu, Signal);
     }
     SendSignal = 0;
     Continue = 0;
     Wait(cpu);
     RegisterSaveArea = OldSaveArea;
+    fprintf(stderr, "return from gdb exception\n");
 }
 
 /* EOF */

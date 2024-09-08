@@ -1921,8 +1921,6 @@ bad:	/*
 stop_running_translated:
 
   /* Simple evaluator here? to make tracepoints? */
-  
-
 	debugger_n_steps_left_before_interaction = 0;
 
 	ic = cpu->cd.DYNTRANS_ARCH.next_ic = &nothing_call;

@@ -37,7 +37,6 @@ static void debugger_cmd_allsettings(struct machine *m, char *cmd_line)
 	settings_debugdump(global_settings, GLOBAL_SETTINGS_NAME, 1);
 }
 
-
 /*
  *  debugger_cmd_breakpoint():
  *
@@ -80,18 +79,7 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 			return;
 		}
 
-		free(m->breakpoints.string[x]);
-
-		for (i=x; i<m->breakpoints.n-1; i++) {
-			m->breakpoints.addr[i]   = m->breakpoints.addr[i+1];
-			m->breakpoints.string[i] = m->breakpoints.string[i+1];
-		}
-		m->breakpoints.n --;
-
-		/*  Clear translations:  */
-		for (i=0; i<m->ncpus; i++)
-			if (m->cpus[i]->translation_cache != NULL)
-				cpu_create_or_reset_tc(m->cpus[i]);
+    breakpoint_delete_number(m, x);
 		return;
 	}
 
@@ -107,29 +95,11 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 			return;
 		}
 
-		CHECK_ALLOCATION(m->breakpoints.string = (char **) realloc(
-		    m->breakpoints.string, sizeof(char *) *
-		    (m->breakpoints.n + 1)));
-		CHECK_ALLOCATION(m->breakpoints.addr = (uint64_t *) realloc(
-		    m->breakpoints.addr, sizeof(uint64_t) *
-		   (m->breakpoints.n + 1)));
+    breakpoint_buf_len = strlen(cmd_line+4) + 1;
 
-		breakpoint_buf_len = strlen(cmd_line+4) + 1;
-
-		CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)
-		    malloc(breakpoint_buf_len));
-		strlcpy(m->breakpoints.string[i], cmd_line+4,
-		    breakpoint_buf_len);
-		m->breakpoints.addr[i] = tmp;
-
-		m->breakpoints.n ++;
-		show_breakpoint(m, i);
-
-		/*  Clear translations:  */
-		for (i=0; i<m->ncpus; i++)
-			if (m->cpus[i]->translation_cache != NULL)
-				cpu_create_or_reset_tc(m->cpus[i]);
-		return;
+    breakpoint_add(m, res, cmd_line + 4, breakpoint_buf_len);
+    show_breakpoint(m, i);
+    return;
 	}
 
 	printf("Unknown breakpoint subcommand.\n");
@@ -1440,6 +1410,22 @@ static void debugger_cmd_swap_floppy(struct machine *m, char *cmd_line)
   }
 }
 
+static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
+{
+  char *endptr;
+  unsigned long trap = strtoul(cmd_line, &endptr, 10);
+
+  if (!trap) {
+    trap = 7;
+  }
+
+  fprintf(stderr, "gdb exception\n");
+  GdblibTakeException(debugger_machine->cpus[0], trap);
+  fprintf(stderr, "gdb exception done\n");
+
+	exit_debugger = 1;
+}
+
 /****************************************************************************/
 
 
@@ -1541,6 +1527,8 @@ static struct cmd cmds[] = {
 
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },
+
+  { "gdb", "trap number", 0, debugger_cmd_gdb, "Transfer control to gdb" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

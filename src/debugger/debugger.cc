@@ -157,6 +157,13 @@ void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int name
   }
 }
 
+void debugger_step(struct machine *m, int steps) {
+	debugger_n_steps_left_before_interaction = steps - 1;
+
+	/*  Special hack, see debugger() for more info.  */
+	exit_debugger = -1;
+}
+
 /*
  *  debugger_readchar():
  */

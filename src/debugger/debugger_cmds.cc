@@ -988,10 +988,7 @@ static void debugger_cmd_step(struct machine *m, char *cmd_line)
 		}
 	}
 
-	debugger_n_steps_left_before_interaction = n - 1;
-
-	/*  Special hack, see debugger() for more info.  */
-	exit_debugger = -1;
+  debugger_step(m, n);
 
 	strlcpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
 }

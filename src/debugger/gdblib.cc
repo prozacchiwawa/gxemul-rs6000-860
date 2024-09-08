@@ -102,6 +102,10 @@ typedef struct _BREAKPOINT {
     int *Address;
 } BREAKPOINT, *PBREAKPOINT;
 
+extern volatile int single_step;
+extern volatile int exit_debugger;
+extern int debugger_n_steps_left_before_interaction;
+
 BREAKPOINT BreakPoints[64];
 char DataOutBuffer[65536];
 volatile int DataOutAddr, DataOutCsum;
@@ -400,20 +404,16 @@ void GotPacket(struct cpu *cpu)
         for (i = 0; i < 32; i++) {
             PacketWriteHexNumber(0, 8, 0);
         }
+
         // [x] 0xfe019d70
         PacketWriteHexNumber(RegisterSaveArea->pc, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         // [x] 0x13031
         PacketWriteHexNumber(RegisterSaveArea->cd.ppc.msr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
-        // [?] 0x0 fpscr
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[1], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
-        // [?] 0x0 (ctr)
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[9], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
-        // [?] 0x0
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpscr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
-        // 0xfe037d60 (lr)
-        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[8], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
-        // 0x28280288
         PacketWriteHexNumber(RegisterSaveArea->cd.ppc.cr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[8], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[9], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.fpscr, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
+        PacketWriteHexNumber(RegisterSaveArea->cd.ppc.spr[1], 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         for (i = 0; i < 4; i++) {
             PacketWriteHexNumber(0, 8, cpu->cd.ppc.msr & PPC_MSR_LE);
         }
@@ -421,10 +421,7 @@ void GotPacket(struct cpu *cpu)
         break;
 
     case 'G':
-        for (i = 0; i < 108; i++)
-        {
-            ((int *)RegisterSaveArea)[i] = PacketReadHexNumber(8);
-        }
+        // Don't support for now.
         PacketOk(cpu);
         break;
 
@@ -478,6 +475,14 @@ void GotPacket(struct cpu *cpu)
     case 'C':
     case 'c':
         Continue = 1;
+        break;
+
+    case 'H':
+        if (DataInBuffer[1] == 'c') {
+            Continue = 1;
+            debugger_step(cpu->machine, 1);
+        }
+        PacketOk(cpu);
         break;
 
     case 's':

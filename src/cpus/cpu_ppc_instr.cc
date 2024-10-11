@@ -1236,7 +1236,7 @@ X(llsc)
       return; // exit(1);
     }
 
-    fprintf(stderr, "lwarx: len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
+    // fprintf(stderr, "lwarx: len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
 
     // Like in cpu_ppc_instr_loadstore
     if (len == 8) {
@@ -1255,7 +1255,7 @@ X(llsc)
         (d[1^swizzle] << 16) +
         (d[2^swizzle] <<  8) +
         d[3^swizzle];
-      fprintf(stderr, "lwarx offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt]);
+      // fprintf(stderr, "lwarx offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt]);
     }
 
 		cpu->cd.ppc.ll_addr = final_addr;
@@ -1302,7 +1302,7 @@ X(llsc)
       d[6^swizzle] = value >> 8;
       d[7^swizzle] = value;
     } else {
-      fprintf(stderr, "stwcx. offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)value);
+      // fprintf(stderr, "stwcx. offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)value);
       d[0^swizzle] = value >> 24;
       d[1^swizzle] = value >> 16;
       d[2^swizzle] = value >> 8;
@@ -1311,12 +1311,12 @@ X(llsc)
 
     if (page) {
       memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-    } else if (!cpu->memory_rw(cpu, cpu->mem, final_addr, d, len, MEM_WRITE, CACHE_DATA)) {
+    } else if (!cpu->memory_rw(cpu, cpu->mem, addr, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
 		}
 
-    fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
+    // fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
 		cpu->cd.ppc.cr |= 0x20000000;	/*  success!  */
 	}
 }

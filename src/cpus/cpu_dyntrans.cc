@@ -239,7 +239,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
       }
 			cpu->cd.ppc.dec_intr_pending = 0;
 		}
-		if (cpu->cd.ppc.irq_asserted && cpu->cd.ppc.msr & PPC_MSR_EE)
+		if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
 			ppc_exception(cpu, PPC_EXCEPTION_EI);
 #endif
 #ifdef DYNTRANS_SH

@@ -1397,6 +1397,8 @@ DEVICE_ACCESS(vga_ctrl)
 	size_t i;
 	uint64_t idata = 0, odata = 0;
 
+  fprintf(stderr, "vga ctr at %08x\n", (unsigned int)cpu->pc);
+
 	for (i=0; i<len; i++) {
 		idata = data[i];
 

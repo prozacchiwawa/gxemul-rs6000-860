@@ -479,10 +479,12 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 			    (uint64_t) cpu->cd.ppc.spr[SPR_SRR1]);
 		}
 
-    debug(" bridge swap D%d I%d latch %d\n",
+    debug(" bridge swap D%d I%d latch %d ll %d %08x\n",
           cpu->cd.ppc.bytelane_swap[0],
           cpu->cd.ppc.bytelane_swap[1],
-          cpu->cd.ppc.bytelane_swap_latch);
+          cpu->cd.ppc.bytelane_swap_latch,
+          cpu->cd.ppc.ll_bit,
+          (unsigned int)cpu->cd.ppc.ll_addr);
 
 		debug("cpu%i: msr = ", x);
 		reg_access_msr(cpu, &tmp, 0, 0);
@@ -2081,17 +2083,18 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
     fpscr |= PPC_FPSCR_CLASS;
   }
 
-  if (f64_lt(*result, pos_zero)) {
-    fpscr |= PPC_FPSCR_FL;
-  }
-  if (f64_lt(pos_zero, *result)) {
-    fpscr |= PPC_FPSCR_FG;
-  }
-  if (f64_eq(*result, pos_zero)) {
-    fpscr |= PPC_FPSCR_FE;
-  }
   if (isnan) {
+    fprintf(stderr, "F - NaN\n");
     fpscr |= PPC_FPSCR_FU;
+  } else if (f64_lt(*result, pos_zero)) {
+    fprintf(stderr, "F - LT\n");
+    fpscr |= PPC_FPSCR_FL;
+  } else if (f64_lt(pos_zero, *result)) {
+    fprintf(stderr, "F - GT\n");
+    fpscr |= PPC_FPSCR_FG;
+  } else {
+    fprintf(stderr, "F - EQ\n");
+    fpscr |= PPC_FPSCR_FE;
   }
 
   fprintf(stderr, "final fpscr %08x\n", fpscr);
@@ -2245,6 +2248,7 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
   extFloat80_t result;
   extF80M_sub(&efra, &efrc, &result);
   float64_t result_64 = extF80M_to_f64(&result);
+  fprintf(stderr, "fcmp %" PRIX64 " - %" PRIx64 " = %" PRIx64 "\n", fra.v, frc.v, result_64.v);
   fpu_epilog(cpu, &result, &result_64);
 }
 

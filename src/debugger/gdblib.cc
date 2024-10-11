@@ -112,7 +112,7 @@ volatile int DataOutAddr, DataOutCsum;
 char DataInBuffer[128];
 volatile int DataInAddr, ParseState = 0, ComputedCsum, ActualCsum;
 volatile int PacketSent = 0, SendSignal = 0;
-volatile int Continue = 0, Signal = 0;
+volatile int Continue = 0, Signal = 0, SingleStep = 0;
 
 int gdbstub_socket = -1, gdbstub_listen = -1;
 
@@ -474,21 +474,22 @@ void GotPacket(struct cpu *cpu)
 
     case 'C':
     case 'c':
+        debugger_step(cpu->machine, 0);
+        SingleStep = 0;
         Continue = 1;
+        single_step = 0;
+        exit_debugger = 1;
         break;
 
     case 'H':
-        if (DataInBuffer[1] == 'c') {
-            Continue = 1;
-            debugger_step(cpu->machine, 1);
-        }
         PacketOk(cpu);
         break;
 
     case 's':
-        RegisterSaveArea->cd.ppc.spr[SPR_SRR1] |= 16;
-        PacketOk(cpu);
         Continue = 1;
+        SingleStep = 1;
+        debugger_step(cpu->machine, 1);
+        single_step = ENTER_SINGLE_STEPPING;
         break;
 
     case 'v':
@@ -501,6 +502,7 @@ void GotPacket(struct cpu *cpu)
         memaddr = PacketReadHexNumber(8);
         breakpoint_delete(cpu->machine, memaddr);
         PacketOk(cpu);
+        breakpoint_show(cpu->machine);
         break;
 
     case 'Z': // Add breakpoint
@@ -510,6 +512,7 @@ void GotPacket(struct cpu *cpu)
         sprintf(namebuf, "%08x", memaddr);
         breakpoint_add(cpu->machine, memaddr, namebuf, strlen(namebuf));
         PacketOk(cpu);
+        breakpoint_show(cpu->machine);
         break;
 
     case 'q':
@@ -524,7 +527,7 @@ void GotPacket(struct cpu *cpu)
 
         case 'C': /* thread id */
             PacketStart();
-            PacketWriteString("0100");
+            PacketWriteString("100");
             PacketFinish(cpu);
             break;
 
@@ -539,15 +542,16 @@ void GotPacket(struct cpu *cpu)
             break;
 
         case 'f': /* thread list */
-            if (DataInBuffer[2] != 'T') { /*hreadinfo*/
-                PacketEmpty(cpu);
+            fprintf(stderr, "qf query\n");
+            if (DataInBuffer[2] == 'T') { /*hreadinfo*/
+                fprintf(stderr, "qfThreadInfo\n");
+                PacketStart();
+                PacketWriteString("m100");
+                PacketFinish(cpu);
                 break;
             }
 
-            PacketStart();
-            PacketWriteString("m");
-            PacketWriteHexNumber(0,1, cpu->cd.ppc.msr & PPC_MSR_LE);
-            PacketFinish(cpu);
+            PacketEmpty(cpu);
             break;
 
         case 's':
@@ -642,6 +646,7 @@ void GdblibTakeException(struct cpu *cpu, int n)
         fprintf(stderr, "send signal packet\n");
         PacketWriteSignal(cpu, Signal);
     }
+    SingleStep = 0;
     SendSignal = 0;
     Continue = 0;
     Wait(cpu);

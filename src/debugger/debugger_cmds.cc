@@ -46,8 +46,9 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 {
 	int i, res;
 
-	while (cmd_line[0] != '\0' && cmd_line[0] == ' ')
+	while (cmd_line[0] != '\0' && cmd_line[0] == ' ') {
 		cmd_line ++;
+  }
 
 	if (cmd_line[0] == '\0') {
 		printf("syntax: breakpoint subcmd [args...]\n");
@@ -59,10 +60,7 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 	}
 
 	if (strcmp(cmd_line, "show") == 0) {
-		if (m->breakpoints.n == 0)
-			printf("No breakpoints set.\n");
-		for (i=0; i<m->breakpoints.n; i++)
-			show_breakpoint(m, i);
+    breakpoint_show(m);
 		return;
 	}
 
@@ -93,11 +91,11 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 		if (!res) {
 			printf("Couldn't parse '%s'\n", cmd_line + 4);
 			return;
-		}
+    }
 
     breakpoint_buf_len = strlen(cmd_line+4) + 1;
 
-    breakpoint_add(m, res, cmd_line + 4, breakpoint_buf_len);
+    breakpoint_add(m, tmp, cmd_line + 4, breakpoint_buf_len);
     show_breakpoint(m, i);
     return;
 	}

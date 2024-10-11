@@ -1752,13 +1752,14 @@ cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
 					fatal("ERROR! Breakpoint in a delay"
 					    " slot! Not yet supported.\n");
 #endif
-				single_step_breakpoint = 1;
-				single_step = ENTER_SINGLE_STEPPING;
+        single_step_breakpoint = 1;
+        single_step = ENTER_SINGLE_STEPPING;
 				goto stop_running_translated;
 			}
 	}
 
   if (GdblibCheckWaiting(cpu)) {
+      fprintf(stderr, "gdb pollin\n");
       GdblibSerialInterrupt(cpu);
   }
 #endif	/*  DYNTRANS_TO_BE_TRANSLATED_HEAD  */

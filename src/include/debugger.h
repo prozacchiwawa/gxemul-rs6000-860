@@ -73,5 +73,6 @@ extern void GdblibSerialInterrupt(struct cpu *cpu);
 extern void debugger_step(struct machine *m, int steps);
 extern void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen);
 extern void breakpoint_delete(struct machine *m, uint64_t addr);
+extern void breakpoint_show(struct machine *m);
 
 #endif	/*  DEBUGGER_H  */

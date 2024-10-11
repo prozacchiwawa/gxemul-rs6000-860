@@ -101,6 +101,8 @@ static char repeat_cmd[MAX_CMD_BUFLEN];
 static uint64_t last_dump_addr = MAGIC_UNTOUCHED;
 static uint64_t last_unasm_addr = MAGIC_UNTOUCHED;
 
+static void show_breakpoint(struct machine *m, int i);
+
 static void breakpoint_delete_number(struct machine *m, int x) {
   free(m->breakpoints.string[x]);
 
@@ -124,27 +126,23 @@ void breakpoint_delete(struct machine *m, uint64_t addr) {
     }
   }
 
-  if (which_bp == -1) {
-    return;
+  if (which_bp != -1) {
+    breakpoint_delete_number(m, which_bp);
   }
-
-  breakpoint_delete_number(m, which_bp);
 }
 
 void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen) {
-  CHECK_ALLOCATION(m->breakpoints.string = (char **) realloc(
-                                                             m->breakpoints.string, sizeof(char *) *
-                                                             (m->breakpoints.n + 1)));
-  CHECK_ALLOCATION(m->breakpoints.addr = (uint64_t *) realloc(
-                                                              m->breakpoints.addr, sizeof(uint64_t) *
-                                                              (m->breakpoints.n + 1)));
+  CHECK_ALLOCATION
+    (m->breakpoints.string = (char **) realloc
+     (m->breakpoints.string, sizeof(char *) *(m->breakpoints.n + 1)));
+  CHECK_ALLOCATION
+    (m->breakpoints.addr = (uint64_t *) realloc
+     (m->breakpoints.addr, sizeof(uint64_t) *(m->breakpoints.n + 1)));
 
   int i = m->breakpoints.n;
 
-  CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)
-                   malloc(namelen));
-  strlcpy(m->breakpoints.string[i], name,
-          namelen);
+  CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)malloc(namelen+1));
+  strlcpy(m->breakpoints.string[i], name, namelen);
   m->breakpoints.addr[i] = addr;
 
   m->breakpoints.n ++;
@@ -154,6 +152,16 @@ void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int name
     if (m->cpus[i]->translation_cache != NULL) {
       cpu_create_or_reset_tc(m->cpus[i]);
     }
+  }
+}
+
+void breakpoint_show(struct machine *m) {
+  if (m->breakpoints.n == 0) {
+    printf("No breakpoints set.\n");
+  }
+
+  for (int i=0; i<m->breakpoints.n; i++) {
+    show_breakpoint(m, i);
   }
 }
 
@@ -770,7 +778,6 @@ void debugger(void)
     }
 
     fprintf(stderr, "resume from gdb\n");
-    single_step = NOT_SINGLE_STEPPING;
     exit_debugger = 1;
     return;
   }

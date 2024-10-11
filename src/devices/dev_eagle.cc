@@ -61,6 +61,7 @@ DEVICE_ACCESS(eagle)
 
 	case 0:	/*  Address:  */
 		bus_pci_decompose_1(idata, &bus, &dev, &func, &reg);
+    fprintf(stderr, "pci cf8 @ %08x\n", (unsigned int)cpu->pc);
 		bus_pci_setaddr(cpu, d->pci_data, bus, dev, func, reg);
 		break;
 

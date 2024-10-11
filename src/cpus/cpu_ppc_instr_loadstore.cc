@@ -115,10 +115,14 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #ifdef LS_D
 	(*(uint64_t *)(ic->arg[0])) =
-	    ((uint64_t)data[0^swizzle] << 56) + ((uint64_t)data[1^swizzle] << 48) +
-	    ((uint64_t)data[2^swizzle] << 40) + ((uint64_t)data[3^swizzle] << 32) +
-	    ((uint64_t)data[4^swizzle] << 24) + (data[5^swizzle] << 16) +
-	    (data[6^swizzle] << 8) + data[7^swizzle];
+	    ((uint64_t)data[0^swizzle] << 56) +
+      ((uint64_t)data[1^swizzle] << 48) +
+	    ((uint64_t)data[2^swizzle] << 40) +
+      ((uint64_t)data[3^swizzle] << 32) +
+      ((uint64_t)data[4^swizzle] << 24) +
+      ((uint64_t)data[5^swizzle] << 16) +
+      ((uint64_t)data[6^swizzle] << 8) +
+      (uint64_t)data[7^swizzle];
 #endif
 
   access_log(cpu, 0, addr^offset, data, sizeof(data), swizzle);
@@ -210,11 +214,11 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 	unsigned char *page = cpu->cd.ppc.
 #ifdef LS_LOAD
-	    host_load
+    host_load
 #else
-	    host_store
+    host_store
 #endif
-	    [addr >> 12];
+    [addr >> 12];
 #ifdef LS_UPDATE
 	uint32_t new_addr = addr;
 #endif
@@ -265,8 +269,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
       ((uint64_t)page[(addr+1)^offset^swizzle] << 48) +
       ((uint64_t)page[(addr+2)^offset^swizzle] << 40) +
       ((uint64_t)page[(addr+3)^offset^swizzle] << 32) +
-      ((uint64_t)page[(addr+4)^offset^swizzle] << 24) + (page[(addr+5)^offset^swizzle] << 16) +
-      (page[(addr+6)^offset^swizzle] << 8) + page[(addr+7)^offset^swizzle];
+      ((uint64_t)page[(addr+4)^offset^swizzle] << 24) +
+      ((uint64_t)page[(addr+5)^offset^swizzle] << 16) +
+      ((uint64_t)page[(addr+6)^offset^swizzle] << 8) +
+      (uint64_t)page[(addr+7)^offset^swizzle];
 #endif	/*  LS_D  */
 
     access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);

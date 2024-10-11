@@ -232,9 +232,9 @@ DEVICE_ACCESS(ns16550)
 
 	case com_msr:
 		if (writeflag == MEM_WRITE) {
-			debug("[ ns16550 (%s): write to msr: 0x%02x ]\n",
+			debug("[ ns16550 (%s): write to mcr: 0x%02x ]\n",
 			    d->name, (int)idata);
-			d->reg[com_msr] = idata;
+			d->reg[com_mcr] = idata;
 		} else {
 			odata = d->reg[com_msr];
 			//debug("[ ns16550 (%s): read from msr: 0x%02x ]\n",

@@ -1632,7 +1632,7 @@ X(crorc) {
 	ba = (cpu->cd.ppc.cr >> (31-ba)) & 1;
 	bb = (cpu->cd.ppc.cr >> (31-bb)) & 1;
 	cpu->cd.ppc.cr &= ~(1 << (31-bt));
-	if (!(ba | bb))
+	if ((ba | !bb))
 		cpu->cd.ppc.cr |= (1 << (31-bt));
 }
 X(crnor) {

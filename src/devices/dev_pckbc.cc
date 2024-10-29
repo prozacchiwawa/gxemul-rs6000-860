@@ -960,7 +960,7 @@ DEVICE_TICK(pckbc)
  *
  *  Handle commands to the 8048 in the emulated keyboard.
  */
-static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
+static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr)
 {
 	int cmd = d->reg[PC_CMD];
 
@@ -1009,7 +1009,7 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 	if (d->state == STATE_WAITING_FOR_AUX_OUT) {
     port_nr = 1;
     debug("[ pckbc: (port %i) sending to mouse: "
-          "0x%02x cmd %02x ]\n", port_nr, cmd, d->mouse_cmd);
+          "0x%02x cmd %02x (pc %08x) ]\n", port_nr, cmd, d->mouse_cmd, (unsigned int)cpu->pc);
     switch (d->mouse_cmd) {
     case 0:
       switch (cmd) {
@@ -1043,9 +1043,8 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
 
       case 0xf2:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-
-        d->mouse_timeout = 2;
+        pckbc_add_code(d, 0xab, port_nr);
+        pckbc_add_code(d, 0x83, port_nr);
         break;
 
       case 0xe2:
@@ -1081,6 +1080,9 @@ static void dev_pckbc_command(struct pckbc_data *d, int port_nr)
         pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;
+
+      default:
+        fprintf(stderr, "[ pckbc: unknown command %02x to mouse ]\n", cmd);
       }
       break;
 
@@ -1242,11 +1244,11 @@ DEVICE_ACCESS(pckbc)
 			/*  TODO (port 0x61)  */
 			odata = 0x21;
       {
-static int x = 0;
-x++;
-if (x&1)
-			odata ^= 0x10;
-}
+        // static int x = 0;
+        // x++;
+        // if (x&1)
+        // odata ^= 0x10;
+      }
 			if (writeflag == MEM_READ)
 				memory_writemax64(cpu, data, len, odata);
 			return 1;
@@ -1307,7 +1309,7 @@ if (x&1)
 				d->state = STATE_NORMAL;
 				break;
 			default:d->reg[relative_addr] = idata;
-				dev_pckbc_command(d, port_nr);
+				dev_pckbc_command(cpu, d, port_nr);
         break;
 			}
 		}
@@ -1321,28 +1323,27 @@ if (x&1)
 			/*  "Data in buffer" bit  */
       if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: output ring %d-%d ]\n", d->head[1], d->tail[1]);
-        odata |= KBS_DIB | 8;
+        odata |= KBS_DIB | 0x20;
       } else if (d->head[0] != d->tail[0] ||
                  d->state == STATE_RDCMDBYTE ||
                  d->state == STATE_RDOUTPUT) {
 				odata |= KBS_DIB;
+      } else {
+        odata = 0;
       }
 
-			if (d->state == STATE_RDCMDBYTE)
-				odata |= KBS_OCMD;
+			if (d->state == STATE_RDCMDBYTE) {
+				// odata |= KBS_OCMD;
+      }
 
-			odata |= KBS_NOSEC;
+			// odata |= KBS_NOSEC;
 
       if (d->mouse_timeout) {
         d->mouse_timeout--;
-        if (!d->mouse_timeout) {
-          fprintf(stderr, "[ mouse timeout ]\n");
-          odata |= 0x20;
-        }
       }
-      if (odata != 0x10) {
+      if (odata != 0) {
         debug("[ pckbc: read from CTL status port: "
-              "0x%02x ]\n", (int)odata);
+              "0x%02x (pc %08x) ]\n", (int)odata, (unsigned int)cpu->pc);
       }
 		} else {
 			debug("[ pckbc: write to CTL:");
@@ -1423,7 +1424,7 @@ if (x&1)
 
 			/*  Handle keyboard commands:  */
 			d->reg[PS2_TXBUF] = idata;
-			dev_pckbc_command(d, port_nr);
+			dev_pckbc_command(cpu, d, port_nr);
 		}
 		break;
 
@@ -1462,7 +1463,7 @@ if (x&1)
 
 			if (d->head[port_nr] != d->tail[port_nr]) {
 				/*  0x10 = receicer data available (?)  */
-				odata |= 0x10;
+				// odata |= 0x10;
 			}
 
 			debug("[ pckbc: read from port %i, PS2_STATUS: "

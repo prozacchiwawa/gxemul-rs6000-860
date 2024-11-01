@@ -110,8 +110,13 @@ static void gather_statistics(struct cpu *cpu)
 
 #if 1
 
+#ifdef DYNTRANS_PPC
+/*  The normal instruction execution core:  */
+#define I	{ cpu->cd.ppc.icount++; ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic); }
+#else
 /*  The normal instruction execution core:  */
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic);
+#endif
 
 #else
 
@@ -234,10 +239,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #endif
 #ifdef DYNTRANS_PPC
 		if (cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
+			cpu->cd.ppc.dec_intr_pending = 0;
 			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 				ppc_exception(cpu, PPC_EXCEPTION_DEC);
       }
-			cpu->cd.ppc.dec_intr_pending = 0;
 		}
 		if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
 			ppc_exception(cpu, PPC_EXCEPTION_EI);
@@ -266,7 +271,9 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
 
   if (GdblibCheckWaiting(cpu)) {
-    GdblibSerialInterrupt(cpu);
+    if (GdblibSerialInterrupt(cpu)) {
+      single_step = 1;
+    }
   }
 
 	if (single_step || cpu->machine->instruction_trace
@@ -436,16 +443,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #ifdef DYNTRANS_PPC
 	/*  Update the Decrementer and Time base registers:  */
 	{
-		uint32_t old = cpu->cd.ppc.spr[SPR_DEC];
-		cpu->cd.ppc.spr[SPR_DEC] = (uint32_t) (old - n_instrs);
-		if ((old >> 31) == 0 && (cpu->cd.ppc.spr[SPR_DEC] >> 31) == 1
-		    && !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-			cpu->cd.ppc.dec_intr_pending = 1;
-    }
-		old = cpu->cd.ppc.spr[SPR_TBL];
-		cpu->cd.ppc.spr[SPR_TBL] += n_instrs;
-		if ((old >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0)
-			cpu->cd.ppc.spr[SPR_TBU] ++;
+    ppc_update_for_icount(cpu);
 	}
 #endif
 

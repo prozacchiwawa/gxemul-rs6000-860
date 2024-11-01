@@ -770,15 +770,23 @@ void debugger(void)
     debugger_machine->show_trace_tree = 0;
 
     GdblibTakeException(debugger_machine->cpus[0], 7);
-    timer_start();
+    if (exit_debugger != -1) {
+      timer_start();
 
-    for (i=0; i<debugger_machine->ncpus; i++) {
-      gettimeofday(&debugger_machine->cpus[i]->starttime, NULL);
-      debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
+      for (i=0; i<debugger_machine->ncpus; i++) {
+        gettimeofday(&debugger_machine->cpus[i]->starttime, NULL);
+        debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
+      }
+
+      exit_debugger = 1;
+      fprintf(stderr, "resume from gdb (cont)\n");
+    } else {
+      single_step = 1;
+      debugger_machine->instruction_trace = 1;
+      debugger_n_steps_left_before_interaction = 0;
+      single_step = ENTER_SINGLE_STEPPING;
+      fprintf(stderr, "resume from gdb (step)\n");
     }
-
-    fprintf(stderr, "resume from gdb\n");
-    exit_debugger = 1;
     return;
   }
 
@@ -812,8 +820,10 @@ void debugger(void)
 		debugger_execute_cmd(cmd, cmd_len);
 
 		/*  Special hack for the "step" command:  */
-		if (exit_debugger == -1)
+		if (exit_debugger == -1) {
+      fprintf(stderr, "exit debugger for single step\n");
 			return;
+    }
 	}
 
 	/*  Start up timers again:  */

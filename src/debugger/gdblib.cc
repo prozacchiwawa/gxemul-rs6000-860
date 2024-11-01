@@ -390,6 +390,8 @@ void GotPacket(struct cpu *cpu)
     auto OldSaveArea = RegisterSaveArea;
     RegisterSaveArea = cpu;
 
+    fprintf(stderr, "GotPacket %c\n", DataInBuffer[DataInAddr]);
+
     switch (DataInBuffer[DataInAddr++])
     {
     case 'g':
@@ -474,6 +476,7 @@ void GotPacket(struct cpu *cpu)
 
     case 'C':
     case 'c':
+        fprintf(stderr, "Continue packet\n");
         debugger_step(cpu->machine, 0);
         SingleStep = 0;
         Continue = 1;
@@ -482,14 +485,18 @@ void GotPacket(struct cpu *cpu)
         break;
 
     case 'H':
+        fprintf(stderr, "H packet: %c\n", DataInBuffer[DataInAddr]);
         PacketOk(cpu);
         break;
 
+    case 'S':
     case 's':
+        fprintf(stderr, "Step\n");
         Continue = 1;
         SingleStep = 1;
+        debugger_reset();
         debugger_step(cpu->machine, 1);
-        single_step = ENTER_SINGLE_STEPPING;
+        fprintf(stderr, "Leaving step\n");
         break;
 
     case 'v':
@@ -574,7 +581,7 @@ void GotPacket(struct cpu *cpu)
     RegisterSaveArea = OldSaveArea;
 }
 
-void GdblibSerialInterrupt(struct cpu *cpu)
+bool GdblibSerialInterrupt(struct cpu *cpu)
 {
     int ch = SerialRead();
     fprintf(stderr, "%c", ch);
@@ -603,7 +610,6 @@ void GdblibSerialInterrupt(struct cpu *cpu)
         ParseState = 0;
         DataInAddr = 0;
         Wait(cpu);
-        return;
     }
     else if (ParseState == 0)
     {
@@ -633,6 +639,8 @@ void GdblibSerialInterrupt(struct cpu *cpu)
             SerialWrite('-');
         }
     }
+
+    return exit_debugger == -1;
 }
 
 void GdblibTakeException(struct cpu *cpu, int n)

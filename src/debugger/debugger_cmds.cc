@@ -1416,9 +1416,13 @@ static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
 
   fprintf(stderr, "gdb exception\n");
   GdblibTakeException(debugger_machine->cpus[0], trap);
-  fprintf(stderr, "gdb exception done\n");
 
-	exit_debugger = 1;
+  if (exit_debugger != -1) {
+    exit_debugger = 1;
+    fprintf(stderr, "gdb exception done (cont)\n");
+  } else {
+    fprintf(stderr, "gdb exception done (step)\n");
+  }
 }
 
 /****************************************************************************/

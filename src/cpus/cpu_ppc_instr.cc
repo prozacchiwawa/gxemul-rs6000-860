@@ -1321,6 +1321,54 @@ X(llsc)
 	}
 }
 
+/*
+ * load halfword and update indexed (and variations)
+ *
+ * arg[0]: RT << 2 | (update << 1) | indexed
+ * arg[1] = ptr to ra
+ * arg[2] = ptr to rb if indexed else displacement
+ */
+X(loose_lhaux)
+{
+  uint64_t full_addr = reg(ic->arg[1]);
+  bool indexed = ic->arg[0] & 1;
+  bool update = (ic->arg[0] >> 1) & 1;
+  int rt = ic->arg[0] >> 2;
+
+  if (indexed) {
+    full_addr += reg(ic->arg[2]);
+  } else if (ic->arg[2] & 0x8000) {
+    full_addr = full_addr + ic->arg[2] - 65536;
+  } else {
+    full_addr += ic->arg[2];
+  }
+
+  auto page_ptr = cpu->cd.ppc.host_load;
+  unsigned char *page = page_ptr[((uint32_t)full_addr) >> 12];
+
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+
+  uint8_t raw_value[2];
+
+  if (page) {
+    auto addr = full_addr & 0xfff;
+    memcpy(raw_value, &page[addr ^ offset], 2);
+  } else if (!cpu->memory_rw(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+    return; // exit(1);
+  }
+
+  if (raw_value[0] & 0x80) {
+    cpu->cd.ppc.gpr[rt] = 0xffff0000 | raw_value[swizzle] << 8 | raw_value[1 ^ swizzle];
+  } else {
+    cpu->cd.ppc.gpr[rt] = raw_value[swizzle] << 8 | raw_value[1 ^ swizzle];
+  }
+
+  if (update) {
+    reg(ic->arg[1]) = full_addr;
+  }
+}
+
 
 /*
  *  mtsr, mtsrin:  Move To Segment Register [Indirect]
@@ -1605,7 +1653,7 @@ X(crandc) {
 	ba = (cpu->cd.ppc.cr >> (31-ba)) & 1;
 	bb = (cpu->cd.ppc.cr >> (31-bb)) & 1;
 	cpu->cd.ppc.cr &= ~(1 << (31-bt));
-	if (!(ba & bb))
+	if (ba && !bb)
 		cpu->cd.ppc.cr |= (1 << (31-bt));
 }
 X(creqv) {
@@ -1713,7 +1761,16 @@ X(mtlr) {
 X(mtctr) {
 	cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
 }
-
+// If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
+X(mtdec) {
+  ppc_update_for_icount(cpu);
+  uint64_t dec = cpu->cd.ppc.spr[SPR_DEC];
+  uint64_t reg = reg(ic->arg[0]);
+  if (reg & 0x80000000 && !(dec & 0x80000000)) {
+    cpu->cd.ppc.dec_intr_pending = 1;
+  }
+  cpu->cd.ppc.spr[SPR_DEC] = reg;
+}
 
 /*
  *  rfi[d]:  Return from Interrupt
@@ -1743,6 +1800,12 @@ X(rfid)
 	if (!(tmp & PPC_MSR_SF))
 		cpu->pc = (uint32_t)cpu->pc;
 	quick_pc_to_pointers(cpu);
+}
+
+
+X(isync)
+{
+  ppc_update_for_icount(cpu);
 }
 
 
@@ -1957,7 +2020,7 @@ X(lswi)
 			return;
 		}
 
-    fprintf(stderr, "%08x: lsw%s load %08x (%02x) into r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rt);
+    // fprintf(stderr, "%08x: lsw%s load %08x (%02x) into r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rt);
 
 		if (cpu->cd.ppc.mode == MODE_POWER && sub == 0)
 			cpu->cd.ppc.gpr[rt] = 0;
@@ -1998,7 +2061,7 @@ X(stswi)
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
 
-    fprintf(stderr, "%08x: stsw%s store %08x (%02x) from r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rs);
+    // fprintf(stderr, "%08x: stsw%s store %08x (%02x) from r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rs);
 
 		if (cpu->memory_rw(cpu, cpu->mem, addr, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -2973,12 +3036,23 @@ X(to_be_translated)
 		ic->arg[2] = (size_t)(&cpu->cd.ppc.gpr[ra]);
 		break;
 
+	case PPC_HI6_LHA:
+  case PPC_HI6_LHAU:
+    ic->f = instr(loose_lhaux);
+    rs = (iword >> 21) & 31; ra = (iword >> 16) & 31;
+    ic->arg[0] = rs << 2 | lha_does_update(ra, rs, main_opcode == PPC_HI6_LHAU) << 1; // update or not.
+    if (ra == 0) {
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
+    } else {
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+    }
+    ic->arg[2] = iword & 0xffff;
+    break;
+
 	case PPC_HI6_LBZ:
 	case PPC_HI6_LBZU:
 	case PPC_HI6_LHZ:
 	case PPC_HI6_LHZU:
-	case PPC_HI6_LHA:
-	case PPC_HI6_LHAU:
 	case PPC_HI6_LWZ:
 	case PPC_HI6_LWZU:
 	case PPC_HI6_LD:
@@ -3001,8 +3075,6 @@ X(to_be_translated)
 		switch (main_opcode) {
 		case PPC_HI6_LBZ:  load=1; break;
 		case PPC_HI6_LBZU: load=1; update=1; break;
-		case PPC_HI6_LHA:  load=1; size=1; zero=0; break;
-		case PPC_HI6_LHAU: load=1; size=1; zero=0; update=1; break;
 		case PPC_HI6_LHZ:  load=1; size=1; break;
 		case PPC_HI6_LHZU: load=1; size=1; update=1; break;
 		case PPC_HI6_LWZ:  load=1; size=2; break;
@@ -3184,8 +3256,7 @@ X(to_be_translated)
 			break;
 
 		case PPC_19_ISYNC:
-			/*  TODO  */
-			ic->f = instr(nop);
+			ic->f = instr(isync);
 			break;
 
 		case PPC_19_RFI:
@@ -3391,6 +3462,9 @@ X(to_be_translated)
 			case SPR_SPRG2:
 				ic->f = instr(mtspr_sprg2);
 				break;
+      case SPR_DEC:
+        ic->f = instr(mtdec);
+        break;
 			default:ic->f = instr(mtspr);
 			}
 			break;
@@ -3616,10 +3690,21 @@ X(to_be_translated)
 			ic->f = instr(nop);
 			break;
 
-		case PPC_31_LBZX:
-		case PPC_31_LBZUX:
 		case PPC_31_LHAX:
 		case PPC_31_LHAUX:
+      ic->f = instr(loose_lhaux);
+      rs = (iword >> 21) & 31; ra = (iword >> 16) & 31; rb = (iword >> 11) & 31;
+      ic->arg[0] = rs << 2 | lha_does_update(ra, rs, xo == PPC_31_LHAUX) << 1 | 1; // update or not, indexed.
+      if (ra == 0) {
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[2] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      break;
+
+		case PPC_31_LBZX:
+		case PPC_31_LBZUX:
 		case PPC_31_LHZX:
 		case PPC_31_LHZUX:
 		case PPC_31_LWZX:
@@ -3655,7 +3740,6 @@ X(to_be_translated)
 			case PPC_31_LBZX:  load = 1; break;
 			case PPC_31_LBZUX: load=update=1; break;
 			case PPC_31_LHAX:  size=1; load=1; zero=0; break;
-			case PPC_31_LHAUX: size=1; load=update=1; zero=0; break;
 			case PPC_31_LHZX:  size=1; load=1; break;
 			case PPC_31_LHZUX: size=1; load=update = 1; break;
 			case PPC_31_LWZX:  size=2; load=1; break;

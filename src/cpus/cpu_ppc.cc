@@ -56,6 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
+#define COUNT_DIV 16
 
 /*
  *  ppc_cpu_new():
@@ -340,8 +341,8 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
 		if (cpu->cd.ppc.dec_intr_pending &&
 		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-			ppc_exception(cpu, PPC_EXCEPTION_DEC);
 			cpu->cd.ppc.dec_intr_pending = 0;
+			ppc_exception(cpu, PPC_EXCEPTION_DEC);
 		} else if (cpu->cd.ppc.irq_asserted)
 			ppc_exception(cpu, PPC_EXCEPTION_EI);
 	}
@@ -371,9 +372,13 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
     cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | (cpu->cd.ppc.msr & 0x3c00000) | 0x10000;
   }
 
-	if (!quiet_mode && exception_nr != 5)
+  if (exception_nr == 9) {
+		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
+    //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
+  } else if (!quiet_mode && exception_nr != 5) {
 		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" ]\n",
-		    exception_nr, cpu->pc);
+          exception_nr, cpu->pc);
+  }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
@@ -2250,6 +2255,35 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
   float64_t result_64 = extF80M_to_f64(&result);
   fprintf(stderr, "fcmp %" PRIX64 " - %" PRIx64 " = %" PRIx64 "\n", fra.v, frc.v, result_64.v);
   fpu_epilog(cpu, &result, &result_64);
+}
+
+void ppc_update_for_icount(struct cpu *cpu) {
+  uint32_t dec = cpu->cd.ppc.spr[SPR_DEC];
+  uint32_t icount = cpu->cd.ppc.icount / COUNT_DIV;
+
+  // Take care of decrementer
+  if (dec >= icount) {
+    // No decrementer pending yet.
+    cpu->cd.ppc.spr[SPR_DEC] -= icount;
+  } else {
+    if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      cpu->cd.ppc.dec_intr_pending = 1;
+    }
+    cpu->cd.ppc.spr[SPR_DEC] = 0xffffffff - (icount - dec - 1);
+  }
+
+  // Take care of timebase
+  uint32_t tbl = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[SPR_TBL] += icount;
+  if ((tbl >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0) {
+    cpu->cd.ppc.spr[SPR_TBU] ++;
+  }
+
+  cpu->cd.ppc.icount &= (COUNT_DIV - 1);
+}
+
+int lha_does_update(int ra, int rs, bool update_form) {
+  return !(!update_form || ra == rs || ra == 0);
 }
 
 #include "memory_ppc.cc"

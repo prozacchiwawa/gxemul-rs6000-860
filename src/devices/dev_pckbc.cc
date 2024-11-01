@@ -1043,8 +1043,7 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 
       case 0xf2:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0xab, port_nr);
-        pckbc_add_code(d, 0x83, port_nr);
+        pckbc_add_code(d, 0x00, port_nr);
         break;
 
       case 0xe2:

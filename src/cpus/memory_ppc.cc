@@ -330,6 +330,8 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     cpu->cd.ppc.ll_bit = 0;
   } else if ((write && (cpu->cd.ppc.ll_addr & ~7 == addr & ~7)) || addr == 0x4fc) {
     fprintf(stderr, "Suspiciously close write to ll_addr %08x (%08x) %08x\n", (unsigned int)cpu->cd.ppc.ll_addr, cpu->pc, *((unsigned int *)data));
+  } else if (write && addr >= 0xfe058050 && addr < 0xfe070000) {
+    fprintf(stderr, "Write to %08x from %08x\n", (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);

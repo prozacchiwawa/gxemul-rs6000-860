@@ -139,6 +139,8 @@ struct ppc_cpu {
   int   bytelane_swap_latch;
   int   bytelane_swap[2];
 
+  int   icount; /* Number of instructions executed since the most recent dyntrans stride */
+
 	/*
 	 *  Instruction translation cache and Virtual->Physical->Host
 	 *  address translation:
@@ -258,5 +260,8 @@ void stwbrx_cache_spill(struct cpu *cpu);
 int base_fadd(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
 int base_fmul(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
 int base_fdiv(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
+
+void ppc_update_for_icount(struct cpu *cpu);
+int lha_does_update(int ra, int rs, bool update_form);
 
 #endif	/*  CPU_PPC_H  */

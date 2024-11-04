@@ -821,9 +821,8 @@ void debugger(void)
 
 		/*  Special hack for the "step" command:  */
 		if (exit_debugger == -1) {
-      fprintf(stderr, "exit debugger for single step\n");
 			return;
-    }
+    		}
 	}
 
 	/*  Start up timers again:  */

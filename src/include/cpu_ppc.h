@@ -230,7 +230,7 @@ struct ppc_cpu {
 /*  cpu_ppc.c:  */
 int ppc_run_instr(struct cpu *cpu);
 int ppc32_run_instr(struct cpu *cpu);
-void ppc_exception(struct cpu *cpu, int exception_nr);
+void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra);
 void ppc_update_translation_table(struct cpu *cpu, uint64_t vaddr_page,
 	unsigned char *host_page, int writeflag, uint64_t paddr_page);
 void ppc32_update_translation_table(struct cpu *cpu, uint64_t vaddr_page,

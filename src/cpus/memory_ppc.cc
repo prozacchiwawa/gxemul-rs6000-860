@@ -230,6 +230,8 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	int instr = flags & FLAG_INSTR, res = 0, match, user;
 	int writeflag = flags & FLAG_WRITEFLAG? 1 : 0;
 	uint64_t msr;
+  // XX Set srr1 below in checks for bat+write or page table.
+  int srr1_extra = 0;
 
 	reg_access_msr(cpu, &msr, 0, 0);
 	user = msr & PPC_MSR_PR? 1 : 0;
@@ -292,7 +294,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		msr |= PPC_MSR_TGPR;
 		reg_access_msr(cpu, &msr, 1, 0);
 
-		ppc_exception(cpu, instr? 0x10 : (writeflag? 0x12 : 0x11));
+		ppc_exception(cpu, instr? 0x10 : (writeflag? 0x12 : 0x11), 0);
 	} else {
 		if (!instr) {
 			cpu->cd.ppc.spr[SPR_DAR] = vaddr;
@@ -302,7 +304,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 				cpu->cd.ppc.spr[SPR_DSISR] |= DSISR_STORE;
 		}
 		ppc_exception(cpu, instr?
-		    PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI);
+                  PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI, srr1_extra);
 	}
 
 	return 0;
@@ -330,8 +332,6 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     cpu->cd.ppc.ll_bit = 0;
   } else if ((write && (cpu->cd.ppc.ll_addr & ~7 == addr & ~7)) || addr == 0x4fc) {
     fprintf(stderr, "Suspiciously close write to ll_addr %08x (%08x) %08x\n", (unsigned int)cpu->cd.ppc.ll_addr, cpu->pc, *((unsigned int *)data));
-  } else if (write && addr >= 0xfe058050 && addr < 0xfe070000) {
-    fprintf(stderr, "Write to %08x from %08x\n", (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);

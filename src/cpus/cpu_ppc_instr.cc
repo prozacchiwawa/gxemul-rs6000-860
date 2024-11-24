@@ -52,7 +52,7 @@
 		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<	 \
 		    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<		 \
 		    PPC_INSTR_ALIGNMENT_SHIFT);				 \
-		ppc_exception(cpu, PPC_EXCEPTION_FPU);			 \
+		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);     \
 		return; } }
 #endif
 
@@ -85,6 +85,16 @@ X(invalid)
  */
 X(addi)
 {
+	reg(ic->arg[2]) = reg(ic->arg[0]) + (int32_t)ic->arg[1];
+}
+X(addi_symmetric)
+{
+  if (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch) {
+    fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
+    cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
+    cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
+    stwbrx_cache_spill(cpu);
+  }
 	reg(ic->arg[2]) = reg(ic->arg[0]) + (int32_t)ic->arg[1];
 }
 X(li)
@@ -1358,10 +1368,9 @@ X(loose_lhaux)
     return; // exit(1);
   }
 
-  if (raw_value[0] & 0x80) {
-    cpu->cd.ppc.gpr[rt] = 0xffff0000 | raw_value[swizzle] << 8 | raw_value[1 ^ swizzle];
-  } else {
-    cpu->cd.ppc.gpr[rt] = raw_value[swizzle] << 8 | raw_value[1 ^ swizzle];
+  cpu->cd.ppc.gpr[rt] = raw_value[swizzle] << 8 | raw_value[1 ^ swizzle];
+  if (cpu->cd.ppc.gpr[rt] & 0x8000) {
+    cpu->cd.ppc.gpr[rt] |= 0xffff0000;
   }
 
   if (update) {
@@ -1923,6 +1932,9 @@ X(lmw) {
 	unsigned char d[4];
 	int rs = ic->arg[0];
 
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
 	    / sizeof(struct ppc_instr_call);
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
@@ -1930,18 +1942,14 @@ X(lmw) {
 	cpu->pc |= (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	while (rs <= 31) {
-		if (cpu->memory_rw(cpu, cpu->mem, addr, d, sizeof(d),
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
 		}
 
-		if (cpu->byte_order == EMUL_BIG_ENDIAN)
-			cpu->cd.ppc.gpr[rs] = (d[0] << 24) + (d[1] << 16)
-			    + (d[2] << 8) + d[3];
-		else
-			cpu->cd.ppc.gpr[rs] = (d[3] << 24) + (d[2] << 16)
-			    + (d[1] << 8) + d[0];
+    cpu->cd.ppc.gpr[rs] = (d[0 ^ swizzle] << 24) + (d[1 ^ swizzle] << 16)
+			    + (d[2 ^ swizzle] << 8) + d[3 ^ swizzle];
 
 		rs ++;
 		addr += sizeof(uint32_t);
@@ -1952,6 +1960,9 @@ X(stmw) {
 	unsigned char d[4];
 	int rs = ic->arg[0];
 
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+
 	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
 	    / sizeof(struct ppc_instr_call);
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
@@ -1960,14 +1971,12 @@ X(stmw) {
 
 	while (rs <= 31) {
 		uint32_t tmp = cpu->cd.ppc.gpr[rs];
-		if (cpu->byte_order == EMUL_BIG_ENDIAN) {
-			d[3] = tmp; d[2] = tmp >> 8;
-			d[1] = tmp >> 16; d[0] = tmp >> 24;
-		} else {
-			d[0] = tmp; d[1] = tmp >> 8;
-			d[2] = tmp >> 16; d[3] = tmp >> 24;
-		}
-		if (cpu->memory_rw(cpu, cpu->mem, addr, d, sizeof(d),
+    if (tmp == 0x2ad40000) {
+      fprintf(stderr, "stmw rs=%d 2ad40000 pc = %08x\n", rs, (unsigned int)cpu->pc);
+    }
+    d[3 ^ swizzle] = tmp; d[2 ^ swizzle] = tmp >> 8;
+    d[1 ^ swizzle] = tmp >> 16; d[0 ^ swizzle] = tmp >> 24;
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -1996,6 +2005,9 @@ X(lswi)
 	int rt = ic->arg[0], nb;
 	int sub = 0;
 
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+
   if (ic->arg[2] & 1) {
     nb = (ic->arg[2] >> 1);
   } else {
@@ -2014,13 +2026,13 @@ X(lswi)
 
 	while (nb > 0) {
 		unsigned char d;
-		if (cpu->memory_rw(cpu, cpu->mem, addr, &d, 1,
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
 		}
 
-    // fprintf(stderr, "%08x: lsw%s load %08x (%02x) into r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rt);
+    fprintf(stderr, "%08x: lsw%s load %08x (%02x) into r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rt);
 
 		if (cpu->cd.ppc.mode == MODE_POWER && sub == 0)
 			cpu->cd.ppc.gpr[rt] = 0;
@@ -2042,6 +2054,9 @@ X(stswi)
 	uint32_t cur = cpu->cd.ppc.gpr[rs];
 	int sub = 0;
 
+  int swizzle = 0, offset = 0;
+  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+
   if (ic->arg[2] & 1) {
     nb = (ic->arg[2] >> 1);
   } else {
@@ -2061,9 +2076,9 @@ X(stswi)
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
 
-    // fprintf(stderr, "%08x: stsw%s store %08x (%02x) from r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rs);
+    fprintf(stderr, "%08x: stsw%s store %08x (%02x) from r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rs);
 
-		if (cpu->memory_rw(cpu, cpu->mem, addr, &d, 1,
+		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -2405,7 +2420,7 @@ X(lfs)
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-		ppc_exception(cpu, PPC_EXCEPTION_FPU);
+		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);
 		return;
 	}
 
@@ -2435,7 +2450,7 @@ X(lfsx)
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-		ppc_exception(cpu, PPC_EXCEPTION_FPU);
+		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);
 		return;
 	}
 
@@ -2643,7 +2658,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
-    ppc_exception(cpu, PPC_EXCEPTION_PRG);
+    ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
 
@@ -2673,7 +2688,7 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
-    ppc_exception(cpu, PPC_EXCEPTION_PRG);
+    ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
 
@@ -2724,7 +2739,7 @@ X(sc)
 	/*  Synchronize the PC (pointing to _after_ this instruction)  */
 	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[1];
 
-	ppc_exception(cpu, PPC_EXCEPTION_SC);
+	ppc_exception(cpu, PPC_EXCEPTION_SC, 0);
 
 	/*  This caused an update to the PC register, so there is no need
 	    to worry about the next instruction being an end_of_page.  */
@@ -2880,13 +2895,6 @@ X(to_be_translated)
     }
 	}
 
-  if ((iword == 0x38010138) && (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch)) {
-    fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
-    cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
-    cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
-    stwbrx_cache_spill(cpu);
-  }
-
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
@@ -2994,7 +3002,11 @@ X(to_be_translated)
 	case PPC_HI6_ADDI:
 	case PPC_HI6_ADDIS:
 		rt = (iword >> 21) & 31; ra = (iword >> 16) & 31;
-		ic->f = instr(addi);
+    if (iword == 0x38010138) {
+      ic->f = instr(addi_symmetric);
+    } else {
+      ic->f = instr(addi);
+    }
 		if (ra == 0)
 			ic->f = instr(li);
 		else

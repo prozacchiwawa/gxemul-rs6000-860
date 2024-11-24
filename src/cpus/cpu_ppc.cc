@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 16
+#define COUNT_DIV 4
 
 /*
  *  ppc_cpu_new():
@@ -342,9 +342,9 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		if (cpu->cd.ppc.dec_intr_pending &&
 		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 			cpu->cd.ppc.dec_intr_pending = 0;
-			ppc_exception(cpu, PPC_EXCEPTION_DEC);
+			ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
 		} else if (cpu->cd.ppc.irq_asserted)
-			ppc_exception(cpu, PPC_EXCEPTION_EI);
+			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
 	}
 }
 
@@ -352,7 +352,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 /*
  *  ppc_exception():
  */
-void ppc_exception(struct cpu *cpu, int exception_nr)
+void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 {
   auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
   cpu->cd.ppc.spr[SPR_TBL] += 1000;
@@ -362,15 +362,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
-
-	if (exception_nr >= 0x10 && exception_nr <= 0x13)
-		cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff)
-		    | (cpu->cd.ppc.cr & 0xf0000000);
-	else if (exception_nr != PPC_EXCEPTION_PRG) {
-		cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0x87c0ffff);
-  } else {
-    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | (cpu->cd.ppc.msr & 0x3c00000) | 0x10000;
-  }
+  cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 65395) | exn_extra;
 
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
@@ -382,7 +374,10 @@ void ppc_exception(struct cpu *cpu, int exception_nr)
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
 	    and go to Supervisor mode  */
-  cpu->cd.ppc.msr &= ~(PPC_MSR_EE | PPC_MSR_RI | PPC_MSR_PR | PPC_MSR_IR | PPC_MSR_DR | PPC_MSR_LE);
+  cpu->cd.ppc.msr &= ~0x4ef36;
+  if (exception_nr == 2) {
+    cpu->cd.ppc.msr &= ~PPC_MSR_ME;
+  }
   cpu->cd.ppc.msr |= PPC_MSR_LE & (cpu->cd.ppc.msr >> 16);
 
 	cpu->pc = exception_nr * 0x100;
@@ -744,6 +739,12 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	hi6 = iword >> 26;
 
 	switch (hi6) {
+	case 0x3:
+		to = (iword >> 21) & 31;
+		ra = (iword >> 16) & 31;
+		imm = (int16_t)(iword & 0xffff);
+		debug("twi\t%d,r%d,%i", to, ra, imm);
+		break;
 	case 0x4:
 		debug("ALTIVEC TODO");
 		/*  vxor etc  */
@@ -2012,7 +2013,7 @@ int f64_isnan(float64_t f) {
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
                                                             PPC_INSTR_ALIGNMENT_SHIFT); \
-      ppc_exception(cpu, PPC_EXCEPTION_FPU);                            \
+      ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);                         \
       return; } }
 #endif
 
@@ -2024,7 +2025,7 @@ int f64_isnan(float64_t f) {
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
                                                             PPC_INSTR_ALIGNMENT_SHIFT); \
-      ppc_exception(cpu, PPC_EXCEPTION_PRG);                            \
+      ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 20);                   \
       return; } }
 
 #define FP_SET_BIT(X) { \

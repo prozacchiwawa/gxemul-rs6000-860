@@ -89,12 +89,13 @@ X(addi)
 }
 X(addi_symmetric)
 {
-  if (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch) {
-    fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
-    cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
-    cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
-    stwbrx_cache_spill(cpu);
-  }
+	if (cpu->cd.ppc.bytelane_swap[0] != cpu->cd.ppc.bytelane_swap_latch) {
+		fprintf(stderr, "Bytelane swap latch -> bytelane swap (%d)\n", cpu->cd.ppc.bytelane_swap_latch);
+		cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
+		cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
+		stwbrx_cache_spill(cpu);
+		cpu->invalidate_translation_caches(cpu, 0, INVALIDATE_ALL | INVALIDATE_VADDR_UPPER4);
+	}
 	reg(ic->arg[2]) = reg(ic->arg[0]) + (int32_t)ic->arg[1];
 }
 X(li)
@@ -1225,8 +1226,12 @@ X(llsc)
   uint64_t final_addr;
 
   if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
+    // Will throw.
+    fprintf(stderr, "llsc: no translation?\n");
     return;
   }
+
+  final_addr = (final_addr & ~0xfff) | (addr ^ offset);
 
   auto page_ptr = load ? cpu->cd.ppc.host_load : cpu->cd.ppc.host_store;
   unsigned char *page = page_ptr[((uint32_t)addr) >> 12];
@@ -1319,15 +1324,18 @@ X(llsc)
       d[3^swizzle] = value;
     }
 
-    if (page) {
-      memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-    } else if (!cpu->memory_rw(cpu, cpu->mem, addr, d, len, MEM_WRITE, CACHE_DATA)) {
+    if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
+    }
+
+    if (page) {
+      memcpy(page + ((addr & 0xfff) ^ offset), d, len);
 		}
 
     // fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
-		cpu->cd.ppc.cr |= 0x20000000;	/*  success!  */
+    // Clear the reserve bit.
+		cpu->cd.ppc.cr = new_cr | 0x20000000;	/*  success!  */
 	}
 }
 
@@ -1794,6 +1802,7 @@ X(rfi)
 	reg_access_msr(cpu, &tmp, 1, 0);
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
+
 	quick_pc_to_pointers(cpu);
 }
 X(rfid)
@@ -2727,7 +2736,7 @@ X(tlbie)
 	/*  fatal("[ tlbie ]\n");  */
   fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
 	cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]),
-	    INVALIDATE_VADDR);
+                                     INVALIDATE_VADDR);
 }
 
 

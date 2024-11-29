@@ -1006,6 +1006,10 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 		if (tlbi > 0)
 			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[tlbi-1].valid = 0;
 		cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[index] = 0;
+
+    if (index == 1048324) {
+      fprintf(stderr, "invalidate rom page %" PRIx64 "\n", (uint64_t)vaddr_page);
+    }
 	}
 #else
 	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
@@ -1213,7 +1217,7 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page
 			    & 0xf0000000) == addr_page) {
 				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page & 0xffffffff,
 				    0);
 				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
 			}
@@ -1226,7 +1230,7 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
 			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
 				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page & 0xffffffff,
 				    0);
 				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
 			}
@@ -1243,9 +1247,9 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 
 	for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
 		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid && addr_page
-		    == cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page) {
+		    == cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page & 0xffffffff) {
 			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu,
-			    cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+        (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page & 0xffffffff),
 			    flags);
 			if (flags & JUST_MARK_AS_NON_WRITABLE)
 				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
@@ -1391,16 +1395,19 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 	}
 
 	/*  Invalidate entries in the VPH table:  */
+  uint64_t translated = (uint64_t)(cpu->cd.ppc.msr & (PPC_MSR_DR | PPC_MSR_IR)) << 32ull;
 	for (r = 0; r < DYNTRANS_MAX_VPH_TLB_ENTRIES; r ++) {
 		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
+      // Invalidate regardless of matches to poisoned i and d cache just to be safe.
 			vaddr_page = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-			    .vaddr_page & ~(DYNTRANS_PAGESIZE-1);
+			    .vaddr_page & ~(DYNTRANS_PAGESIZE-1) & 0xffffffff;
 			paddr_page = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-			    .paddr_page & ~(DYNTRANS_PAGESIZE-1);
+			    .paddr_page & ~(DYNTRANS_PAGESIZE-1) & 0xffffffff;
 
 			if (flags & INVALIDATE_ALL ||
 			    (flags & INVALIDATE_PADDR && paddr_page == addr) ||
 			    (flags & INVALIDATE_VADDR && vaddr_page == addr)) {
+
 #ifdef MODE32
 				uint32_t index =
 				    DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
@@ -1440,6 +1447,7 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 	unsigned char *host_page, int writeflag, uint64_t paddr_page)
 {
 	int found, r, useraccess = 0;
+  uint64_t translated = (uint64_t)(cpu->cd.ppc.msr & (PPC_MSR_DR | PPC_MSR_IR)) << 32ull;
 
 #ifdef MODE32
 	uint32_t index;
@@ -1495,8 +1503,18 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 	 *          for the entry with the lowest time stamp, just choosing
 	 *          one at random will work as well.
 	 */
-	found = (int)cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[
-	    DYNTRANS_ADDR_TO_PAGENR(vaddr_page)] - 1;
+  auto tlbindex = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
+	found = (int)cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[tlbindex] - 1;
+
+  // Don't match if the entry is poisoned to this cpu state.
+  if (found >= 0 && cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[found].vaddr_page != (translated | vaddr_page)) {
+    auto paddr = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[found].paddr_page;
+		auto vaddr = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[found].vaddr_page;
+
+    fprintf(stderr, "%" PRIx64 " REJECTED vph %d (%" PRIx64 " => %" PRIx64 ")\n", translated | vaddr_page, found, vaddr, paddr);
+    found = -1;
+  }
+
 #else
 	x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
 	x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
@@ -1523,16 +1541,20 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
 			/*  This one has to be invalidated first:  */
 			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu,
-			    cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+			    cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page & 0xffffffff,
 			    0);
 		}
 
 		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid = 1;
 		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].host_page = host_page;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page = paddr_page;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page = vaddr_page;
+		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page = translated | paddr_page;
+		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page = translated | vaddr_page;
 		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag =
 		    writeflag & MEM_WRITE;
+
+#ifdef MODE32
+    fprintf(stderr, "dyntrans (tlb index %d) vph %d (%" PRIx64 " => %" PRIx64 ")\n", tlbindex, r, vaddr_page, paddr_page);
+#endif
 
 		/*  Add the new translation to the table:  */
 #ifdef MODE32

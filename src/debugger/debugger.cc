@@ -752,6 +752,7 @@ void debugger(void)
 	 *  become to complex to keep in sync.
 	 */
 	/*  TODO: In all machines  */
+#if 0
 	for (i=0; i<debugger_machine->ncpus; i++)
 		if (debugger_machine->cpus[i]->translation_cache != NULL) {
 			cpu_create_or_reset_tc(debugger_machine->cpus[i]);
@@ -759,6 +760,7 @@ void debugger(void)
 			    invalidate_translation_caches(
 			    debugger_machine->cpus[i], 0, INVALIDATE_ALL);
 		}
+#endif
 
   exit_debugger = 0;
 

@@ -337,6 +337,8 @@ struct cpu {
 
 	/*  Nr of instructions executed, etc.:  */
 	int64_t		ninstrs;
+  int64_t   ninstrs_async;
+  int64_t   ninstrs_syncpc;
 	int64_t		ninstrs_show;
 	int64_t		ninstrs_flush;
 	int64_t		ninstrs_since_gettimeofday;

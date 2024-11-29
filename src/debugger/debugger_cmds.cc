@@ -1425,6 +1425,56 @@ static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
   }
 }
 
+static void debugger_cmd_until(struct machine *m, char *cmd_line) {
+  char *endptr;
+  unsigned long long when = strtoull(cmd_line, &endptr, 16);
+
+  fprintf(stderr, "until %" PRIx64 "\n", (uint64_t)when);
+
+  if (!when) {
+    return;
+  }
+
+  if (when < 0x100) {
+    debugger_cmd_step(m, "");
+  } else {
+    single_step = when & ~0x100;
+  }
+}
+
+static void debugger_cmd_kbd(struct machine *m, char *cmd_line) {
+  char *endptr;
+
+  do {
+    unsigned long kbd = strtoul(cmd_line, &endptr, 16);
+    while (*endptr == ' ') {
+      endptr++;
+    }
+
+    cmd_line = endptr;
+
+    keyboard_event_t k = { kbd };
+    keyboard_debug_events.push_back(k);
+  } while (isxdigit(*endptr));
+}
+
+static void debugger_cmd_script(struct machine *m, char *cmd_line) {
+  std::string line;
+  std::ifstream in;
+  in.open(cmd_line);
+  if (!in) {
+    fprintf(stderr, "Couldn't read script file\n");
+    return;
+  }
+
+  while (getline(in, line)) {
+    if (line.size() && line[0] == ';') {
+      continue;
+    }
+    script_queue.push_back(line);
+  }
+}
+
 /****************************************************************************/
 
 
@@ -1528,6 +1578,12 @@ static struct cmd cmds[] = {
 		"print version information" },
 
   { "gdb", "trap number", 0, debugger_cmd_gdb, "Transfer control to gdb" },
+
+  { "until", "number of instructions", 0, debugger_cmd_until, "Run until roughly the n'th emulated instruction" },
+
+  { "kbd", "hex ...", 0, debugger_cmd_kbd, "Inject these bytes into the keyboard byte stream" },
+
+  { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

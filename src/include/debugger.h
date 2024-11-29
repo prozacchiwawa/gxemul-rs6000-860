@@ -32,6 +32,7 @@
  */
 
 #include "misc.h"
+#include <deque>
 
 struct emul;
 struct machine;
@@ -48,6 +49,12 @@ void debugger(void);
 void debugger_reset(void);
 void debugger_init(struct emul *emul);
 int  debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name);
+
+typedef struct _keyboard_event_t {
+  int code;
+} keyboard_event_t;
+
+extern std::deque<keyboard_event_t> keyboard_debug_events;
 
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0

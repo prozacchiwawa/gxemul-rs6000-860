@@ -50,7 +50,7 @@
 #include "UnitTest.h"
 #include "debugger.h"
 
-extern int single_step;
+extern uint64_t single_step;
 extern int force_debugger_at_exit;
 
 extern int optind;

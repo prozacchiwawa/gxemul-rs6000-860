@@ -37,6 +37,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <deque>
+#include <iostream>
+#include <fstream>
 
 #include "console.h"
 #include "cpu.h"
@@ -58,6 +61,7 @@ extern char **extra_argv;
 extern struct settings *global_settings;
 extern int quiet_mode;
 static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
+static std::deque<std::string> script_queue;
 
 /*
  *  Global debugger variables:
@@ -65,7 +69,7 @@ static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
  *  TODO: Some of these should be moved to some other place!
  */
 
-volatile int single_step = NOT_SINGLE_STEPPING;
+volatile uint64_t single_step = NOT_SINGLE_STEPPING;
 volatile int exit_debugger;
 int force_debugger_at_exit = 0;
 
@@ -201,7 +205,7 @@ void debugger_activate(int x)
 {
 	ctrl_c = 1;
 
-	if (single_step != NOT_SINGLE_STEPPING) {
+	if ((single_step & 0xff) != NOT_SINGLE_STEPPING) {
 		/*  Already in the debugger. Do nothing.  */
 		int i;
 		for (i=0; i<MAX_CMD_BUFLEN; i++)
@@ -794,7 +798,17 @@ void debugger(void)
 
 	while (!exit_debugger) {
 		/*  Read a line from the terminal:  */
-		cmd = debugger_readline();
+    bool script_cmd = false;
+
+    if (script_queue.size()) {
+      std::string queue_command;
+      queue_command = script_queue.front();
+      script_queue.pop_front();
+      cmd = strdup(queue_command.c_str());
+      script_cmd = true;
+    } else {
+      cmd = debugger_readline();
+    }
 
 		cmd_len = strlen(cmd);
 
@@ -820,11 +834,14 @@ void debugger(void)
 		}
 
 		debugger_execute_cmd(cmd, cmd_len);
+    if (script_cmd) {
+      free(cmd);
+    }
 
 		/*  Special hack for the "step" command:  */
 		if (exit_debugger == -1) {
 			return;
-    		}
+    }
 	}
 
 	/*  Start up timers again:  */
@@ -837,7 +854,7 @@ void debugger(void)
 		debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
 	}
 
-	single_step = NOT_SINGLE_STEPPING;
+	single_step = (single_step & ~0xff) | NOT_SINGLE_STEPPING;
 	debugger_machine->instruction_trace = old_instruction_trace;
 	debugger_machine->show_trace_tree = old_show_trace_tree;
 	quiet_mode = old_quiet_mode;

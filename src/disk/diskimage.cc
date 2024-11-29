@@ -46,7 +46,7 @@
 
 /*  #define debug fatal  */
 
-extern int single_step;
+extern uint64_t single_step;
 
 static const char *diskimage_types[] = DISKIMAGE_TYPES;
 

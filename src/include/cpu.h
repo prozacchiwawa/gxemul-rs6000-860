@@ -317,6 +317,8 @@ struct cpu_family {
 #define	N_BASE_TABLE_ENTRIES		65536
 #define	PAGENR_TO_TABLE_INDEX(a)	((a) & (N_BASE_TABLE_ENTRIES-1))
 
+#define INSTR_BETWEEN_INTERRUPTS 0x100
+#define SYNCHRONIZE_PC 0x20
 
 /*
  *  The generic CPU struct:
@@ -514,5 +516,8 @@ void cpu_init(void);
 	return 1;							\
 	}
 
+#ifndef MIN
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#endif
 
 #endif	/*  CPU_H  */

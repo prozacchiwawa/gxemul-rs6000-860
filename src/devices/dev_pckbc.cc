@@ -39,6 +39,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <deque>
 
 #include "console.h"
 #include "cpu.h"
@@ -46,9 +47,11 @@
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
+#include "debugger.h"
 
 #include "thirdparty/kbdreg.h"
 
+std::deque<keyboard_event_t> keyboard_debug_events;
 
 /*  #define PCKBC_DEBUG  */
 /*  #define debug fatal  */
@@ -929,6 +932,12 @@ DEVICE_TICK(pckbc)
 
 	if (d->cmdbyte & KC8_KDISABLE)
 		ints_enabled = 0;
+
+  while (keyboard_debug_events.size()) {
+    auto event = keyboard_debug_events.front();
+    pckbc_add_code(d, event.code, 0);
+    keyboard_debug_events.pop_front();
+  }
 
 	for (port_nr=0; port_nr<2; port_nr++) {
 		/*  Cause receive interrupt, if there's something in the

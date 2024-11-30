@@ -102,7 +102,7 @@ typedef struct _BREAKPOINT {
     int *Address;
 } BREAKPOINT, *PBREAKPOINT;
 
-extern volatile int single_step;
+extern volatile uint64_t single_step;
 extern volatile int exit_debugger;
 extern int debugger_n_steps_left_before_interaction;
 

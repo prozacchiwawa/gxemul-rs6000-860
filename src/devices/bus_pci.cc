@@ -540,7 +540,7 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, bar_loc | 1);
     return 1;
   case 0x14:
-    bar_loc = value & ~0xff;
+    bar_loc = value & ~0x1fff;
     fprintf(stderr, "lsi: set BAR1 %08x (raw %08x)\n", bar_loc, value);
     PCI_SET_DATA(reg, bar_loc);
     return 1;
@@ -582,14 +582,20 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
+  auto first_alloc = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 1;
   assoc->size = 0x80;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
-  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
+  assoc->allocated_space = first_alloc;
+  assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 0;
+  assoc->size = 0x2000;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
+  assoc->allocated_space = first_alloc + 0x10000;
 
   snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
-           assoc->allocated_space, irqstr);
+           first_alloc, irqstr);
   fprintf(stderr, "lsi53c895a: add with string %s\n", tmpstr);
 
   device_add(machine, tmpstr);

@@ -55,7 +55,7 @@
 
 #define	DEV_8253_LENGTH		4
 #define	TICK_SHIFT		14
-
+#define INTERRUPT_TICK_COUNT 80000
 
 struct pit8253_data {
 	int		in_use;
@@ -71,13 +71,15 @@ struct pit8253_data {
 	struct timer	*timer0;
 	struct interrupt irq;
 	int		pending_interrupts_timer0;
+
+  int tick_count;
 };
 
 
 static void timer0_tick(struct timer *t, void *extra)
 {
 	struct pit8253_data *d = (struct pit8253_data *) extra;
-	d->pending_interrupts_timer0 ++;
+	// d->pending_interrupts_timer0 ++;
 
 	/*  printf("%i ", d->pending_interrupts_timer0); fflush(stdout);  */
 }
@@ -89,6 +91,15 @@ DEVICE_TICK(8253)
 
 	if (!d->in_use)
 		return;
+
+
+  if (d->hz[0] != 0) {
+    d->tick_count++;
+    if (d->tick_count >= INTERRUPT_TICK_COUNT / d->hz[0]) {
+      d->pending_interrupts_timer0++;
+      d->tick_count -= INTERRUPT_TICK_COUNT;
+    }
+  }
 
 	// Generate interrupts regardless of (d->mode[0] & 0x0e)?
 	// (It seems like Linux/MALTA kernels like this.)
@@ -122,6 +133,7 @@ DEVICE_ACCESS(8253)
 			case I8253_TIMER_MSB:
 				d->counter[relative_addr] &= 0x00ff;
 				d->counter[relative_addr] |= ((idata&0xff)<<8);
+        d->tick_count = 0;
 				if (d->counter[relative_addr] != 0)
 					d->hz[relative_addr] = (int) (
 					    I8253_TIMER_FREQ / (float)

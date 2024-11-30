@@ -106,7 +106,6 @@ DYNTRANS_MISC64_DECLARATIONS(ppc,PPC,uint8_t)
 
 #define	PPC_MAX_VPH_TLB_ENTRIES		128
 
-
 struct ppc_cpu {
 	struct ppc_cpu_type_def cpu_type;
 

@@ -276,7 +276,12 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     }
   }
 
-	if (single_step || cpu->machine->instruction_trace
+  auto prev_instrs = cpu->ninstrs;
+  auto next_limit =
+    MIN(prev_instrs + N_SAFE_DYNTRANS_LIMIT, cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS) -
+    cpu->ninstrs;
+
+	if (single_step & 0xff || cpu->machine->instruction_trace
 	    || cpu->machine->register_dump) {
 		/*
 		 *  Single-step:
@@ -335,7 +340,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	} else if (cpu->machine->statistics.enabled) {
 		/*  Gather statistics while executing multiple instructions:  */
 		n_instrs = 0;
-		for (;;) {
+		while (n_instrs + 24 < next_limit) {
 			struct DYNTRANS_IC *ic;
 
 			S; I; S; I; S; I; S; I; S; I; S; I;
@@ -344,11 +349,13 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			S; I; S; I; S; I; S; I; S; I; S; I;
 
 			n_instrs += 24;
-
-			if (n_instrs + cpu->n_translated_instrs >=
-			    N_SAFE_DYNTRANS_LIMIT)
-				break;
 		}
+    while (n_instrs < next_limit) {
+			struct DYNTRANS_IC *ic;
+
+			S; I;
+			n_instrs ++;
+    }
 	} else {
 		/*
 		 *  Execute multiple instructions:
@@ -357,35 +364,25 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		 */
 		n_instrs = 0;
 
-		for (;;) {
+    while (n_instrs + 30 < next_limit) {
 			struct DYNTRANS_IC *ic;
 
 			I; I; I; I; I;   I; I; I; I; I;
-/*
 			I; I; I; I; I;   I; I; I; I; I;
 			I; I; I; I; I;   I; I; I; I; I;
 
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
+      n_instrs += 30;
+    }
+    while (n_instrs < next_limit) {
+			struct DYNTRANS_IC *ic;
 
-			I; I; I; I; I;   I; I; I; I; I;
+      I;
 
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
+      n_instrs ++;
+    }
 
-			I; I; I; I; I;   I; I; I; I; I;
-      */
-
-			cpu->n_translated_instrs += 32;
-			if (cpu->n_translated_instrs >= N_SAFE_DYNTRANS_LIMIT)
-				break;
-		}
+    cpu->n_translated_instrs += n_instrs;
 	}
-
-	n_instrs += cpu->n_translated_instrs;
 
 	/*  Synchronize the program counter:  */
 	low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - (size_t)
@@ -442,12 +439,19 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #endif
 #ifdef DYNTRANS_PPC
 	/*  Update the Decrementer and Time base registers:  */
+  if (single_step >= 0x100 && single_step <= prev_instrs + n_instrs) {
+    fprintf(stderr, "until limit reached\n");
+    single_step = 1;
+  }
+  if (cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS <= prev_instrs + n_instrs)
 	{
+    // fprintf(stderr, "recognizing interrupts, timers at %08x\n", (unsigned int)(prev_instrs + n_instrs));
+    cpu->ninstrs_async += INSTR_BETWEEN_INTERRUPTS;
     ppc_update_for_icount(cpu);
 	}
 #endif
 
-	cpu->ninstrs += n_instrs;
+  cpu->ninstrs = prev_instrs + n_instrs;
 
 	/*  Return the nr of instructions executed:  */
 	return n_instrs;

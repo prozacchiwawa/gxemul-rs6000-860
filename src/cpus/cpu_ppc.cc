@@ -199,6 +199,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	CPU_SETTINGS_ADD_REGISTER64("lr", cpu->cd.ppc.spr[SPR_LR]);
 	CPU_SETTINGS_ADD_REGISTER32("cr", cpu->cd.ppc.cr);
 	CPU_SETTINGS_ADD_REGISTER32("fpscr", cpu->cd.ppc.fpscr);
+  CPU_SETTINGS_ADD_REGISTER64("icount", cpu->ninstrs);
 	/*  Integer GPRs, floating point registers, and segment registers:  */
 	for (i=0; i<PPC_NGPRS; i++) {
 		char tmpstr[5];

@@ -61,7 +61,7 @@ extern char **extra_argv;
 extern int verbose;
 extern int quiet_mode;
 extern int force_debugger_at_exit;
-extern int single_step;
+extern uint64_t single_step;
 extern int old_show_trace_tree;
 extern int old_instruction_trace;
 extern int old_quiet_mode;

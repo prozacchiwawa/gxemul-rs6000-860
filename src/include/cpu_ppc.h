@@ -40,7 +40,7 @@ struct cpu_family;
 #define	MODE_POWER		1
 
 /*  PPC CPU types:  */
-struct ppc_cpu_type_def { 
+struct ppc_cpu_type_def {
 	const char	*name;
 	int		pvr;
 	int		bits;
@@ -150,6 +150,24 @@ struct ppc_cpu {
 	VPH64(ppc,PPC)
 };
 
+#define PPC_RECORDING_LENGTH (8 * 1024 * 1024)
+struct ppc_record_buf {
+  uint32_t pc;
+  uint32_t iword;
+  uint64_t index;
+  uint64_t gpr[PPC_NGPRS];
+  uint32_t sr[16];
+  uint64_t msr;
+  uint64_t cr;
+  uint64_t lr;
+  uint64_t ctr;
+  uint64_t dec;
+  uint64_t dar;
+  uint64_t sdr1;
+  uint64_t dsisr;
+  uint64_t srr[2];
+  uint64_t sprg[4];
+};
 
 /*  Machine status word bits: (according to Book 3)  */
 #define	PPC_MSR_SF	(1ULL << 63)	/*  Sixty-Four-Bit Mode  */
@@ -264,5 +282,11 @@ int base_fdiv(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc
 
 void ppc_update_for_icount(struct cpu *cpu);
 int lha_does_update(int ra, int rs, bool update_form);
+
+void ppc_no_trace(struct cpu *cpu, uint64_t pc);
+void ppc_trace(struct cpu *cpu, uint64_t pc);
+
+void ppc_no_end_trace(struct cpu *cpu);
+void ppc_end_trace(struct cpu *cpu);
 
 #endif	/*  CPU_PPC_H  */

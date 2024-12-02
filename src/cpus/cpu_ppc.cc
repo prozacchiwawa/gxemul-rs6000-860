@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 4
+#define COUNT_DIV 32
 
 /*
  *  ppc_cpu_new():
@@ -163,6 +163,9 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	/*  Some default stack pointer value.  TODO: move this?  */
 	cpu->cd.ppc.gpr[1] = machine->physical_ram_in_mb * 1048576 - 4096;
+
+  cpu->functioncall_trace = ppc_no_trace;
+  cpu->functioncall_end_trace = ppc_no_end_trace;
 
 	/*
 	 *  NOTE/TODO: Ugly hack for OpenFirmware emulation:
@@ -321,39 +324,52 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 			}
 		}
 
-		if (cpu->cd.ppc.msr & PPC_MSR_IP && 
-            cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
+		if (cpu->cd.ppc.msr & PPC_MSR_IP &&
+                    cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
 			fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");
 			cpu->running = 0;
 		}
 	}
 
-  /*  TODO: Is the little-endian bit writable?  */
+	if (!writeflag) {
+		*valuep = cpu->cd.ppc.msr;
+    return;
+	}
+
+  auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
+  cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
+                         << PPC_INSTR_ALIGNMENT_SHIFT)) |
+    (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+
 	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int new_map = (cpu->cd.ppc.msr >> 4) & 3;
+
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
 		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-	} else if (old_map != new_map) {
-		auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
-		cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
-			<< PPC_INSTR_ALIGNMENT_SHIFT);
-		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
+    return;
+	}
+
+  if (old_map != new_map) {
+		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
 		ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
+    return;
 	}
 
-	if (!writeflag) {
-		*valuep = cpu->cd.ppc.msr;
+	if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
+		return;
 	}
 
-	if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-		if (cpu->cd.ppc.dec_intr_pending &&
-		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-			cpu->cd.ppc.dec_intr_pending = 0;
-			ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-		} else if (cpu->cd.ppc.irq_asserted)
-			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
+	if (cpu->cd.ppc.dec_intr_pending && !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+		cpu->cd.ppc.dec_intr_pending = 0;
+		ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+    return;
+	}
+
+  if (cpu->cd.ppc.irq_asserted) {
+		fprintf(stderr, "[ ppc: dispatch interrupt %04x ]\n", (int)cpu->machine->isa_pic_data.last_int);
+		ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
 	}
 }
 
@@ -377,8 +393,8 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
   } else if (!quiet_mode && exception_nr != 5) {
-		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" ]\n",
-          exception_nr, cpu->pc);
+		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %08x ]\n",
+          exception_nr, cpu->pc, (unsigned int)cpu->ninstrs);
   }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
@@ -410,7 +426,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
  */
 void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset, tmp;
 	int i, x = cpu->cpu_id;
 	int bits32 = cpu->cd.ppc.bits == 32;
@@ -488,12 +504,11 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 			    (uint64_t) cpu->cd.ppc.spr[SPR_SRR1]);
 		}
 
-    debug(" bridge swap D%d I%d latch %d ll %d %08x\n",
+    debug(" bridge swap D%d I%d latch %d ll %d\n",
           cpu->cd.ppc.bytelane_swap[0],
           cpu->cd.ppc.bytelane_swap[1],
           cpu->cd.ppc.bytelane_swap_latch,
-          cpu->cd.ppc.ll_bit,
-          (unsigned int)cpu->cd.ppc.ll_addr);
+          cpu->cd.ppc.ll_bit);
 
 		debug("cpu%i: msr = ", x);
 		reg_access_msr(cpu, &tmp, 0, nullptr, 0);
@@ -509,9 +524,10 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		debug("cpu%i: dec = 0x%08" PRIx32,
 		    x, (uint32_t) cpu->cd.ppc.spr[SPR_DEC]);
 		if (!bits32)
-			debug("  hdec = 0x%08" PRIx32"\n",
+			debug("  hdec = 0x%08" PRIx32,
 			    (uint32_t) cpu->cd.ppc.spr[SPR_HDEC]);
 
+    debug("  dar = 0x%08" PRIx32 " dsisr = 0x%08" PRIx32, x, (uint32_t)cpu->cd.ppc.spr[SPR_DAR], (uint32_t)cpu->cd.ppc.spr[SPR_DSISR]);
 		debug("\n");
 	}
 
@@ -632,6 +648,7 @@ void ppc_cpu_tlbdump(struct machine *m, int x, int rawflag)
 void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
+  fprintf(stderr, "ppc irq raised\n");
 	cpu->cd.ppc.irq_asserted = 1;
 }
 
@@ -642,6 +659,7 @@ void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
+  fprintf(stderr, "ppc irq lowered\n");
 	cpu->cd.ppc.irq_asserted = 0;
 }
 
@@ -1899,10 +1917,11 @@ static void debug_spr_usage(uint64_t pc, int spr)
 		break;
 	default:if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
 			break;
-		} else
+		} else {
 			fatal("[ using UNIMPLEMENTED spr %i (%s), pc = "
 			    "0x%" PRIx64" ]\n", spr, ppc_spr_names[spr] == NULL?
 			    "UNKNOWN" : ppc_spr_names[spr], (uint64_t) pc);
+		}
 	}
 
 	spr_used[spr >> 2] |= (1 << (spr & 3));
@@ -1951,7 +1970,7 @@ void fpu_update_cr1(struct cpu *cpu)
   uint64_t c = (cpu->cd.ppc.fpscr >> 28) & 0xf;
 	cpu->cd.ppc.cr &= ~((uint32_t)0xf << 24);
 	cpu->cd.ppc.cr |= ((uint32_t)c << 24);
-  fprintf(stderr, "%x => %08x\n", c, (uint32_t)cpu->cd.ppc.cr);
+  fprintf(stderr, "%" PRIx64" => %08x\n", c, (uint32_t)cpu->cd.ppc.cr);
 }
 
 void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset) {
@@ -2112,7 +2131,7 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
     fpscr |= PPC_FPSCR_FE;
   }
 
-  fprintf(stderr, "final fpscr %08x\n", fpscr);
+  fprintf(stderr, "final fpscr %08" PRIx64 "\n", fpscr);
   cpu->cd.ppc.fpscr = fpscr;
 }
 
@@ -2290,6 +2309,14 @@ void ppc_update_for_icount(struct cpu *cpu) {
   }
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
+
+  if (cpu->cd.ppc.msr & PPC_MSR_EE) {
+    if (cpu->cd.ppc.dec_intr_pending &&
+        !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      cpu->cd.ppc.dec_intr_pending = 0;
+      ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+    }
+	}
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {
@@ -2316,9 +2343,23 @@ unsigned char *ppc_get_host_page_ptr(struct cpu *cpu, bool instr, bool load, uin
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
   auto val = ic - cpu->cd.ppc.cur_ic_page;
   if (val < 0 || val > 0x1010) {
-    fprintf(stderr, "Bad sync low pc: %d\n", val);
+    fprintf(stderr, "Bad sync low pc: %d\n", (int)val);
   }
   return val;
+}
+
+void ppc_no_trace(struct cpu *cpu, uint64_t pc) {
+}
+
+void ppc_trace(struct cpu *cpu, uint64_t pc) {
+  cpu_functioncall_trace(cpu, pc);
+}
+
+void ppc_no_end_trace(struct cpu *cpu) {
+}
+
+void ppc_end_trace(struct cpu *cpu) {
+  cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 }
 
 #include "memory_ppc.cc"

@@ -33,7 +33,6 @@
  *  be increased by 3.)
  */
 
-
 #include "float_emul.h"
 
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
@@ -48,10 +47,10 @@ int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
 		/*  Synchronize the PC, and cause an FPU exception:  */  \
-    uint64_t low_pc = sync_low_pc(cpu, ic);                \
-		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<	 \
-		    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<		 \
-		    PPC_INSTR_ALIGNMENT_SHIFT);				 \
+      uint64_t low_pc = sync_low_pc(cpu, ic);                \
+      cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
+                                                            PPC_INSTR_ALIGNMENT_SHIFT); \
 		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);     \
 		return; } }
 #endif
@@ -208,8 +207,7 @@ X(bclr)
 		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
 		/*  TODO: trace in separate (duplicate) function?  */
-		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+    cpu->functioncall_end_trace(cpu);
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
@@ -482,46 +480,26 @@ X(bcl_samepage)
 }
 
 
+X(bla)
+{
+	/*  Calculate LR:  */
+	cpu->cd.ppc.spr[SPR_LR] =
+    (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
+                 << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
+
+	cpu->pc = (int32_t)ic->arg[0];
+	cpu->functioncall_trace(cpu, cpu->pc);
+	quick_pc_to_pointers(cpu);
+}
+
+
 /*
- *  bl:  Branch and Link (to a different translated page)
+ *  bl:  Branch and Link (to a different translated page)  (with trace)
  *
  *  arg[0] = relative offset (as an int32_t) from start of page
  *  arg[1] = lr offset (relative to start of current page)
  */
 X(bl)
-{
-  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 4) & 0xffffffff;
-  if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
-    cpu->cd.ppc.spr[SPR_TBU]++;
-  }
-
-	/*  Calculate LR and new PC:  */
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->cd.ppc.spr[SPR_LR] = cpu->pc + ic->arg[1];
-	cpu->pc += (int32_t)ic->arg[0];
-
-	/*  Find the new physical page and update the translation pointers:  */
-	quick_pc_to_pointers(cpu);
-}
-X(bla)
-{
-	/*  Calculate LR:  */
-	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
-	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
-
-	cpu->pc = (int32_t)ic->arg[0];
-	quick_pc_to_pointers(cpu);
-}
-
-
-/*
- *  bl_trace:  Branch and Link (to a different translated page)  (with trace)
- *
- *  arg[0] = relative offset (as an int32_t) from start of page
- *  arg[1] = lr offset (relative to start of current page)
- */
-X(bl_trace)
 {
 	/*  Calculate LR:  */
 	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
@@ -531,27 +509,17 @@ X(bl_trace)
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (int32_t)ic->arg[0];
 
-	cpu_functioncall_trace(cpu, cpu->pc);
+	cpu->functioncall_trace(cpu, cpu->pc);
 
 	/*  Find the new physical page and update the translation pointers:  */
-	quick_pc_to_pointers(cpu);
-}
-X(bla_trace)
-{
-	/*  Calculate LR:  */
-	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
-	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
-
-	cpu->pc = (int32_t)ic->arg[0];
-	cpu_functioncall_trace(cpu, cpu->pc);
 	quick_pc_to_pointers(cpu);
 }
 
 
 /*
- *  bl_samepage:  Branch and Link (to within the same translated page)
+ *  bl_samepage_trace:  Branch and Link (to within the same translated page)
  *
- *  arg[0] = offset of new ppc_instr_call
+ *  arg[0] = pointer to new ppc_instr_call
  *  arg[1] = lr offset (relative to start of current page)
  */
 X(bl_samepage)
@@ -563,35 +531,12 @@ X(bl_samepage)
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
 	cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
-	/*  Calculate new PC (for the trace)  */
-	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.cur_ic_page;
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-  cpu->cd.ppc.next_ic->f = ppc32_instr_to_be_translated;
-}
-
-
-/*
- *  bl_samepage_trace:  Branch and Link (to within the same translated page)
- *
- *  arg[0] = pointer to new ppc_instr_call
- *  arg[1] = lr offset (relative to start of current page)
- */
-X(bl_samepage_trace)
-{
-	uint32_t low_pc;
-
-	/*  Calculate LR:  */
-	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
-	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
-
-	cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
 
 	/*  Calculate new PC (for the trace)  */
 	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.cur_ic_page;
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu_functioncall_trace(cpu, cpu->pc);
+	cpu->functioncall_trace(cpu, cpu->pc);
   cpu->cd.ppc.next_ic->f = ppc32_instr_to_be_translated;
 }
 
@@ -856,7 +801,7 @@ X(dcbz)
 		int to_clear = cacheline_size < sizeof(cacheline)?
 		    cacheline_size : sizeof(cacheline);
 #ifdef MODE32
-		unsigned char *page = cpu->cd.ppc.host_store[addr >> 12];
+		unsigned char *page = nullptr; // cpu->cd.ppc.host_store[addr >> 12];
 		if (page != NULL) {
 			memset(page + (addr & 0xfff), 0, to_clear);
 		} else
@@ -1204,8 +1149,8 @@ X(llsc)
 	int iw = ic->arg[0], len = 4, load = 0, xo = (iw >> 1) & 1023;
 	int i, rc = iw & 1, rt, ra, rb;
   int ll_bit = cpu->cd.ppc.ll_bit;
-	uint64_t addr = 0, value;
-	unsigned char d[8];
+	uint64_t addr = 0, value = 0;
+	unsigned char d[8] = { };
 
 	switch (xo) {
 	case PPC_31_LDARX:
@@ -1231,7 +1176,13 @@ X(llsc)
   }
 
 	addr += cpu->cd.ppc.gpr[rb];
-  uint64_t final_addr;
+  uint64_t final_addr = 0;
+
+	/*  Synchronize the PC so the exception below can target the right location.  */
+  uint64_t low_pc = sync_low_pc(cpu, ic);
+  cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
+                         PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
+                                                        PPC_INSTR_ALIGNMENT_SHIFT);
 
   if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
     // Will throw.
@@ -1239,13 +1190,12 @@ X(llsc)
     return;
   }
 
-  final_addr = (final_addr & ~0xfff) | (addr ^ offset);
+  final_addr = (final_addr & ~0xfff) | ((addr & 0xfff) ^ offset);
 
   auto page_ptr = load ? cpu->cd.ppc.host_load : cpu->cd.ppc.host_store;
   unsigned char *page = page_ptr[((uint32_t)addr) >> 12];
 
 	if (load) {
-
 		if (rc) {
 			fatal("ll: rc-bit set?\n");
 			exit(1);
@@ -1254,20 +1204,18 @@ X(llsc)
     // First check for a cache page as in ppc_instr_loadstore.
     if (page) {
       memcpy(d, page + ((addr & 0xfff) ^ offset), len);
-    } else if (!cpu->memory_rw(cpu, cpu->mem, addr, d, len, MEM_READ, CACHE_DATA)) {
+    } else if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
       fatal("ll: error: TODO\n");
       return; // exit(1);
     }
 
-    // fprintf(stderr, "lwarx: len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
-
     // Like in cpu_ppc_instr_loadstore
     if (len == 8) {
       cpu->cd.ppc.gpr[rt] =
-        (d[0^swizzle] << 56) +
-        (d[1^swizzle] << 48) +
-        (d[2^swizzle] << 40) +
-        (d[3^swizzle] << 32) +
+        ((uint64_t)d[0^swizzle] << 56) +
+        ((uint64_t)d[1^swizzle] << 48) +
+        ((uint64_t)d[2^swizzle] << 40) +
+        ((uint64_t)d[3^swizzle] << 32) +
         (d[4^swizzle] << 24) +
         (d[5^swizzle] << 16) +
         (d[6^swizzle] <<  8) +
@@ -1278,11 +1226,11 @@ X(llsc)
         (d[1^swizzle] << 16) +
         (d[2^swizzle] <<  8) +
         d[3^swizzle];
-      // fprintf(stderr, "lwarx offset %d swizzle %d %08x = %08x\n", offset, swizzle, (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt]);
     }
 
 		cpu->cd.ppc.ll_addr = final_addr;
 		cpu->cd.ppc.ll_bit = 1;
+    		// fprintf(stderr, "lwarx %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt], (unsigned int)cpu->pc);
 	} else {
 		uint32_t old_so = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_SO;
 		if (!rc) {
@@ -1303,14 +1251,17 @@ X(llsc)
       new_cr |= 0x10000000;
     }
 
-		if (!ll_bit || cpu->cd.ppc.ll_addr != final_addr) {
-      cpu->cd.ppc.cr = new_cr;
-      fprintf(stderr, "stwcx. early return ll %d %08x addr %08x\n", ll_bit, (unsigned int)cpu->cd.ppc.ll_addr, (unsigned int)final_addr);
+		if (!ll_bit) {
+			cpu->cd.ppc.cr = new_cr;
+			// fprintf(stderr, "stwcx. %08x /!\\ %08x ll %d %08x @ %08x\n", (unsigned int)addr, (unsigned int)value, ll_bit, (unsigned int)cpu->cd.ppc.ll_addr, (unsigned int)cpu->pc);
 			return;
 		}
 
+		// fprintf(stderr, "stwcx. %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)value, (unsigned int)cpu->pc);
+
 		/*  Clear _all_ CPUs' ll_bits:  */
 		for (i=0; i<cpu->machine->ncpus; i++) {
+			cpu->machine->cpus[i]->cd.ppc.ll_addr = 0;
 			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
     }
 
@@ -1332,14 +1283,12 @@ X(llsc)
       d[3^swizzle] = value;
     }
 
-    if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
+    if (page) {
+      memcpy(page + ((addr & 0xfff) ^ offset), d, len);
+    } else if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
     }
-
-    if (page) {
-      memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-		}
 
     // fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
     // Clear the reserve bit.
@@ -1584,7 +1533,7 @@ X(rlwimi)
 	uint32_t iword = ic->arg[2];
 	int sh = (iword >> 11) & 31;
 	int mb = (iword >> 6) & 31;
-	int me = (iword >> 1) & 31;   
+	int me = (iword >> 1) & 31;
 	int rc = iword & 1;
 
 	tmp = (tmp << sh) | (tmp >> (32-sh));
@@ -1784,10 +1733,6 @@ X(mtlr) {
 	cpu->cd.ppc.spr[SPR_LR] = reg(ic->arg[0]);
 }
 X(mtctr) {
-  auto val = reg(ic->arg[0]);
-  if (val >> 28 == 3) {
-    fprintf(stderr, "suspicious ctr value %x at %" PRIx64 "\n", (unsigned int)val, (cpu->pc & ~0xfff) | sync_low_pc(cpu, ic) * 4);
-  }
   cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
@@ -1811,6 +1756,7 @@ X(rfi)
 	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~0xffff;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
+
 	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
@@ -2504,9 +2450,32 @@ X(stfs)
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [2 + 4](cpu, ic);
+    [2 + 4](cpu, ic);
+
+	ic->arg[0] = (size_t)old_arg0;
+}
+X(stfs_update)
+{
+	uint64_t *old_arg0 = (uint64_t *) ic->arg[0];
+	struct ieee_float_value val;
+	uint64_t tmp_val;
+
+	CHECK_FOR_FPU_EXCEPTION;
+
+	ieee_interpret_float_value(*old_arg0, &val, IEEE_FMT_D);
+	tmp_val = ieee_store_float_value(val.f, IEEE_FMT_S, val.nan);
+
+	ic->arg[0] = (size_t)&tmp_val;
+
+	/*  Perform a 32-bit store:  */
+#ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [2 + 4 + 16 + 32](cpu, ic);
 
 	ic->arg[0] = (size_t)old_arg0;
 }
@@ -2541,9 +2510,21 @@ X(stfd)
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [3 + 4](cpu, ic);
+    [3 + 4](cpu, ic);
+}
+X(stfd_update)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+
+	/*  Perform a 64-bit store:  */
+#ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [3 + 4 + 16 + 32](cpu, ic);
 }
 X(stfdx)
 {
@@ -2649,7 +2630,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2680,8 +2661,8 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
-    ppc_exception(cpu, PPC_EXCEPTION_PRG, 3 << 16);
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
+    ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
 
@@ -2719,8 +2700,9 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
-	cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]),
-                                     INVALIDATE_VADDR);
+  for (uint32_t i = 0; i < 16; i++) {
+    cpu->invalidate_translation_caches(cpu, (i << 28) | reg(ic->arg[0]) & 0xffff000, INVALIDATE_VADDR | INVALIDATE_PADDR);
+  }
 }
 
 
@@ -2811,6 +2793,21 @@ X(end_of_page)
 }
 
 
+X(dump_registers) {
+  auto additions = (dump_register_state_t *)ic->arg[0];
+  ic->arg[0] = additions->arg0;
+  auto new_f = (void (*)(struct cpu *, struct ppc_instr_call *))additions->f;
+  new_f(cpu, ic);
+  auto old_pc = cpu->pc;
+  cpu->pc = ic->pc;
+  cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
+  cpu->pc = old_pc;
+  if (cpu->machine->register_dump) {
+    ppc_cpu_register_dump(cpu, true, false);
+  }
+  ic->arg[0] = (ssize_t)additions;
+}
+
 /*****************************************************************************/
 
 
@@ -2833,6 +2830,7 @@ X(to_be_translated)
 	    bfa, fp, byterev, nb, mb, me;
 	void (*samepage_function)(struct cpu *, struct ppc_instr_call *);
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
+  auto found = dump_registers.end();
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
@@ -2890,12 +2888,12 @@ X(to_be_translated)
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
-
+  memcpy(ic->instr, ib, sizeof(ic->instr));
+  ic->pc = cpu->pc;
 
 	/*
 	 *  Translate the instruction:
 	 */
-
 	main_opcode = iword >> 26;
 
 	switch (main_opcode) {
@@ -3071,6 +3069,8 @@ X(to_be_translated)
 	case PPC_HI6_STD:
 	case PPC_HI6_STFD:
 	case PPC_HI6_STFS:
+  case PPC_HI6_STFDU:
+  case PPC_HI6_STFSU:
 		rs = (iword >> 21) & 31;
 		ra = (iword >> 16) & 31;
 		imm = (int16_t)iword;
@@ -3095,6 +3095,8 @@ X(to_be_translated)
 		case PPC_HI6_STD:  size=3; break;
 		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
+    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
+		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
 		}
 		if (ic->f == NULL) {
 			ic->f =
@@ -3179,13 +3181,8 @@ X(to_be_translated)
 		tmp_addr = (int64_t)(int32_t)((iword & 0x03fffffc) << 6);
 		tmp_addr = (int64_t)tmp_addr >> 6;
 		if (lk_bit) {
-			if (cpu->machine->show_trace_tree) {
-				ic->f = instr(bl_trace);
-				samepage_function = instr(bl_samepage_trace);
-			} else {
-				ic->f = instr(bl);
-				samepage_function = instr(bl_samepage);
-			}
+      ic->f = instr(bl);
+      samepage_function = instr(bl_samepage);
 		} else {
 			ic->f = instr(b);
 			samepage_function = instr(b_samepage);
@@ -3207,11 +3204,7 @@ X(to_be_translated)
 		}
 		if (aa_bit) {
 			if (lk_bit) {
-				if (cpu->machine->show_trace_tree) {
-					ic->f = instr(bla_trace);
-				} else {
-					ic->f = instr(bla);
-				}
+        ic->f = instr(bla);
 			} else {
 				ic->f = instr(ba);
 			}
@@ -3296,7 +3289,10 @@ X(to_be_translated)
 			ic->arg[0] = iword;
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_HI6_19: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -3304,7 +3300,7 @@ X(to_be_translated)
 	case PPC_HI6_RLWINM:
 		ra = (iword >> 16) & 31;
 		mb = (iword >> 6) & 31;
-		me = (iword >> 1) & 31;   
+		me = (iword >> 1) & 31;
 		rc = iword & 1;
 		mask = 0;
 		for (;;) {
@@ -3374,7 +3370,10 @@ X(to_be_translated)
 			}
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_HI6_30: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -3961,7 +3960,10 @@ X(to_be_translated)
 			ic->f = load? instr(lvx) : instr(stvx);
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_31: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -4003,7 +4005,10 @@ X(to_be_translated)
 			break;
 		default:/*  Use all 10 bits of xo:  */
 			switch (xo) {
-			default:goto bad;
+			default:{
+        fprintf(stderr, "PPC_59: unknown xo %d\n", xo);
+        goto bad;
+      }
 			}
 		}
 		break;
@@ -4106,14 +4111,28 @@ X(to_be_translated)
 						ic->arg[1] |= 0xf;
 				}
 				break;
-			default:goto bad;
-			}
+			default:{
+        fprintf(stderr, "PPC_63: unknown xo %d\n", xo);
+        goto bad;
+      }
+      }
 		}
 		break;
 
-	default:goto bad;
-	}
+  default:{
+    fprintf(stderr, "unknown ppc hi6 %d\n", main_opcode);
+    goto bad;
+  }
+  }
 
+  // If we should dump for this address, change the ic.
+  found = dump_registers.find(ic->pc);
+  if (found != dump_registers.end()) {
+    found->second->f = (void *)ic->f;
+    found->second->arg0 = ic->arg[0];
+    ic->arg[0] = (uint64_t)found->second.get();
+    ic->f = instr(dump_registers);
+  }
 
 #define	DYNTRANS_TO_BE_TRANSLATED_TAIL
 #include "cpu_dyntrans.cc"

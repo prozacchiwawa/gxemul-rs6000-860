@@ -33,6 +33,7 @@
  *  this file.
  */
 
+void ppc_instr_dump_registers(struct cpu *cpu, struct ppc_instr_call *ic);
 
 #ifndef STATIC_STUFF
 #define	STATIC_STUFF
@@ -113,10 +114,30 @@ static void gather_statistics(struct cpu *cpu)
 #ifdef DYNTRANS_PPC
 /*  The normal instruction execution core:  */
 #define I	{ \
-  cpu->cd.ppc.icount++;                                                 \
-  ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                                \
-  ic->f(cpu, ic);                                                       \
-}
+    cpu->cd.ppc.icount++;                                               \
+    ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                              \
+    if (ppc_recording) {                                                \
+      auto ptr = &ppc_recording[ppc_recording_offset];                  \
+      memcpy(&ptr->iword, ic->instr, sizeof(uint32_t));                 \
+      memcpy(ptr->gpr, cpu->cd.ppc.gpr, sizeof(cpu->cd.ppc.gpr));       \
+      memcpy(ptr->sr, cpu->cd.ppc.sr, sizeof(cpu->cd.ppc.sr));          \
+      ptr->pc = ic->pc;                                                 \
+      ptr->index = cpu->ninstrs;                                        \
+      ptr->msr = cpu->cd.ppc.msr;                                       \
+      ptr->cr = cpu->cd.ppc.cr;                                         \
+      ptr->lr = cpu->cd.ppc.spr[SPR_LR];                                \
+      ptr->ctr = cpu->cd.ppc.spr[SPR_CTR];                              \
+      ptr->dec = cpu->cd.ppc.spr[SPR_DEC];                              \
+      ptr->dar = cpu->cd.ppc.spr[SPR_DAR];                              \
+      ptr->sdr1 = cpu->cd.ppc.spr[SPR_SDR1];                            \
+      ptr->dsisr = cpu->cd.ppc.spr[SPR_DSISR];                          \
+      ptr->srr[0] = cpu->cd.ppc.spr[SPR_SRR0];                          \
+      ptr->srr[1] = cpu->cd.ppc.spr[SPR_SRR1];                          \
+      memcpy(ptr->sprg, &cpu->cd.ppc.spr[SPR_SPRG0], sizeof(uint64_t) * 4); \
+      ppc_recording_offset = (ppc_recording_offset + 1) & (PPC_RECORDING_LENGTH - 1); \
+    }                                                                   \
+    ic->f(cpu, ic);                                                     \
+  }
 #else
 /*  The normal instruction execution core:  */
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic);
@@ -185,8 +206,8 @@ static void gather_statistics(struct cpu *cpu)
  */
 int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 {
-	MODE_uint_t cached_pc;
-	int low_pc, n_instrs;
+	int low_pc = 0;
+	uint64_t n_instrs = 0;
 
 	/*  Ugly... fix this some day.  */
 #ifdef DYNTRANS_DUALMODE_32
@@ -241,16 +262,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		if (enabled && mask)
 			mips_cpu_exception(cpu, EXCEPTION_INT, 0, 0, 0, 0, 0,0);
 #endif
-#ifdef DYNTRANS_PPC
-		if (cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-			cpu->cd.ppc.dec_intr_pending = 0;
-			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-				ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-      }
-		}
-		if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
-			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
-#endif
 #ifdef DYNTRANS_SH
 		if (cpu->cd.sh.int_to_assert > 0 && !(cpu->cd.sh.sr & SH_SR_BL)
 		    && ((cpu->cd.sh.sr & SH_SR_IMASK) >> SH_SR_IMASK_SHIFT)
@@ -267,8 +278,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	}
 #endif
 
-	cached_pc = cpu->pc;
-
 	cpu->n_translated_instrs = 0;
 
 	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
@@ -280,73 +289,66 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     }
   }
 
-  auto prev_instrs = cpu->ninstrs;
-  auto next_limit =
+  uint64_t prev_instrs = cpu->ninstrs;
+  uint64_t next_limit =
     MIN(prev_instrs + N_SAFE_DYNTRANS_LIMIT, cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS) -
     cpu->ninstrs;
 
-	if (single_step & 0xff || cpu->machine->instruction_trace
-	    || cpu->machine->register_dump) {
+#ifdef DYNTRANS_PPC
+  if (cpu->machine->instruction_trace) {
+    cpu->functioncall_trace = ppc_trace;
+    cpu->functioncall_end_trace = ppc_end_trace;
+  } else {
+    cpu->functioncall_trace = ppc_no_trace;
+    cpu->functioncall_end_trace = ppc_no_end_trace;
+  }
+#endif
+
+  auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
+#ifdef DYNTRANS_PPC
+    if (ic->f == ppc_instr_dump_registers) {
+      I;
+      return;
+    }
+
+    auto this_pc = cpu->pc;
+    auto old_ptr = ic;
+    auto old_setting = dump_registers.find(this_pc);
+    bool remove = false;
+    if (old_setting == dump_registers.end()) {
+      remove = true;
+      dump_registers.insert(std::pair(this_pc, std::make_unique<dump_register_state_t>((void *)old_ptr->f, ic->arg[0])));
+      old_setting = dump_registers.find(this_pc);
+      old_ptr->arg[0] = (ssize_t)old_setting->second.get();
+      old_ptr->f = ppc_instr_dump_registers;
+    }
+#endif
+    I;
+#ifdef DYNTRANS_PPC
+    if (remove) {
+      old_ptr->f = (void(*)(struct cpu *, struct ppc_instr_call *))old_setting->second->f;
+      old_ptr->arg[0] = old_setting->second->arg0;
+      dump_registers.erase(this_pc);
+    }
+#endif
+  };
+
+  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
+	if (single_step & 0xff) {
 		/*
 		 *  Single-step:
 		 */
-		struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
-		if (cpu->machine->register_dump) {
-			debug("\n");
-			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
-		}
-		if (cpu->machine->instruction_trace) {
-			/*  TODO/Note: This must be large enough to hold
-			    any instruction for any ISA:  */
-			unsigned char instr[1 <<
-			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-			if (!cpu->memory_rw(cpu, cpu->mem, cached_pc, &instr[0],
-			    sizeof(instr), MEM_READ, CACHE_INSTRUCTION)) {
-				fatal("XXX_run_instr(): could not read "
-				    "the instruction\n");
-			} else {
-#ifdef DYNTRANS_DELAYSLOT
-				int len =
-#endif
-				    cpu_disassemble_instr(
-				    cpu->machine, cpu, instr, 1, 0);
-#ifdef DYNTRANS_DELAYSLOT
-				/*  Show the instruction in the delay slot,
-				    if any:  */
-				if (cpu->instruction_has_delayslot == NULL)
-					fatal("WARNING: ihd func not yet"
-					    " implemented?\n");
-				else if (cpu->instruction_has_delayslot(cpu,
-				    instr)) {
-					int saved_delayslot = cpu->delay_slot;
-					cpu->memory_rw(cpu, cpu->mem, cached_pc
-					    + len, &instr[0],
-					    sizeof(instr), MEM_READ,
-					    CACHE_INSTRUCTION);
-					cpu->delay_slot = DELAYED;
-					cpu->pc += len;
-					cpu_disassemble_instr(cpu->machine,
-					    cpu, instr, 1, 0);
-					cpu->delay_slot = saved_delayslot;
-					cpu->pc -= len;
-				}
-#endif
-			}
-		}
+    instr_trace(ic);
 
-		if (cpu->machine->statistics.enabled)
+		if (cpu->machine->statistics.enabled) {
 			S;
-
-		/*  Execute just one instruction:  */
-    I;
+		}
 
 		n_instrs = 1;
 	} else if (cpu->machine->statistics.enabled) {
 		/*  Gather statistics while executing multiple instructions:  */
 		n_instrs = 0;
 		while (n_instrs + 24 < next_limit) {
-			struct DYNTRANS_IC *ic;
-
 			S; I; S; I; S; I; S; I; S; I; S; I;
 			S; I; S; I; S; I; S; I; S; I; S; I;
 			S; I; S; I; S; I; S; I; S; I; S; I;
@@ -354,12 +356,13 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
 			n_instrs += 24;
 		}
-    while (n_instrs < next_limit) {
-			struct DYNTRANS_IC *ic;
-
+		while (n_instrs < next_limit) {
 			S; I;
 			n_instrs ++;
-    }
+		}
+	} else if (cpu->machine->instruction_trace) {
+    instr_trace(ic);
+    n_instrs = 1;
 	} else {
 		/*
 		 *  Execute multiple instructions:
@@ -367,26 +370,23 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		 *  (This is the core dyntrans loop.)
 		 */
 		n_instrs = 0;
+		while (n_instrs + 24 < next_limit) {
+			I; I; I; I; I; I; I; I;
+			I; I; I; I; I; I; I; I;
+			I; I; I; I; I; I; I; I;
 
-    while (n_instrs + 30 < next_limit) {
-			struct DYNTRANS_IC *ic;
-
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-
-      n_instrs += 30;
-    }
+      n_instrs += 24;
+		}
     while (n_instrs < next_limit) {
 			struct DYNTRANS_IC *ic;
 
       I;
 
       n_instrs ++;
-    }
-
-    cpu->n_translated_instrs += n_instrs;
+		}
 	}
+
+    	cpu->n_translated_instrs += n_instrs;
 
 	/*  Synchronize the program counter:  */
 	low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
@@ -442,7 +442,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #endif
 #ifdef DYNTRANS_PPC
 	/*  Update the Decrementer and Time base registers:  */
-  if (single_step >= 0x100 && single_step <= prev_instrs + n_instrs) {
+  uint64_t new_instrs = prev_instrs + n_instrs;
+  uint64_t compare_steps = (single_step | 0xffull) - 255ull;
+  bool should_stop = new_instrs >= compare_steps;
+  if ((single_step >= 0x100ull) && should_stop) {
     fprintf(stderr, "until limit reached\n");
     single_step = 1;
   }
@@ -475,7 +478,7 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 {
 	int show_symbolic_function_name = 1;
         char strbuf[100];
-	char *symbol;
+	const char *symbol;
 	uint64_t ot;
 	int x, print_dots = 1, n_args_to_print =
 #if defined(DYNTRANS_ALPHA)
@@ -1935,19 +1938,8 @@ bad:	/*
 	if (cpu->translation_readahead)
 		return;
 
+	fprintf(stderr, "to be translated failed iword = %08x\n", iword);
 	quiet_mode = 0;
-	fatal("to_be_translated(): TODO: unimplemented instruction");
-
-	if (cpu->machine->instruction_trace) {
-		if (cpu->is_32bit)
-			fatal(" at 0x%" PRIx32"\n", (uint32_t)cpu->pc);
-		else
-			fatal(" at 0x%" PRIx64"\n", (uint64_t)cpu->pc);
-	} else {
-		fatal(":\n");
-		DISASSEMBLE(cpu, ib, 1, 0);
-	}
-
 	cpu->running = 0;
 
 	/*  Note: Single-stepping can jump here.  */

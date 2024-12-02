@@ -701,7 +701,7 @@ int mips_cpu_disassemble_instr(struct cpu *cpu, unsigned char *originstr,
 	uint64_t addr, offset;
 	uint32_t instrword;
 	unsigned char instr[4];
-	char *symbol;
+	const char *symbol;
 
 	if (running)
 		dumpaddr = cpu->pc;
@@ -1498,7 +1498,7 @@ void mips_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
 	int coprocnr, i, bits32;
 	uint64_t offset;
-	char *symbol;
+	const char *symbol;
 	int bits128 = cpu->cd.mips.cpu_type.rev == MIPS_R5900;
 
 	bits32 = cpu->is_32bit;
@@ -1731,7 +1731,7 @@ void mips_cpu_exception(struct cpu *cpu, int exccode, int tlb, uint64_t vaddr,
 	if (!quiet_mode) {
 		uint64_t offset;
 		int x;
-		char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
+		const char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
 
 		debug("[ ");
@@ -1797,7 +1797,7 @@ void mips_cpu_exception(struct cpu *cpu, int exccode, int tlb, uint64_t vaddr,
 
 	if (tlb && vaddr < 0x1000) {
 		uint64_t offset;
-		char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
+		const char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
 		fatal("[ ");
 		if (cpu->machine->ncpus > 1)

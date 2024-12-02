@@ -221,8 +221,10 @@
 #define	PPC_HI6_LFD		0x32
 
 #define	PPC_HI6_STFS		0x34
+#define PPC_HI6_STFSU   0x35
 
 #define	PPC_HI6_STFD		0x36
+#define PPC_HI6_STFDU   0x37
 
 #define	PPC_HI6_LD		0x3a
 #define	PPC_HI6_59		0x3b

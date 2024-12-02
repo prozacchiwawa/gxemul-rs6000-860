@@ -99,14 +99,6 @@ int MEMORY_RW(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 			return MEMORY_ACCESS_FAILED;
 	}
 
-#ifdef MEM_PPC
-  // Disable ll bit if we would cancel the reserve.
-  if (writeflag && cpu->cd.ppc.ll_bit && cpu->cd.ppc.ll_addr == paddr) {
-    fprintf(stderr, "ll bit off due to write to %08x\n", (unsigned int)paddr);
-    cpu->cd.ppc.ll_bit = 0;
-  }
-#endif
-
 #if 0
 	/*
 	 *  For quick-and-dirty debugging of 32-bit code, typically
@@ -170,7 +162,7 @@ int MEMORY_RW(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 		}
 
 		uint64_t paddr2 = paddr - 0x0c000000;
-		
+
 		if (paddr < 0x200000)
 			paddr2 = paddr + 16*1048576;
 

@@ -3,7 +3,12 @@
 #endif
 
 #ifdef MODE32
-#define	quick_pc_to_pointers(cpu) {					\
+#ifdef DYNTRANS_PPC
+#define	quick_pc_to_pointers(cpu) {             \
+		DYNTRANS_PC_TO_POINTERS(cpu);               \
+    }
+#else
+#define	quick_pc_to_pointers(cpu) {     \
 	uint32_t pc_tmp32 = cpu->pc;					\
 	struct DYNTRANS_TC_PHYSPAGE *ppp_tmp;				\
 	ppp_tmp = cpu->cd.DYNTRANS_ARCH.phys_page[pc_tmp32 >> 12];	\
@@ -13,8 +18,9 @@
 		    cpu->cd.DYNTRANS_ARCH.cur_ic_page +			\
 		    DYNTRANS_PC_TO_IC_ENTRY(pc_tmp32);			\
 	} else								\
-		DYNTRANS_PC_TO_POINTERS(cpu);				\
+		DYNTRANS_PC_TO_POINTERS(cpu);               \
 }
+#endif
 
 #ifndef quick_pc_to_pointers_arm
 #define	quick_pc_to_pointers_arm(cpu) {					\

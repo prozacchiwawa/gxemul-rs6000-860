@@ -233,7 +233,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
   // XX Set srr1 below in checks for bat+write or page table.
   int srr1_extra = 0;
 
-	reg_access_msr(cpu, &msr, 0, 0);
+	reg_access_msr(cpu, &msr, 0, nullptr, 0);
 	user = msr & PPC_MSR_PR? 1 : 0;
 
 	if (cpu->cd.ppc.bits == 32)
@@ -292,7 +292,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		cpu->cd.ppc.spr[instr? SPR_IMISS : SPR_DMISS] = vaddr;
 
 		msr |= PPC_MSR_TGPR;
-		reg_access_msr(cpu, &msr, 1, 0);
+		reg_access_msr(cpu, &msr, 1, nullptr, 0);
 
 		ppc_exception(cpu, instr? 0x10 : (writeflag? 0x12 : 0x11), 0);
 	} else {
@@ -332,6 +332,8 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     cpu->cd.ppc.ll_bit = 0;
   } else if ((write && (cpu->cd.ppc.ll_addr & ~7 == addr & ~7)) || addr == 0x4fc) {
     fprintf(stderr, "Suspiciously close write to ll_addr %08x (%08x) %08x\n", (unsigned int)cpu->cd.ppc.ll_addr, cpu->pc, *((unsigned int *)data));
+  } else if (write && addr == 0x20fa2c || addr == 0x20fa98) {
+    fprintf(stderr, "%08x: %s sus location: %08x <- %08x\n", (unsigned int)cpu->pc, rw, (unsigned int)addr, *((unsigned int *)data));
   }
 
   int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);

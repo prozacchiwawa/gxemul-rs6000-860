@@ -36,6 +36,8 @@
 
 #include "float_emul.h"
 
+int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
+
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
 #define DOT1(n) X(n ## _dot) { instr(n)(cpu,ic); \
@@ -46,9 +48,7 @@
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
 		/*  Synchronize the PC, and cause an FPU exception:  */  \
-		uint64_t low_pc = ((size_t)ic -				 \
-		    (size_t)cpu->cd.ppc.cur_ic_page)			 \
-		    / sizeof(struct ppc_instr_call);			 \
+    uint64_t low_pc = sync_low_pc(cpu, ic);                \
 		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<	 \
 		    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<		 \
 		    PPC_INSTR_ALIGNMENT_SHIFT);				 \
@@ -194,8 +194,9 @@ X(bclr)
 	int ctr_ok, cond_ok;
 	uint64_t old_pc = cpu->pc;
 	MODE_uint_t tmp, addr = cpu->cd.ppc.spr[SPR_LR];
-	if (!(bo & 4))
+	if (!(bo & 4)) {
 		cpu->cd.ppc.spr[SPR_CTR] --;
+  }
 	ctr_ok = (bo >> 2) & 1;
 	tmp = cpu->cd.ppc.spr[SPR_CTR];
 	ctr_ok |= ( (tmp == 0) == ((bo >> 1) & 1) );
@@ -241,8 +242,7 @@ X(bclr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call) + 1;
+	low_pc = sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -314,8 +314,7 @@ X(bcctr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call) + 1;
+	low_pc = sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -391,8 +390,7 @@ X(bcl)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call) + 1;
+	low_pc = sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -417,7 +415,7 @@ X(bcl)
  */
 X(b_samepage)
 {
-	cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+  cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
 }
 
 
@@ -440,20 +438,23 @@ X(bc_samepage)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
-	if (ctr_ok && cond_ok)
-		cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	if (ctr_ok && cond_ok) {
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+  }
 }
 X(bc_samepage_simple0)
 {
 	int bi31m = ic->arg[2];
-	if (!((cpu->cd.ppc.cr >> bi31m) & 1))
-		cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	if (!((cpu->cd.ppc.cr >> bi31m) & 1)) {
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+  }
 }
 X(bc_samepage_simple1)
 {
 	int bi31m = ic->arg[2];
-	if ((cpu->cd.ppc.cr >> bi31m) & 1)
-		cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	if ((cpu->cd.ppc.cr >> bi31m) & 1) {
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+  }
 }
 X(bcl_samepage)
 {
@@ -462,10 +463,9 @@ X(bcl_samepage)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call) + 1;
+	low_pc = sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
-	    << PPC_INSTR_ALIGNMENT_SHIFT);
+                                        << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (!(bo & 4))
@@ -476,8 +476,9 @@ X(bcl_samepage)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
-	if (ctr_ok && cond_ok)
-		cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	if (ctr_ok && cond_ok) {
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+  }
 }
 
 
@@ -550,16 +551,23 @@ X(bla_trace)
 /*
  *  bl_samepage:  Branch and Link (to within the same translated page)
  *
- *  arg[0] = pointer to new ppc_instr_call
+ *  arg[0] = offset of new ppc_instr_call
  *  arg[1] = lr offset (relative to start of current page)
  */
 X(bl_samepage)
 {
+	uint32_t low_pc;
+
 	/*  Calculate LR:  */
 	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
-	cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+	/*  Calculate new PC (for the trace)  */
+	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.cur_ic_page;
+	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
+	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+  cpu->cd.ppc.next_ic->f = ppc32_instr_to_be_translated;
 }
 
 
@@ -577,14 +585,14 @@ X(bl_samepage_trace)
 	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
-	cpu->cd.ppc.next_ic = (struct ppc_instr_call *) ic->arg[0];
+	cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
 
 	/*  Calculate new PC (for the trace)  */
-	low_pc = ((size_t)cpu->cd.ppc.next_ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call);
+	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.cur_ic_page;
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu_functioncall_trace(cpu, cpu->pc);
+  cpu->cd.ppc.next_ic->f = ppc32_instr_to_be_translated;
 }
 
 
@@ -1776,7 +1784,11 @@ X(mtlr) {
 	cpu->cd.ppc.spr[SPR_LR] = reg(ic->arg[0]);
 }
 X(mtctr) {
-	cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
+  auto val = reg(ic->arg[0]);
+  if (val >> 28 == 3) {
+    fprintf(stderr, "suspicious ctr value %x at %" PRIx64 "\n", (unsigned int)val, (cpu->pc & ~0xfff) | sync_low_pc(cpu, ic) * 4);
+  }
+  cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
@@ -1796,10 +1808,10 @@ X(rfi)
 {
 	uint64_t tmp;
 
-	reg_access_msr(cpu, &tmp, 0, 0);
+	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~0xffff;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
-	reg_access_msr(cpu, &tmp, 1, 0);
+	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
 
@@ -1809,10 +1821,10 @@ X(rfid)
 {
 	uint64_t tmp, mask = 0x800000000000ff73ULL;
 
-	reg_access_msr(cpu, &tmp, 0, 0);
+	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~mask;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & mask);
-	reg_access_msr(cpu, &tmp, 1, 0);
+	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
 	if (!(tmp & PPC_MSR_SF))
@@ -1845,7 +1857,7 @@ X(mfcr)
  */
 X(mfmsr)
 {
-	reg_access_msr(cpu, (uint64_t*)ic->arg[0], 0, 0);
+	reg_access_msr(cpu, (uint64_t*)ic->arg[0], 0, ic, 0);
 }
 
 
@@ -1869,11 +1881,11 @@ X(mtmsr)
 
 	if (!ic->arg[2]) {
 		uint64_t y;
-		reg_access_msr(cpu, &y, 0, 0);
+		reg_access_msr(cpu, &y, 0, ic, 0);
 		x = (y & 0xffffffff00000000ULL) | (x & 0xffffffffULL);
 	}
 
-	reg_access_msr(cpu, &x, 1, 1);
+	reg_access_msr(cpu, &x, 1, ic, 1);
 
 	/*
 	 *  Super-ugly hack:  If the pc wasn't changed (i.e. if there was no
@@ -1898,9 +1910,9 @@ X(wrteei)
 	/*  Synchronize the PC (pointing to _after_ this instruction)  */
 	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[1];
 
-	reg_access_msr(cpu, &x, 0, 0);
+	reg_access_msr(cpu, &x, 0, ic, 0);
 	x = (x & ~0x8000) | ic->arg[0];
-	reg_access_msr(cpu, &x, 1, 1);
+	reg_access_msr(cpu, &x, 1, ic, 1);
 }
 
 
@@ -1944,12 +1956,6 @@ X(lmw) {
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
-	    << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc |= (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-
 	while (rs <= 31) {
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -1971,12 +1977,6 @@ X(stmw) {
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
-
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
-	    << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	while (rs <= 31) {
 		uint32_t tmp = cpu->cd.ppc.gpr[rs];
@@ -2027,12 +2027,6 @@ X(lswi)
     }
   }
 
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
-	    << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-
 	while (nb > 0) {
 		unsigned char d;
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
@@ -2040,8 +2034,6 @@ X(lswi)
 			/*  exception  */
 			return;
 		}
-
-    fprintf(stderr, "%08x: lsw%s load %08x (%02x) into r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rt);
 
 		if (cpu->cd.ppc.mode == MODE_POWER && sub == 0)
 			cpu->cd.ppc.gpr[rt] = 0;
@@ -2076,16 +2068,8 @@ X(stswi)
     }
   }
 
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1)
-	    << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
-
-    fprintf(stderr, "%08x: stsw%s store %08x (%02x) from r%d\n", (unsigned int)cpu->pc, ic->arg[2] & 1 ? "i" : "x", (unsigned int)addr, d, rs);
 
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -2424,8 +2408,7 @@ X(xori) { reg(ic->arg[2]) = reg(ic->arg[0]) ^ (uint32_t)ic->arg[1]; }
 X(lfs)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call);
+	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.cur_ic_page;
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2454,8 +2437,7 @@ X(lfs)
 X(lfsx)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.ppc.cur_ic_page) / sizeof(struct ppc_instr_call);
+	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.cur_ic_page;
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2667,6 +2649,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2697,6 +2680,7 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2854,8 +2838,7 @@ X(to_be_translated)
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
+	low_pc = ic - cpu->cd.ppc.cur_ic_page;
 	addr = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -2904,6 +2887,10 @@ X(to_be_translated)
     }
 	}
 
+  if (cpu->machine->instruction_trace) {
+    fprintf(stderr, "%08x translating instruction %08x\n", (unsigned int)cpu->pc, iword);
+  }
+  
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
@@ -3175,9 +3162,7 @@ X(to_be_translated)
 			if ((old_pc & ~mask_within_page) ==
 			    (new_pc & ~mask_within_page)) {
 				ic->f = samepage_function;
-				ic->arg[0] = (size_t) (
-				    cpu->cd.ppc.cur_ic_page +
-				    ((new_pc & mask_within_page) >> 2));
+				ic->arg[0] = ((new_pc & mask_within_page) >> 2);
 			}
 		}
 		break;
@@ -3221,9 +3206,7 @@ X(to_be_translated)
 			if ((old_pc & ~mask_within_page) ==
 			    (new_pc & ~mask_within_page)) {
 				ic->f = samepage_function;
-				ic->arg[0] = (size_t) (
-				    cpu->cd.ppc.cur_ic_page +
-				    ((new_pc & mask_within_page) >> 2));
+				ic->arg[0] = ((new_pc & mask_within_page) >> 2);
 			}
 		}
 		if (aa_bit) {

@@ -296,7 +296,7 @@ void ppc_cpu_dumpinfo(struct cpu *cpu)
  *  reg_access_msr():
  */
 void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
-	int check_for_interrupts)
+                    ppc_instr_call *ic, int check_for_interrupts)
 {
 	uint64_t old = cpu->cd.ppc.msr;
 
@@ -306,6 +306,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+  int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
 	if (writeflag) {
 		cpu->cd.ppc.msr = *valuep;
@@ -328,12 +329,29 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		}
 	}
 
-        /*  TODO: Is the little-endian bit writable?  */
+  /*  TODO: Is the little-endian bit writable?  */
 	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
+  int new_map = (cpu->cd.ppc.msr >> 4) & 3;
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
     ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-	}
+	} else if (old_map != new_map) {
+    static int invalidate_on = 0;
+    if (!invalidate_on) {
+      const char *env_inval = getenv("GXEMUL_DR_CHANGE");
+      invalidate_on++;
+      if (env_inval && !strcmp(env_inval, "1")) {
+        invalidate_on++;
+      }
+    }
+    auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
+    cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
+                          << PPC_INSTR_ALIGNMENT_SHIFT);
+    if (invalidate_on == 2) {
+      ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
+      ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
+    }
+  }
 
 	if (!writeflag) {
 		*valuep = cpu->cd.ppc.msr;
@@ -488,7 +506,7 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
           (unsigned int)cpu->cd.ppc.ll_addr);
 
 		debug("cpu%i: msr = ", x);
-		reg_access_msr(cpu, &tmp, 0, 0);
+		reg_access_msr(cpu, &tmp, 0, nullptr, 0);
 		if (bits32)
 			debug("0x%08" PRIx32, (uint32_t) tmp);
 		else
@@ -2286,6 +2304,31 @@ void ppc_update_for_icount(struct cpu *cpu) {
 
 int lha_does_update(int ra, int rs, bool update_form) {
   return !(!update_form || ra == rs || ra == 0);
+}
+
+unsigned char *ppc_get_host_page_ptr(struct cpu *cpu, bool instr, bool load, uint64_t vaddr) {
+  bool phys_only = !(cpu->cd.ppc.msr & (instr ? PPC_MSR_IR : PPC_MSR_DR));
+
+  // fprintf(stderr, "ppc get host page: %c %c %c %" PRIx64 "\n", phys_only ? 'P' : 'p', instr ? 'I' : 'i', load ? 'L' : 'l', vaddr);
+  if (phys_only) {
+    if (vaddr < cpu->mem->physical_max) {
+      return memory_paddr_to_hostaddr(cpu->mem, vaddr & ~0xfff, load ? MEM_READ : MEM_WRITE);
+    }
+    return nullptr;
+  } else {
+    auto index = vaddr >> 12;
+    auto page = load ? cpu->cd.ppc.host_load[index] : cpu->cd.ppc.host_store[index];
+    // fprintf(stderr, "ppc get host page V: index %d page %p\n", index, page);
+    return page;
+  }
+}
+
+int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
+  auto val = ic - cpu->cd.ppc.cur_ic_page;
+  if (val < 0 || val > 0x1010) {
+    fprintf(stderr, "Bad sync low pc: %d\n", val);
+  }
+  return val;
 }
 
 #include "memory_ppc.cc"

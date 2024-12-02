@@ -112,7 +112,11 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef DYNTRANS_PPC
 /*  The normal instruction execution core:  */
-#define I	{ cpu->cd.ppc.icount++; ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic); }
+#define I	{ \
+  cpu->cd.ppc.icount++;                                                 \
+  ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                                \
+  ic->f(cpu, ic);                                                       \
+}
 #else
 /*  The normal instruction execution core:  */
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic);
@@ -334,7 +338,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			S;
 
 		/*  Execute just one instruction:  */
-		I;
+    I;
 
 		n_instrs = 1;
 	} else if (cpu->machine->statistics.enabled) {
@@ -385,8 +389,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	}
 
 	/*  Synchronize the program counter:  */
-	low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - (size_t)
-	    cpu->cd.DYNTRANS_ARCH.cur_ic_page) / sizeof(struct DYNTRANS_IC);
+	low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
 	if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
 		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
@@ -805,6 +808,8 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		    JUST_MARK_AS_NON_WRITABLE | INVALIDATE_PADDR);
 	}
 
+  cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cached_pc & ~0xfff;
+  cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
 	cpu->cd.DYNTRANS_ARCH.cur_ic_page = &ppp->ics[0];
 
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.cur_ic_page +
@@ -868,6 +873,16 @@ void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
 
 	/*  Quick return path:  */
 have_it:
+  // fprintf
+  //   (stderr, "%08x quick cur_ic return: prev virt %" PRIx64 " phys %" PRIx64 "\n",
+  //    (unsigned int)cpu->pc,
+  //    cpu->cd.DYNTRANS_ARCH.cur_ic_virt,
+  //    cpu->cd.DYNTRANS_ARCH.cur_ic_phys
+  //    );
+
+  // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.cur_ic_page, &ppp->ics[0]);
+  cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cpu->pc & ~0xfff;
+  cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
 	cpu->cd.DYNTRANS_ARCH.cur_ic_page = &ppp->ics[0];
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.cur_ic_page +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
@@ -1215,15 +1230,30 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
 			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid &&
 			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page
-			    & 0xf0000000) == addr_page) {
+           & 0xf0000000) == addr_page) {
 				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-				    0);
+                                      DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+                                      0);
 				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
 			}
 		}
 		return;
 	}
+  if ((flags & INVALIDATE_ALL) && (flags & INVALIDATE_IDENTITY)) {
+    // Invalidate mappings that overlap ram.
+		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
+			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid &&
+			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page < cpu->mem->physical_max)) {
+        fprintf(stderr, "dyntrans: invalidate overlapping map %" PRIx64 "\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page);
+				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
+                                      DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+                                      0);
+        DYNTRANS_INVALIDATE_TC(cpu, cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page, INVALIDATE_VADDR);
+				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
+			}
+		}
+		return;
+  }
 #endif
 	if (flags & INVALIDATE_ALL) {
 		/*  fatal("all\n");  */

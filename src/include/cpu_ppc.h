@@ -255,6 +255,8 @@ void ppc32_pc_to_pointers(struct cpu *);
 void ppc_irq_interrupt_assert(struct interrupt *interrupt);
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt);
 
+unsigned char *ppc_get_host_page_ptr(struct cpu *cpu, bool load, uint64_t vaddr);
+
 void stwbrx_cache_spill(struct cpu *cpu);
 int base_fadd(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);
 int base_fmul(struct cpu *cpu, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc);

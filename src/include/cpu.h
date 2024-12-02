@@ -140,11 +140,13 @@ struct physpage_ranges {
  *  current page, NOT shifted right.)
  */
 #define DYNTRANS_ITC(arch)	struct arch ## _tc_physpage *cur_physpage;  \
-				struct arch ## _instr_call  *cur_ic_page;   \
-				struct arch ## _instr_call  *next_ic;       \
-				struct arch ## _tc_physpage *physpage_template;\
-				void (*combination_check)(struct cpu *,     \
-				    struct arch ## _instr_call *, int low_addr);
+  uint64_t              cur_ic_phys;                                    \
+  uint64_t              cur_ic_virt;                                    \
+  struct arch ## _instr_call  *cur_ic_page;                             \
+  struct arch ## _instr_call  *next_ic;                                 \
+  struct arch ## _tc_physpage *physpage_template;                       \
+  void (*combination_check)(struct cpu *,                               \
+                            struct arch ## _instr_call *, int low_addr);
 
 /*
  *  Virtual -> physical -> host address translation TLB entries:
@@ -482,6 +484,7 @@ void cpu_init(void);
 #define	INVALIDATE_PADDR		4
 #define	INVALIDATE_VADDR		8
 #define	INVALIDATE_VADDR_UPPER4		16	/*  useful for PPC emulation  */
+#define INVALIDATE_IDENTITY 32
 
 
 /*  Note: 64-bit processors running in 32-bit mode use a 32-bit

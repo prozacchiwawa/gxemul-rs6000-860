@@ -453,7 +453,7 @@ int sh_cpu_instruction_has_delayslot(struct cpu *cpu, unsigned char *ib)
  */
 void sh_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 
@@ -775,7 +775,7 @@ void sh_exception(struct cpu *cpu, int expevt, int intevt, uint32_t vaddr)
 int sh_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	int running, uint64_t dumpaddr)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset, addr;
 	uint16_t iword;
 

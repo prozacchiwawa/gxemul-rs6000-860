@@ -410,7 +410,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
  */
 void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset, tmp;
 	int i, x = cpu->cpu_id;
 	int bits32 = cpu->cd.ppc.bits == 32;

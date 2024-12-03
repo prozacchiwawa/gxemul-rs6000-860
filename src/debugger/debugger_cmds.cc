@@ -28,6 +28,7 @@
  *  Debugger commands. Included from debugger.c.
  */
 #include "crc.h"
+#include <map>
 
 /*
  *  debugger_cmd_allsettings():
@@ -436,7 +437,7 @@ static void debugger_cmd_lookup(struct machine *m, char *cmd_line)
 {
 	uint64_t addr;
 	int res;
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 
 	if (cmd_line[0] == '\0') {
@@ -1475,6 +1476,37 @@ static void debugger_cmd_script(struct machine *m, char *cmd_line) {
   }
 }
 
+static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
+  std::string line;
+  std::ifstream in;
+  in.open(cmd_line);
+  if (!in) {
+    fprintf(stderr, "Couldn't read script file\n");
+    return;
+  }
+
+  std::map<uint64_t, std::string> symbol_map;
+  while (getline(in, line)) {
+    auto cspace = strchr(line.c_str(), ' ');
+    if (!cspace) {
+      continue;
+    }
+    while (*cspace == ' ') {
+      cspace++;
+    }
+    auto name = std::string(cspace);
+    uint64_t addr;
+    char *space;
+    addr = strtoull(line.c_str(), &space, 16);
+    if (*space != ' ') {
+      continue;
+    }
+    add_symbol_name(&m->symbol_context, addr, 0, name.c_str(), 't' | 0x100, -1);
+  }
+
+  symbol_recalc_sizes(&m->symbol_context);
+}
+
 /****************************************************************************/
 
 
@@ -1584,6 +1616,8 @@ static struct cmd cmds[] = {
   { "kbd", "hex ...", 0, debugger_cmd_kbd, "Inject these bytes into the keyboard byte stream" },
 
   { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
+
+  { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

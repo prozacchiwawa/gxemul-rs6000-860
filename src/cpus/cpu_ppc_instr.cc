@@ -2649,7 +2649,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2680,8 +2680,8 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
-    ppc_exception(cpu, PPC_EXCEPTION_PRG, 3 << 16);
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
+    ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
 

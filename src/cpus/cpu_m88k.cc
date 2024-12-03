@@ -271,7 +271,7 @@ int m88k_cpu_instruction_has_delayslot(struct cpu *cpu, unsigned char *ib)
  */
 void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 

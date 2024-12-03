@@ -32,33 +32,32 @@
  */
 
 #include "misc.h"
+#include <vector>
 
 /*  This should actually only be used within symbol.c:  */
 struct symbol {
-	struct symbol	*next;
 	uint64_t	addr;
 	uint64_t	len;
-	char		*name;
+  std::string name;
 	int		type;
 
 	int		n_args;
 	/*  TODO: argument types  */
+
+symbol() : addr(), len(), type(), n_args() { }
 };
 
 
 struct symbol_context {
-	struct symbol	*first_symbol;
-	int		sorted_array;
-	int		n_symbols;
-
+  std::vector<symbol> *symbols;
 };
 
 /*  symbol.c:  */
 int symbol_nsymbols(struct symbol_context *);
 int get_symbol_addr(struct symbol_context *, const char *symbol, uint64_t *addr);
-char *get_symbol_name_and_n_args(struct cpu *, struct symbol_context *, uint64_t addr,
+const char *get_symbol_name_and_n_args(struct cpu *, struct symbol_context *, uint64_t addr,
 	uint64_t *offset, int *n_argsp);
-char *get_symbol_name(struct cpu *, struct symbol_context *, uint64_t addr, uint64_t *offset);
+const char *get_symbol_name(struct cpu *, struct symbol_context *, uint64_t addr, uint64_t *offset);
 void add_symbol_name(struct symbol_context *, uint64_t addr,
 	uint64_t len, const char *name, int type, int n_args);
 void symbol_readfile(struct symbol_context *, char *fname);

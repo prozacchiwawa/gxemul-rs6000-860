@@ -475,7 +475,7 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 {
 	int show_symbolic_function_name = 1;
         char strbuf[100];
-	char *symbol;
+	const char *symbol;
 	uint64_t ot;
 	int x, print_dots = 1, n_args_to_print =
 #if defined(DYNTRANS_ALPHA)

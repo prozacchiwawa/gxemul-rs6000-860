@@ -42,6 +42,10 @@ extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, in
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
+#ifndef LS_IGNOREOFS
+	int32_t ofs = ic->arg[2];
+#endif
+
 #ifdef MODE32
 	uint32_t addr =
 #else
@@ -51,7 +55,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #ifdef LS_INDEXED
 	    reg(ic->arg[2]);
 #else
-	    (int32_t)ic->arg[2];
+	    ofs;
 #endif
 	unsigned char data[LS_SIZE];
 
@@ -180,6 +184,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 
+#ifndef LS_IGNOREOFS
+	int32_t ofs = ic->arg[2];
+#endif
+
 #ifdef MODE32
 	uint32_t addr =
 #else
@@ -190,7 +198,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    + reg(ic->arg[2])
 #else
 #ifndef LS_IGNOREOFS
-	    + (int32_t)ic->arg[2]
+	    + ofs
 #endif
 #endif
 	    ;

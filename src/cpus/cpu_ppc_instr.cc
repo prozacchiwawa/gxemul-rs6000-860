@@ -2681,7 +2681,7 @@ X(twi)
 
   if (do_trap) {
     cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page + 1) * 4;
-    ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
+    ppc_exception(cpu, PPC_EXCEPTION_PRG, 3 << 16);
   }
 }
 
@@ -2880,17 +2880,13 @@ X(to_be_translated)
 	{
 		uint32_t *p = (uint32_t *) ib;
 		iword = *p;
-    if (cpu->cd.ppc.bytelane_swap[1]) {
-      iword = LE32_TO_HOST(iword);
-    } else {
-      iword = BE32_TO_HOST(iword);
-    }
+		if (cpu->cd.ppc.bytelane_swap[1]) {
+			iword = LE32_TO_HOST(iword);
+		} else {
+			iword = BE32_TO_HOST(iword);
+		}
 	}
 
-  if (cpu->machine->instruction_trace) {
-    fprintf(stderr, "%08x translating instruction %08x\n", (unsigned int)cpu->pc, iword);
-  }
-  
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD

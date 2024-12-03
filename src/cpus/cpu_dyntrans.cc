@@ -1244,10 +1244,10 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
 			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid &&
 			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page < cpu->mem->physical_max)) {
-        fprintf(stderr, "dyntrans: invalidate overlapping map %" PRIx64 "\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page);
-				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-                                      DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-                                      0);
+        // fprintf(stderr, "dyntrans: invalidate overlapping map %" PRIx64 "\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page);
+	//			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
+	//			DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
+	//			0);
         DYNTRANS_INVALIDATE_TC(cpu, cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page, INVALIDATE_VADDR);
 				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
 			}

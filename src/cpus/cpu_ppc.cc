@@ -334,28 +334,18 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
   int new_map = (cpu->cd.ppc.msr >> 4) & 3;
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
-    ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
 	} else if (old_map != new_map) {
-    static int invalidate_on = 0;
-    if (!invalidate_on) {
-      const char *env_inval = getenv("GXEMUL_DR_CHANGE");
-      invalidate_on++;
-      if (env_inval && !strcmp(env_inval, "1")) {
-        invalidate_on++;
-      }
-    }
-    auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
-    cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
-                          << PPC_INSTR_ALIGNMENT_SHIFT);
-    if (invalidate_on == 2) {
-      ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
-      ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
-    }
-  }
+		auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
+		cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
+			<< PPC_INSTR_ALIGNMENT_SHIFT);
+		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
+		ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
+	}
 
 	if (!writeflag) {
 		*valuep = cpu->cd.ppc.msr;
-  }
+	}
 
 	if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
 		if (cpu->cd.ppc.dec_intr_pending &&

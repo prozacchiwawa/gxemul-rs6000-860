@@ -789,7 +789,7 @@ struct emul *emul_create_from_configfile(char *fname)
  */
 void emul_run(struct emul *emul)
 {
-	int i = 0, j, go = 1, n, anything;
+	int go = 1;
 
 	atexit(fix_console);
 
@@ -808,21 +808,6 @@ void emul_run(struct emul *emul)
 	/*  Initialize the interactive debugger:  */
 	debugger_init(emul);
 
-	/*  Run any additional debugger commands before starting:  */
-	if (emul->n_debugger_cmds > 0) {
-		if (i == 0)
-			print_separator_line();
-		for (int k = 0; k < emul->n_debugger_cmds; k ++) {
-			debug("> %s\n", emul->debugger_cmds[k]);
-			debugger_execute_cmd(emul->debugger_cmds[k],
-			    strlen(emul->debugger_cmds[k]));
-		}
-	}
-
-	print_separator_line();
-	debug("\n");
-
-
 	/*
 	 *  console_init_main() makes sure that the terminal is in a
 	 *  reasonable state.
@@ -839,12 +824,13 @@ void emul_run(struct emul *emul)
 	signal(SIGCONT, console_sigcont);
 
 	/*  Not in verbose mode? Then set quiet_mode.  */
-	if (!verbose)
+	if (!verbose) {
 		quiet_mode = 1;
+	}
 
 
 	/*  Initialize all CPUs in all machines:  */
-	for (j=0; j<emul->n_machines; j++)
+	for (int j=0; j<emul->n_machines; j++)
 		cpu_run_init(emul->machines[j]);
 
 	/*  TODO: Generalize:  */
@@ -853,8 +839,7 @@ void emul_run(struct emul *emul)
 		    emul->machines[0]->cpus[0]->pc);
 
 	/*  Start emulated clocks:  */
-	timer_start();
-
+	// timer_start();
 
 	/*
 	 *  MAIN LOOP:
@@ -872,15 +857,17 @@ void emul_run(struct emul *emul)
 		if (bootcpu->ninstrs > bootcpu->ninstrs_flush + (1<<19)) {
 			x11_check_event(emul);
 			console_flush();
-			bootcpu->ninstrs_flush = bootcpu->ninstrs;
+			bootcpu->ninstrs_flush += (1 << 19);
 		}
 
+		/*
 		if (bootcpu->ninstrs > bootcpu->ninstrs_show + (1<<25)) {
 			bootcpu->ninstrs_since_gettimeofday +=
 			    (bootcpu->ninstrs - bootcpu->ninstrs_show);
 			cpu_show_cycles(emul->machines[0], 0);
 			bootcpu->ninstrs_show = bootcpu->ninstrs;
 		}
+		*/
 
 		if (single_step == ENTER_SINGLE_STEPPING) {
 			/*  TODO: Cleanup!  */
@@ -895,22 +882,23 @@ void emul_run(struct emul *emul)
 			single_step = SINGLE_STEPPING;
 		}
 
-		if (single_step == SINGLE_STEPPING)
+		if (single_step == SINGLE_STEPPING) {
 			debugger();
+		}
 
-		for (j=0; j<emul->n_machines; j++) {
-			anything = machine_run(emul->machines[j]);
-			if (anything)
-				go = 1;
+		go = 0;
+		for (int j=0; j<emul->n_machines; j++) {
+			go = go || machine_run(emul->machines[j]);
 		}
 	}
 
 	/*  Stop any running timers:  */
-	timer_stop();
+	// timer_stop();
 
 	/*  Deinitialize all CPUs in all machines:  */
-	for (j=0; j<emul->n_machines; j++)
+	for (int j=0; j<emul->n_machines; j++) {
 		cpu_run_deinit(emul->machines[j]);
+	}
 
 	/*  force_debugger_at_exit flag set? Then enter the debugger:  */
 	if (force_debugger_at_exit) {
@@ -920,10 +908,12 @@ void emul_run(struct emul *emul)
 	}
 
 	/*  Any machine using X11? Then wait before exiting:  */
-	n = 0;
-	for (j=0; j<emul->n_machines; j++)
-		if (emul->machines[j]->x11_md.in_use)
+	int n = 0;
+	for (int j=0; j<emul->n_machines; j++) {
+		if (emul->machines[j]->x11_md.in_use) {
 			n++;
+		}
+	}
 
 	if (n > 0) {
 		printf("Press enter to quit.\n");

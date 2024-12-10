@@ -192,6 +192,7 @@ struct eagle_data {
   int l2_cache;
   int discontiguous;
   int ide_command;
+  int bg_data_8mb;
 };
 
 struct eagle_glob {

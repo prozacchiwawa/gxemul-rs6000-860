@@ -205,6 +205,8 @@ void debugger_activate(int x)
 {
 	ctrl_c = 1;
 
+  script_queue.clear();
+
 	if ((single_step & 0xff) != NOT_SINGLE_STEPPING) {
 		/*  Already in the debugger. Do nothing.  */
 		int i;

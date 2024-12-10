@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 4
+#define COUNT_DIV 1
 
 /*
  *  ppc_cpu_new():
@@ -163,6 +163,9 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	/*  Some default stack pointer value.  TODO: move this?  */
 	cpu->cd.ppc.gpr[1] = machine->physical_ram_in_mb * 1048576 - 4096;
+
+  cpu->functioncall_trace = ppc_no_trace;
+  cpu->functioncall_end_trace = ppc_no_end_trace;
 
 	/*
 	 *  NOTE/TODO: Ugly hack for OpenFirmware emulation:
@@ -329,7 +332,6 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		}
 	}
 
-  /*  TODO: Is the little-endian bit writable?  */
 	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int new_map = (cpu->cd.ppc.msr >> 4) & 3;
 	if (old_le != new_le) {
@@ -352,8 +354,10 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
 			cpu->cd.ppc.dec_intr_pending = 0;
 			ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-		} else if (cpu->cd.ppc.irq_asserted)
+		} else if (cpu->cd.ppc.irq_asserted) {
+			fprintf(stderr, "[ ppc: dispatch interrupt %d ]\n", (int)cpu->machine->isa_pic_data.last_int);
 			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
+    }
 	}
 }
 
@@ -377,8 +381,8 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
   } else if (!quiet_mode && exception_nr != 5) {
-		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" ]\n",
-          exception_nr, cpu->pc);
+		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %08x ]\n",
+          exception_nr, cpu->pc, (unsigned int)cpu->ninstrs);
   }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
@@ -1899,10 +1903,11 @@ static void debug_spr_usage(uint64_t pc, int spr)
 		break;
 	default:if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
 			break;
-		} else
+		} else {
 			fatal("[ using UNIMPLEMENTED spr %i (%s), pc = "
 			    "0x%" PRIx64" ]\n", spr, ppc_spr_names[spr] == NULL?
 			    "UNKNOWN" : ppc_spr_names[spr], (uint64_t) pc);
+		}
 	}
 
 	spr_used[spr >> 2] |= (1 << (spr & 3));
@@ -2290,6 +2295,13 @@ void ppc_update_for_icount(struct cpu *cpu) {
   }
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
+
+  if ((cpu->cd.ppc.msr & PPC_MSR_EE) &&
+      cpu->cd.ppc.dec_intr_pending &&
+      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+    cpu->cd.ppc.dec_intr_pending = 0;
+    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+  }
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {
@@ -2319,6 +2331,20 @@ int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
     fprintf(stderr, "Bad sync low pc: %d\n", val);
   }
   return val;
+}
+
+void ppc_no_trace(struct cpu *cpu, uint64_t pc) {
+}
+
+void ppc_trace(struct cpu *cpu, uint64_t pc) {
+  cpu_functioncall_trace(cpu, pc);
+}
+
+void ppc_no_end_trace(struct cpu *cpu) {
+}
+
+void ppc_end_trace(struct cpu *cpu) {
+  cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
 }
 
 #include "memory_ppc.cc"

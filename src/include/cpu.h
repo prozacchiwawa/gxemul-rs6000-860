@@ -384,6 +384,9 @@ struct cpu {
 	int		(*instruction_has_delayslot)(struct cpu *cpu,
 			    unsigned char *ib);
 
+  void (*functioncall_trace)(struct cpu *cpu, uint64_t pc);
+  void (*functioncall_end_trace)(struct cpu *cpu);
+
 	/*  The program counter. (For 32-bit modes, not all bits are used.)  */
 	uint64_t	pc;
 

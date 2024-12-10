@@ -126,14 +126,16 @@ static void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) 
 
   if (pri_enabled >= 0) {
     uint8_t pri_mask = 1 << pri_enabled;
-    if (!(d->isr & pri_mask)) {
 #ifdef DEV_8259_DEBUG
-      fprintf(stderr, "8259(%d): new interrupt %d\n", d->irq_base, pri_enabled);
+    fprintf(stderr, "8259(%d): new interrupt %d\n", d->irq_base, pri_enabled);
 #endif
-      d->isr |= (1 << pri_enabled);
-      do_assert(d);
-    }
+    d->isr |= pri_mask;
+    do_assert(d);
     return;
+  }
+  
+  if (d->isr == 0x10) {
+	  d->isr = 0;
   }
 
   if (old_isr && !d->isr) {
@@ -209,7 +211,9 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
     d->rotate = 1;
     d->rotation_pri = level;
     d->isr &= ~(1 << level);
+#ifdef DEV_8259_DEBUG
     fprintf(stderr, "8259(%d): rotate on specific eoi: %d new isr %02x\n", d->irq_base, d->rotation_pri, d->isr);
+#endif
     dev_8259_recalc_interrupts(d, old_isr);
     break;
 
@@ -391,7 +395,7 @@ DEVINIT(8259)
 
 	CHECK_ALLOCATION(d = (struct pic8259_data *) malloc(sizeof(struct pic8259_data)));
 	memset(d, 0, sizeof(struct pic8259_data));
-  d->init_state = -1;
+  	d->init_state = -1;
 
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 
@@ -402,7 +406,7 @@ DEVINIT(8259)
 		d->irq_base = 8;
 	}
 
-  assert(devinit->addr > 0x808680000000ull);
+  	assert(devinit->addr > 0x808680000000ull);
 
 	memory_device_register(devinit->machine->memory, name2,
 	    devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,

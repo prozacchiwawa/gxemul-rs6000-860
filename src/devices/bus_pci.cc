@@ -90,7 +90,7 @@ void bus_pci_decompose_1(uint32_t t, int *bus, int *dev, int *func, int *reg)
 	*reg  =  t        & 0xfc;
 
   // The low bits are masked.
-  fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
+  // fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
 }
 
 /*

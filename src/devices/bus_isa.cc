@@ -50,43 +50,15 @@
  */
 void isa_interrupt_common(struct bus_isa_data *d, int line, int assert_int)
 {
-	int new_isa_assert, x;
-
-  int orig_irr1 = d->pic1->irr;
-  int orig_irr2 = d->pic2->irr;
-
   struct pic8259_data *pic_ptr = ((line > 7) && d->pic2) ? d->pic2 : d->pic1;
 
   if (assert_int) {
+    if (line != 2) {
+      *d->ptr_to_last_int |= 1 << line;
+    }
     dev_8259_assert(pic_ptr, line & 7);
   } else {
     dev_8259_deassert(pic_ptr, line & 7);
-  }
-
-	/*  printf("ISA: irr=%02x%02x ier=%02x%02x\n",
-	    d->pic2->irr, d->pic1->irr, d->pic2->ier, d->pic1->ier);  */
-
-	new_isa_assert = d->pic1->irr & ~d->pic1->ier;
-
-  if (line == 13) {
-    fprintf(stderr, "isa_interrupt_common(13) old %02x%02x new %02x%02x assert %d ier %02x%02x\n", orig_irr1, orig_irr2, d->pic1->irr, d->pic2->irr, new_isa_assert, (~d->pic1->ier) & 0xff, (~d->pic2->ier) & 0xff);
-  }
-
-	if (assert_int) {
-    for (x=0; x<16; x++) {
-      if (x == 2)
-        continue;
-
-      if (x < 8 && (d->pic1->irr & ~d->pic1->ier & (1 << x)))
-        break;
-
-      if (x >= 8 && (d->pic2->irr & ~d->pic2->ier & (1 << (x&7))))
-        break;
-    }
-
-    if (x < 16) {
-      *d->ptr_to_last_int = x;
-    }
   }
 }
 
@@ -101,7 +73,9 @@ void isa_interrupt_assert(struct interrupt *interrupt)
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
 	int line = interrupt->line;
 
+#if 0
 	if (line) { fprintf(stderr, "ISA_INTERRUPT_ASSERT(%d)\n", line); }
+#endif
 
 	isa_interrupt_common(d, line, 1);
 }
@@ -116,7 +90,9 @@ void isa_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
 	int line = interrupt->line;
-  fprintf(stderr, "ISA_INTERRUPT_DEASSERT(%d)\n", line);
+#if 0
+  	fprintf(stderr, "ISA_INTERRUPT_DEASSERT(%d)\n", line);
+#endif
 	int old_irr1 = d->pic1->irr;
 
 	isa_interrupt_common(d, line, 0);

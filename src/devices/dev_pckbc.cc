@@ -893,6 +893,12 @@ DEVICE_TICK(pckbc)
 
 	ints_enabled = d->rx_int_enable;
 
+  while (keyboard_debug_events.size()) {
+    auto event = keyboard_debug_events.front();
+    pckbc_add_code(d, event.code, 0);
+    keyboard_debug_events.pop_front();
+  }
+
   if (d->in_use && console_charavail(d->console_handle)) {
     ch = console_readchar(d->console_handle);
     if (d->translation_table == 1) {
@@ -930,20 +936,15 @@ DEVICE_TICK(pckbc)
     d->mouse_last_but = mouse_but;
   }
 
-	if (d->cmdbyte & KC8_KDISABLE)
-		ints_enabled = 0;
-
-  while (keyboard_debug_events.size()) {
-    auto event = keyboard_debug_events.front();
-    pckbc_add_code(d, event.code, 0);
-    keyboard_debug_events.pop_front();
+  if (d->cmdbyte & KC8_KDISABLE) {
+    ints_enabled = 0;
   }
 
 	for (port_nr=0; port_nr<2; port_nr++) {
 		/*  Cause receive interrupt, if there's something in the
 		    receive buffer: (Otherwise deassert the interrupt.)  */
 
-		if (d->head[port_nr] != d->tail[port_nr] && ints_enabled) {
+		if (d->head[port_nr] != d->tail[port_nr] && ints_enabled && !d->currently_asserted[port_nr]) {
 			debug("[ pckbc: interrupt port %i ]\n", port_nr);
 			if (port_nr == 0) {
 				INTERRUPT_ASSERT(d->irq_keyboard);
@@ -951,14 +952,13 @@ DEVICE_TICK(pckbc)
 				INTERRUPT_ASSERT(d->irq_mouse);
       }
 			d->currently_asserted[port_nr] = 1;
-		} else {
-			if (d->currently_asserted[port_nr]) {
+		} else if (d->currently_asserted[port_nr]) {
 				if (port_nr == 0)
 					INTERRUPT_DEASSERT(d->irq_keyboard);
 				else
 					INTERRUPT_DEASSERT(d->irq_mouse);
-			}
-			d->currently_asserted[port_nr] = 0;
+
+        d->currently_asserted[port_nr] = 0;
 		}
 	}
 }

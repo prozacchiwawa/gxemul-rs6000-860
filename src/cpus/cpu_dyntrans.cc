@@ -185,8 +185,8 @@ static void gather_statistics(struct cpu *cpu)
  */
 int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 {
-	MODE_uint_t cached_pc;
-	int low_pc, n_instrs;
+	MODE_uint_t cached_pc = 0;
+	int low_pc = 0, n_instrs = 0;
 
 	/*  Ugly... fix this some day.  */
 #ifdef DYNTRANS_DUALMODE_32
@@ -285,6 +285,16 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     MIN(prev_instrs + N_SAFE_DYNTRANS_LIMIT, cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS) -
     cpu->ninstrs;
 
+#ifdef DYNTRANS_PPC
+  if (cpu->machine->instruction_trace) {
+    cpu->functioncall_trace = ppc_trace;
+    cpu->functioncall_end_trace = ppc_end_trace;
+  } else {
+    cpu->functioncall_trace = ppc_no_trace;
+    cpu->functioncall_end_trace = ppc_no_end_trace;
+  }
+#endif
+
 	if (single_step & 0xff || cpu->machine->instruction_trace
 	    || cpu->machine->register_dump) {
 		/*
@@ -334,11 +344,12 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			}
 		}
 
-		if (cpu->machine->statistics.enabled)
+		if (cpu->machine->statistics.enabled) {
 			S;
+		}
 
 		/*  Execute just one instruction:  */
-    I;
+    		I;
 
 		n_instrs = 1;
 	} else if (cpu->machine->statistics.enabled) {
@@ -354,12 +365,12 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
 			n_instrs += 24;
 		}
-    while (n_instrs < next_limit) {
+		while (n_instrs < next_limit) {
 			struct DYNTRANS_IC *ic;
 
 			S; I;
 			n_instrs ++;
-    }
+		}
 	} else {
 		/*
 		 *  Execute multiple instructions:
@@ -367,26 +378,25 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		 *  (This is the core dyntrans loop.)
 		 */
 		n_instrs = 0;
-
-    while (n_instrs + 30 < next_limit) {
+		while (n_instrs + 24 < next_limit) {
 			struct DYNTRANS_IC *ic;
 
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
-			I; I; I; I; I;   I; I; I; I; I;
+			I; I; I; I; I; I; I; I;
+			I; I; I; I; I; I; I; I;
+			I; I; I; I; I; I; I; I;
 
-      n_instrs += 30;
-    }
-    while (n_instrs < next_limit) {
+      			n_instrs += 24;
+		}
+    		while (n_instrs < next_limit) {
 			struct DYNTRANS_IC *ic;
 
-      I;
+      			I;
 
-      n_instrs ++;
-    }
-
-    cpu->n_translated_instrs += n_instrs;
+      			n_instrs ++;
+		}
 	}
+
+    	cpu->n_translated_instrs += n_instrs;
 
 	/*  Synchronize the program counter:  */
 	low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;

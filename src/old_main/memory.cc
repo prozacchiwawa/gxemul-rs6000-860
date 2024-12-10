@@ -612,7 +612,7 @@ void memory_warn_about_unimplemented_addr(struct cpu *cpu, struct memory *mem,
 	int writeflag, uint64_t paddr, uint8_t *data, size_t len)
 {
 	uint64_t offset, old_pc = cpu->pc;
-	char *symbol;
+	const char *symbol;
 
     if (paddr >= mem->physical_max && cpu->machine->hole) {
         if (cpu->machine->hole) {

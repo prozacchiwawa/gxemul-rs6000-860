@@ -35,6 +35,7 @@
 #include "bus_isa.h"
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
@@ -44,24 +45,41 @@ struct prep_data {
 	uint32_t		int_status;
 };
 
+static void isa_pic_deassert(struct machine *machine, int line) {
+  struct pic8259_data *pic_ptr = ((line > 7) && machine->isa_pic_data.pic2) ? machine->isa_pic_data.pic2 : machine->isa_pic_data.pic1;
+
+  machine->isa_pic_data.last_int &= ~(1 << line);
+  fprintf(stderr, "[ isa: lower int %d ]\n", line);
+  dev_8259_deassert(pic_ptr, line & 7);
+}
 
 DEVICE_ACCESS(prep)
 {
 	/*  struct prep_data *d = extra;  */
 	uint64_t idata = 0, odata = 0;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-
-	if (writeflag == MEM_READ) {
-		odata = cpu->machine->isa_pic_data.last_int;
-    fprintf(stderr, "[ int ack: %d ]\n", odata);
-	} else {
 		fatal("[ prep: write to interrupt register? ]\n");
-	}
+  } else if (writeflag == MEM_READ) {
+    auto detected = false;
+    if (cpu->machine->isa_pic_data.last_int) {
+      for (int i = 0; i < 16; i++) {
+        if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+          odata = i;
+          detected = true;
+          cpu->machine->isa_pic_data.last_int &= ~(1 << i);
+          break;
+        }
+      }
+    }
 
-	if (writeflag == MEM_READ)
+    isa_pic_deassert(cpu->machine, odata);
+    cpu->cd.ppc.irq_asserted = !!(cpu->machine->isa_pic_data.last_int & 4);
+
+    fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
 		memory_writemax64(cpu, data, len, odata);
+	}
 
 	return 1;
 }

@@ -61,7 +61,6 @@ DEVICE_ACCESS(eagle)
 
 	case 0:	/*  Address:  */
 		bus_pci_decompose_1(idata, &bus, &dev, &func, &reg);
-    fprintf(stderr, "pci cf8 @ %08x\n", (unsigned int)cpu->pc);
 		bus_pci_setaddr(cpu, d->pci_data, bus, dev, func, reg);
 		break;
 
@@ -184,7 +183,7 @@ DEVICE_ACCESS(eagle_pci_config)
 DEVICE_ACCESS(eagle_8mb)
 {
 	struct eagle_data *d = (struct eagle_data *) extra;
-	uint64_t real_addr = relative_addr, idata;
+	uint64_t real_addr = relative_addr, idata = 0xffffff00;
 
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     relative_addr &= 0xffffff;
@@ -475,6 +474,9 @@ DEVICE_ACCESS(eagle_830)
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  } else {
+    idata = d->ide_command++;
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
   }
 
   fprintf(stderr, "[ unknown-830: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);

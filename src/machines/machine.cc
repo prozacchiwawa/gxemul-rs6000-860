@@ -617,12 +617,15 @@ void machine_default_cputype(struct machine *m)
 int machine_run(struct machine *machine)
 {
 	struct cpu **cpus = machine->cpus;
-	int ncpus = machine->ncpus, cpu0instrs = 0, i, te;
-	uint64_t instrs;
+	int ncpus = machine->ncpus, cpu0instrs = 0;
 
-	if (cpus[0]->running) {
-		cpu0instrs += cpus[i]->run_instr(cpus[i]);
+  	for (int i = 0; i < ncpus; i++) {
+		if (cpus[i]->running) {
+			cpu0instrs += cpus[i]->run_instr(cpus[i]);
+		}
 	}
+
+  	// fprintf(stderr, "%x %08x\n", cpu0instrs, (unsigned int)cpus[0]->pc);
 
 	/*
 	 *  Hardware 'ticks':  (clocks, interrupt sources...)
@@ -632,7 +635,7 @@ int machine_run(struct machine *machine)
 	 *  TODO: This should be redesigned into some "mainbus" stuff instead!
 	 */
 
-	for (te=0; te<machine->tick_functions.n_entries; te++) {
+	for (int te=0; te<machine->tick_functions.n_entries; te++) {
 		machine->tick_functions.ticks_till_next[te] -= cpu0instrs;
 		if (machine->tick_functions.ticks_till_next[te] <= 0) {
 			while (machine->tick_functions.ticks_till_next[te]<=0) {
@@ -647,7 +650,7 @@ int machine_run(struct machine *machine)
 	}
 
 	/*  Is any CPU still alive?  */
-	for (i=0; i<ncpus; i++)
+	for (int i=0; i<ncpus; i++)
 		if (cpus[i]->running)
 			return 1;
 

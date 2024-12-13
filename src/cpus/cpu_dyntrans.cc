@@ -303,9 +303,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		cached_pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (l_pc <<
                                                             PPC_INSTR_ALIGNMENT_SHIFT);
+
     if (!cpu->memory_rw
         (cpu, cpu->mem, cached_pc, &instr[0],
-         sizeof(instr), MEM_READ, CACHE_INSTRUCTION | NO_EXCEPTIONS)) {
+         sizeof(instr), MEM_READ, CACHE_NONE | NO_EXCEPTIONS)) {
       fatal("XXX_run_instr(): could not read "
 				    "the instruction\n");
     } else {

@@ -339,8 +339,9 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
 	} else if (old_map != new_map) {
 		auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
-		cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
-			<< PPC_INSTR_ALIGNMENT_SHIFT);
+		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
+                           << PPC_INSTR_ALIGNMENT_SHIFT)) |
+      (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
 		ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
 	}
@@ -1957,7 +1958,7 @@ void fpu_update_cr1(struct cpu *cpu)
   uint64_t c = (cpu->cd.ppc.fpscr >> 28) & 0xf;
 	cpu->cd.ppc.cr &= ~((uint32_t)0xf << 24);
 	cpu->cd.ppc.cr |= ((uint32_t)c << 24);
-  fprintf(stderr, "%x => %08x\n", c, (uint32_t)cpu->cd.ppc.cr);
+  fprintf(stderr, "%" PRIx64" => %08x\n", c, (uint32_t)cpu->cd.ppc.cr);
 }
 
 void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, int *offset) {
@@ -2118,7 +2119,7 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
     fpscr |= PPC_FPSCR_FE;
   }
 
-  fprintf(stderr, "final fpscr %08x\n", fpscr);
+  fprintf(stderr, "final fpscr %08" PRIx64 "\n", fpscr);
   cpu->cd.ppc.fpscr = fpscr;
 }
 
@@ -2329,7 +2330,7 @@ unsigned char *ppc_get_host_page_ptr(struct cpu *cpu, bool instr, bool load, uin
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
   auto val = ic - cpu->cd.ppc.cur_ic_page;
   if (val < 0 || val > 0x1010) {
-    fprintf(stderr, "Bad sync low pc: %d\n", val);
+    fprintf(stderr, "Bad sync low pc: %d\n", (int)val);
   }
   return val;
 }

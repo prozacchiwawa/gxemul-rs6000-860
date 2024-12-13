@@ -1207,10 +1207,10 @@ X(llsc)
     // Like in cpu_ppc_instr_loadstore
     if (len == 8) {
       cpu->cd.ppc.gpr[rt] =
-        (d[0^swizzle] << 56) +
-        (d[1^swizzle] << 48) +
-        (d[2^swizzle] << 40) +
-        (d[3^swizzle] << 32) +
+        ((uint64_t)d[0^swizzle] << 56) +
+        ((uint64_t)d[1^swizzle] << 48) +
+        ((uint64_t)d[2^swizzle] << 40) +
+        ((uint64_t)d[3^swizzle] << 32) +
         (d[4^swizzle] << 24) +
         (d[5^swizzle] << 16) +
         (d[6^swizzle] <<  8) +
@@ -1728,7 +1728,6 @@ X(mtlr) {
 	cpu->cd.ppc.spr[SPR_LR] = reg(ic->arg[0]);
 }
 X(mtctr) {
-  auto val = reg(ic->arg[0]);
   cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.

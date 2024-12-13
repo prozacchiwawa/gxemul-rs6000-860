@@ -295,13 +295,13 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   }
 #endif
 
-  static auto instr_trace = [](struct cpu *cpu, struct DYNTRANS_IC *ic, MODE_uint_t &cached_pc) {
+  static auto instr_trace = [&cpu, &cached_pc](struct DYNTRANS_IC *ic) {
     /*  TODO/Note: This must be large enough to hold
         any instruction for any ISA:  */
     unsigned char instr[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-    uint64_t low_pc = ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+    uint64_t l_pc = ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
 		cached_pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
-                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (l_pc <<
                                                             PPC_INSTR_ALIGNMENT_SHIFT);
     if (!cpu->memory_rw
         (cpu, cpu->mem, cached_pc, &instr[0],
@@ -347,9 +347,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			debug("\n");
 			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
 		}
-		if (cpu->machine->instruction_trace) {
-      instr_trace(cpu, ic, cached_pc);
-		}
+    instr_trace(ic);
 
 		if (cpu->machine->statistics.enabled) {
 			S;
@@ -380,7 +378,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		}
 	} else if (cpu->machine->instruction_trace || cpu->machine->register_dump) {
 #ifndef J
-#define J if ((single_step & 0xff) == ENTER_SINGLE_STEPPING) { break; } else { instr_trace(cpu, ic, cached_pc); }
+#define J if ((single_step & 0xff) == ENTER_SINGLE_STEPPING) { break; } else { instr_trace(ic); }
 #endif
 
 		/*  Gather statistics while executing multiple instructions:  */

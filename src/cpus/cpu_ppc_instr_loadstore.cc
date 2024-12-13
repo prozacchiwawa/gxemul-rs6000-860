@@ -42,8 +42,10 @@ extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, in
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
+#ifndef LS_INDEXED
 #ifndef LS_IGNOREOFS
 	int32_t ofs = ic->arg[2];
+#endif
 #endif
 
 #ifdef MODE32
@@ -184,8 +186,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 
+#ifndef LS_INDEXED
 #ifndef LS_IGNOREOFS
 	int32_t ofs = ic->arg[2];
+#endif
 #endif
 
 #ifdef MODE32
@@ -287,8 +291,6 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
   access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #else	/*  !LS_LOAD  */
-  auto physaddr = cpu->cd.DYNTRANS_ARCH.phys_addr[full_addr >> 12];
-
   /*  Store:  */
 #ifdef LS_B
   page[addr^offset] = reg(ic->arg[0]);

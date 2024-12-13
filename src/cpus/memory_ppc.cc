@@ -325,8 +325,6 @@ void stwbrx_remember(uint32_t addr) {
 }
 
 void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
-  const char *rw = write ? "write" : "read";
-
   if (write) {
     if (!cpu->cd.ppc.bytelane_swap_latch) {
       stwbrx_remember(addr);
@@ -337,7 +335,7 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
 void stwbrx_cache_spill(struct cpu *cpu) {
   uint8_t data[8];
   uint8_t swapped[8];
-  fprintf(stderr, "%08x CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
+  fprintf(stderr, "%08" PRIx64" CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
   for (uint32_t pl1 = 0; pl1 < 1024; pl1++) {
     auto lv1 = stwbrx_cache[pl1];
     if (lv1) {
@@ -352,7 +350,7 @@ void stwbrx_cache_spill(struct cpu *cpu) {
                 if (addr < 0x80000000) {
                   if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data), MEM_READ, CACHE_DATA)) {
                     // Swap
-                    for (int k = 0; k < sizeof(swapped); k++) {
+                    for (unsigned long k = 0; k < sizeof(swapped); k++) {
                       swapped[7 - k] = data[k];
                     }
 

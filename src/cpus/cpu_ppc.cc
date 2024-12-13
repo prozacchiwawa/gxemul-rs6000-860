@@ -309,7 +309,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
-  int old_map = (cpu->cd.ppc.msr >> 4) & 3;
+        int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
 	if (writeflag) {
 		cpu->cd.ppc.msr = *valuep;
@@ -325,7 +325,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		}
 
 		if (cpu->cd.ppc.msr & PPC_MSR_IP && 
-            cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
+                    cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
 			fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");
 			cpu->running = 0;
@@ -333,7 +333,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
 	int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
-  int new_map = (cpu->cd.ppc.msr >> 4) & 3;
+        int new_map = (cpu->cd.ppc.msr >> 4) & 3;
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
 		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
@@ -349,15 +349,16 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		*valuep = cpu->cd.ppc.msr;
 	}
 
-	if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-		if (cpu->cd.ppc.dec_intr_pending &&
-		    !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-			cpu->cd.ppc.dec_intr_pending = 0;
-			ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-		} else if (cpu->cd.ppc.irq_asserted) {
-			fprintf(stderr, "[ ppc: dispatch interrupt %d ]\n", (int)cpu->machine->isa_pic_data.last_int);
-			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
-    }
+	if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
+		return;
+	}
+
+	if (cpu->cd.ppc.dec_intr_pending && !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+		cpu->cd.ppc.dec_intr_pending = 0;
+		ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+	} else if (cpu->cd.ppc.irq_asserted) {
+		fprintf(stderr, "[ ppc: dispatch interrupt %d ]\n", (int)cpu->machine->isa_pic_data.last_int);
+		ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
 	}
 }
 

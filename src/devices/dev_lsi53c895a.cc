@@ -866,7 +866,7 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len);
 static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid);
 
 static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
-    size_t result_size;
+    size_t result_size = req->xfer.data_in_len;
 
     if (req->status != 0) {
         fprintf(stderr, "LSI: scsi_req_continue stop with error %d\n", req->status);
@@ -880,7 +880,6 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x1b:
     case 0x1e:
     case 0x35:
-    case 0x43:
     case 0x51:
     case 0x52: {
         lsi_transfer_data(cpu, req, result_size);
@@ -916,7 +915,8 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x12:
     case 0x1a:
     case 0x25:
-    case 0x28: {
+    case 0x28: 
+    case 0x43: {
         fprintf(stderr, "lsi: transferred %d (cmd %02x)\n", req->transferred, req->cmd.buf[0]);
         if (!req->transferred) {
             req->transferred++;
@@ -1492,8 +1492,6 @@ static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid
 static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len)
 {
     LSIState *s = LSI53C895A(req->bus->qbus.parent);
-    int out;
-
     assert(req->hba_private);
     if (s->waiting == LSI_WAIT_RESELECT || req->hba_private != s->current ||
         (lsi_irq_on_rsl(s) && !(s->scntl1 & LSI_SCNTL1_CON))) {
@@ -1502,19 +1500,21 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len)
         }
     }
 
-    out = (s->sstat1 & PHASE_MASK) == PHASE_DO;
+    int out = (s->sstat1 & PHASE_MASK) == PHASE_DO;
 
     /* host adapter (re)connected */
-    fprintf(stderr, "lsi: transfer data: DNAD %08x DBC %08x (len %d)\n", s->dnad, s->dbc, len);
+    fprintf(stderr, "lsi: transfer data (waiting %x): DNAD %08x DBC %08x (len %d)\n", s->waiting, s->dnad, s->dbc, len);
     trace_lsi_transfer_data(req->tag, len);
     s->current->dma_len = len;
     s->command_complete = 1;
     if (s->waiting) {
         if (s->waiting == LSI_WAIT_RESELECT || s->dbc == 0) {
+	    fprintf(stderr, "lsi: wait reselect %x s->dbc %x\n", s->waiting == LSI_WAIT_RESELECT, (int)s->dbc);
             lsi_resume_script(cpu, s);
         } else {
+            fprintf(stderr, "lsi: do dma (out %d)\n", out);
             lsi_do_dma(cpu, s, out);
-        }
+	}
     }
 }
 
@@ -2204,16 +2204,16 @@ again:
                 break;
             }
             cond = jmp = (insn & (1 << 19)) != 0;
-            if (cond == jmp && (insn & (1 << 21))) {
+            if ((cond == jmp) && (insn & (1 << 21))) {
                 trace_lsi_execute_script_tc_compc(s->carry == jmp);
                 cond = s->carry != 0;
             }
-            if (cond == jmp && (insn & (1 << 17))) {
+            if ((cond == jmp) && (insn & (1 << 17))) {
                 trace_lsi_execute_script_tc_compp(scsi_phase_name(s->sstat1),
                         jmp ? '=' : '!', scsi_phase_name(insn >> 24));
                 cond = (s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7);
             }
-            if (cond == jmp && (insn & (1 << 18))) {
+            if ((cond == jmp) && (insn & (1 << 18))) {
                 uint8_t mask;
 
                 mask = (~insn >> 8) & 0xff;

@@ -574,4 +574,3 @@ void cpu_init(void)
 {
 	ADD_ALL_CPU_FAMILIES;
 }
-

@@ -295,8 +295,50 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   }
 #endif
 
-	if (single_step & 0xff || cpu->machine->instruction_trace
-	    || cpu->machine->register_dump) {
+  static auto instr_trace = [](struct cpu *cpu, struct DYNTRANS_IC *ic, MODE_uint_t &cached_pc) {
+    /*  TODO/Note: This must be large enough to hold
+        any instruction for any ISA:  */
+    unsigned char instr[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
+    uint64_t low_pc = ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+		cached_pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
+                                                            PPC_INSTR_ALIGNMENT_SHIFT);
+    if (!cpu->memory_rw
+        (cpu, cpu->mem, cached_pc, &instr[0],
+         sizeof(instr), MEM_READ, CACHE_INSTRUCTION | NO_EXCEPTIONS)) {
+      fatal("XXX_run_instr(): could not read "
+				    "the instruction\n");
+    } else {
+      auto old_pc = cpu->pc;
+      cpu->pc = cached_pc;
+#ifdef DYNTRANS_DELAYSLOT
+      int len =
+#endif
+        cpu_disassemble_instr(cpu->machine, cpu, instr, 1, 0);
+      cpu->pc = old_pc;
+#ifdef DYNTRANS_DELAYSLOT
+      /*  Show the instruction in the delay slot,
+          if any:  */
+      if (cpu->instruction_has_delayslot == NULL)
+        fatal("WARNING: ihd func not yet"
+					    " implemented?\n");
+      else if (cpu->instruction_has_delayslot(cpu, instr)) {
+        int saved_delayslot = cpu->delay_slot;
+        cpu->memory_rw(cpu, cpu->mem, cached_pc
+                       + len, &instr[0],
+                       sizeof(instr), MEM_READ,
+                       CACHE_INSTRUCTION | NO_EXCEPTIONS);
+        cpu->delay_slot = DELAYED;
+        cpu->pc += len;
+        cpu_disassemble_instr(cpu->machine, cpu, instr, 1, 0);
+        cpu->delay_slot = saved_delayslot;
+        cpu->pc -= len;
+      }
+#endif
+			}
+  };
+
+	if (single_step & 0xff) {
 		/*
 		 *  Single-step:
 		 */
@@ -306,42 +348,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
 		}
 		if (cpu->machine->instruction_trace) {
-			/*  TODO/Note: This must be large enough to hold
-			    any instruction for any ISA:  */
-			unsigned char instr[1 <<
-			    DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-			if (!cpu->memory_rw(cpu, cpu->mem, cached_pc, &instr[0],
-			    sizeof(instr), MEM_READ, CACHE_INSTRUCTION)) {
-				fatal("XXX_run_instr(): could not read "
-				    "the instruction\n");
-			} else {
-#ifdef DYNTRANS_DELAYSLOT
-				int len =
-#endif
-				    cpu_disassemble_instr(
-				    cpu->machine, cpu, instr, 1, 0);
-#ifdef DYNTRANS_DELAYSLOT
-				/*  Show the instruction in the delay slot,
-				    if any:  */
-				if (cpu->instruction_has_delayslot == NULL)
-					fatal("WARNING: ihd func not yet"
-					    " implemented?\n");
-				else if (cpu->instruction_has_delayslot(cpu,
-				    instr)) {
-					int saved_delayslot = cpu->delay_slot;
-					cpu->memory_rw(cpu, cpu->mem, cached_pc
-					    + len, &instr[0],
-					    sizeof(instr), MEM_READ,
-					    CACHE_INSTRUCTION);
-					cpu->delay_slot = DELAYED;
-					cpu->pc += len;
-					cpu_disassemble_instr(cpu->machine,
-					    cpu, instr, 1, 0);
-					cpu->delay_slot = saved_delayslot;
-					cpu->pc -= len;
-				}
-#endif
-			}
+      instr_trace(cpu, ic, cached_pc);
 		}
 
 		if (cpu->machine->statistics.enabled) {
@@ -349,7 +356,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		}
 
 		/*  Execute just one instruction:  */
-    		I;
+    I;
 
 		n_instrs = 1;
 	} else if (cpu->machine->statistics.enabled) {
@@ -371,6 +378,29 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			S; I;
 			n_instrs ++;
 		}
+	} else if (cpu->machine->instruction_trace || cpu->machine->register_dump) {
+#ifndef J
+#define J if ((single_step & 0xff) == ENTER_SINGLE_STEPPING) { break; } else { instr_trace(cpu, ic, cached_pc); }
+#endif
+
+		/*  Gather statistics while executing multiple instructions:  */
+		n_instrs = 0;
+		while (n_instrs + 24 < next_limit) {
+			struct DYNTRANS_IC *ic;
+
+			J; I; J; I; J; I; J; I; J; I; J; I;
+			J; I; J; I; J; I; J; I; J; I; J; I;
+			J; I; J; I; J; I; J; I; J; I; J; I;
+			J; I; J; I; J; I; J; I; J; I; J; I;
+
+			n_instrs += 24;
+		}
+		while (n_instrs < next_limit) {
+			struct DYNTRANS_IC *ic;
+
+      J; I;
+      n_instrs ++;
+    }
 	} else {
 		/*
 		 *  Execute multiple instructions:
@@ -385,14 +415,14 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			I; I; I; I; I; I; I; I;
 			I; I; I; I; I; I; I; I;
 
-      			n_instrs += 24;
+      n_instrs += 24;
 		}
-    		while (n_instrs < next_limit) {
+    while (n_instrs < next_limit) {
 			struct DYNTRANS_IC *ic;
 
-      			I;
+      I;
 
-      			n_instrs ++;
+      n_instrs ++;
 		}
 	}
 

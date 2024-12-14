@@ -64,7 +64,7 @@ struct mp_data {
 };
 
 
-extern int single_step;
+extern uint64_t single_step;
 
 
 DEVICE_ACCESS(mp)

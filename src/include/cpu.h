@@ -340,12 +340,12 @@ struct cpu {
 	char		*path;
 
 	/*  Nr of instructions executed, etc.:  */
-	int64_t		ninstrs;
-  int64_t   ninstrs_async;
-  int64_t   ninstrs_syncpc;
-	int64_t		ninstrs_show;
-	int64_t		ninstrs_flush;
-	int64_t		ninstrs_since_gettimeofday;
+	uint64_t		ninstrs;
+  uint64_t   ninstrs_async;
+  uint64_t   ninstrs_syncpc;
+	uint64_t		ninstrs_show;
+	uint64_t		ninstrs_flush;
+	uint64_t		ninstrs_since_gettimeofday;
 	struct timeval	starttime;
 
 	/*  EMUL_LITTLE_ENDIAN or EMUL_BIG_ENDIAN.  */

@@ -79,7 +79,7 @@ int debugger_n_steps_left_before_interaction = 0;
 int old_instruction_trace = 0;
 int old_quiet_mode = 0;
 int old_show_trace_tree = 0;
-
+int trace_mapping = 0;
 
 /*
  *  Private (global) debugger variables:

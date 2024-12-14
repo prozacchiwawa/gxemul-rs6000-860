@@ -31,6 +31,8 @@
 #define STWBRX_CACHE_SIZE 100000
 uint32_t **stwbrx_cache[1024];
 
+extern int trace_mapping;
+
 /*
  *  ppc_bat():
  *
@@ -252,8 +254,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	/*  Try the BATs first:  */
 	if (cpu->cd.ppc.bits == 32) {
 		res = ppc_bat(cpu, vaddr, return_paddr, flags, user);
-		if (res > 0)
+		if (res > 0) {
 			return res;
+    }
 		if (res == 0) {
 			fatal("[ TODO: BAT exception ]\n");
 			exit(1);
@@ -264,8 +267,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	if (cpu->cd.ppc.bits == 32) {
 		match = ppc_vtp32(cpu, vaddr, return_paddr, &res, msr,
 		    writeflag, instr);
-		if (match && res > 0)
-			return res;
+		if (match && res > 0) {
+      return res;
+    }
 	} else {
 		/*  htaborg = sdr1 & 0xfffffffffffc0000ULL;  */
 		fatal("TODO: ppc 64-bit translation\n");
@@ -302,7 +306,10 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 			    DSISR_PROTECT : DSISR_NOTFOUND;
 			if (writeflag)
 				cpu->cd.ppc.spr[SPR_DSISR] |= DSISR_STORE;
-		}
+		} else {
+      // XX Set for failed translation, fix for bats and NX pages.
+      srr1_extra |= 1 << 30;
+    }
 		ppc_exception(cpu, instr?
                   PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI, srr1_extra);
 	}

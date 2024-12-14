@@ -2191,8 +2191,8 @@ again:
 
     case 2: /* Transfer Control.  */
         {
-            int cond;
-            int jmp;
+            bool cond;
+            bool jmp;
 
             if ((insn & 0x002e0000) == 0) {
                 trace_lsi_execute_script_tc_nop();
@@ -2203,25 +2203,27 @@ again:
                 lsi_stop_script(s);
                 break;
             }
-            cond = jmp = (insn & (1 << 19)) != 0;
-            if ((cond == jmp) && (insn & (1 << 21))) {
+            jmp = (insn & (1 << 19)) != 0;
+            cond = true;
+
+            if (insn & (1 << 21)) {
                 trace_lsi_execute_script_tc_compc(s->carry == jmp);
-                cond = s->carry != 0;
+                cond &= (s->carry != 0) == jmp;
             }
-            if ((cond == jmp) && (insn & (1 << 17))) {
+            if (insn & (1 << 17)) {
                 trace_lsi_execute_script_tc_compp(scsi_phase_name(s->sstat1),
                         jmp ? '=' : '!', scsi_phase_name(insn >> 24));
-                cond = (s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7);
+                cond &= ((s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7)) == jmp;
             }
-            if ((cond == jmp) && (insn & (1 << 18))) {
+            if (insn & (1 << 18)) {
                 uint8_t mask;
 
                 mask = (~insn >> 8) & 0xff;
                 trace_lsi_execute_script_tc_compd(
                         s->sfbr, mask, jmp ? '=' : '!', insn & mask);
-                cond = (s->sfbr & mask) == (insn & mask);
+                cond &= ((s->sfbr & mask) == (insn & mask)) == jmp;
             }
-            if (cond == jmp) {
+            if (cond) {
                 if (insn & (1 << 23)) {
                     uint32_t want_offset = sextract32(addr, 0, 24);
                     fprintf(stderr, "lsi: jump to relative address insn %08x addr %08x offset %0x\n", insn, addr, want_offset);

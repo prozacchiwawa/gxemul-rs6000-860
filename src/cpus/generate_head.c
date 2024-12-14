@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 	printf("#define COMBINE_INSTRUCTIONS %s_combine_instructions\n", a);
 	printf("#define DISASSEMBLE %s_cpu_disassemble_instr\n", a);
 
-	printf("\nextern volatile int single_step, single_step_breakpoint;"
+	printf("\nextern volatile uint64_t single_step;\nextern int single_step_breakpoint;"
 	    "\nextern int debugger_n_steps_left_before_interaction;\n"
 	    "extern int old_show_trace_tree;\n"
 	    "extern int old_instruction_trace;\n"

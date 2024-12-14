@@ -1428,7 +1428,7 @@ static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
 
 static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   char *endptr;
-  unsigned long long when = strtoull(cmd_line, &endptr, 16);
+  uint64_t when = strtoull(cmd_line, &endptr, 16);
 
   fprintf(stderr, "until %" PRIx64 "\n", (uint64_t)when);
 
@@ -1439,7 +1439,7 @@ static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   if (when < 0x100) {
     debugger_cmd_step(m, "");
   } else {
-    single_step = when & ~0x100;
+    single_step = (when | 0xffull) - 255ull;
   }
 }
 
@@ -1505,6 +1505,10 @@ static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
   }
 
   symbol_recalc_sizes(&m->symbol_context);
+}
+
+static void debugger_cmd_mtrace(struct machine *m, char *cmd_line) {
+  trace_mapping = !trace_mapping;
 }
 
 /****************************************************************************/
@@ -1618,6 +1622,8 @@ static struct cmd cmds[] = {
   { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
 
   { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
+
+  { "mtrace", "", 0, debugger_cmd_mtrace, "Toggle verbose mapping update output" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

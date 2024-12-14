@@ -186,7 +186,8 @@ static void gather_statistics(struct cpu *cpu)
 int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 {
 	MODE_uint_t cached_pc = 0;
-	int low_pc = 0, n_instrs = 0;
+	int low_pc = 0;
+	uint64_t n_instrs = 0;
 
 	/*  Ugly... fix this some day.  */
 #ifdef DYNTRANS_DUALMODE_32
@@ -280,8 +281,8 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     }
   }
 
-  auto prev_instrs = cpu->ninstrs;
-  auto next_limit =
+  uint64_t prev_instrs = cpu->ninstrs;
+  uint64_t next_limit =
     MIN(prev_instrs + N_SAFE_DYNTRANS_LIMIT, cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS) -
     cpu->ninstrs;
 
@@ -481,7 +482,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #endif
 #ifdef DYNTRANS_PPC
 	/*  Update the Decrementer and Time base registers:  */
-  if (single_step >= 0x100 && single_step <= prev_instrs + n_instrs) {
+  uint64_t new_instrs = prev_instrs + n_instrs;
+  uint64_t compare_steps = (single_step | 0xffull) - 255ull;
+  bool should_stop = new_instrs >= compare_steps;
+  if ((single_step >= 0x100ull) && should_stop) {
     fprintf(stderr, "until limit reached\n");
     single_step = 1;
   }

@@ -296,55 +296,42 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   }
 #endif
 
-  static auto instr_trace = [&cpu, &cached_pc](struct DYNTRANS_IC *ic) {
+  auto instr_trace = [&cpu, &cached_pc](struct DYNTRANS_IC *ic) {
     /*  TODO/Note: This must be large enough to hold
         any instruction for any ISA:  */
-    unsigned char instr[1 << DYNTRANS_INSTR_ALIGNMENT_SHIFT];
-    uint64_t l_pc = ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
-		cached_pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
-                             PPC_INSTR_ALIGNMENT_SHIFT)) + (l_pc <<
-                                                            PPC_INSTR_ALIGNMENT_SHIFT);
-
-    if (!cpu->memory_rw
-        (cpu, cpu->mem, cached_pc, &instr[0],
-         sizeof(instr), MEM_READ, CACHE_NONE | NO_EXCEPTIONS)) {
-      fatal("XXX_run_instr(): could not read "
-				    "the instruction\n");
-    } else {
-      auto old_pc = cpu->pc;
-      cpu->pc = cached_pc;
+    auto old_pc = cpu->pc;
+    cpu->pc = ic->pc;
 #ifdef DYNTRANS_DELAYSLOT
-      int len =
+    int len =
 #endif
-        cpu_disassemble_instr(cpu->machine, cpu, instr, 1, 0);
-      cpu->pc = old_pc;
+      cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
+    cpu->pc = old_pc;
 #ifdef DYNTRANS_DELAYSLOT
-      /*  Show the instruction in the delay slot,
-          if any:  */
-      if (cpu->instruction_has_delayslot == NULL)
-        fatal("WARNING: ihd func not yet"
-					    " implemented?\n");
-      else if (cpu->instruction_has_delayslot(cpu, instr)) {
-        int saved_delayslot = cpu->delay_slot;
-        cpu->memory_rw(cpu, cpu->mem, cached_pc
-                       + len, &instr[0],
-                       sizeof(instr), MEM_READ,
-                       CACHE_INSTRUCTION | NO_EXCEPTIONS);
-        cpu->delay_slot = DELAYED;
-        cpu->pc += len;
-        cpu_disassemble_instr(cpu->machine, cpu, instr, 1, 0);
-        cpu->delay_slot = saved_delayslot;
-        cpu->pc -= len;
-      }
+    /*  Show the instruction in the delay slot,
+        if any:  */
+    if (cpu->instruction_has_delayslot == NULL)
+      fatal("WARNING: ihd func not yet"
+            " implemented?\n");
+    else if (cpu->instruction_has_delayslot(cpu, ic->instr)) {
+      int saved_delayslot = cpu->delay_slot;
+      cpu->memory_rw(cpu, cpu->mem, ic->pc
+                     + len, &ic->instr[0],
+                     sizeof(ic->instr), MEM_READ,
+                     CACHE_INSTRUCTION | NO_EXCEPTIONS);
+      cpu->delay_slot = DELAYED;
+      cpu->pc += len;
+      cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
+      cpu->delay_slot = saved_delayslot;
+      cpu->pc -= len;
+    }
 #endif
-			}
   };
 
+  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
 	if (single_step & 0xff) {
 		/*
 		 *  Single-step:
 		 */
-		struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
 		if (cpu->machine->register_dump) {
 			debug("\n");
 			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
@@ -363,8 +350,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		/*  Gather statistics while executing multiple instructions:  */
 		n_instrs = 0;
 		while (n_instrs + 24 < next_limit) {
-			struct DYNTRANS_IC *ic;
-
 			S; I; S; I; S; I; S; I; S; I; S; I;
 			S; I; S; I; S; I; S; I; S; I; S; I;
 			S; I; S; I; S; I; S; I; S; I; S; I;
@@ -373,8 +358,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			n_instrs += 24;
 		}
 		while (n_instrs < next_limit) {
-			struct DYNTRANS_IC *ic;
-
 			S; I;
 			n_instrs ++;
 		}
@@ -386,7 +369,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		/*  Gather statistics while executing multiple instructions:  */
 		n_instrs = 0;
 		while (n_instrs + 24 < next_limit) {
-			struct DYNTRANS_IC *ic;
 
 			J; I; J; I; J; I; J; I; J; I; J; I;
 			J; I; J; I; J; I; J; I; J; I; J; I;
@@ -396,8 +378,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			n_instrs += 24;
 		}
 		while (n_instrs < next_limit) {
-			struct DYNTRANS_IC *ic;
-
       J; I;
       n_instrs ++;
     }
@@ -409,8 +389,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		 */
 		n_instrs = 0;
 		while (n_instrs + 24 < next_limit) {
-			struct DYNTRANS_IC *ic;
-
 			I; I; I; I; I; I; I; I;
 			I; I; I; I; I; I; I; I;
 			I; I; I; I; I; I; I; I;

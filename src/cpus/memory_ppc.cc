@@ -302,13 +302,12 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	} else {
 		if (!instr) {
 			cpu->cd.ppc.spr[SPR_DAR] = vaddr;
-			cpu->cd.ppc.spr[SPR_DSISR] = match?
-			    DSISR_PROTECT : DSISR_NOTFOUND;
+			cpu->cd.ppc.spr[SPR_DSISR] = match ? DSISR_PROTECT : DSISR_NOTFOUND;
 			if (writeflag)
 				cpu->cd.ppc.spr[SPR_DSISR] |= DSISR_STORE;
 		} else {
       // XX Set for failed translation, fix for bats and NX pages.
-      srr1_extra |= 1 << 30;
+      srr1_extra = match ? DSISR_PROTECT : DSISR_NOTFOUND;
     }
 		ppc_exception(cpu, instr?
                   PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI, srr1_extra);

@@ -2831,12 +2831,12 @@ X(to_be_translated)
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
-
+  memcpy(ic->instr, ib, sizeof(ic->instr));
+  ic->pc = cpu->pc;
 
 	/*
 	 *  Translate the instruction:
 	 */
-
 	main_opcode = iword >> 26;
 
 	switch (main_opcode) {

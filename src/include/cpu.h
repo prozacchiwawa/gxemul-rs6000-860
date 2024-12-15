@@ -71,9 +71,11 @@
 #define DYNTRANS_MISC_DECLARATIONS(arch,ARCH,addrtype)  struct \
 	arch ## _instr_call {					\
 		void	(*f)(struct cpu *, struct arch ## _instr_call *); \
-		size_t	arg[ARCH ## _N_IC_ARGS];			\
-	};								\
-									\
+    uint8_t instr[1 << ARCH ## _INSTR_ALIGNMENT_SHIFT];     \
+    uint64_t pc;                                            \
+		size_t	arg[ARCH ## _N_IC_ARGS];                        \
+	};                                                        \
+                                                            \
 	/*  Translation cache struct for each physical page:  */	\
 	struct arch ## _tc_physpage {					\
 		struct arch ## _instr_call ics[ARCH ## _IC_ENTRIES_PER_PAGE+2];\

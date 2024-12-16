@@ -242,16 +242,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		if (enabled && mask)
 			mips_cpu_exception(cpu, EXCEPTION_INT, 0, 0, 0, 0, 0,0);
 #endif
-#ifdef DYNTRANS_PPC
-		if (cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-			cpu->cd.ppc.dec_intr_pending = 0;
-			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-				ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-      }
-		}
-		if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
-			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
-#endif
 #ifdef DYNTRANS_SH
 		if (cpu->cd.sh.int_to_assert > 0 && !(cpu->cd.sh.sr & SH_SR_BL)
 		    && ((cpu->cd.sh.sr & SH_SR_IMASK) >> SH_SR_IMASK_SHIFT)

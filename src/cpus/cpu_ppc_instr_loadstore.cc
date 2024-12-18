@@ -257,6 +257,16 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
     (int8_t)
 #endif
     page[addr ^ offset];
+  // if ((cpu->pc & 0xffff0000) == 0x800e0000) {
+  //   fprintf(stderr, "lbz: %p full_addr %08x addr %08x offset %d\n", page, (unsigned int)full_addr, (unsigned int)addr, offset);
+  //   for (int i = 0; i < 4096; i += 16) {
+  //     fprintf(stderr, "%08x:", i);
+  //     for (int j = i; j < i + 16; j++) {
+  //       fprintf(stderr, " %02x", page[j]);
+  //     }
+  //     fprintf(stderr, "\n");
+  //   }
+  // }
 #endif	/*  LS_B  */
 #ifdef LS_H
   reg(ic->arg[0]) =

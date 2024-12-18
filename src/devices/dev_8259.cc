@@ -133,8 +133,8 @@ static void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) 
     do_assert(d);
     return;
   }
-  
-  if (d->isr == 0x10) {
+
+  if (d->isr == 0x10 && d->irq_base == 8) {
 	  d->isr = 0;
   }
 

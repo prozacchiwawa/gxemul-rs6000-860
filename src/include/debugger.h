@@ -33,6 +33,8 @@
 
 #include "misc.h"
 #include <deque>
+#include <map>
+#include <memory>
 
 struct emul;
 struct machine;
@@ -55,6 +57,15 @@ typedef struct _keyboard_event_t {
 } keyboard_event_t;
 
 extern std::deque<keyboard_event_t> keyboard_debug_events;
+
+struct dump_register_state_t {
+  void *f;
+  uint64_t arg0;
+
+  dump_register_state_t(void *f, uint64_t arg0) : f(f), arg0(arg0) { }
+};
+
+extern std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
 
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0

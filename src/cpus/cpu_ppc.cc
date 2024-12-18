@@ -324,7 +324,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 			}
 		}
 
-		if (cpu->cd.ppc.msr & PPC_MSR_IP && 
+		if (cpu->cd.ppc.msr & PPC_MSR_IP &&
                     cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
 			fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");
@@ -342,7 +342,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
                            << PPC_INSTR_ALIGNMENT_SHIFT)) |
       (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
+		ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
 		ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
 	}
 
@@ -494,12 +494,11 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 			    (uint64_t) cpu->cd.ppc.spr[SPR_SRR1]);
 		}
 
-    debug(" bridge swap D%d I%d latch %d ll %d %08x\n",
+    debug(" bridge swap D%d I%d latch %d ll %d\n",
           cpu->cd.ppc.bytelane_swap[0],
           cpu->cd.ppc.bytelane_swap[1],
           cpu->cd.ppc.bytelane_swap_latch,
-          cpu->cd.ppc.ll_bit,
-          (unsigned int)cpu->cd.ppc.ll_addr);
+          cpu->cd.ppc.ll_bit);
 
 		debug("cpu%i: msr = ", x);
 		reg_access_msr(cpu, &tmp, 0, nullptr, 0);
@@ -515,9 +514,10 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		debug("cpu%i: dec = 0x%08" PRIx32,
 		    x, (uint32_t) cpu->cd.ppc.spr[SPR_DEC]);
 		if (!bits32)
-			debug("  hdec = 0x%08" PRIx32"\n",
+			debug("  hdec = 0x%08" PRIx32,
 			    (uint32_t) cpu->cd.ppc.spr[SPR_HDEC]);
 
+    debug("  dar = 0x%08" PRIx32 " dsisr = 0x%08" PRIx32, x, (uint32_t)cpu->cd.ppc.spr[SPR_DAR], (uint32_t)cpu->cd.ppc.spr[SPR_DSISR]);
 		debug("\n");
 	}
 

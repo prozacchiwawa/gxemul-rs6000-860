@@ -62,6 +62,7 @@ extern struct settings *global_settings;
 extern int quiet_mode;
 static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
 static std::deque<std::string> script_queue;
+std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
 
 /*
  *  Global debugger variables:

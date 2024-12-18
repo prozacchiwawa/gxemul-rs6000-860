@@ -33,7 +33,6 @@
  *  be increased by 3.)
  */
 
-
 #include "float_emul.h"
 
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
@@ -48,7 +47,7 @@ int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
 		/*  Synchronize the PC, and cause an FPU exception:  */  \
-    uint64_t low_pc = sync_low_pc(cpu, ic);                \
+      uint64_t low_pc = sync_low_pc(cpu, ic);                \
 		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<	 \
 		    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<		 \
 		    PPC_INSTR_ALIGNMENT_SHIFT);				 \
@@ -1179,6 +1178,12 @@ X(llsc)
 	addr += cpu->cd.ppc.gpr[rb];
   uint64_t final_addr = 0;
 
+	/*  Synchronize the PC so the exception below can target the right location.  */
+  uint64_t low_pc = sync_low_pc(cpu, ic);
+  cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
+                         PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
+                                                        PPC_INSTR_ALIGNMENT_SHIFT);
+
   if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
     // Will throw.
     fprintf(stderr, "llsc: no translation?\n");
@@ -1528,7 +1533,7 @@ X(rlwimi)
 	uint32_t iword = ic->arg[2];
 	int sh = (iword >> 11) & 31;
 	int mb = (iword >> 6) & 31;
-	int me = (iword >> 1) & 31;   
+	int me = (iword >> 1) & 31;
 	int rc = iword & 1;
 
 	tmp = (tmp << sh) | (tmp >> (32-sh));
@@ -2660,8 +2665,9 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
-	cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]),
-                                     INVALIDATE_VADDR);
+  for (uint32_t i = 0; i < 16; i++) {
+    cpu->invalidate_translation_caches(cpu, (i << 28) | reg(ic->arg[0]) & 0xffff000, INVALIDATE_VADDR | INVALIDATE_PADDR);
+  }
 }
 
 
@@ -2752,6 +2758,19 @@ X(end_of_page)
 }
 
 
+X(dump_registers) {
+  auto additions = (dump_register_state_t *)ic->arg[0];
+  ic->arg[0] = additions->arg0;
+  auto new_f = (void (*)(struct cpu *, struct ppc_instr_call *))additions->f;
+  new_f(cpu, ic);
+  auto old_pc = cpu->pc;
+  cpu->pc = ic->pc;
+  cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
+  cpu->pc = old_pc;
+  ppc_cpu_register_dump(cpu, true, false);
+  ic->arg[0] = (ssize_t)additions;
+}
+
 /*****************************************************************************/
 
 
@@ -2774,6 +2793,7 @@ X(to_be_translated)
 	    bfa, fp, byterev, nb, mb, me;
 	void (*samepage_function)(struct cpu *, struct ppc_instr_call *);
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
+  auto found = dump_registers.end();
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
@@ -4046,6 +4066,14 @@ X(to_be_translated)
 	default:goto bad;
 	}
 
+  // If we should dump for this address, change the ic.
+  found = dump_registers.find(ic->pc);
+  if (found != dump_registers.end()) {
+    found->second->f = (void *)ic->f;
+    found->second->arg0 = ic->arg[0];
+    ic->arg[0] = (uint64_t)found->second.get();
+    ic->f = instr(dump_registers);
+  }
 
 #define	DYNTRANS_TO_BE_TRANSLATED_TAIL
 #include "cpu_dyntrans.cc"

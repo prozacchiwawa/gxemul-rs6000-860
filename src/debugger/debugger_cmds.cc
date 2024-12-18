@@ -1507,8 +1507,33 @@ static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
   symbol_recalc_sizes(&m->symbol_context);
 }
 
-static void debugger_cmd_mtrace(struct machine *m, char *cmd_line) {
-  trace_mapping = !trace_mapping;
+static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
+  bool exclude = *cmd_line == '!';
+  if (*cmd_line == '+') {
+    exclude = false;
+    cmd_line++;
+  }
+
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  uint64_t end_addr = addr + 4;
+  if (*space == '-') {
+    cmd_line = space + 1;
+    end_addr = strtoull(cmd_line, &space, 16);
+  }
+
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed rtrace %s\n", cmd_line);
+    return;
+  }
+
+  for (auto i = addr; i < end_addr; i++) {
+    if (exclude) {
+      dump_registers.erase(i);
+    } else {
+      dump_registers.insert(std::pair(i, std::make_unique<dump_register_state_t>(dump_register_state_t(nullptr, 0))));
+    }
+  }
 }
 
 /****************************************************************************/
@@ -1623,7 +1648,7 @@ static struct cmd cmds[] = {
 
   { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
 
-  { "mtrace", "", 0, debugger_cmd_mtrace, "Toggle verbose mapping update output" },
+  { "rtrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

@@ -107,10 +107,6 @@ const char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc,
 		return NULL;
   }
 
-	//if ((addr >> 32) == 0 && (addr & 0x80000000ULL)) {
-	//	addr |= 0xffffffff00000000ULL;
-  //}
-
   symbol_buf.clear();
 	if (offset != NULL) {
 		*offset = 0;
@@ -138,7 +134,7 @@ const char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc,
     }
   }
 
-  if (symbol_buf.size()) {
+  if (symbol_buf.size() && strncmp(symbol_buf.c_str(), "*", 1) != 0) {
     return symbol_buf.c_str();
   } else {
     return nullptr;

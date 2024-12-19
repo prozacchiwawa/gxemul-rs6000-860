@@ -217,10 +217,21 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
+  d->sequencer_reg[0x61] = 0x63;
+  d->sequencer_reg[0x66] = 0;
+  d->sequencer_reg[0x69] = 0x57;
+  d->sequencer_reg[0x6e] = 0x22;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
 	d->n_is1_reads = 0;
+
+  d->crtc_reg[0x13] = 0x50;
+  d->crtc_reg[0x51] = 0;
+  d->crtc_reg[0x30] = 0xe0;
+  d->crtc_reg[0x2d] = 0x88;
+  d->crtc_reg[0x2e] = 0x12;
+  d->crtc_reg[0x2f] = 1;
 }
 
 
@@ -371,11 +382,14 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 	int x, y, ix, iy, c, rx = d->pixel_repx, ry = d->pixel_repy;
 	unsigned char pixel[3];
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	for (y=y1; y<=y2; y++)
 		for (x=x1; x<=x2; x++) {
 			/*  addr is where to read from VGA memory, addr2 is
 			    where to write on the 24-bit framebuffer device  */
-			int addr = (y * d->max_x + x) * d->bits_per_pixel;
+			int addr = (y * logical_width + x) * d->bits_per_pixel;
 			switch (d->bits_per_pixel) {
 			case 8:	addr >>= 3;
 				c = d->gfx_mem[addr];
@@ -950,7 +964,11 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
   bool draws_up;
 
   if (writeflag != MEM_WRITE) {
-    memory_writemax64(cpu, data, len, 0);
+    uint16_t outval = 1 << 10; // tell them all entries are clear?
+    if (len == 1) {
+      outval >>= relative_addr * 16;
+    }
+    memory_writemax64(cpu, data, len, outval);
   } else {
 		written = get_le_16(memory_readmax64(cpu, data, len));
     L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
@@ -1188,6 +1206,8 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
 {
 	int i, grayscale;
 
+  fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x ]\n",
+		    regnr, idata);
 	switch (regnr) {
 	case VGA_CRTC_CURSOR_SCANLINE_START:		/*  0x0a  */
 	case VGA_CRTC_CURSOR_SCANLINE_END:		/*  0x0b  */
@@ -1320,8 +1340,8 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
 		reset_palette(d, grayscale);
 		register_reset(d);
 		break;
-	default:fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x ]\n",
-		    regnr, idata);
+	default:
+    break;
 	}
 }
 
@@ -1458,10 +1478,9 @@ DEVICE_ACCESS(vga_ctrl)
 				odata = d->sequencer_reg[
 				    d->sequencer_reg_select];
 			else {
-				d->sequencer_reg[d->
-				    sequencer_reg_select] = idata;
-				vga_sequencer_reg_write(cpu->machine, d,
-				    d->sequencer_reg_select, idata);
+        d->sequencer_reg[d->sequencer_reg_select] = idata;
+        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x ]\n", d->sequencer_reg_select, (unsigned int)idata);
+        vga_sequencer_reg_write(cpu->machine, d, d->sequencer_reg_select, idata);
 			}
 			break;
 
@@ -1555,10 +1574,14 @@ DEVICE_ACCESS(vga_ctrl)
 				d->crtc_reg_select = idata;
 			break;
 		case VGA_CRTC_DATA:			/*  0x15  */
-			if (writeflag == MEM_READ)
+			if (writeflag == MEM_READ) {
 				odata = d->crtc_reg[d->crtc_reg_select];
-			else {
-				d->crtc_reg[d->crtc_reg_select] = idata;
+        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x ]\n",
+              d->crtc_reg_select, (unsigned int)odata);
+      } else {
+        if (d->crtc_reg_select != 0x30) {
+          d->crtc_reg[d->crtc_reg_select] = idata;
+        }
 				vga_crtc_reg_write(cpu->machine, d,
 				    d->crtc_reg_select, idata);
 			}

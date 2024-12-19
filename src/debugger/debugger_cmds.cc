@@ -1536,6 +1536,30 @@ static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
   }
 }
 
+static void debugger_cmd_breakat(struct machine *m, char *cmd_line) {
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed breakat %s\n", cmd_line);
+    return;
+  }
+
+  if (!*space) {
+    break_commands.erase(addr);
+    return;
+  }
+
+  while (*space == ' ') space++;
+  cmd_line = space;
+
+  std::vector<std::string> cmds;
+  while (space = strtok(cmd_line, "|")) {
+    cmds.push_back(std::string(space));
+    cmd_line = nullptr;
+  }
+  break_commands.insert(std::pair(addr, cmds));
+}
+
 /****************************************************************************/
 
 
@@ -1649,6 +1673,8 @@ static struct cmd cmds[] = {
   { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
 
   { "rtrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
+
+  { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

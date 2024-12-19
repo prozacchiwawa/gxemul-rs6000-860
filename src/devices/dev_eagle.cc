@@ -97,7 +97,13 @@ DEVICE_ACCESS(eagle)
 int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space, uint32_t real_addr, uint8_t *data, int len) {
 	uint64_t idata = 0, odata = 0;
 	uint8_t data_buf[4];
-  uint64_t target_addr = bus_pci_get_io_target(cpu, d->pci_data, io_space, real_addr, len);
+  uint64_t target_addr;
+
+  if (real_addr >= 0x38000000 && real_addr < 0x39000000) {
+    target_addr = (BUS_PCI_IO_NATIVE_SPACE + 0x30000000) + (real_addr - 0x38000000);
+  } else {
+    target_addr = bus_pci_get_io_target(cpu, d->pci_data, io_space, real_addr, len);
+  }
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);

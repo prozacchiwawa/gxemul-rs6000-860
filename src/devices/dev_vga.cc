@@ -556,6 +556,9 @@ DEVICE_TICK(vga)
 	struct vga_data *d = (struct vga_data *) extra;
 	int64_t low = -1, high;
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	vga_update_cursor(cpu->machine, d);
 
 	/*  TODO: text vs graphics tick?  */
@@ -572,8 +575,8 @@ DEVICE_TICK(vga)
 		high -= base;
 		d->update_x1 = 0;
 		d->update_x2 = d->max_x - 1;
-		new_u_y1 = (low/2) / d->max_x;
-		new_u_y2 = ((high/2) / d->max_x) + 1;
+		new_u_y1 = (low/2) / logical_width;
+		new_u_y2 = ((high/2) / logical_width) + 1;
 		if (new_u_y1 < d->update_y1)
 			d->update_y1 = new_u_y1;
 		if (new_u_y2 > d->update_y2)
@@ -642,6 +645,9 @@ DEVICE_ACCESS(vga_graphics)
 
 	L(fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len));
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	if (relative_addr + len >= d->gfx_mem_size)
 		return 0;
 
@@ -650,10 +656,10 @@ DEVICE_ACCESS(vga_graphics)
 
 	switch (d->graphics_mode) {
 	case GRAPHICS_MODE_8BIT:
-		y = relative_addr / d->max_x;
-		x = relative_addr % d->max_x;
-		y2 = (relative_addr+len-1) / d->max_x;
-		x2 = (relative_addr+len-1) % d->max_x;
+		y = relative_addr / logical_width;
+		x = relative_addr % logical_width;
+		y2 = (relative_addr+len-1) / logical_width;
+		x2 = (relative_addr+len-1) % logical_width;
 
 		if (writeflag == MEM_WRITE) {
 			memcpy(d->gfx_mem + relative_addr, data, len);
@@ -738,16 +744,19 @@ DEVICE_ACCESS(vga)
 	int x, y, x2, y2, r, base;
 	size_t i;
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len);
 
 	base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
 	    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 	r = relative_addr - base;
-	y = r / (d->max_x * 2);
-	x = (r/2) % d->max_x;
-	y2 = (r+len-1) / (d->max_x * 2);
-	x2 = ((r+len-1)/2) % d->max_x;
+	y = r / (logical_width * 2);
+	x = (r/2) % logical_width;
+	y2 = (r+len-1) / (logical_width * 2);
+	x2 = ((r+len-1)/2) % logical_width;
 
 	if (relative_addr + len - 1 < d->charcells_size) {
 		if (writeflag == MEM_WRITE) {

@@ -48,9 +48,9 @@ int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
 		/*  Synchronize the PC, and cause an FPU exception:  */  \
       uint64_t low_pc = sync_low_pc(cpu, ic);                \
-		cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<	 \
-		    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<		 \
-		    PPC_INSTR_ALIGNMENT_SHIFT);				 \
+      cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
+                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
+                                                            PPC_INSTR_ALIGNMENT_SHIFT); \
 		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);     \
 		return; } }
 #endif

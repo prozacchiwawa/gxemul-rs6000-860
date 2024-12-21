@@ -909,7 +909,7 @@ DEVICE_TICK(pckbc)
     keyboard_debug_events.pop_front();
   }
 
-  if (d->in_use && console_charavail(d->console_handle)) {
+  if ((d->in_use & 1) && console_charavail(d->console_handle)) {
     ch = console_readchar(d->console_handle);
     if (d->translation_table == 1) {
       ascii_to_pc_scancodes_type1(ch, d);
@@ -921,7 +921,7 @@ DEVICE_TICK(pckbc)
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
-  if (d->mouse_ena &&
+  if (d->mouse_ena && (d->in_use & 2) &&
       ((d->mouse_last_x != mouse_x) ||
        (d->mouse_last_y != mouse_y) ||
        (d->mouse_last_but != mouse_but))
@@ -1333,7 +1333,7 @@ DEVICE_ACCESS(pckbc)
 
 			/*  "Data in buffer" bit  */
       if (d->head[1] != d->tail[1]) {
-        fprintf(stderr, "[ pckbc: output ring %d-%d ]\n", d->head[1], d->tail[1]);
+        fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
         INTERRUPT_DEASSERT(d->irq_mouse);
         d->currently_asserted[1] = false;
@@ -1341,6 +1341,7 @@ DEVICE_ACCESS(pckbc)
                  d->state == STATE_RDCMDBYTE ||
                  d->state == STATE_RDOUTPUT) {
 				odata |= KBS_DIB;
+        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
         INTERRUPT_DEASSERT(d->irq_keyboard);
         d->currently_asserted[0] = false;
       }
@@ -1410,10 +1411,12 @@ DEVICE_ACCESS(pckbc)
 					    output buffer  */
 				debug("[ pckbc: send data to kbd ]\n");
 				d->state = STATE_WAITING_FOR_AUX;
+				d->in_use |= 2;
 				break;
 			case 0xd4:	/*  write to auxiliary port  */
 				debug("[ pckbc: send data to mouse ]\n");
 				d->state = STATE_WAITING_FOR_AUX_OUT;
+				d->in_use |= 2;
 				break;
 			default:
 				fatal("[ pckbc: unknown CONTROL 0x%x ]\n",

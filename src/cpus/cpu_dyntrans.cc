@@ -33,6 +33,7 @@
  *  this file.
  */
 
+void ppc_instr_dump_registers(struct cpu *cpu, struct ppc_instr_call *ic);
 
 #ifndef STATIC_STUFF
 #define	STATIC_STUFF
@@ -352,25 +353,28 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			n_instrs ++;
 		}
 	} else if (cpu->machine->instruction_trace || cpu->machine->register_dump) {
-#ifndef J
-#define J if ((single_step & 0xff) == ENTER_SINGLE_STEPPING) { break; } else { instr_trace(ic); }
-#endif
-
-		/*  Gather statistics while executing multiple instructions:  */
-		n_instrs = 0;
-		while (n_instrs + 24 < next_limit) {
-
-			J; I; J; I; J; I; J; I; J; I; J; I;
-			J; I; J; I; J; I; J; I; J; I; J; I;
-			J; I; J; I; J; I; J; I; J; I; J; I;
-			J; I; J; I; J; I; J; I; J; I; J; I;
-
-			n_instrs += 24;
-		}
-		while (n_instrs < next_limit) {
-      J; I;
-      n_instrs ++;
+#ifdef DYNTRANS_PPC
+    auto this_pc = cpu->pc;
+    auto old_ptr = ic;
+    auto old_setting = dump_registers.find(this_pc);
+    bool remove = false;
+    if (old_setting == dump_registers.end()) {
+      remove = true;
+      dump_registers.insert(std::pair(this_pc, std::make_unique<dump_register_state_t>((void *)old_ptr->f, ic->arg[0])));
+      old_setting = dump_registers.find(this_pc);
+      old_ptr->arg[0] = (ssize_t)old_setting->second.get();
+      old_ptr->f = ppc_instr_dump_registers;
     }
+#endif
+    I;
+#ifdef DYNTRANS_PPC
+    if (remove) {
+      old_ptr->f = (void(*)(struct cpu *, struct ppc_instr_call *))old_setting->second->f;
+      old_ptr->arg[0] = old_setting->second->arg0;
+      dump_registers.erase(this_pc);
+    }
+#endif
+    n_instrs = 1;
 	} else {
 		/*
 		 *  Execute multiple instructions:

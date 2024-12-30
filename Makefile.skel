@@ -4,7 +4,7 @@
 
 SOFTFLOATDIR=src/thirdparty/softfloat/build/Linux-x86_64-GCC
 BIN=gxemul
-LIBS=$(XLIB) $(OTHERLIBS) -lboost_thread -lboost_system $(SOFTFLOATDIR)/softfloat.a
+LIBS=$(XLIB) $(OTHERLIBS) -lboost_thread -lboost_system $(SOFTFLOATDIR)/softfloat.a -lstdc++
 INCLUDE += $(SOFTFLOATDIR)/source/include
 
 all: build

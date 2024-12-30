@@ -712,7 +712,7 @@ DEVICE_ACCESS(vga_graphics)
 		break;
 	default:fatal("dev_vga: Unimplemented graphics mode %i\n",
 		    d->graphics_mode);
-		cpu->running = 0;
+		/*cpu->running = 0;*/
 	}
 
 	if (modified) {

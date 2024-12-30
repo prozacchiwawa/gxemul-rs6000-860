@@ -81,6 +81,7 @@ struct pic8259_data {
   // was masked before coming from that PIC.  Raise it if it becomes unblocked.
   struct pic8259_data *chained_to;
   int chained_int_line;
+  int *last_int;
 };
 
 void dev_8259_assert(struct pic8259_data *d, int line);

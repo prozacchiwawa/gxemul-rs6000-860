@@ -114,10 +114,30 @@ static void gather_statistics(struct cpu *cpu)
 #ifdef DYNTRANS_PPC
 /*  The normal instruction execution core:  */
 #define I	{ \
-  cpu->cd.ppc.icount++;                                                 \
-  ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                                \
-  ic->f(cpu, ic);                                                       \
-}
+    cpu->cd.ppc.icount++;                                               \
+    ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                              \
+    if (ppc_recording) {                                                \
+      auto ptr = &ppc_recording[ppc_recording_offset];                  \
+      memcpy(&ptr->iword, ic->instr, sizeof(uint32_t));                 \
+      memcpy(ptr->gpr, cpu->cd.ppc.gpr, sizeof(cpu->cd.ppc.gpr));       \
+      memcpy(ptr->sr, cpu->cd.ppc.sr, sizeof(cpu->cd.ppc.sr));          \
+      ptr->pc = ic->pc;                                                 \
+      ptr->index = cpu->ninstrs;                                        \
+      ptr->msr = cpu->cd.ppc.msr;                                       \
+      ptr->cr = cpu->cd.ppc.cr;                                         \
+      ptr->lr = cpu->cd.ppc.spr[SPR_LR];                                \
+      ptr->ctr = cpu->cd.ppc.spr[SPR_CTR];                              \
+      ptr->dec = cpu->cd.ppc.spr[SPR_DEC];                              \
+      ptr->dar = cpu->cd.ppc.spr[SPR_DAR];                              \
+      ptr->sdr1 = cpu->cd.ppc.spr[SPR_SDR1];                            \
+      ptr->dsisr = cpu->cd.ppc.spr[SPR_DSISR];                          \
+      ptr->srr[0] = cpu->cd.ppc.spr[SPR_SRR0];                          \
+      ptr->srr[1] = cpu->cd.ppc.spr[SPR_SRR1];                          \
+      memcpy(ptr->sprg, &cpu->cd.ppc.spr[SPR_SPRG0], sizeof(uint64_t) * 4); \
+      ppc_recording_offset = (ppc_recording_offset + 1) & (PPC_RECORDING_LENGTH - 1); \
+    }                                                                   \
+    ic->f(cpu, ic);                                                     \
+  }
 #else
 /*  The normal instruction execution core:  */
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic);
@@ -186,7 +206,6 @@ static void gather_statistics(struct cpu *cpu)
  */
 int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 {
-	MODE_uint_t cached_pc = 0;
 	int low_pc = 0;
 	uint64_t n_instrs = 0;
 
@@ -259,8 +278,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	}
 #endif
 
-	cached_pc = cpu->pc;
-
 	cpu->n_translated_instrs = 0;
 
 	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
@@ -287,73 +304,13 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   }
 #endif
 
-  auto instr_trace = [&cpu, &cached_pc](struct DYNTRANS_IC *ic) {
-    /*  TODO/Note: This must be large enough to hold
-        any instruction for any ISA:  */
-    auto old_pc = cpu->pc;
-    cpu->pc = ic->pc;
-#ifdef DYNTRANS_DELAYSLOT
-    int len =
-#endif
-      cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
-    cpu->pc = old_pc;
-#ifdef DYNTRANS_DELAYSLOT
-    /*  Show the instruction in the delay slot,
-        if any:  */
-    if (cpu->instruction_has_delayslot == NULL)
-      fatal("WARNING: ihd func not yet"
-            " implemented?\n");
-    else if (cpu->instruction_has_delayslot(cpu, ic->instr)) {
-      int saved_delayslot = cpu->delay_slot;
-      cpu->memory_rw(cpu, cpu->mem, ic->pc
-                     + len, &ic->instr[0],
-                     sizeof(ic->instr), MEM_READ,
-                     CACHE_INSTRUCTION | NO_EXCEPTIONS);
-      cpu->delay_slot = DELAYED;
-      cpu->pc += len;
-      cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
-      cpu->delay_slot = saved_delayslot;
-      cpu->pc -= len;
-    }
-#endif
-  };
-
-  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
-	if (single_step & 0xff) {
-		/*
-		 *  Single-step:
-		 */
-		if (cpu->machine->register_dump) {
-			debug("\n");
-			cpu_register_dump(cpu->machine, cpu, 1, 0x1);
-		}
-    instr_trace(ic);
-
-		if (cpu->machine->statistics.enabled) {
-			S;
-		}
-
-		/*  Execute just one instruction:  */
-    I;
-
-		n_instrs = 1;
-	} else if (cpu->machine->statistics.enabled) {
-		/*  Gather statistics while executing multiple instructions:  */
-		n_instrs = 0;
-		while (n_instrs + 24 < next_limit) {
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-
-			n_instrs += 24;
-		}
-		while (n_instrs < next_limit) {
-			S; I;
-			n_instrs ++;
-		}
-	} else if (cpu->machine->instruction_trace || cpu->machine->register_dump) {
+  auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
 #ifdef DYNTRANS_PPC
+    if (ic->f == ppc_instr_dump_registers) {
+      I;
+      return;
+    }
+
     auto this_pc = cpu->pc;
     auto old_ptr = ic;
     auto old_setting = dump_registers.find(this_pc);
@@ -374,6 +331,37 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
       dump_registers.erase(this_pc);
     }
 #endif
+  };
+
+  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
+	if (single_step & 0xff) {
+		/*
+		 *  Single-step:
+		 */
+    instr_trace(ic);
+
+		if (cpu->machine->statistics.enabled) {
+			S;
+		}
+
+		n_instrs = 1;
+	} else if (cpu->machine->statistics.enabled) {
+		/*  Gather statistics while executing multiple instructions:  */
+		n_instrs = 0;
+		while (n_instrs + 24 < next_limit) {
+			S; I; S; I; S; I; S; I; S; I; S; I;
+			S; I; S; I; S; I; S; I; S; I; S; I;
+			S; I; S; I; S; I; S; I; S; I; S; I;
+			S; I; S; I; S; I; S; I; S; I; S; I;
+
+			n_instrs += 24;
+		}
+		while (n_instrs < next_limit) {
+			S; I;
+			n_instrs ++;
+		}
+	} else if (cpu->machine->instruction_trace) {
+    instr_trace(ic);
     n_instrs = 1;
 	} else {
 		/*
@@ -1950,19 +1938,8 @@ bad:	/*
 	if (cpu->translation_readahead)
 		return;
 
+	fprintf(stderr, "to be translated failed iword = %08x\n", iword);
 	quiet_mode = 0;
-	fatal("to_be_translated(): TODO: unimplemented instruction");
-
-	if (cpu->machine->instruction_trace) {
-		if (cpu->is_32bit)
-			fatal(" at 0x%" PRIx32"\n", (uint32_t)cpu->pc);
-		else
-			fatal(" at 0x%" PRIx64"\n", (uint64_t)cpu->pc);
-	} else {
-		fatal(":\n");
-		DISASSEMBLE(cpu, ib, 1, 0);
-	}
-
 	cpu->running = 0;
 
 	/*  Note: Single-stepping can jump here.  */

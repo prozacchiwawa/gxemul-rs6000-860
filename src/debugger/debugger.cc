@@ -65,6 +65,10 @@ static std::deque<std::string> script_queue;
 static std::map<uint64_t, std::vector<std::string>> break_commands;
 std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
 
+int ppc_recording_fd = -1;
+int ppc_recording_offset = 0;
+struct ppc_record_buf *ppc_recording = nullptr;
+
 /*
  *  Global debugger variables:
  *

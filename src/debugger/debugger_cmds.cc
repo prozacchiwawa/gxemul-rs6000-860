@@ -28,6 +28,9 @@
  *  Debugger commands. Included from debugger.c.
  */
 #include "crc.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <map>
 
 /*
@@ -883,6 +886,42 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
 	int cpuid = debugger_cur_cpu, coprocnr = -1;
 	int gprs, coprocs;
 	char *p;
+  auto file_length = PPC_RECORDING_LENGTH * sizeof(ppc_record_buf);
+
+  if (!strcmp(cmd_line, "+")) {
+    m->register_dump = true;
+    return;
+  } else if (!strcmp(cmd_line, "-")) {
+    m->register_dump = false;
+    if (ppc_recording) {
+      munmap(ppc_recording, file_length);
+      close(ppc_recording_fd);
+      ppc_recording = nullptr;
+      ppc_recording_fd = -1;
+    }
+    return;
+  } else if (!strcmp(cmd_line, "record")) {
+    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR, 0644);
+    if (ppc_recording_fd == -1) {
+      fprintf(stderr, "failed to open recording file\n");
+      return;
+    }
+    int res = ftruncate(ppc_recording_fd, file_length);
+    if (res == -1) {
+      fprintf(stderr, "failed to set recording size\n");
+      return;
+    }
+    ppc_recording = (struct ppc_record_buf *)mmap(nullptr, file_length, PROT_READ | PROT_WRITE, MAP_SHARED, ppc_recording_fd, 0);
+    if (ppc_recording == MAP_FAILED) {
+      ppc_recording = nullptr;
+      fprintf(stderr, "failed to map recording space\n");
+      close(ppc_recording_fd);
+      ppc_recording_fd = -1;
+      return;
+    }
+
+    ppc_recording_offset = 0;
+  }
 
 	/*  [cpuid][,c]  */
 	if (cmd_line[0] != '\0') {
@@ -1508,9 +1547,9 @@ static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
 }
 
 static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
-  bool exclude = *cmd_line == '!';
-  if (*cmd_line == '+') {
-    exclude = false;
+  bool exclude = false;
+  if (*cmd_line == '!') {
+    exclude = true;
     cmd_line++;
   }
 
@@ -1523,7 +1562,7 @@ static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
   }
 
   if (*space && *space != ' ') {
-    fprintf(stderr, "malformed rtrace %s\n", cmd_line);
+    fprintf(stderr, "malformed trace %s\n", cmd_line);
     return;
   }
 
@@ -1672,7 +1711,7 @@ static struct cmd cmds[] = {
 
   { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
 
-  { "rtrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
+  { "etrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
 
   { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
 

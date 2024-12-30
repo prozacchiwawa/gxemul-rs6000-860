@@ -66,6 +66,8 @@ struct dump_register_state_t {
 };
 
 extern std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
+extern int ppc_recording_offset;
+extern struct ppc_record_buf *ppc_recording;
 
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0

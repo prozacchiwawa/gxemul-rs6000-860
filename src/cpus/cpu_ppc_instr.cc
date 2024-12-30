@@ -801,7 +801,7 @@ X(dcbz)
 		int to_clear = cacheline_size < sizeof(cacheline)?
 		    cacheline_size : sizeof(cacheline);
 #ifdef MODE32
-		unsigned char *page = cpu->cd.ppc.host_store[addr >> 12];
+		unsigned char *page = nullptr; // cpu->cd.ppc.host_store[addr >> 12];
 		if (page != NULL) {
 			memset(page + (addr & 0xfff), 0, to_clear);
 		} else
@@ -2450,9 +2450,32 @@ X(stfs)
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [2 + 4](cpu, ic);
+    [2 + 4](cpu, ic);
+
+	ic->arg[0] = (size_t)old_arg0;
+}
+X(stfs_update)
+{
+	uint64_t *old_arg0 = (uint64_t *) ic->arg[0];
+	struct ieee_float_value val;
+	uint64_t tmp_val;
+
+	CHECK_FOR_FPU_EXCEPTION;
+
+	ieee_interpret_float_value(*old_arg0, &val, IEEE_FMT_D);
+	tmp_val = ieee_store_float_value(val.f, IEEE_FMT_S, val.nan);
+
+	ic->arg[0] = (size_t)&tmp_val;
+
+	/*  Perform a 32-bit store:  */
+#ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [2 + 4 + 16 + 32](cpu, ic);
 
 	ic->arg[0] = (size_t)old_arg0;
 }
@@ -2487,9 +2510,21 @@ X(stfd)
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [3 + 4](cpu, ic);
+    [3 + 4](cpu, ic);
+}
+X(stfd_update)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+
+	/*  Perform a 64-bit store:  */
+#ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [3 + 4 + 16 + 32](cpu, ic);
 }
 X(stfdx)
 {
@@ -2767,7 +2802,9 @@ X(dump_registers) {
   cpu->pc = ic->pc;
   cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
   cpu->pc = old_pc;
-  ppc_cpu_register_dump(cpu, true, false);
+  if (cpu->machine->register_dump) {
+    ppc_cpu_register_dump(cpu, true, false);
+  }
   ic->arg[0] = (ssize_t)additions;
 }
 
@@ -3032,6 +3069,8 @@ X(to_be_translated)
 	case PPC_HI6_STD:
 	case PPC_HI6_STFD:
 	case PPC_HI6_STFS:
+  case PPC_HI6_STFDU:
+  case PPC_HI6_STFSU:
 		rs = (iword >> 21) & 31;
 		ra = (iword >> 16) & 31;
 		imm = (int16_t)iword;
@@ -3056,6 +3095,8 @@ X(to_be_translated)
 		case PPC_HI6_STD:  size=3; break;
 		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
+    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
+		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
 		}
 		if (ic->f == NULL) {
 			ic->f =
@@ -3248,7 +3289,10 @@ X(to_be_translated)
 			ic->arg[0] = iword;
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_HI6_19: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -3256,7 +3300,7 @@ X(to_be_translated)
 	case PPC_HI6_RLWINM:
 		ra = (iword >> 16) & 31;
 		mb = (iword >> 6) & 31;
-		me = (iword >> 1) & 31;   
+		me = (iword >> 1) & 31;
 		rc = iword & 1;
 		mask = 0;
 		for (;;) {
@@ -3326,7 +3370,10 @@ X(to_be_translated)
 			}
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_HI6_30: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -3913,7 +3960,10 @@ X(to_be_translated)
 			ic->f = load? instr(lvx) : instr(stvx);
 			break;
 
-		default:goto bad;
+		default:{
+      fprintf(stderr, "PPC_31: unknown xo %d\n", xo);
+      goto bad;
+    }
 		}
 		break;
 
@@ -3955,7 +4005,10 @@ X(to_be_translated)
 			break;
 		default:/*  Use all 10 bits of xo:  */
 			switch (xo) {
-			default:goto bad;
+			default:{
+        fprintf(stderr, "PPC_59: unknown xo %d\n", xo);
+        goto bad;
+      }
 			}
 		}
 		break;
@@ -4058,13 +4111,19 @@ X(to_be_translated)
 						ic->arg[1] |= 0xf;
 				}
 				break;
-			default:goto bad;
-			}
+			default:{
+        fprintf(stderr, "PPC_63: unknown xo %d\n", xo);
+        goto bad;
+      }
+      }
 		}
 		break;
 
-	default:goto bad;
-	}
+  default:{
+    fprintf(stderr, "unknown ppc hi6 %d\n", main_opcode);
+    goto bad;
+  }
+  }
 
   // If we should dump for this address, change the ic.
   found = dump_registers.find(ic->pc);

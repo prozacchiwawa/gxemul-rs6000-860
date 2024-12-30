@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 1
+#define COUNT_DIV 32
 
 /*
  *  ppc_cpu_new():
@@ -368,7 +368,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
   if (cpu->cd.ppc.irq_asserted) {
-		fprintf(stderr, "[ ppc: dispatch interrupt %d ]\n", (int)cpu->machine->isa_pic_data.last_int);
+		fprintf(stderr, "[ ppc: dispatch interrupt %04x ]\n", (int)cpu->machine->isa_pic_data.last_int);
 		ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
 	}
 }
@@ -648,6 +648,7 @@ void ppc_cpu_tlbdump(struct machine *m, int x, int rawflag)
 void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
+  fprintf(stderr, "ppc irq raised\n");
 	cpu->cd.ppc.irq_asserted = 1;
 }
 
@@ -658,6 +659,7 @@ void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
+  fprintf(stderr, "ppc irq lowered\n");
 	cpu->cd.ppc.irq_asserted = 0;
 }
 
@@ -2308,12 +2310,13 @@ void ppc_update_for_icount(struct cpu *cpu) {
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
 
-  if ((cpu->cd.ppc.msr & PPC_MSR_EE) &&
-      cpu->cd.ppc.dec_intr_pending &&
-      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-    cpu->cd.ppc.dec_intr_pending = 0;
-    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-  }
+  if (cpu->cd.ppc.msr & PPC_MSR_EE) {
+    if (cpu->cd.ppc.dec_intr_pending &&
+        !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      cpu->cd.ppc.dec_intr_pending = 0;
+      ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+    }
+	}
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {

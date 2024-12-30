@@ -174,7 +174,7 @@ void alpha_cpu_list_available_types(void)
  */
 void alpha_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 { 
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 

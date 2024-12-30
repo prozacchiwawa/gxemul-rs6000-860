@@ -436,7 +436,7 @@ static void debugger_cmd_lookup(struct machine *m, char *cmd_line)
 {
 	uint64_t addr;
 	int res;
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 
 	if (cmd_line[0] == '\0') {

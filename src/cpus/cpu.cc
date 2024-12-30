@@ -220,7 +220,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 {
 	int show_symbolic_function_name = 1;
 	int i, n_args = -1;
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 
 	/*  Special hack for M88K userspace:  */
@@ -405,7 +405,7 @@ void cpu_run_deinit(struct machine *machine)
 void cpu_show_cycles(struct machine *machine, int forced)
 {
 	uint64_t offset, pc;
-	char *symbol;
+	const char *symbol;
 	int64_t mseconds, ninstrs, is, avg;
 	struct timeval tv;
 	struct cpu *cpu = machine->cpus[machine->bootstrap_cpu];

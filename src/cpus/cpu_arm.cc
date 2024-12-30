@@ -334,7 +334,7 @@ void arm_cpu_list_available_types(void)
  */
 void arm_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int mode = cpu->cd.arm.cpsr & ARM_FLAG_MODE;
 	int i, x = cpu->cpu_id;

@@ -35,6 +35,7 @@
 #include "bus_isa.h"
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
@@ -44,24 +45,43 @@ struct prep_data {
 	uint32_t		int_status;
 };
 
-
 DEVICE_ACCESS(prep)
 {
 	/*  struct prep_data *d = extra;  */
-	uint64_t idata = 0, odata = 0;
+	uint64_t idata = 0, odata = 0xff;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-
-	if (writeflag == MEM_READ) {
-		odata = cpu->machine->isa_pic_data.last_int;
-    fprintf(stderr, "[ int ack: %d ]\n", odata);
-	} else {
 		fatal("[ prep: write to interrupt register? ]\n");
-	}
+  } else if (writeflag == MEM_READ) {
+    fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
+    if (cpu->machine->isa_pic_data.last_int & 0x10000) {
+      cpu->machine->isa_pic_data.last_int &= 0xffff;
+      if (cpu->machine->isa_pic_data.last_int & 4) {
+        for (int i = 8; i < 16; i++) {
+          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+            odata = i;
+            break;
+          }
+        }
+      } else {
+        for (int i = 0; i < 8; i++) {
+          if (i == 2) {
+            continue;
+          }
 
-	if (writeflag == MEM_READ)
-		memory_writemax64(cpu, data, len, odata);
+          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+            odata = i;
+            break;
+          }
+        }
+      }
+    }
+
+    cpu->cd.ppc.irq_asserted = false;
+    fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    memory_writemax64(cpu, data, len, odata);
+	}
 
 	return 1;
 }

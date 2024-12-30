@@ -217,10 +217,21 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
+  d->sequencer_reg[0x61] = 0x63;
+  d->sequencer_reg[0x66] = 0;
+  d->sequencer_reg[0x69] = 0x57;
+  d->sequencer_reg[0x6e] = 0x22;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
 	d->n_is1_reads = 0;
+
+  d->crtc_reg[0x13] = 0x50;
+  d->crtc_reg[0x51] = 0;
+  d->crtc_reg[0x30] = 0xe0;
+  d->crtc_reg[0x2d] = 0x88;
+  d->crtc_reg[0x2e] = 0x12;
+  d->crtc_reg[0x2f] = 1;
 }
 
 
@@ -371,11 +382,14 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 	int x, y, ix, iy, c, rx = d->pixel_repx, ry = d->pixel_repy;
 	unsigned char pixel[3];
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	for (y=y1; y<=y2; y++)
 		for (x=x1; x<=x2; x++) {
 			/*  addr is where to read from VGA memory, addr2 is
 			    where to write on the 24-bit framebuffer device  */
-			int addr = (y * d->max_x + x) * d->bits_per_pixel;
+			int addr = (y * logical_width + x) * d->bits_per_pixel;
 			switch (d->bits_per_pixel) {
 			case 8:	addr >>= 3;
 				c = d->gfx_mem[addr];
@@ -542,6 +556,9 @@ DEVICE_TICK(vga)
 	struct vga_data *d = (struct vga_data *) extra;
 	int64_t low = -1, high;
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	vga_update_cursor(cpu->machine, d);
 
 	/*  TODO: text vs graphics tick?  */
@@ -558,8 +575,8 @@ DEVICE_TICK(vga)
 		high -= base;
 		d->update_x1 = 0;
 		d->update_x2 = d->max_x - 1;
-		new_u_y1 = (low/2) / d->max_x;
-		new_u_y2 = ((high/2) / d->max_x) + 1;
+		new_u_y1 = (low/2) / logical_width;
+		new_u_y2 = ((high/2) / logical_width) + 1;
 		if (new_u_y1 < d->update_y1)
 			d->update_y1 = new_u_y1;
 		if (new_u_y2 > d->update_y2)
@@ -628,6 +645,9 @@ DEVICE_ACCESS(vga_graphics)
 
 	L(fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len));
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	if (relative_addr + len >= d->gfx_mem_size)
 		return 0;
 
@@ -636,10 +656,10 @@ DEVICE_ACCESS(vga_graphics)
 
 	switch (d->graphics_mode) {
 	case GRAPHICS_MODE_8BIT:
-		y = relative_addr / d->max_x;
-		x = relative_addr % d->max_x;
-		y2 = (relative_addr+len-1) / d->max_x;
-		x2 = (relative_addr+len-1) % d->max_x;
+		y = relative_addr / logical_width;
+		x = relative_addr % logical_width;
+		y2 = (relative_addr+len-1) / logical_width;
+		x2 = (relative_addr+len-1) % logical_width;
 
 		if (writeflag == MEM_WRITE) {
 			memcpy(d->gfx_mem + relative_addr, data, len);
@@ -692,7 +712,7 @@ DEVICE_ACCESS(vga_graphics)
 		break;
 	default:fatal("dev_vga: Unimplemented graphics mode %i\n",
 		    d->graphics_mode);
-		cpu->running = 0;
+		/*cpu->running = 0;*/
 	}
 
 	if (modified) {
@@ -724,16 +744,19 @@ DEVICE_ACCESS(vga)
 	int x, y, x2, y2, r, base;
 	size_t i;
 
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len);
 
 	base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
 	    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 	r = relative_addr - base;
-	y = r / (d->max_x * 2);
-	x = (r/2) % d->max_x;
-	y2 = (r+len-1) / (d->max_x * 2);
-	x2 = ((r+len-1)/2) % d->max_x;
+	y = r / (logical_width * 2);
+	x = (r/2) % logical_width;
+	y2 = (r+len-1) / (logical_width * 2);
+	x2 = ((r+len-1)/2) % logical_width;
 
 	if (relative_addr + len - 1 < d->charcells_size) {
 		if (writeflag == MEM_WRITE) {
@@ -950,7 +973,11 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
   bool draws_up;
 
   if (writeflag != MEM_WRITE) {
-    memory_writemax64(cpu, data, len, 0);
+    uint16_t outval = 1 << 10; // tell them all entries are clear?
+    if (len == 1) {
+      outval >>= relative_addr * 16;
+    }
+    memory_writemax64(cpu, data, len, outval);
   } else {
 		written = get_le_16(memory_readmax64(cpu, data, len));
     L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
@@ -1188,6 +1215,8 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
 {
 	int i, grayscale;
 
+  fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x ]\n",
+		    regnr, idata);
 	switch (regnr) {
 	case VGA_CRTC_CURSOR_SCANLINE_START:		/*  0x0a  */
 	case VGA_CRTC_CURSOR_SCANLINE_END:		/*  0x0b  */
@@ -1320,8 +1349,8 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
 		reset_palette(d, grayscale);
 		register_reset(d);
 		break;
-	default:fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x ]\n",
-		    regnr, idata);
+	default:
+    break;
 	}
 }
 
@@ -1458,10 +1487,9 @@ DEVICE_ACCESS(vga_ctrl)
 				odata = d->sequencer_reg[
 				    d->sequencer_reg_select];
 			else {
-				d->sequencer_reg[d->
-				    sequencer_reg_select] = idata;
-				vga_sequencer_reg_write(cpu->machine, d,
-				    d->sequencer_reg_select, idata);
+        d->sequencer_reg[d->sequencer_reg_select] = idata;
+        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x ]\n", d->sequencer_reg_select, (unsigned int)idata);
+        vga_sequencer_reg_write(cpu->machine, d, d->sequencer_reg_select, idata);
 			}
 			break;
 
@@ -1555,10 +1583,14 @@ DEVICE_ACCESS(vga_ctrl)
 				d->crtc_reg_select = idata;
 			break;
 		case VGA_CRTC_DATA:			/*  0x15  */
-			if (writeflag == MEM_READ)
+			if (writeflag == MEM_READ) {
 				odata = d->crtc_reg[d->crtc_reg_select];
-			else {
-				d->crtc_reg[d->crtc_reg_select] = idata;
+        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x ]\n",
+              d->crtc_reg_select, (unsigned int)odata);
+      } else {
+        if (d->crtc_reg_select != 0x30) {
+          d->crtc_reg[d->crtc_reg_select] = idata;
+        }
 				vga_crtc_reg_write(cpu->machine, d,
 				    d->crtc_reg_select, idata);
 			}

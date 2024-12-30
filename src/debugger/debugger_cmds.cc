@@ -28,6 +28,10 @@
  *  Debugger commands. Included from debugger.c.
  */
 #include "crc.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <map>
 
 /*
  *  debugger_cmd_allsettings():
@@ -882,6 +886,42 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
 	int cpuid = debugger_cur_cpu, coprocnr = -1;
 	int gprs, coprocs;
 	char *p;
+  auto file_length = PPC_RECORDING_LENGTH * sizeof(ppc_record_buf);
+
+  if (!strcmp(cmd_line, "+")) {
+    m->register_dump = true;
+    return;
+  } else if (!strcmp(cmd_line, "-")) {
+    m->register_dump = false;
+    if (ppc_recording) {
+      munmap(ppc_recording, file_length);
+      close(ppc_recording_fd);
+      ppc_recording = nullptr;
+      ppc_recording_fd = -1;
+    }
+    return;
+  } else if (!strcmp(cmd_line, "record")) {
+    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR, 0644);
+    if (ppc_recording_fd == -1) {
+      fprintf(stderr, "failed to open recording file\n");
+      return;
+    }
+    int res = ftruncate(ppc_recording_fd, file_length);
+    if (res == -1) {
+      fprintf(stderr, "failed to set recording size\n");
+      return;
+    }
+    ppc_recording = (struct ppc_record_buf *)mmap(nullptr, file_length, PROT_READ | PROT_WRITE, MAP_SHARED, ppc_recording_fd, 0);
+    if (ppc_recording == MAP_FAILED) {
+      ppc_recording = nullptr;
+      fprintf(stderr, "failed to map recording space\n");
+      close(ppc_recording_fd);
+      ppc_recording_fd = -1;
+      return;
+    }
+
+    ppc_recording_offset = 0;
+  }
 
 	/*  [cpuid][,c]  */
 	if (cmd_line[0] != '\0') {
@@ -1427,7 +1467,7 @@ static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
 
 static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   char *endptr;
-  unsigned long long when = strtoull(cmd_line, &endptr, 16);
+  uint64_t when = strtoull(cmd_line, &endptr, 16);
 
   fprintf(stderr, "until %" PRIx64 "\n", (uint64_t)when);
 
@@ -1438,7 +1478,7 @@ static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   if (when < 0x100) {
     debugger_cmd_step(m, "");
   } else {
-    single_step = when & ~0x100;
+    single_step = (when | 0xffull) - 255ull;
   }
 }
 
@@ -1473,6 +1513,90 @@ static void debugger_cmd_script(struct machine *m, char *cmd_line) {
     }
     script_queue.push_back(line);
   }
+}
+
+static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
+  std::string line;
+  std::ifstream in;
+  in.open(cmd_line);
+  if (!in) {
+    fprintf(stderr, "Couldn't read script file\n");
+    return;
+  }
+
+  std::map<uint64_t, std::string> symbol_map;
+  while (getline(in, line)) {
+    auto cspace = strchr(line.c_str(), ' ');
+    if (!cspace) {
+      continue;
+    }
+    while (*cspace == ' ') {
+      cspace++;
+    }
+    auto name = std::string(cspace);
+    uint64_t addr;
+    char *space;
+    addr = strtoull(line.c_str(), &space, 16);
+    if (*space != ' ') {
+      continue;
+    }
+    add_symbol_name(&m->symbol_context, addr, 0, name.c_str(), 't' | 0x100, -1);
+  }
+
+  symbol_recalc_sizes(&m->symbol_context);
+}
+
+static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
+  bool exclude = false;
+  if (*cmd_line == '!') {
+    exclude = true;
+    cmd_line++;
+  }
+
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  uint64_t end_addr = addr + 4;
+  if (*space == '-') {
+    cmd_line = space + 1;
+    end_addr = strtoull(cmd_line, &space, 16);
+  }
+
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed trace %s\n", cmd_line);
+    return;
+  }
+
+  for (auto i = addr; i < end_addr; i++) {
+    if (exclude) {
+      dump_registers.erase(i);
+    } else {
+      dump_registers.insert(std::pair(i, std::make_unique<dump_register_state_t>(dump_register_state_t(nullptr, 0))));
+    }
+  }
+}
+
+static void debugger_cmd_breakat(struct machine *m, char *cmd_line) {
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed breakat %s\n", cmd_line);
+    return;
+  }
+
+  if (!*space) {
+    break_commands.erase(addr);
+    return;
+  }
+
+  while (*space == ' ') space++;
+  cmd_line = space;
+
+  std::vector<std::string> cmds;
+  while (space = strtok(cmd_line, "|")) {
+    cmds.push_back(std::string(space));
+    cmd_line = nullptr;
+  }
+  break_commands.insert(std::pair(addr, cmds));
 }
 
 /****************************************************************************/
@@ -1584,6 +1708,12 @@ static struct cmd cmds[] = {
   { "kbd", "hex ...", 0, debugger_cmd_kbd, "Inject these bytes into the keyboard byte stream" },
 
   { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
+
+  { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
+
+  { "etrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
+
+  { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

@@ -331,7 +331,6 @@ typedef struct interrupt qemu_irq;
 
 #define QTAILQ_INSERT_TAIL(HEAD, ELT, _) \
     do { \
-        fprintf(stderr, "lsi: insert tail %p\n", ELT); \
         (ELT)->next = (HEAD)->next; \
         (ELT)->prev = (HEAD)->prev; \
         (ELT)->prev->next = (ELT); \
@@ -431,6 +430,7 @@ struct lsi53c895a_data {
     uint8_t sxfer;
     uint8_t socl;
     uint8_t sdid;
+    uint8_t gpreg;
     uint8_t ssid;
     uint8_t sfbr;
     uint8_t sbcl;
@@ -576,7 +576,7 @@ static void scsi_req_unref(struct SCSIRequest *req) {
 
 static SCSIDevice *scsi_device_find(struct cpu *cpu, struct lsi53c895a_data *d, SCSIBus *bus, uint8_t channel, uint8_t id, uint8_t lun) {
     if (diskimage_exist(cpu->machine, id, DISKIMAGE_SCSI)) {
-        fprintf(stderr, "lsi: found device %d: %p\n", id, &bus->devices[id]);
+        fprintf(stderr, "lsi: found device %d\n", id);
         return &bus->devices[id];
     } else {
         return nullptr;
@@ -645,6 +645,8 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     case 0x1b:
     case 0x1e:
     case 0x35: {
+        req->xfer.data_in_len = 0;
+        req->dev->sense_data_len = 0;
         return 1;
     }
 
@@ -656,10 +658,10 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     case 0x43:
     case 0x51:
     case 0x52: {
-        if (req->cmd.buf[0] == 0x12 && req->cmd.buf[1] & 0x20 && req->cmd.buf[2]) {
-            req->status = 2; // CHECK_CONDITION
-            return 1;
-        }
+      if (req->cmd.buf[0] == 0x12 && req->cmd.buf[1] & 0x20 && req->cmd.buf[2]) {
+        req->status = 2; // CHECK_CONDITION
+        return 1;
+      }
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
@@ -684,7 +686,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         QTAILQ_INSERT_TAIL(&req->bus->queue, req, next);
         req->result_buf = req->xfer.data_in;
         req->result_len = req->xfer.data_in_len;
-        fprintf(stderr, "result_buf: %p len: %d\n", req->result_buf, req->result_len);
+        fprintf(stderr, "result_buf len: %d\n", req->result_len);
         return req->xfer.data_in_len;
     }
 
@@ -719,6 +721,17 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
             );
         return -req->xfer.data_out_len;
     }
+
+    case 0xbd:
+      // error is fine
+      req->status = 2; // CHECK_CONDITION
+      req->dev->sense_data_len = 18;
+      memset(req->dev->sense_data, 0, 18);
+      req->dev->sense_data[0] = 0xf0; // VALID + 0x70h
+      req->dev->sense_data[2] = 5; // ILLEGAL_REQUEST;
+      req->dev->sense_data[7] = 12;
+      req->dev->sense_data[12] = 20; // INVALID COMMAND
+      return 1;
 
     default:
         fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
@@ -825,7 +838,7 @@ static void address_space_read
  dma_addr_t len
  )
 {
-    fprintf(stderr, "lsi: address_space_read(%08x, flags=%08x, buf=%p, len=%08x)\n", address, flags, buf, len);
+    fprintf(stderr, "lsi: address_space_read(%08x, flags=%08x, len=%08x)\n", address, flags, len);
     ABORT();
 }
 
@@ -837,7 +850,7 @@ static void address_space_write
  dma_addr_t len
  )
 {
-    fprintf(stderr, "lsi: address_space_write(%08x, flags=%08x, buf=%p, len=%08x)\n", address, flags, buf, len);
+    fprintf(stderr, "lsi: address_space_write(%08x, flags=%08x, len=%08x)\n", address, flags, len);
     ABORT();
 }
 
@@ -853,7 +866,7 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len);
 static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid);
 
 static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
-    size_t result_size;
+    size_t result_size = req->xfer.data_in_len;
 
     if (req->status != 0) {
         fprintf(stderr, "LSI: scsi_req_continue stop with error %d\n", req->status);
@@ -867,7 +880,6 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x1b:
     case 0x1e:
     case 0x35:
-    case 0x43:
     case 0x51:
     case 0x52: {
         lsi_transfer_data(cpu, req, result_size);
@@ -903,7 +915,8 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x12:
     case 0x1a:
     case 0x25:
-    case 0x28: {
+    case 0x28: 
+    case 0x43: {
         fprintf(stderr, "lsi: transferred %d (cmd %02x)\n", req->transferred, req->cmd.buf[0]);
         if (!req->transferred) {
             req->transferred++;
@@ -1277,7 +1290,7 @@ static void lsi_do_dma(struct cpu *cpu, LSIState *s, int out)
     dma_addr_t addr;
     SCSIDevice *dev;
 
-    fprintf(stderr, "lsi: current %p dma_len %08x (DNAD %08x DBC %08x)\n", s->current, s->current ? s->current->dma_len : 0, s->dnad, s->dbc);
+    fprintf(stderr, "lsi: current dma_len %08x (DNAD %08x DBC %08x)\n", s->current ? s->current->dma_len : 0, s->dnad, s->dbc);
     if (!s->current || !s->current->dma_len) {
         /* Wait until data is available.  */
         s->istat0 |= LSI_ISTAT0_DIP | LSI_ISTAT0_SIP;
@@ -1308,8 +1321,11 @@ static void lsi_do_dma(struct cpu *cpu, LSIState *s, int out)
      if (s->current->dma_buf == NULL) {
          s->current->dma_buf = scsi_req_get_buf(s->current->req);
          if (!s->current->dma_buf) {
+             static uint8_t fake_out_buffer[2048];
+             memset(fake_out_buffer, 0, sizeof(fake_out_buffer));
              fprintf(stderr, "lsi: no dma buffer provided for write (DNAD %08x count %d out %d)\n", s->dnad, count, out);
-             ABORT();
+             s->current->dma_buf = fake_out_buffer;
+
          }
     }
     /* ??? Set SFBR to first data byte.  */
@@ -1476,8 +1492,6 @@ static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid
 static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len)
 {
     LSIState *s = LSI53C895A(req->bus->qbus.parent);
-    int out;
-
     assert(req->hba_private);
     if (s->waiting == LSI_WAIT_RESELECT || req->hba_private != s->current ||
         (lsi_irq_on_rsl(s) && !(s->scntl1 & LSI_SCNTL1_CON))) {
@@ -1486,19 +1500,21 @@ static void lsi_transfer_data(struct cpu *cpu, SCSIRequest *req, uint32_t len)
         }
     }
 
-    out = (s->sstat1 & PHASE_MASK) == PHASE_DO;
+    int out = (s->sstat1 & PHASE_MASK) == PHASE_DO;
 
     /* host adapter (re)connected */
-    fprintf(stderr, "lsi: transfer data: DNAD %08x DBC %08x (len %d)\n", s->dnad, s->dbc, len);
+    fprintf(stderr, "lsi: transfer data (waiting %x): DNAD %08x DBC %08x (len %d)\n", s->waiting, s->dnad, s->dbc, len);
     trace_lsi_transfer_data(req->tag, len);
     s->current->dma_len = len;
     s->command_complete = 1;
     if (s->waiting) {
         if (s->waiting == LSI_WAIT_RESELECT || s->dbc == 0) {
+	    fprintf(stderr, "lsi: wait reselect %x s->dbc %x\n", s->waiting == LSI_WAIT_RESELECT, (int)s->dbc);
             lsi_resume_script(cpu, s);
         } else {
+            fprintf(stderr, "lsi: do dma (out %d)\n", out);
             lsi_do_dma(cpu, s, out);
-        }
+	}
     }
 }
 
@@ -1511,7 +1527,7 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
 
     id = (s->select_tag >> 8) & 0xf;
     s->ssid = id;
-    trace_lsi_do_command(cpu, s->dbc, id);
+    trace_lsi_do_command(s->dbc, id);
     if (s->dbc > 16)
         s->dbc = 16;
     pci_dma_read(cpu, PCI_DEVICE(s), s->dnad, buf, s->dbc);
@@ -1853,6 +1869,7 @@ again:
             break;
         }
         s->dbc = insn & 0xffffff;
+        fprintf(stderr, "lsi: set dbc to %08x\n", (unsigned int)s->dbc);
         s->rbc = s->dbc;
         /* ??? Set ESA.  */
         s->ia = s->dsp - 8;
@@ -1869,6 +1886,7 @@ again:
             pci_dma_read(cpu, pci_dev, s->dsa + offset, buf, 8);
             /* byte count is stored in bits 0:23 only */
             s->dbc = cpu_to_le32(cpu, buf[0]) & 0xffffff;
+            fprintf(stderr, "lsi: set dbc to %08x\n", (unsigned int)s->dbc);
             s->rbc = s->dbc;
             addr = cpu_to_le32(cpu, buf[1]);
 
@@ -2173,8 +2191,8 @@ again:
 
     case 2: /* Transfer Control.  */
         {
-            int cond;
-            int jmp;
+            bool cond;
+            bool jmp;
 
             if ((insn & 0x002e0000) == 0) {
                 trace_lsi_execute_script_tc_nop();
@@ -2185,25 +2203,27 @@ again:
                 lsi_stop_script(s);
                 break;
             }
-            cond = jmp = (insn & (1 << 19)) != 0;
-            if (cond == jmp && (insn & (1 << 21))) {
+            jmp = (insn & (1 << 19)) != 0;
+            cond = true;
+
+            if (insn & (1 << 21)) {
                 trace_lsi_execute_script_tc_compc(s->carry == jmp);
-                cond = s->carry != 0;
+                cond &= (s->carry != 0) == jmp;
             }
-            if (cond == jmp && (insn & (1 << 17))) {
+            if (insn & (1 << 17)) {
                 trace_lsi_execute_script_tc_compp(scsi_phase_name(s->sstat1),
                         jmp ? '=' : '!', scsi_phase_name(insn >> 24));
-                cond = (s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7);
+                cond &= ((s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7)) == jmp;
             }
-            if (cond == jmp && (insn & (1 << 18))) {
+            if (insn & (1 << 18)) {
                 uint8_t mask;
 
                 mask = (~insn >> 8) & 0xff;
                 trace_lsi_execute_script_tc_compd(
                         s->sfbr, mask, jmp ? '=' : '!', insn & mask);
-                cond = (s->sfbr & mask) == (insn & mask);
+                cond &= ((s->sfbr & mask) == (insn & mask)) == jmp;
             }
-            if (cond == jmp) {
+            if (cond) {
                 if (insn & (1 << 23)) {
                     uint32_t want_offset = sextract32(addr, 0, 24);
                     fprintf(stderr, "lsi: jump to relative address insn %08x addr %08x offset %0x\n", insn, addr, want_offset);
@@ -2329,7 +2349,7 @@ static uint8_t lsi_reg_readb(struct cpu *cpu, LSIState *s, int offset)
         ret = s->sdid;
         break;
     case 0x07: /* GPREG0 */
-        ret = 0x7f;
+        ret = s->gpreg;
         break;
     case 0x08: /* Revision ID */
         ret = 0x00;
@@ -2590,6 +2610,7 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
         s->sdid = val & 0xf;
         break;
     case 0x07: /* GPREG0 */
+        s->gpreg = val;
         break;
     case 0x08: /* SFBR */
         /* The CPU is not allowed to write to this register.  However the
@@ -3129,7 +3150,7 @@ DEVICE_ACCESS(lsi53c895a_io)
     uint64_t idata = memory_readmax64(cpu, data, len);
     lsi_mmio_write(cpu, d, relative_addr, idata, len);
   } else {
-    fprintf(stderr, "LSI read to %p (%d) from %08x\n", data, len, relative_addr);
+    fprintf(stderr, "LSI read (%d) from %08x\n", len, relative_addr);
     uint64_t odata = lsi_mmio_read(cpu, d, relative_addr, len);
     memory_writemax64(cpu, data, len, odata);
   }
@@ -3150,7 +3171,7 @@ DEVICE_ACCESS(lsi53c895a_mem)
       idata >>= 8;
     }
   } else {
-    fprintf(stderr, "LSI mem read to %p (%d) from %08x\n", data, len, relative_addr);
+    fprintf(stderr, "LSI mem read (%d) from %08x\n", len, relative_addr);
     uint64_t odata = 0;
     for (int i = 0; i < len; i++) {
       odata <<= 8;
@@ -3174,6 +3195,7 @@ DEVINIT(lsi53c895a)
     lsi_soft_reset(d);
 
     d->macntl = 15;
+    d->gpreg = 0x7f;
     d->config[PCI_LATENCY_TIMER] = 0xff;
     INTERRUPT_CONNECT(devinit->interrupt_path, d->ext_irq);
 
@@ -3186,7 +3208,7 @@ DEVINIT(lsi53c895a)
 
     memory_device_register(devinit->machine->memory, "lsi53c895a (MEM)",
                            devinit->addr + 0x10000, 0x2000,
-                           dev_lsi53c895a_mem_access, d, DM_DEFAULT, NULL);
+                           dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "lsi53c895a (ALT)",
                            VIRTUAL_ISA_PORTBASE | 0x80008000, DEV_LSI53C895A_LENGTH,

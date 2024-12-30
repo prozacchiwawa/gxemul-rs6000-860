@@ -383,13 +383,22 @@ KeynameToPCKeyboard pc_type_3[] = {
  */
 void pckbc_add_code(struct pckbc_data *d, int code, int port)
 {
-  fprintf(stderr, "[ pckbc: %s enqueue %02x ]\n", port ? "mouse" : "kbd", code);
+  fprintf(stderr, "[ pckbc: %s enqueue %02x (asserted %d) ]\n", port ? "mouse" : "kbd", (uint8_t)code, d->currently_asserted[port]);
 	/*  Add at the head, read at the tail:  */
 	d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
 	if (d->head[port] == d->tail[port])
 		fatal("[ pckbc: queue overrun, port %i! ]\n", port);
 
 	d->key_queue[port][d->head[port]] = code;
+  if (!d->currently_asserted[port]) {
+    fprintf(stderr, "[ pckbc: interrupt port %d ]\n", port);
+    if (port == 0) {
+      INTERRUPT_ASSERT(d->irq_keyboard);
+    } else {
+      INTERRUPT_ASSERT(d->irq_mouse);
+    }
+    d->currently_asserted[port] = true;
+  }
 }
 
 void send_pc_key(struct KeynameToPCKeyboard *table, int key, struct pckbc_data *d) {
@@ -423,6 +432,7 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 		fatal("[ pckbc: queue empty, port %i! ]\n", port);
 	else
 		d->tail[port] = (d->tail[port]+1) % MAX_8042_QUEUELEN;
+
 	return d->key_queue[port][d->tail[port]];
 }
 
@@ -888,12 +898,18 @@ static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
 DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
-	int port_nr, ch, ints_enabled;
+	int ch, ints_enabled;
   int mouse_x, mouse_y, mouse_but, fb_nr;
 
 	ints_enabled = d->rx_int_enable;
 
-  if (d->in_use && console_charavail(d->console_handle)) {
+  while (keyboard_debug_events.size()) {
+    auto event = keyboard_debug_events.front();
+    pckbc_add_code(d, event.code, 0);
+    keyboard_debug_events.pop_front();
+  }
+
+  if ((d->in_use & 1) && console_charavail(d->console_handle)) {
     ch = console_readchar(d->console_handle);
     if (d->translation_table == 1) {
       ascii_to_pc_scancodes_type1(ch, d);
@@ -905,7 +921,7 @@ DEVICE_TICK(pckbc)
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
-  if (d->mouse_ena &&
+  if (d->mouse_ena && (d->in_use & 2) &&
       ((d->mouse_last_x != mouse_x) ||
        (d->mouse_last_y != mouse_y) ||
        (d->mouse_last_but != mouse_but))
@@ -930,37 +946,25 @@ DEVICE_TICK(pckbc)
     d->mouse_last_but = mouse_but;
   }
 
-	if (d->cmdbyte & KC8_KDISABLE)
-		ints_enabled = 0;
-
-  while (keyboard_debug_events.size()) {
-    auto event = keyboard_debug_events.front();
-    pckbc_add_code(d, event.code, 0);
-    keyboard_debug_events.pop_front();
+  if (d->cmdbyte & KC8_KDISABLE) {
+    ints_enabled = 0;
   }
 
-	for (port_nr=0; port_nr<2; port_nr++) {
-		/*  Cause receive interrupt, if there's something in the
-		    receive buffer: (Otherwise deassert the interrupt.)  */
+  if (!ints_enabled) {
+    return;
+  }
 
-		if (d->head[port_nr] != d->tail[port_nr] && ints_enabled) {
-			debug("[ pckbc: interrupt port %i ]\n", port_nr);
-			if (port_nr == 0) {
-				INTERRUPT_ASSERT(d->irq_keyboard);
+  for (int port = 0; port < 2; port++) {
+    if ((d->head[port] != d->tail[port]) && !d->currently_asserted[port]) {
+      fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
+      if (port == 0) {
+        INTERRUPT_ASSERT(d->irq_keyboard);
       } else {
-				INTERRUPT_ASSERT(d->irq_mouse);
+        INTERRUPT_ASSERT(d->irq_mouse);
       }
-			d->currently_asserted[port_nr] = 1;
-		} else {
-			if (d->currently_asserted[port_nr]) {
-				if (port_nr == 0)
-					INTERRUPT_DEASSERT(d->irq_keyboard);
-				else
-					INTERRUPT_DEASSERT(d->irq_mouse);
-			}
-			d->currently_asserted[port_nr] = 0;
-		}
-	}
+      d->currently_asserted[port] = true;
+    }
+  }
 }
 
 
@@ -1297,6 +1301,7 @@ DEVICE_ACCESS(pckbc)
 					d->last_scancode |= 0x80;
 				}
 			}
+
 			/*  debug("[ pckbc: read from DATA: 0x%02x ]\n",
 			    (int)odata);  */
 		} else {
@@ -1324,20 +1329,21 @@ DEVICE_ACCESS(pckbc)
 		break;
 	case 1:		/*  control  */
 		if (writeflag==MEM_READ) {
-			dev_pckbc_tick(cpu, d);
-
 			odata = 0;
 
 			/*  "Data in buffer" bit  */
       if (d->head[1] != d->tail[1]) {
-        fprintf(stderr, "[ pckbc: output ring %d-%d ]\n", d->head[1], d->tail[1]);
+        fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
+        INTERRUPT_DEASSERT(d->irq_mouse);
+        d->currently_asserted[1] = false;
       } else if (d->head[0] != d->tail[0] ||
                  d->state == STATE_RDCMDBYTE ||
                  d->state == STATE_RDOUTPUT) {
 				odata |= KBS_DIB;
-      } else {
-        odata = 0;
+        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
+        INTERRUPT_DEASSERT(d->irq_keyboard);
+        d->currently_asserted[0] = false;
       }
 
 			if (d->state == STATE_RDCMDBYTE) {
@@ -1382,6 +1388,7 @@ DEVICE_ACCESS(pckbc)
         pckbc_add_code(d, 0x00, 0);
 				break;
 			case 0xaa:	/*  keyboard self-test  */
+        d->head[0] = d->tail[0] = d->head[1] = d->tail[1] = 0;
 				pckbc_add_code(d, 0x55, port_nr);
 				break;
 			case 0xab:	/*  keyboard interface self-test  */
@@ -1404,10 +1411,12 @@ DEVICE_ACCESS(pckbc)
 					    output buffer  */
 				debug("[ pckbc: send data to kbd ]\n");
 				d->state = STATE_WAITING_FOR_AUX;
+				d->in_use |= 2;
 				break;
 			case 0xd4:	/*  write to auxiliary port  */
 				debug("[ pckbc: send data to mouse ]\n");
 				d->state = STATE_WAITING_FOR_AUX_OUT;
+				d->in_use |= 2;
 				break;
 			default:
 				fatal("[ pckbc: unknown CONTROL 0x%x ]\n",
@@ -1506,8 +1515,6 @@ DEVICE_ACCESS(pckbc)
 	if (writeflag == MEM_READ) {
 		memory_writemax64(cpu, data, len, odata);
   }
-
-	dev_pckbc_tick(cpu, d);
 
 	return 1;
 }

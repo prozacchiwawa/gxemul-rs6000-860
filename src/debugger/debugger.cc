@@ -62,6 +62,12 @@ extern struct settings *global_settings;
 extern int quiet_mode;
 static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
 static std::deque<std::string> script_queue;
+static std::map<uint64_t, std::vector<std::string>> break_commands;
+std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
+
+int ppc_recording_fd = -1;
+int ppc_recording_offset = 0;
+struct ppc_record_buf *ppc_recording = nullptr;
 
 /*
  *  Global debugger variables:
@@ -79,7 +85,7 @@ int debugger_n_steps_left_before_interaction = 0;
 int old_instruction_trace = 0;
 int old_quiet_mode = 0;
 int old_show_trace_tree = 0;
-
+int trace_mapping = 0;
 
 /*
  *  Private (global) debugger variables:
@@ -204,6 +210,8 @@ char debugger_readchar(void)
 void debugger_activate(int x)
 {
 	ctrl_c = 1;
+
+  script_queue.clear();
 
 	if ((single_step & 0xff) != NOT_SINGLE_STEPPING) {
 		/*  Already in the debugger. Do nothing.  */
@@ -756,16 +764,6 @@ void debugger(void)
 	 *  become to complex to keep in sync.
 	 */
 	/*  TODO: In all machines  */
-#if 0
-	for (i=0; i<debugger_machine->ncpus; i++)
-		if (debugger_machine->cpus[i]->translation_cache != NULL) {
-			cpu_create_or_reset_tc(debugger_machine->cpus[i]);
-			debugger_machine->cpus[i]->
-			    invalidate_translation_caches(
-			    debugger_machine->cpus[i], 0, INVALIDATE_ALL);
-		}
-#endif
-
   exit_debugger = 0;
 
 	/*  Stop timers while interacting with the user:  */
@@ -779,11 +777,6 @@ void debugger(void)
     if (exit_debugger != -1) {
       timer_start();
 
-      for (i=0; i<debugger_machine->ncpus; i++) {
-        gettimeofday(&debugger_machine->cpus[i]->starttime, NULL);
-        debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
-      }
-
       exit_debugger = 1;
       fprintf(stderr, "resume from gdb (cont)\n");
     } else {
@@ -794,6 +787,14 @@ void debugger(void)
       fprintf(stderr, "resume from gdb (step)\n");
     }
     return;
+  }
+
+  auto bkpt_commands = break_commands.find(debugger_machine->cpus[0]->pc);
+  if (bkpt_commands != break_commands.end()) {
+    for (auto prefix_cmd = bkpt_commands->second.rbegin(); prefix_cmd != bkpt_commands->second.rend(); prefix_cmd++) {
+      fprintf(stderr, "enqueue command %s\n", prefix_cmd->c_str());
+      script_queue.push_front(*prefix_cmd);
+    }
   }
 
 	while (!exit_debugger) {

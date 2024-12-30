@@ -119,6 +119,8 @@ DEVICE_ACCESS(pccmos)
             odata |= d->update_in_progress_cycle & 0x80;
         } else if (d->select == 11) {
             odata = 0xff;
+        } else if (d->select == 12) {
+            
         } else if (d->select == 13) {
             odata = 0xff;
         } else if (d->select <= 0x0d) {

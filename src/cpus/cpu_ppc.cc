@@ -301,12 +301,17 @@ void ppc_cpu_dumpinfo(struct cpu *cpu)
 void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
                     ppc_instr_call *ic, int check_for_interrupts)
 {
-	uint64_t old = cpu->cd.ppc.msr;
-
 	if (valuep == NULL) {
 		fatal("reg_access_msr(): NULL\n");
 		return;
 	}
+
+  if (!writeflag) {
+    *valuep = cpu->cd.ppc.msr;
+    return;
+  }
+
+	uint64_t old = cpu->cd.ppc.msr;
 
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
@@ -346,10 +351,6 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
     ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
     ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
 	}
-
-  if (!writeflag) {
-    *valuep = cpu->cd.ppc.msr;
-  }
 
   if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
     if (cpu->cd.ppc.dec_intr_pending &&

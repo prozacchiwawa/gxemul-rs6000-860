@@ -31,6 +31,8 @@
 #define STWBRX_CACHE_SIZE 100000
 uint32_t **stwbrx_cache[1024];
 
+extern int trace_mapping;
+
 /*
  *  ppc_bat():
  *
@@ -252,8 +254,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	/*  Try the BATs first:  */
 	if (cpu->cd.ppc.bits == 32) {
 		res = ppc_bat(cpu, vaddr, return_paddr, flags, user);
-		if (res > 0)
+		if (res > 0) {
 			return res;
+    }
 		if (res == 0) {
 			fatal("[ TODO: BAT exception ]\n");
 			exit(1);
@@ -264,8 +267,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	if (cpu->cd.ppc.bits == 32) {
 		match = ppc_vtp32(cpu, vaddr, return_paddr, &res, msr,
 		    writeflag, instr);
-		if (match && res > 0)
-			return res;
+		if (match && res > 0) {
+      return res;
+    }
 	} else {
 		/*  htaborg = sdr1 & 0xfffffffffffc0000ULL;  */
 		fatal("TODO: ppc 64-bit translation\n");
@@ -298,11 +302,13 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	} else {
 		if (!instr) {
 			cpu->cd.ppc.spr[SPR_DAR] = vaddr;
-			cpu->cd.ppc.spr[SPR_DSISR] = match?
-			    DSISR_PROTECT : DSISR_NOTFOUND;
+			cpu->cd.ppc.spr[SPR_DSISR] = match ? DSISR_PROTECT : DSISR_NOTFOUND;
 			if (writeflag)
 				cpu->cd.ppc.spr[SPR_DSISR] |= DSISR_STORE;
-		}
+		} else {
+      // XX Set for failed translation, fix for bats and NX pages.
+      srr1_extra = match ? DSISR_PROTECT : DSISR_NOTFOUND;
+    }
 		ppc_exception(cpu, instr?
                   PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI, srr1_extra);
 	}
@@ -325,19 +331,6 @@ void stwbrx_remember(uint32_t addr) {
 }
 
 void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
-  const char *rw = write ? "write" : "read";
-
-  if (write && (cpu->cd.ppc.ll_addr == addr) && cpu->cd.ppc.ll_bit) {
-    fprintf(stderr, "Cancel reserve %08x due to other access\n", (unsigned int)addr);
-    cpu->cd.ppc.ll_bit = 0;
-  } else if ((write && (cpu->cd.ppc.ll_addr & ~7 == addr & ~7)) || addr == 0x4fc) {
-    fprintf(stderr, "Suspiciously close write to ll_addr %08x (%08x) %08x\n", (unsigned int)cpu->cd.ppc.ll_addr, cpu->pc, *((unsigned int *)data));
-  } else if (write && addr == 0x20fa2c || addr == 0x20fa98) {
-    fprintf(stderr, "%08x: %s sus location: %08x <- %08x\n", (unsigned int)cpu->pc, rw, (unsigned int)addr, *((unsigned int *)data));
-  }
-
-  int io_region_arc = addr >= 0xe0000000 && addr < 0xe0100000 && !(addr >= 0xe0000060 && addr <= 0xe000007f);
-
   if (write) {
     if (!cpu->cd.ppc.bytelane_swap_latch) {
       stwbrx_remember(addr);
@@ -348,7 +341,7 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
 void stwbrx_cache_spill(struct cpu *cpu) {
   uint8_t data[8];
   uint8_t swapped[8];
-  fprintf(stderr, "%08x CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
+  fprintf(stderr, "%08" PRIx64" CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
   for (uint32_t pl1 = 0; pl1 < 1024; pl1++) {
     auto lv1 = stwbrx_cache[pl1];
     if (lv1) {
@@ -363,7 +356,7 @@ void stwbrx_cache_spill(struct cpu *cpu) {
                 if (addr < 0x80000000) {
                   if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data), MEM_READ, CACHE_DATA)) {
                     // Swap
-                    for (int k = 0; k < sizeof(swapped); k++) {
+                    for (unsigned long k = 0; k < sizeof(swapped); k++) {
                       swapped[7 - k] = data[k];
                     }
 

@@ -987,7 +987,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		    xferp->cmd[1] >> 5, (xferp->cmd[1] >> 1) & 1);
 		debug("starting_track=%i ", xferp->cmd[6]);
 		retlen = xferp->cmd[7] * 256 + xferp->cmd[8];
-		debug("allocation_len=%i)\n", retlen);
+		debug("allocation_len=%i format=%x)\n", retlen, xferp->cmd[2] & 15);
 
 		/*  Return data:  */
 		scsi_transfer_allocbuf(&xferp->data_in_len,
@@ -1005,6 +1005,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		xferp->data_in[6] = 0x00;	/*  Track nr  */
 		xferp->data_in[7] = 0x00;	/*  Reserved  */
 		/*  8..11 = absolute CDROM address  */
+		memset(&xferp->data_in[8], 0, 4);
 
 		diskimage__return_default_status_and_message(xferp);
 		break;

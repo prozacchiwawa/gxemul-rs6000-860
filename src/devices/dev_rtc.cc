@@ -94,7 +94,7 @@ DEVICE_ACCESS(rtc)
 	switch (relative_addr) {
 
 	case DEV_RTC_TRIGGER_READ:
-		gettimeofday(&d->cur_time, NULL);
+		// gettimeofday(&d->cur_time, NULL);
 		break;
 
 	case DEV_RTC_SEC:

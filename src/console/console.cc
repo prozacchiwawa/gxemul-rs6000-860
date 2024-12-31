@@ -367,7 +367,8 @@ static int d_avail(int d)
 	FD_SET(d, &rfds);
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-	return select(d+1, &rfds, NULL, NULL, &tv);
+	int selres = select(d+1, &rfds, NULL, NULL, &tv);
+	return selres > 0;
 }
 
 

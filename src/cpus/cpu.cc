@@ -254,7 +254,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	if (cpu->machine->cpu_family->functioncall_trace != NULL)
 		cpu->machine->cpu_family->functioncall_trace(cpu, n_args);
 
-	fatal(")>\n");
+	fatal(") %" PRIx64" >\n", cpu->ninstrs);
 
 #ifdef PRINT_MEMORY_CHECKSUM
 	/*  Temporary hack for finding bugs:  */
@@ -574,4 +574,3 @@ void cpu_init(void)
 {
 	ADD_ALL_CPU_FAMILIES;
 }
-

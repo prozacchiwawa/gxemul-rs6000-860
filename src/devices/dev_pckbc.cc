@@ -433,6 +433,15 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 	else
 		d->tail[port] = (d->tail[port]+1) % MAX_8042_QUEUELEN;
 
+  if (d->currently_asserted[port] && (d->head[port] == d->tail[port])) {
+    if (port) {
+      INTERRUPT_DEASSERT(d->irq_mouse);
+    } else {
+      INTERRUPT_DEASSERT(d->irq_keyboard);
+    }
+    d->currently_asserted[port] = false;
+  }
+
 	return d->key_queue[port][d->tail[port]];
 }
 
@@ -1335,15 +1344,11 @@ DEVICE_ACCESS(pckbc)
       if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
-        INTERRUPT_DEASSERT(d->irq_mouse);
-        d->currently_asserted[1] = false;
       } else if (d->head[0] != d->tail[0] ||
                  d->state == STATE_RDCMDBYTE ||
                  d->state == STATE_RDOUTPUT) {
 				odata |= KBS_DIB;
         fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
-        INTERRUPT_DEASSERT(d->irq_keyboard);
-        d->currently_asserted[0] = false;
       }
 
 			if (d->state == STATE_RDCMDBYTE) {

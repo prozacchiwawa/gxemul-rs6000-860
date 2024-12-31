@@ -90,7 +90,7 @@ void bus_pci_decompose_1(uint32_t t, int *bus, int *dev, int *func, int *reg)
 	*reg  =  t        & 0xfc;
 
   // The low bits are masked.
-  fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
+  // fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
 }
 
 /*
@@ -204,8 +204,8 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
         continue;
       }
 
-      uint32_t bar_addr = PCI_MAPREG_IO_ADDR(bar);
-      uint32_t bar_len = PCI_MAPREG_IO_SIZE(bar);
+      uint32_t bar_addr = io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar);
+      uint32_t bar_len = io ? PCI_MAPREG_IO_SIZE(bar) : PCI_MAPREG_MEM_SIZE(bar);
 
       if (target >= bar_addr && target < bar_addr + bar_len) {
         // Match: check our recorded mappings.  Exit one way or another so we

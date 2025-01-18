@@ -188,33 +188,36 @@ struct memory *memory_new(uint64_t physical_max, int arch)
  *  addr, otherwise 0.
  */
 int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
-	int min_string_length)
+                            int min_string_length)
 {
-	int cur_length = 0;
-  int mz = 0;
 	unsigned char c;
 
-	for (;;) {
-		c = '\0';
-		cpu->memory_rw(cpu, mem, addr+cur_length,
-		    &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-    if (c == 'M' && mz == 0) {
-      mz++;
+  for (int stride = 1; stride <= 2; stride++) {
+    int mz = 0;
+    int cur_length = 0;
+    bool good_char = true;
+    for (cur_length = 0; good_char;) {
+      c = '\0';
+      cpu->memory_rw(cpu, mem, addr+cur_length,
+                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+      if (c == 'M' && mz == 0) {
+        mz++;
+      }
+      if (c == 'Z' && mz == 1) {
+        return 0;
+      }
+      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+        cur_length += stride;
+      } else {
+        good_char = false;
+      }
     }
-    if (c == 'Z' && mz == 1) {
-      return 0;
+    if (cur_length / stride >= min_string_length) {
+      return 1;
     }
-		if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
-			cur_length ++;
-			if (cur_length >= min_string_length)
-				return 1;
-		} else {
-			if (cur_length >= min_string_length)
-				return 1;
-			else
-				return 0;
-		}
 	}
+
+  return 0;
 }
 
 
@@ -231,44 +234,38 @@ char *memory_conv_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
 	unsigned char c, p='\0';
 
   for (int stride = 1; stride <= 2; stride++) {
-    int output_index = 0;
+    int mz = 0;
+    int cur_length = 0;
+    bool good_char = true;
 
-    while (output_index < bufsize-1) {
+    len = 0;
+    for (cur_length = 0; good_char;) {
       c = '\0';
-      cpu->memory_rw(cpu, mem, addr+len, &c, sizeof(c), MEM_READ,
-                     CACHE_NONE | NO_EXCEPTIONS);
-      buf[output_index] = c;
-      if (c == 0 && output_index == 1) {
-        break;
+      cpu->memory_rw(cpu, mem, addr+cur_length,
+                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+      if (c == 'M' && mz == 0) {
+        mz++;
       }
-      if (c>=' ' && c<127) {
-        len += stride;
-        output_index ++;
-      } else if (c=='\n' || c=='\r' || c=='\t') {
-        len += stride;
-        buf[output_index] = '\\';
-        output_index ++;
-        switch (c) {
-        case '\n':	p = 'n'; break;
-        case '\r':	p = 'r'; break;
-        case '\t':	p = 't'; break;
-        }
-        if (output_index < bufsize-1) {
-          buf[output_index] = p;
-          output_index ++;
+      if (c == 'Z' && mz == 1) {
+        return 0;
+      }
+      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+        cur_length += stride;
+        buf[len++] = c;
+        if (len >= bufsize) {
+          buf[bufsize - 1] = '\0';
+          return buf;
         }
       } else {
-        buf[output_index] = '\0';
-        return buf;
+        good_char = false;
       }
     }
-
-    if (output_index == bufsize - 1) {
+    if (cur_length / stride >= 3) {
       break;
     }
-  }
+	}
 
-	buf[bufsize-1] = '\0';
+	buf[len] = '\0';
 	return buf;
 }
 

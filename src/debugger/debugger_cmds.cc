@@ -1599,6 +1599,10 @@ static void debugger_cmd_breakat(struct machine *m, char *cmd_line) {
   break_commands.insert(std::pair(addr, cmds));
 }
 
+static void debugger_cmd_echo(struct machine *m, char *cmd_line) {
+  fprintf(stderr, "echo: %s\n", cmd_line);
+}
+
 /****************************************************************************/
 
 
@@ -1714,6 +1718,8 @@ static struct cmd cmds[] = {
   { "etrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
 
   { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
+
+  { "echo", "", 0, debugger_cmd_echo, "Output this string for debugging use" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

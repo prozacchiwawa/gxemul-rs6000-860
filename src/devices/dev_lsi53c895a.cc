@@ -622,6 +622,8 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     req->enqueued = true;
     req->refct++;
 
+    fprintf(stderr, "lsi: enqueue command %02x\n", req->cmd.buf[0]);
+
     switch (req->cmd.buf[0]) {
     case 0x03: {
         if (req->cmd.buf[1] & 1) {
@@ -640,16 +642,18 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         return req->xfer.data_in_len;
     }
 
-    case 0x00:
     case 0x15:
     case 0x1b:
     case 0x1e:
     case 0x35: {
+        fprintf(stderr, "LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
+        req->status = 0;
         req->xfer.data_in_len = 0;
         req->dev->sense_data_len = 0;
         return 1;
     }
 
+    case 0x00:
     case 0x08:
     case 0x12:
     case 0x1a:
@@ -724,6 +728,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
 
     case 0xbd:
       // error is fine
+      fprintf(stderr, "LSI: cmd bd check condition illegal request\n");
       req->status = 2; // CHECK_CONDITION
       req->dev->sense_data_len = 18;
       memset(req->dev->sense_data, 0, 18);

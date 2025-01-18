@@ -1300,12 +1300,12 @@ DEVICE_ACCESS(pckbc)
 				d->state = STATE_NORMAL;
 				break;
 
-			default: if (d->head[1] != d->tail[1]) {
-          odata = pckbc_get_code(d, 1);
-        } else if (d->head[0] != d->tail[0]) {
+			default: if (d->head[0] != d->tail[0]) {
 					odata = pckbc_get_code(d, 0);
 					d->last_scancode = odata;
-				} else {
+				} else if (d->head[1] != d->tail[1]) {
+          odata = pckbc_get_code(d, 1);
+        } else {
 					odata = d->last_scancode;
 					d->last_scancode |= 0x80;
 				}
@@ -1341,14 +1341,14 @@ DEVICE_ACCESS(pckbc)
 			odata = 0;
 
 			/*  "Data in buffer" bit  */
-      if (d->head[1] != d->tail[1]) {
+      if (d->head[0] != d->tail[0] ||
+          d->state == STATE_RDCMDBYTE ||
+          d->state == STATE_RDOUTPUT) {
+        odata |= KBS_DIB;
+        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
+      } else if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
-      } else if (d->head[0] != d->tail[0] ||
-                 d->state == STATE_RDCMDBYTE ||
-                 d->state == STATE_RDOUTPUT) {
-				odata |= KBS_DIB;
-        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
       }
 
 			if (d->state == STATE_RDCMDBYTE) {

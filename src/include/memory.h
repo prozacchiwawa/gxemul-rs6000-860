@@ -104,7 +104,7 @@ void *zeroed_alloc(size_t s);
 struct memory *memory_new(uint64_t physical_max, int arch);
 
 int memory_points_to_string(struct cpu *cpu, struct memory *mem,
-	uint64_t addr, int min_string_length);
+                            uint64_t addr, int min_string_length);
 char *memory_conv_to_string(struct cpu *cpu, struct memory *mem,
 	uint64_t addr, char *buf, int bufsize);
 
@@ -136,6 +136,7 @@ unsigned char *memory_paddr_to_hostaddr(struct memory *mem,
 #define FLAG_WRITEFLAG          1
 #define FLAG_NOEXCEPTIONS       2
 #define FLAG_INSTR              4
+#define FLAG_VERBOSE            0x80000000
 
 #define	MEMORY_ACCESS_FAILED		0
 #define	MEMORY_ACCESS_OK		1

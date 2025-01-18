@@ -321,7 +321,7 @@ int sym_addr_compare(const void *a, const void *b)
  */
 void symbol_recalc_sizes(struct symbol_context *sc)
 {
-  std::sort(sc->symbols->begin(), sc->symbols->end(), [](const symbol &a, const symbol &b) {
+  std::sort(sc->symbols->begin(), sc->symbols->end(), [](const symbol &a, const symbol &b) -> bool {
     return a.addr < b.addr;
   });
 

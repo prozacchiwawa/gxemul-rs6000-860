@@ -526,6 +526,7 @@ void cpu_init(void);
 
 struct host_load_store_t {
   uint64_t physaddr;
+  void *ppp;
   uint8_t *host_load;
   uint8_t *host_store;
 };

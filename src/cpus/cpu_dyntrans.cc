@@ -196,8 +196,9 @@ struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t a
   auto index = DYNTRANS_ADDR_TO_PAGENR(addr);
   return host_load_store_t {
     cpu->cd.DYNTRANS_ARCH.phys_addr[index],
+    cpu->cd.DYNTRANS_ARCH.phys_page[index],
     cpu->cd.DYNTRANS_ARCH.host_load[index],
-    cpu->cd.DYNTRANS_ARCH.host_store[index]
+    cpu->cd.DYNTRANS_ARCH.host_store[index],
   };
 }
 
@@ -227,6 +228,7 @@ struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t a
 	/*  fatal("  l3 = %p\n", l3);  */
   return host_load_store_t {
     l3->phys_addr[x3],
+    l3->phys_page[x3],
     l3->host_load[x3],
     l3->host_store[x3]
   };
@@ -648,7 +650,7 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
  */
 static void DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF(struct cpu *cpu,
 	uint64_t physaddr)
-{ 
+{
 	struct DYNTRANS_TC_PHYSPAGE *ppp;
 
 	ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
@@ -884,37 +886,20 @@ void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
 	uint64_t
 #endif
 	    cached_pc = cpu->pc;
-	struct DYNTRANS_TC_PHYSPAGE *ppp;
 
+  auto host_pages =
 #ifdef MODE32
-	int index;
-	index = DYNTRANS_ADDR_TO_PAGENR(cached_pc);
-	ppp = cpu->cd.DYNTRANS_ARCH.phys_page[index];
-	if (ppp != NULL)
-		goto have_it;
+    CPU32(get_cached_tlb_pages)(cpu, cached_pc)
 #else
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	x1 = (cached_pc >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	l3 = l2->l3[x2];
-	ppp = l3->phys_page[x3];
-	if (ppp != NULL)
-		goto have_it;
+    CPU64(get_cached_tlb_pages)(cpu, cached_pc)
 #endif
+    ;
 
-	DYNTRANS_PC_TO_POINTERS_GENERIC(cpu);
-	return;
+	if (host_pages.ppp == nullptr) {
+    DYNTRANS_PC_TO_POINTERS_GENERIC(cpu);
+    return;
+  }
 
-	/*  Quick return path:  */
-have_it:
   // fprintf
   //   (stderr, "%08x quick cur_ic return: prev virt %" PRIx64 " phys %" PRIx64 "\n",
   //    (unsigned int)cpu->pc,
@@ -923,6 +908,7 @@ have_it:
   //    );
 
   // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.cur_ic_page, &ppp->ics[0]);
+  auto ppp = static_cast<DYNTRANS_TC_PHYSPAGE*>(host_pages.ppp);
   cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cpu->pc & ~0xfff;
   cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
 	cpu->cd.DYNTRANS_ARCH.cur_ic_page = &ppp->ics[0];

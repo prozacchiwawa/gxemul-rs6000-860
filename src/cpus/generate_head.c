@@ -55,16 +55,16 @@ int main(int argc, char *argv[])
 {
 	char *a, *b;
 
-	if (argc != 3) {
-		fprintf(stderr, "usage: %s arch Arch\n", argv[0]);
-		fprintf(stderr, "Example: %s alpha Alpha\n", argv[0]);
-		fprintf(stderr, "     or: %s arm ARM\n", argv[0]);
+	if (argc != 4) {
+		fprintf(stderr, "usage: %s arch Arch mask\n", argv[0]);
+		fprintf(stderr, "Example: %s alpha Alpha mask\n", argv[0]);
+		fprintf(stderr, "     or: %s arm ARM mask\n", argv[0]);
 		exit(1);
 	}
 
 	a = argv[1];
 	b = argv[2];
-
+  int bits = atoi(argv[3]);
 
 	printf("\n/*  AUTOMATICALLY GENERATED! Do not edit.  */\n\n");
 
@@ -123,6 +123,15 @@ int main(int argc, char *argv[])
 
 	printf("\n/* instr uses the same names as in "
 	    "cpu_%s_instr.c */\n#define instr(n) %s_instr_ ## n\n\n", a, a);
+
+  if (bits & 1) {
+    printf("#define CPU_BITS_32\n");
+    printf("#define CPU32(n) %s32_ ## n\n", a);
+  }
+  if (bits & 2) {
+    printf("#define CPU_BITS_64\n");
+    printf("#define CPU64(n) %s64_ ## n\n", a);
+  }
 
 	printf("#ifdef DYNTRANS_DUALMODE_32\n"
 	    "#define instr32(n) %s32_instr_ ## n\n\n", a);

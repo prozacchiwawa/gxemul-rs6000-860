@@ -1192,8 +1192,15 @@ X(llsc)
 
   final_addr = (final_addr & ~0xfff) | ((addr & 0xfff) ^ offset);
 
-  auto page_ptr = load ? cpu->cd.ppc.host_load : cpu->cd.ppc.host_store;
-  unsigned char *page = page_ptr[((uint32_t)addr) >> 12];
+  auto host_pages =
+#ifdef MODE32
+    ppc32_get_cached_tlb_pages(cpu, addr)
+#else
+    ppc64_get_cached_tlb_pages(cpu, addr)
+#endif
+    ;
+
+  uint8_t *page = load ? host_pages.host_load : host_pages.host_store;
 
 	if (load) {
 		if (rc) {
@@ -1318,13 +1325,25 @@ X(loose_lhaux)
     full_addr += ic->arg[2];
   }
 
-  auto page_ptr = cpu->cd.ppc.host_load;
-  unsigned char *page = page_ptr[((uint32_t)full_addr) >> 12];
+  auto host_pages =
+#ifdef MODE32
+    ppc32_get_cached_tlb_pages(cpu, full_addr)
+#else
+    ppc64_get_cached_tlb_pages(cpu, full_addr)
+#endif
+    ;
+  uint8_t *page = host_pages.host_load;
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
   uint8_t raw_value[2];
+
+  /*  Synchronize the PC:  */
+  int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
+    / sizeof(struct ppc_instr_call);
+  cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
+  cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
   if (page) {
     auto addr = full_addr & 0xfff;
@@ -1757,9 +1776,8 @@ X(rfi)
 	tmp &= ~0xffff;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
 
-	reg_access_msr(cpu, &tmp, 1, ic, 0);
-
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
+	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	quick_pc_to_pointers(cpu);
 }
@@ -1770,9 +1788,10 @@ X(rfid)
 	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~mask;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & mask);
-	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
+	reg_access_msr(cpu, &tmp, 1, ic, 0);
+
 	if (!(tmp & PPC_MSR_SF))
 		cpu->pc = (uint32_t)cpu->pc;
 	quick_pc_to_pointers(cpu);
@@ -2840,26 +2859,18 @@ X(to_be_translated)
 	addr = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc = addr;
 	addr &= ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
+  fprintf(stderr, "translate %08x\n", (unsigned int)addr);
 
 	/*  Read the instruction word from memory:  */
+  auto host_pages =
 #ifdef MODE32
-	page = cpu->cd.ppc.host_load[((uint32_t)addr) >> 12];
+    ppc32_get_cached_tlb_pages(cpu, addr)
 #else
-	{
-		const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-		const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-		const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-		uint32_t x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-		uint32_t x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-		uint32_t x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-
-		    DYNTRANS_L3N)) & mask3;
-		struct DYNTRANS_L2_64_TABLE *l2 = cpu->cd.ppc.l1_64[x1];
-		struct DYNTRANS_L3_64_TABLE *l3 = l2->l3[x2];
-		page = l3->host_load[x3];
-	}
+    ppc64_get_cached_tlb_pages(cpu, addr)
 #endif
+    ;
+  page = host_pages.host_load;
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */
@@ -2868,10 +2879,9 @@ X(to_be_translated)
 		/*  fatal("TRANSLATION MISS!\n");  */
 		if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
 		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
-			fatal("PPC to_be_translated(): "
-			    "read failed: TODO\n");
-			exit(1);
-			/*  goto bad;  */
+      fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
+      memcpy(ic, &nothing_call, sizeof(nothing_call));
+      goto bad;
 		}
 	}
 
@@ -2889,7 +2899,7 @@ X(to_be_translated)
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
   memcpy(ic->instr, ib, sizeof(ic->instr));
-  ic->pc = cpu->pc;
+  ic->pc = addr;
 
 	/*
 	 *  Translate the instruction:
@@ -4134,6 +4144,7 @@ X(to_be_translated)
     ic->f = instr(dump_registers);
   }
 
+ end:
 #define	DYNTRANS_TO_BE_TRANSLATED_TAIL
 #include "cpu_dyntrans.cc"
 #undef	DYNTRANS_TO_BE_TRANSLATED_TAIL

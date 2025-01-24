@@ -212,6 +212,14 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
 
+  auto pages =
+#ifdef MODE32
+    ppc32_get_cached_tlb_pages(cpu, addr)
+#else
+    ppc64_get_cached_tlb_pages(cpu, addr)
+#endif
+    ;
+
 #ifdef LS_BYTEREVERSE
 #ifdef LS_H
   swizzle ^= 1;
@@ -224,16 +232,17 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 
-	unsigned char *page = cpu->cd.ppc.
-#ifdef LS_LOAD
-    host_load
-#else
-    host_store
-#endif
-    [addr >> 12];
 #ifdef LS_UPDATE
-	uint32_t new_addr = addr;
+  uint32_t new_addr = addr;
 #endif
+
+  auto page =
+#ifdef LS_LOAD
+    pages.host_load
+#else
+    pages.host_store
+#endif
+    ;
 
 #ifndef LS_B
 	if (addr & (LS_SIZE-1)) {

@@ -84,6 +84,7 @@ struct fdc_data {
     bool    asserting_interrupt;
     bool    just_reset;
     bool    recal_interrupt;
+    bool    dor_reset;
 	struct interrupt	irq;
 };
 
@@ -133,11 +134,12 @@ DEVICE_ACCESS(fdc)
   deassert_interrupt(d);
 	d->state = 0;
 
-	idata = memory_readmax64(cpu, data, len);
 
 	if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
 		d->reg[relative_addr] = (uint8_t)idata;
-	}
+    fprintf(stderr, "[ fdc: %x <- %x ]\n", relative_addr, (unsigned int)idata);
+  }
 
 	switch (relative_addr) {
     // TDR
@@ -405,9 +407,17 @@ DEVICE_ACCESS(fdc)
       fprintf(stderr, "[ fdc: DOR write %02x ]\n", (int)idata);
       d->command_size = 0;
       if (idata & 4) {
-        d->state = STATE_EMPTY;
+        if (d->dor_reset) {
+          fprintf(stderr, "[ fdc: DOR reset done ]\n");
+          d->state = STATE_EMPTY;
+					maybe_interrupt(d);
+        } else {
+          d->state = oldstate;
+        }
+        d->dor_reset = false;
       } else {
-        d->state = oldstate;
+        d->dor_reset = true;
+        d->state = STATE_EMPTY;
       }
 		} else {
 			d->state = oldstate;
@@ -424,20 +434,24 @@ DEVICE_ACCESS(fdc)
     }
     break;
 
-	default:if (writeflag==MEM_READ) {
-			fatal("[ fdc: read from reg %i: %02x ]\n",
-            (int)relative_addr, d->reg[relative_addr]);
-			memory_writemax64(cpu, data, len, d->reg[relative_addr]);
-		} else {
+	default:if (writeflag!=MEM_READ) {
 			fatal("[ fdc: write to reg %i:", (int)relative_addr);
 			for (i=0; i<len; i++)
 				fatal(" %02x", data[i]);
 			fatal(" ]\n");
 			d->reg[relative_addr] = idata;
+    // } else {
+		// 	fatal("[ fdc: read from reg %i: %02x ]\n",
+    //         (int)relative_addr, d->reg[relative_addr]);
+		// 	memory_writemax64(cpu, data, len, d->reg[relative_addr]);
 		}
 		break;
 	}
 
+  if (writeflag==MEM_READ) {
+    fatal("[ fdc: read from reg %i: %02x ]\n",
+          (int)relative_addr, (unsigned int)idata);
+  }
 	return 1;
 }
 
@@ -452,8 +466,6 @@ DEVICE_ACCESS(fdc_3f7)
 	if (writeflag == MEM_WRITE) {
       fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
       d->assumed_spt = (idata & 3) == 3 ? 36 : 18;
-      deassert_interrupt(d);
-      assert_interrupt(d);
 	} else {
 	    idata = 2;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);

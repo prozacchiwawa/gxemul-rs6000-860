@@ -530,4 +530,3 @@ not just the device in question.
 do_return_ok:
 	return MEMORY_ACCESS_OK;
 }
-

@@ -190,8 +190,69 @@ static void gather_statistics(struct cpu *cpu)
 	}						\
 	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic); }
 */
-#endif	/*  STATIC STUFF  */
 
+#ifdef CPU_BITS_32
+struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
+  auto index = DYNTRANS_ADDR_TO_PAGENR(addr);
+  return host_load_store_t {
+    cpu->cd.DYNTRANS_ARCH.phys_addr[index],
+    cpu->cd.DYNTRANS_ARCH.host_load[index],
+    cpu->cd.DYNTRANS_ARCH.host_store[index]
+  };
+}
+
+void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
+  auto index = DYNTRANS_ADDR_TO_PAGENR(addr);
+  cpu->cd.DYNTRANS_ARCH.phys_page[index] = ppp;
+}
+#endif
+
+#ifdef CPU_BITS_64
+struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
+	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
+	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
+	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
+	uint32_t x1, x2, x3;
+	struct DYNTRANS_L2_64_TABLE *l2;
+	struct DYNTRANS_L3_64_TABLE *l3;
+
+	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
+	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
+	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
+	/*  fatal("X3: addr=%016" PRIx64" x1=%x x2=%x x3=%x\n",
+	    (uint64_t)addr, (int)x1, (int)x2, (int)x3);  */
+	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
+	/*  fatal("  l2 = %p\n", l2);  */
+	l3 = l2->l3[x2];
+	/*  fatal("  l3 = %p\n", l3);  */
+  return host_load_store_t {
+    l3->phys_addr[x3],
+    l3->host_load[x3],
+    l3->host_store[x3]
+  };
+}
+
+void CPU64(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
+	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
+	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
+	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
+	uint32_t x1, x2, x3;
+	struct DYNTRANS_L2_64_TABLE *l2;
+	struct DYNTRANS_L3_64_TABLE *l3;
+
+	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
+	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
+	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
+	/*  fatal("X3: addr=%016" PRIx64" x1=%x x2=%x x3=%x\n",
+	    (uint64_t)addr, (int)x1, (int)x2, (int)x3);  */
+	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
+	/*  fatal("  l2 = %p\n", l2);  */
+	l3 = l2->l3[x2];
+  l3->phys_page[x3] = ppp;
+}
+#endif
+
+#endif	/*  STATIC STUFF  */
 
 
 #ifdef	DYNTRANS_RUN_INSTR_DEF
@@ -622,46 +683,25 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 #else
 	uint64_t
 #endif
-	    cached_pc = cpu->pc, physaddr = 0;
+	    cached_pc = cpu->pc;
 	uint32_t physpage_ofs;
 	int ok, pagenr, table_index;
 	uint32_t *physpage_entryp;
 	struct DYNTRANS_TC_PHYSPAGE *ppp;
 
+  auto host_pages =
 #ifdef MODE32
-	int index = DYNTRANS_ADDR_TO_PAGENR(cached_pc);
+    CPU32(get_cached_tlb_pages)(cpu, cached_pc)
 #else
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	x1 = (cached_pc >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	/*  fatal("X3: cached_pc=%016" PRIx64" x1=%x x2=%x x3=%x\n",
-	    (uint64_t)cached_pc, (int)x1, (int)x2, (int)x3);  */
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	/*  fatal("  l2 = %p\n", l2);  */
-	l3 = l2->l3[x2];
-	/*  fatal("  l3 = %p\n", l3);  */
+    CPU64(get_cached_tlb_pages)(cpu, cached_pc)
 #endif
+    ;
 
 	/*  Virtual to physical address translation:  */
 	ok = 0;
-#ifdef MODE32
-	if (cpu->cd.DYNTRANS_ARCH.host_load[index] != NULL) {
-		physaddr = cpu->cd.DYNTRANS_ARCH.phys_addr[index];
-		ok = 1;
-	}
-#else
-	if (l3->host_load[x3] != NULL) {
-		physaddr = l3->phys_addr[x3];
-		ok = 1;
-	}
-#endif
+  if (host_pages.host_load != nullptr) {
+    ok = 1;
+  }
 
 	if (!ok) {
 		uint64_t paddr;
@@ -693,25 +733,17 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 			    Update cached_pc:  */
 			cached_pc = cpu->pc;
 
+      host_pages =
 #ifdef MODE32
-			index = DYNTRANS_ADDR_TO_PAGENR(cached_pc);
-			if (cpu->cd.DYNTRANS_ARCH.host_load[index] != NULL) {
-				paddr = cpu->cd.DYNTRANS_ARCH.phys_addr[index];
-				ok = 1;
-			}
+        CPU32(get_cached_tlb_pages)(cpu, cached_pc)
 #else
-			x1 = (cached_pc >> (64-DYNTRANS_L1N)) & mask1;
-			x2 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N))
-			    & mask2;
-			x3 = (cached_pc >> (64-DYNTRANS_L1N-DYNTRANS_L2N
-			    - DYNTRANS_L3N)) & mask3;
-			l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-			l3 = l2->l3[x2];
-			if (l3->host_load[x3] != NULL) {
-				paddr = l3->phys_addr[x3];
-				ok = 1;
-			}
+        CPU64(get_cached_tlb_pages)(cpu, cached_pc)
 #endif
+        ;
+      if (host_pages.host_load) {
+        paddr = host_pages.physaddr;
+        ok = 1;
+      }
 
 			if (!ok) {
 				ok = cpu->translate_v2p(cpu, cpu->pc, &paddr,
@@ -729,22 +761,18 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 			}
 		}
 
-		physaddr = paddr;
+		host_pages.physaddr = paddr;
 	}
 
-	physaddr &= ~(DYNTRANS_PAGESIZE - 1);
+	host_pages.physaddr &= ~(DYNTRANS_PAGESIZE - 1);
 
-#ifdef MODE32
-	if (cpu->cd.DYNTRANS_ARCH.host_load[index] == NULL) {
-#else
-	if (l3->host_load[x3] == NULL) {
-#endif
+  if (host_pages.host_load == nullptr) {
 		int q = DYNTRANS_PAGESIZE - 1;
 		unsigned char *host_page = memory_paddr_to_hostaddr(cpu->mem,
-		    physaddr, MEM_READ);
+		    host_pages.physaddr, MEM_READ);
 		if (host_page != NULL) {
 			cpu->update_translation_table(cpu, cached_pc & ~q,
-			    host_page, 0, physaddr);
+			    host_page, 0, host_pages.physaddr);
 		}
 	}
 
@@ -755,7 +783,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		cpu_create_or_reset_tc(cpu);
 	}
 
-	pagenr = DYNTRANS_ADDR_TO_PAGENR(physaddr);
+	pagenr = DYNTRANS_ADDR_TO_PAGENR(host_pages.physaddr);
 	table_index = PAGENR_TO_TABLE_INDEX(pagenr);
 
 	physpage_entryp = &(((uint32_t *)cpu->translation_cache)[table_index]);
@@ -768,7 +796,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		    + physpage_ofs);
 
 		/*  If we found the page in the cache, then we're done:  */
-		if (ppp->physaddr == physaddr)
+		if (ppp->physaddr == host_pages.physaddr)
 			break;
 
 		/*  Try the next page in the chain:  */
@@ -794,7 +822,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		    cpu->translation_cache_cur_ofs;
 
 		/*  Allocate a default page, with to_be_translated entries:  */
-		DYNTRANS_TC_ALLOCATE(cpu, physaddr);
+		DYNTRANS_TC_ALLOCATE(cpu, host_pages.physaddr);
 
 		ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
 		    + physpage_ofs);
@@ -804,14 +832,13 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 	}
 
 	/*  Here, ppp points to a valid physical page struct.  */
-
+  if (host_pages.host_load != nullptr) {
 #ifdef MODE32
-	if (cpu->cd.DYNTRANS_ARCH.host_load[index] != NULL)
-		cpu->cd.DYNTRANS_ARCH.phys_page[index] = ppp;
+    CPU32(set_tlb_physpage)(cpu, cached_pc, ppp);
 #else
-	if (l3->host_load[x3] != NULL)
-		l3->phys_page[x3] = ppp;
+    CPU64(set_tlb_physpage)(cpu, cached_pc, ppp);
 #endif
+  }
 
 	/*
 	 *  If there are no translations yet on this page, then mark it
@@ -819,7 +846,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 	 *  should already have been marked as non-writable.
 	 */
 	if (ppp->translations_bitmap == 0) {
-		cpu->invalidate_translation_caches(cpu, physaddr,
+		cpu->invalidate_translation_caches(cpu, host_pages.physaddr,
 		    JUST_MARK_AS_NON_WRITABLE | INVALIDATE_PADDR);
 	}
 
@@ -1950,7 +1977,7 @@ bad:	/*
 	if (cpu->translation_readahead)
 		return;
 
-	fprintf(stderr, "to be translated failed iword = %08x\n", iword);
+  fprintf(stderr, "to be translated failed iword = %08x @ %08x\n", iword, (unsigned int)addr);
 	quiet_mode = 0;
 	cpu->running = 0;
 

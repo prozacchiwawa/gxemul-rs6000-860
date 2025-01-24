@@ -313,7 +313,7 @@ struct cpu_family {
 #define	N_SAFE_DYNTRANS_LIMIT_SHIFT	14
 #define	N_SAFE_DYNTRANS_LIMIT	((1 << (N_SAFE_DYNTRANS_LIMIT_SHIFT - 1)) - 1)
 
-#define	MAX_DYNTRANS_READAHEAD		128
+#define	MAX_DYNTRANS_READAHEAD		2048
 
 #define	DEFAULT_DYNTRANS_CACHE_SIZE	(48*1048576)
 #define	DYNTRANS_CACHE_MARGIN		200000
@@ -523,6 +523,12 @@ void cpu_init(void);
 	fp->init_tables = n ## _cpu_init_tables;			\
 	return 1;							\
 	}
+
+struct host_load_store_t {
+  uint64_t physaddr;
+  uint8_t *host_load;
+  uint8_t *host_store;
+};
 
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))

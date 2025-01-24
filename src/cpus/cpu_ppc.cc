@@ -180,6 +180,8 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	CPU_SETTINGS_ADD_REGISTER64("xer", cpu->cd.ppc.spr[SPR_XER]);
 	CPU_SETTINGS_ADD_REGISTER64("dec", cpu->cd.ppc.spr[SPR_DEC]);
 	CPU_SETTINGS_ADD_REGISTER64("hdec", cpu->cd.ppc.spr[SPR_HDEC]);
+  CPU_SETTINGS_ADD_REGISTER64("tbl",  cpu->cd.ppc.spr[SPR_TBL]);
+  CPU_SETTINGS_ADD_REGISTER64("tbu",  cpu->cd.ppc.spr[SPR_TBU]);
 	CPU_SETTINGS_ADD_REGISTER64("srr0", cpu->cd.ppc.spr[SPR_SRR0]);
 	CPU_SETTINGS_ADD_REGISTER64("srr1", cpu->cd.ppc.spr[SPR_SRR1]);
 	CPU_SETTINGS_ADD_REGISTER64("sdr1", cpu->cd.ppc.spr[SPR_SDR1]);
@@ -199,7 +201,11 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	CPU_SETTINGS_ADD_REGISTER64("dbat2l", cpu->cd.ppc.spr[SPR_DBAT2L]);
 	CPU_SETTINGS_ADD_REGISTER64("dbat3u", cpu->cd.ppc.spr[SPR_DBAT3U]);
 	CPU_SETTINGS_ADD_REGISTER64("dbat3l", cpu->cd.ppc.spr[SPR_DBAT3L]);
-	CPU_SETTINGS_ADD_REGISTER64("lr", cpu->cd.ppc.spr[SPR_LR]);
+  CPU_SETTINGS_ADD_REGISTER64("sprg0", cpu->cd.ppc.spr[SPR_SPRG0]);
+  CPU_SETTINGS_ADD_REGISTER64("sprg1", cpu->cd.ppc.spr[SPR_SPRG1]);
+  CPU_SETTINGS_ADD_REGISTER64("sprg2", cpu->cd.ppc.spr[SPR_SPRG2]);
+  CPU_SETTINGS_ADD_REGISTER64("sprg3", cpu->cd.ppc.spr[SPR_SPRG3]);
+  CPU_SETTINGS_ADD_REGISTER64("lr", cpu->cd.ppc.spr[SPR_LR]);
 	CPU_SETTINGS_ADD_REGISTER32("cr", cpu->cd.ppc.cr);
 	CPU_SETTINGS_ADD_REGISTER32("fpscr", cpu->cd.ppc.fpscr);
   CPU_SETTINGS_ADD_REGISTER64("icount", cpu->ninstrs);
@@ -316,26 +322,24 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-	if (writeflag) {
-		cpu->cd.ppc.msr = *valuep;
+  cpu->cd.ppc.msr = *valuep;
 
-		/*  Switching between temporary and real gpr 0..3?  */
-		if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
-			int i;
-			for (i=0; i<PPC_N_TGPRS; i++) {
-				uint64_t t = cpu->cd.ppc.gpr[i];
-				cpu->cd.ppc.gpr[i] = cpu->cd.ppc.tgpr[i];
-				cpu->cd.ppc.tgpr[i] = t;
-			}
-		}
+  /*  Switching between temporary and real gpr 0..3?  */
+  if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
+    int i;
+    for (i=0; i<PPC_N_TGPRS; i++) {
+      uint64_t t = cpu->cd.ppc.gpr[i];
+      cpu->cd.ppc.gpr[i] = cpu->cd.ppc.tgpr[i];
+      cpu->cd.ppc.tgpr[i] = t;
+    }
+  }
 
-		if (cpu->cd.ppc.msr & PPC_MSR_IP &&
-                    cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
-			fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
+  if (cpu->cd.ppc.msr & PPC_MSR_IP &&
+      cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
+    fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");
-			cpu->running = 0;
-		}
-	}
+    cpu->running = 0;
+  }
 
   /*  TODO: Is the little-endian bit writable?  */
   int new_le = cpu->cd.ppc.msr & PPC_MSR_LE;
@@ -345,20 +349,23 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
 		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
-    auto low_pc = ic - cpu->cd.ppc.cur_ic_page;
-    cpu->pc = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
-                          << PPC_INSTR_ALIGNMENT_SHIFT);
     ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
     ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
 	}
 
-  if (check_for_interrupts && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-    if (cpu->cd.ppc.dec_intr_pending &&
-        !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-      cpu->cd.ppc.dec_intr_pending = 0;
-      ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-    } else if (cpu->cd.ppc.irq_asserted)
-      ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
+  if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
+    return;
+  }
+
+  if (cpu->cd.ppc.dec_intr_pending &&
+      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+    cpu->cd.ppc.dec_intr_pending = 0;
+    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+    return;
+  }
+
+  if (cpu->cd.ppc.irq_asserted) {
+    ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
   }
 }
 
@@ -376,14 +383,18 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
-  cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 65395) | exn_extra;
+  if (exception_nr == 7) {
+    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
+  } else {
+    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xff73) | exn_extra;
+  }
 
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
   } else if (!quiet_mode && exception_nr != 5) {
-		fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %08x ]\n",
-          exception_nr, cpu->pc, (unsigned int)cpu->ninstrs);
+    fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %" PRIx64 " ]\n",
+          exception_nr, cpu->pc, cpu->ninstrs);
   }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
@@ -2298,6 +2309,16 @@ void ppc_update_for_icount(struct cpu *cpu) {
   }
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
+
+  if (!(cpu->cd.ppc.msr & PPC_MSR_EE)) {
+    return;
+  }
+
+  if (cpu->cd.ppc.dec_intr_pending &&
+      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+    cpu->cd.ppc.dec_intr_pending = 0;
+    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+  }
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {

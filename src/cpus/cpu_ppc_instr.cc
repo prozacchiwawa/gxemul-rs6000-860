@@ -800,13 +800,17 @@ X(dcbz)
 	while (cleared < cacheline_size) {
 		int to_clear = cacheline_size < sizeof(cacheline)?
 		    cacheline_size : sizeof(cacheline);
+    auto host_pages =
 #ifdef MODE32
-		unsigned char *page = nullptr; // cpu->cd.ppc.host_store[addr >> 12];
-		if (page != NULL) {
-			memset(page + (addr & 0xfff), 0, to_clear);
-		} else
+      CPU32(get_cached_tlb_pages)(cpu, addr)
+#else
+      CPU64(get_cached_tlb_pages)(cpu, addr)
 #endif
-		if (cpu->memory_rw(cpu, cpu->mem, addr, cacheline,
+      ;
+    auto page = host_pages.host_store;
+		if (page != nullptr) {
+			memset(page + (addr & 0xfff), 0, to_clear);
+		} else if (cpu->memory_rw(cpu, cpu->mem, addr, cacheline,
 		    to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -1200,7 +1204,7 @@ X(llsc)
 #endif
     ;
 
-  uint8_t *page = load ? host_pages.host_load : host_pages.host_store;
+  auto page = load ? host_pages.host_load : host_pages.host_store;
 
 	if (load) {
 		if (rc) {
@@ -1332,7 +1336,7 @@ X(loose_lhaux)
     ppc64_get_cached_tlb_pages(cpu, full_addr)
 #endif
     ;
-  uint8_t *page = host_pages.host_load;
+  auto page = host_pages.host_load;
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);

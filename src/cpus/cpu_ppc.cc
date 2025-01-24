@@ -2325,23 +2325,6 @@ int lha_does_update(int ra, int rs, bool update_form) {
   return !(!update_form || ra == rs || ra == 0);
 }
 
-unsigned char *ppc_get_host_page_ptr(struct cpu *cpu, bool instr, bool load, uint64_t vaddr) {
-  bool phys_only = !(cpu->cd.ppc.msr & (instr ? PPC_MSR_IR : PPC_MSR_DR));
-
-  // fprintf(stderr, "ppc get host page: %c %c %c %" PRIx64 "\n", phys_only ? 'P' : 'p', instr ? 'I' : 'i', load ? 'L' : 'l', vaddr);
-  if (phys_only) {
-    if (vaddr < cpu->mem->physical_max) {
-      return memory_paddr_to_hostaddr(cpu->mem, vaddr & ~0xfff, load ? MEM_READ : MEM_WRITE);
-    }
-    return nullptr;
-  } else {
-    auto index = vaddr >> 12;
-    auto page = load ? cpu->cd.ppc.host_load[index] : cpu->cd.ppc.host_store[index];
-    // fprintf(stderr, "ppc get host page V: index %d page %p\n", index, page);
-    return page;
-  }
-}
-
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
   auto val = ic - cpu->cd.ppc.cur_ic_page;
   if (val < 0 || val > 0x1010) {

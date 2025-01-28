@@ -812,7 +812,7 @@ int store_64bit_word(struct cpu *cpu, uint64_t addr, uint64_t data64)
 		tmp = data[3]; data[3] = data[4]; data[4] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -836,7 +836,7 @@ int store_32bit_word(struct cpu *cpu, uint64_t addr, uint64_t data32)
 		tmp = data[1]; data[1] = data[2]; data[2] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -857,7 +857,7 @@ int store_16bit_word(struct cpu *cpu, uint64_t addr, uint64_t data16)
 		int tmp = data[0]; data[0] = data[1]; data[1] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -875,7 +875,7 @@ void store_buf(struct cpu *cpu, uint64_t addr, const char *s, size_t len)
 			while (len >= psize) {
 				cpu->memory_rw(cpu, cpu->mem, addr,
 				    (unsigned char *)s, psize, MEM_WRITE,
-				    CACHE_DATA);
+            CACHE_NONE | NO_EXCEPTIONS);
 				addr += psize;
 				s += psize;
 				len -= psize;
@@ -920,7 +920,7 @@ uint64_t load_64bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[8];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[7]; data[7] = tmp;
@@ -947,7 +947,7 @@ uint32_t load_32bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[4];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[3]; data[3] = tmp;
@@ -968,7 +968,7 @@ uint16_t load_16bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[2];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[1]; data[1] = tmp;

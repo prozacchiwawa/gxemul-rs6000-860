@@ -1742,10 +1742,16 @@ X(mtspr) {
 	/*  TODO: Check permission  */
   uint64_t *spr0 = &cpu->cd.ppc.spr[0];
   int spr = ((uint64_t *)ic->arg[1]) - spr0;
+  fprintf(stderr, "SPR[%d] <= %08x\n", spr, (unsigned int)reg(ic->arg[0]));
   if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
     int sprbank = (spr - SPR_IBAT0U) / 8;
     int regnr = ((spr - SPR_IBAT0U) / 2) & 3;
     int lower = (spr - SPR_IBAT0U) & 1;
+    fprintf(stderr, "BAT CHANGE\n");
+    CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
+  } else if (spr == SPR_SDR1) {
+    fprintf(stderr, "SDR1 CHANGE\n");
+    CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
   }
   reg(ic->arg[1]) = reg(ic->arg[0]);
 }
@@ -1804,6 +1810,7 @@ X(rfid)
 
 X(isync)
 {
+  CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
   ppc_update_for_icount(cpu);
 }
 
@@ -2712,7 +2719,7 @@ X(vxor)
 X(tlbia)
 {
 	fatal("[ tlbia ]\n");
-	cpu->invalidate_translation_caches(cpu, 0, INVALIDATE_ALL | INVALIDATE_VADDR_UPPER4);
+	cpu->invalidate_translation_caches(cpu, 0, INVALIDATE_ALL);
 }
 
 
@@ -2723,9 +2730,7 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
-  for (uint32_t i = 0; i < 16; i++) {
-    cpu->invalidate_translation_caches(cpu, (i << 28) | reg(ic->arg[0]) & 0xffff000, INVALIDATE_VADDR | INVALIDATE_PADDR);
-  }
+  cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
 }
 
 
@@ -2864,6 +2869,7 @@ X(to_be_translated)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr &= ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
+  // fprintf(stderr, "%08x: translate %08x\n", (unsigned int)cpu->ninstrs, (unsigned int)addr);
 
 	/*  Read the instruction word from memory:  */
   auto host_pages =

@@ -193,7 +193,7 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef CPU_BITS_32
 struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-  auto index = DYNTRANS_ADDR_TO_PAGENR(addr);
+  auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
   return host_load_store_t {
     cpu->cd.DYNTRANS_ARCH.phys_addr[index],
     cpu->cd.DYNTRANS_ARCH.phys_page[index],
@@ -203,7 +203,7 @@ struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t a
 }
 
 void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
-  auto index = DYNTRANS_ADDR_TO_PAGENR(addr);
+  auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
   cpu->cd.DYNTRANS_ARCH.phys_page[index] = ppp;
 }
 #endif

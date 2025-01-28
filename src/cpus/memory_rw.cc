@@ -329,9 +329,12 @@ not just the device in question.
 						    (paddr & ~offset_mask);
 					}
 
-					cpu->update_translation_table(cpu,
-					    vaddr & ~offset_mask, host_addr,
-					    wf, orig_paddr & ~offset_mask);
+          if (!no_exceptions) {
+            cpu->update_translation_table
+              (cpu,
+               vaddr & ~offset_mask, host_addr,
+               wf, orig_paddr & ~offset_mask);
+          }
 				}
 
 				res = 0;

@@ -2864,7 +2864,6 @@ X(to_be_translated)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr &= ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-  fprintf(stderr, "translate %08x\n", (unsigned int)addr);
 
 	/*  Read the instruction word from memory:  */
   auto host_pages =

@@ -124,6 +124,8 @@ int main(int argc, char *argv[])
 	printf("\n/* instr uses the same names as in "
 	    "cpu_%s_instr.c */\n#define instr(n) %s_instr_ ## n\n\n", a, a);
 
+  printf("#define VPG_TLB_ENTRY struct %s_vpg_tlb_entry\n", a);
+
   if (bits & 1) {
     printf("#define CPU_BITS_32\n");
     printf("#define CPU32(n) %s32_ ## n\n", a);

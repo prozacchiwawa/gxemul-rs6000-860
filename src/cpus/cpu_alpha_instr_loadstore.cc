@@ -39,6 +39,7 @@
  *	32-bit long words are sign-extended up to 64 bits during a load!
  */
 
+VPG_TLB_ENTRY *CPU64(get_cache_entry)(struct cpu *cpu, uint64_t addr);
 
 #ifndef LS_IGNORE_OFFSET
 static void LS_GENERIC_N(struct cpu *cpu, struct alpha_instr_call *ic)
@@ -133,6 +134,7 @@ static void LS_N(struct cpu *cpu, struct alpha_instr_call *ic)
 #endif
 	    ;
 
+  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr);
 	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
 	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
 	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
@@ -149,9 +151,9 @@ static void LS_N(struct cpu *cpu, struct alpha_instr_call *ic)
 	l3 = l2->l3[x2];
 	/*  fatal("  l3 = %p\n", l3);  */
 #ifdef LS_LOAD
-	page = l3->host_load[x3];
+	page = host_pages.host_load;
 #else
-	page = l3->host_store[x3];
+	page = host_pages.host_store;
 #endif
 
 #ifdef LS_UNALIGNED

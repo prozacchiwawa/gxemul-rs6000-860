@@ -36,6 +36,7 @@
 
 #include "float_emul.h"
 
+extern struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr);
 
 /*
  *  nop:  Do nothing.
@@ -782,18 +783,8 @@ X(to_be_translated)
 	cpu->pc = addr;
 
 	/*  Read the instruction word from memory:  */
-	{
-		const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-		const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-		const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-		uint32_t x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-		uint32_t x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-		uint32_t x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-
-		    DYNTRANS_L3N)) & mask3;
-		struct DYNTRANS_L2_64_TABLE *l2 = cpu->cd.alpha.l1_64[x1];
-		struct DYNTRANS_L3_64_TABLE *l3 = l2->l3[x2];
-		page = l3->host_load[x3];
-	}
+  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr);
+  page = host_pages.host_load;
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */

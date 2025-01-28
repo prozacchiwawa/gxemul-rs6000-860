@@ -214,7 +214,8 @@ X(tst_imm_r0)
 X(xor_b_imm_r0_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + cpu->cd.sh.r[0];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 
 	if (p != NULL) {
 		p[addr & 0xfff] ^= ic->arg[0];
@@ -237,7 +238,8 @@ X(xor_b_imm_r0_gbr)
 X(or_b_imm_r0_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + cpu->cd.sh.r[0];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 
 	if (p != NULL) {
 		p[addr & 0xfff] |= ic->arg[0];
@@ -260,7 +262,8 @@ X(or_b_imm_r0_gbr)
 X(and_b_imm_r0_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + cpu->cd.sh.r[0];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 
 	if (p != NULL) {
 		p[addr & 0xfff] &= ic->arg[0];
@@ -310,7 +313,8 @@ X(dec_rn)     { reg(ic->arg[1]) --; }
 X(mov_b_rm_predec_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) - sizeof(uint8_t);
-	int8_t *p = (int8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int8_t *p = (int8_t *) pages.host_store;
 	int8_t data = reg(ic->arg[0]);
 	if (p != NULL) {
 		p[addr & 0xfff] = data;
@@ -329,7 +333,8 @@ X(mov_b_rm_predec_rn)
 X(mov_w_rm_predec_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) - sizeof(uint16_t);
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_store;
 	uint16_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -354,7 +359,8 @@ X(mov_w_rm_predec_rn)
 X(mov_l_rm_predec_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) - sizeof(uint32_t);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -379,7 +385,8 @@ X(mov_l_rm_predec_rn)
 X(stc_l_rm_predec_rn_md)
 {
 	uint32_t addr = reg(ic->arg[1]) - sizeof(uint32_t);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	RES_INST_IF_NOT_MD;
@@ -416,7 +423,8 @@ X(mov_l_disp_pc_rn)
 {
 	uint32_t addr = ic->arg[0] + (cpu->pc &
 	    ~((SH_IC_ENTRIES_PER_PAGE-1) << SH_INSTR_ALIGNMENT_SHIFT));
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	if (p != NULL) {
@@ -460,7 +468,8 @@ X(mov_w_disp_pc_rn)
 {
 	uint32_t addr = ic->arg[0] + (cpu->pc &
 	    ~((SH_IC_ENTRIES_PER_PAGE-1) << SH_INSTR_ALIGNMENT_SHIFT));
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_load;
 	uint16_t data;
 
 	if (p != NULL) {
@@ -511,7 +520,8 @@ X(mov_w_disp_pc_rn)
 X(load_b_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]);
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_load;
 	uint8_t data;
 
 	if (p != NULL) {
@@ -529,7 +539,8 @@ X(load_b_rm_rn)
 X(load_w_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]);
-	int16_t *p = (int16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int16_t *p = (int16_t *) pages.host_load;
 	int16_t data;
 
 	if (p != NULL) {
@@ -551,7 +562,8 @@ X(load_w_rm_rn)
 X(load_l_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	if (p != NULL) {
@@ -574,7 +586,8 @@ X(load_l_rm_rn)
 X(fmov_rm_frn)
 {
 	uint32_t addr = reg(ic->arg[0]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	FLOATING_POINT_AVAILABLE_CHECK;
@@ -635,7 +648,8 @@ X(fmov_rm_frn)
 X(fmov_r0_rm_frn)
 {
 	uint32_t data, addr = reg(ic->arg[0]) + cpu->cd.sh.r[0];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 
 	FLOATING_POINT_AVAILABLE_CHECK;
 
@@ -667,7 +681,8 @@ X(fmov_rm_postinc_frn)
 {
 	int d = cpu->cd.sh.fpscr & SH_FPSCR_SZ;
 	uint32_t data, data2, addr = reg(ic->arg[0]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	size_t r1 = ic->arg[1];
 
 	if (d) {
@@ -716,7 +731,8 @@ X(fmov_rm_postinc_frn)
 X(mov_b_disp_gbr_r0)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	int8_t *p = (int8_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int8_t *p = (int8_t *) pages.host_load;
 	int8_t data;
 	if (p != NULL) {
 		data = p[addr & 0xfff];
@@ -733,7 +749,8 @@ X(mov_b_disp_gbr_r0)
 X(mov_w_disp_gbr_r0)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	int16_t *p = (int16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int16_t *p = (int16_t *) pages.host_load;
 	int16_t data;
 	if (p != NULL) {
 		data = p[(addr & 0xfff) >> 1];
@@ -754,7 +771,8 @@ X(mov_w_disp_gbr_r0)
 X(mov_l_disp_gbr_r0)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 	if (p != NULL) {
 		data = p[(addr & 0xfff) >> 2];
@@ -775,7 +793,8 @@ X(mov_l_disp_gbr_r0)
 X(mov_b_arg1_postinc_to_arg0)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	int8_t *p = (int8_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int8_t *p = (int8_t *) pages.host_load;
 	int8_t data;
 	if (p != NULL) {
 		data = p[addr & 0xfff];
@@ -794,7 +813,8 @@ X(mov_b_arg1_postinc_to_arg0)
 X(mov_w_arg1_postinc_to_arg0)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_load;
 	uint16_t data;
 
 	if (p != NULL) {
@@ -818,7 +838,8 @@ X(mov_w_arg1_postinc_to_arg0)
 X(mov_l_arg1_postinc_to_arg0)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	if (p != NULL) {
@@ -842,7 +863,8 @@ X(mov_l_arg1_postinc_to_arg0)
 X(mov_l_arg1_postinc_to_arg0_md)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	RES_INST_IF_NOT_MD;
@@ -873,7 +895,8 @@ X(mov_l_arg1_postinc_to_arg0_md)
 X(mov_l_arg1_postinc_to_arg0_fp)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	FLOATING_POINT_AVAILABLE_CHECK;
@@ -904,7 +927,8 @@ X(mov_l_arg1_postinc_to_arg0_fp)
 X(mov_b_r0_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]) + cpu->cd.sh.r[0];
-	int8_t *p = (int8_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int8_t *p = (int8_t *) pages.host_load;
 	int8_t data;
 
 	if (p != NULL) {
@@ -923,7 +947,8 @@ X(mov_b_r0_rm_rn)
 X(mov_w_r0_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]) + cpu->cd.sh.r[0];
-	int16_t *p = (int16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int16_t *p = (int16_t *) pages.host_load;
 	int16_t data;
 
 	if (p != NULL) {
@@ -946,7 +971,8 @@ X(mov_w_r0_rm_rn)
 X(mov_l_r0_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[0]) + cpu->cd.sh.r[0];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	if (p != NULL) {
@@ -970,7 +996,8 @@ X(mov_l_disp_rm_rn)
 {
 	uint32_t addr = cpu->cd.sh.r[ic->arg[0] & 0xf] +
 	    ((ic->arg[0] >> 4) << 2);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	uint32_t data;
 
 	if (p != NULL) {
@@ -993,7 +1020,8 @@ X(mov_l_disp_rm_rn)
 X(mov_b_disp_rn_r0)
 {
 	uint32_t addr = reg(ic->arg[0]) + ic->arg[1];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_load;
 	uint8_t data;
 
 	if (p != NULL) {
@@ -1012,7 +1040,8 @@ X(mov_b_disp_rn_r0)
 X(mov_w_disp_rn_r0)
 {
 	uint32_t addr = reg(ic->arg[0]) + ic->arg[1];
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_load;
 	uint16_t data;
 
 	if (p != NULL) {
@@ -1058,7 +1087,8 @@ X(mov_w_disp_rn_r0)
 X(mov_b_store_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 	uint8_t data = reg(ic->arg[0]);
 
 	if (p != NULL) {
@@ -1075,7 +1105,8 @@ X(mov_b_store_rm_rn)
 X(mov_w_store_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_store;
 	uint16_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1097,7 +1128,8 @@ X(mov_w_store_rm_rn)
 X(mov_l_store_rm_rn)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1119,7 +1151,8 @@ X(mov_l_store_rm_rn)
 X(fmov_frm_rn)
 {
 	uint32_t addr = reg(ic->arg[1]);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	FLOATING_POINT_AVAILABLE_CHECK;
@@ -1168,7 +1201,8 @@ X(fmov_frm_rn)
 X(fmov_frm_r0_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) + cpu->cd.sh.r[0];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	FLOATING_POINT_AVAILABLE_CHECK;
@@ -1199,7 +1233,8 @@ X(fmov_frm_predec_rn)
 {
 	int d = cpu->cd.sh.fpscr & SH_FPSCR_SZ? 1 : 0;
 	uint32_t data, addr = reg(ic->arg[1]) - (d? 8 : 4);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	size_t r0 = ic->arg[0];
 
 	if (d) {
@@ -1247,7 +1282,8 @@ X(fmov_frm_predec_rn)
 X(mov_b_rm_r0_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) + cpu->cd.sh.r[0];
-	int8_t *p = (int8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	int8_t *p = (int8_t *) pages.host_store;
 	int8_t data = reg(ic->arg[0]);
 	if (p != NULL) {
 		p[addr & 0xfff] = data;
@@ -1263,7 +1299,8 @@ X(mov_b_rm_r0_rn)
 X(mov_w_rm_r0_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) + cpu->cd.sh.r[0];
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_store;
 	uint16_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1285,7 +1322,8 @@ X(mov_w_rm_r0_rn)
 X(mov_l_rm_r0_rn)
 {
 	uint32_t addr = reg(ic->arg[1]) + cpu->cd.sh.r[0];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1307,7 +1345,8 @@ X(mov_l_rm_r0_rn)
 X(mov_b_r0_disp_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 	uint8_t data = cpu->cd.sh.r[0];
 	if (p != NULL) {
 		p[addr & 0xfff] = data;
@@ -1323,7 +1362,8 @@ X(mov_b_r0_disp_gbr)
 X(mov_w_r0_disp_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_store;
 	uint16_t data = cpu->cd.sh.r[0];
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1345,7 +1385,8 @@ X(mov_w_r0_disp_gbr)
 X(mov_l_r0_disp_gbr)
 {
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = cpu->cd.sh.r[0];
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1368,7 +1409,8 @@ X(mov_l_rm_disp_rn)
 {
 	uint32_t addr = cpu->cd.sh.r[ic->arg[1] & 0xf] +
 	    ((ic->arg[1] >> 4) << 2);
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_store;
 	uint32_t data = reg(ic->arg[0]);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -1390,7 +1432,8 @@ X(mov_l_rm_disp_rn)
 X(mov_b_r0_disp_rn)
 {
 	uint32_t addr = reg(ic->arg[0]) + ic->arg[1];
-	uint8_t *p = (uint8_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint8_t *p = (uint8_t *) pages.host_store;
 	uint8_t data = cpu->cd.sh.r[0];
 
 	if (p != NULL) {
@@ -1407,7 +1450,8 @@ X(mov_b_r0_disp_rn)
 X(mov_w_r0_disp_rn)
 {
 	uint32_t addr = reg(ic->arg[0]) + ic->arg[1];
-	uint16_t *p = (uint16_t *) cpu->cd.sh.host_store[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint16_t *p = (uint16_t *) pages.host_store;
 	uint16_t data = cpu->cd.sh.r[0];
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
@@ -3021,7 +3065,8 @@ X(bt_samepage_wait_for_variable)
 	// mov_l_disp_gbr_r0:
 	// Bail out quickly if the memory is not on a readable page.
 	uint32_t addr = cpu->cd.sh.gbr + ic->arg[1];
-	uint32_t *p = (uint32_t *) cpu->cd.sh.host_load[addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	uint32_t *p = (uint32_t *) pages.host_load;
 	if (p == NULL) {
 		instr(mov_l_disp_gbr_r0)(cpu, ic);
 		return;
@@ -3193,7 +3238,8 @@ X(to_be_translated)
 	addr &= ~((1 << SH_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-	page = cpu->cd.sh.host_load[(uint32_t)addr >> 12];
+  auto pages = CPU32(get_cached_tlb_pages)(cpu, addr);
+	page = pages.host_load;
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */

@@ -42,14 +42,27 @@ void generate_multi(int store, int endianness, int n)
 		printf(", r%i", i);
 	printf(";\n");
 
-	for (i=0; i<n; i++)
+	for (i=0; i<n; i++) {
 		printf("\tMODE_uint_t addr%i = rX + (int32_t)ic[%i].arg[2];\n",
 		    i, i);
-	for (i=0; i<n; i++)
-		printf("\tuint32_t index%i = addr%i >> 12;\n", i, i);
+  }
 
-	printf("\tpage = (uint32_t *) cpu->cd.mips.host_%s[index0];\n",
-	    store? "store" : "load");
+	for (i=0; i<n; i++) {
+		printf("\tuint32_t index%i = addr%i >> 12;\n", i, i);
+  }
+
+  for (i=0; i<n; i++) {
+    printf("\tauto pages%i =\n"
+           "#ifdef MODE32\n"
+           "\t\tCPU32(get_cached_tlb_pages)(cpu, addr%i)\n"
+           "#else\n"
+           "\t\tCPU64(get_cached_tlb_pages)(cpu, addr%i)\n"
+           "#endif\n"
+           "\t;\n", i, i, i);
+  }
+
+  printf("\tpage = (uint32_t *) pages0.host_%s[index0];\n",
+         store? "store" : "load");
 
 	printf("\tif (cpu->delay_slot ||\n"
 	    "\t    page == NULL");

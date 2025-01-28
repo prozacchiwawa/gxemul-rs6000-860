@@ -453,8 +453,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
       n_instrs += 24;
 		}
     while (n_instrs < next_limit) {
-			struct DYNTRANS_IC *ic;
-
       I;
 
       n_instrs ++;

@@ -85,7 +85,7 @@ void isa_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct bus_isa_data *d = (struct bus_isa_data *) interrupt->extra;
 	int line = interrupt->line;
-  fprintf(stderr, "ISA_INTERRUPT_DEASSERT(%d)\n", line);
+	if (line) { fprintf(stderr, "ISA_INTERRUPT_DEASSERT(%d)\n", line); }
 	int old_irr1 = d->pic1->irr;
 
 	isa_interrupt_common(d, line, 0);

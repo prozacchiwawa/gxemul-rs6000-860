@@ -82,7 +82,7 @@ struct fdc_data {
     int			status_read;
     int     assumed_spt;
     bool    asserting_interrupt;
-    bool    just_reset;
+    bool    recent_seek;
     bool    recal_interrupt;
     bool    dor_reset;
 	struct interrupt	irq;
@@ -114,6 +114,12 @@ static void maybe_interrupt(struct fdc_data *d)
         assert_interrupt(d);
     }
     d->reg[0] |= 0x80;
+}
+
+
+static int st0_state(struct fdc_data *d)
+{
+    return (d->recent_seek ? 0x20 : 0) | (d->seek_head ? 4 : 0);
 }
 
 
@@ -165,6 +171,7 @@ DEVICE_ACCESS(fdc)
         d->status_read = idata;
 			}
 			memory_writemax64(cpu, data, len, idata);
+      return 1;
 		}
 		break;
 
@@ -182,6 +189,7 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "execute command %02x (reg2 %02x)\n", oldstate & 0xff, d->reg[2] & 0xff);
 					switch (command) {
 					case STATE_SEEK:
+            d->recent_seek = true;
 						d->seek_head = (d->command_bytes[1] >> 1) & 1;
 						d->seek_track = d->command_bytes[0];
             d->command_bytes[1] = 0x20;
@@ -192,39 +200,42 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_RECAL:
+            d->recent_seek = true;
+            d->seek_head = 0;
+            d->seek_track = 0;
             d->command_result = 0;
 						d->state = STATE_RECAL;
-            if (d->recal_interrupt) {
-              maybe_interrupt(d);
-            }
+            maybe_interrupt(d);
 						break;
 
 					case STATE_SPECIFY:
             d->command_result = 0;
-						d->state = STATE_EMPTY;
-            maybe_interrupt(d);
+						d->state = STATE_CMD_BUSY;
+            if (!(d->command_bytes[1] & 1)) {
+              d->reg[2] &= ~8;
+            } else {
+              d->reg[2] |= 8;
+            }
 						break;
 
           case STATE_CHECK_DRIVE_STATUS:
             d->command_result = 1;
             d->command_bytes[1] = 0x28 | (d->command_bytes[1] & 7);
             d->state = STATE_CHECK_DRIVE_STATUS | STATE_CMD_QUEUE;
-            maybe_interrupt(d);
             break;
 
 					case STATE_CONFIGURE:
             d->command_result = 0;
 						d->state = STATE_EMPTY;
-            maybe_interrupt(d);
 						break;
 
 					case STATE_READ_ID:
             fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
+            d->seek_head = !!(d->command_bytes[0] & 4);
 						d->state = STATE_READ_ID | STATE_CMD_QUEUE;
 						d->command_result = 7;
-						d->command_bytes[6] = d->seek_head ? 4 : 0;
-;
-						d->command_bytes[5] = 0;
+						d->command_bytes[6] = st0_state(d);
+            d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
 						d->command_bytes[2] = d->seek_head;
@@ -234,6 +245,7 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_READ_NORMAL_DATA:
+            d->recent_seek = true;
 						d->state = STATE_READ_NORMAL_DATA | STATE_CMD_QUEUE | STATE_CMD_DMA;
 						d->seek_track = d->command_bytes[6];
 						d->seek_head = d->command_bytes[5];
@@ -241,7 +253,7 @@ DEVICE_ACCESS(fdc)
 						d->eot_sector = d->command_bytes[2];
 						fprintf(stderr, "[ fdc: read C%d H%d S%d ]\n", d->seek_track, d->seek_head, d->read_sector);
 						d->command_result = 7;
-						d->command_bytes[6] = (d->seek_head ? 4 : 0) | 32;
+						d->command_bytes[6] = st0_state(d);
 						d->command_bytes[5] = 0;
 						d->command_bytes[4] = 0;
 						d->command_bytes[3] = d->seek_track;
@@ -311,9 +323,6 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: specify, NDMA=%d ]\n", d->command_bytes[1] & 1);
 					d->command_size = 2;
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SPECIFY;
-          if (!(d->command_bytes[1] & 1)) {
-            d->reg[2] &= ~8;
-          }
 					break;
 
         case STATE_CHECK_DRIVE_STATUS:
@@ -326,21 +335,16 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: recalibrate ]\n");
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_RECAL;
 					d->command_size = 1;
-          d->recal_interrupt = oldstate == 6;
 					break;
 
 				case SENSE_INTERRUPT:
 					fprintf(stderr, "[ fdc: sense interrupt ]\n");
 					d->command_size = 0;
 					d->command_result = 2;
-          d->just_reset = false;
-          if (d->just_reset) {
-              d->command_bytes[1] = 0xc0;
-          } else {
-              d->command_bytes[1] = 0x20;
-          }
+          d->command_bytes[1] = 0x20;
           d->command_bytes[0] = d->seek_track;
-					d->state = STATE_VERSION_RES | STATE_CMD_QUEUE;
+          d->recent_seek = 0;
+					d->state = STATE_CMD_QUEUE | STATE_CMD_BUSY;
 					break;
 
 				case STATE_SEEK:
@@ -396,6 +400,7 @@ DEVICE_ACCESS(fdc)
 				} else {
 					d->state = oldstate;
 				}
+        return 1;
 			} else {
 				fprintf(stderr, "[ fdc: FIFO READ ]\n");
 			}
@@ -431,6 +436,7 @@ DEVICE_ACCESS(fdc)
       d->state = oldstate;
       fatal("[ fdc: read from reg STA: %02x ]\n", result);
 			memory_writemax64(cpu, data, len, result);
+      return 1;
     }
     break;
 
@@ -451,6 +457,7 @@ DEVICE_ACCESS(fdc)
   if (writeflag==MEM_READ) {
     fatal("[ fdc: read from reg %i: %02x ]\n",
           (int)relative_addr, (unsigned int)idata);
+    memory_writemax64(cpu, data, len, idata);
   }
 	return 1;
 }

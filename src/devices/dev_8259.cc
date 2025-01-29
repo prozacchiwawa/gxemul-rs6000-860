@@ -47,7 +47,7 @@
 
 #define	DEV_8259_LENGTH		2
 
-#define DEV_8259_DEBUG
+// #define DEV_8259_DEBUG
 
 #define N -1
 static int pri_lut[] = {

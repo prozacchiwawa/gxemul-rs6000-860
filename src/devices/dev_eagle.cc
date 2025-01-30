@@ -353,6 +353,12 @@ DEVICE_ACCESS(eagle_dma_1)
             eagle_comm.eagle_comm_area[1] = idata;
         }
         d->addr_low_high_latch = !d->addr_low_high_latch;
+      } else {
+        if (!d->addr_low_high_latch) {
+            idata = eagle_comm.eagle_comm_area[0];
+        } else {
+            idata = eagle_comm.eagle_comm_area[1];
+        }
       }
       break;
 
@@ -364,6 +370,12 @@ DEVICE_ACCESS(eagle_dma_1)
             eagle_comm.eagle_comm_area[5] = idata;
         }
         d->len_low_high_latch = !d->len_low_high_latch;
+      } else {
+        if (!d->len_low_high_latch) {
+          idata = eagle_comm.eagle_comm_area[4];
+        } else {
+          idata = eagle_comm.eagle_comm_area[5];
+        }
       }
       break;
 

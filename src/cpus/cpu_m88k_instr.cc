@@ -35,12 +35,11 @@
 
 
 #define SYNCH_PC                {                                       \
-    int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())      \
-                    / sizeof(struct m88k_instr_call);                   \
-                cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)               \
-                    << M88K_INSTR_ALIGNMENT_SHIFT);                     \
-                cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);      \
-        }
+    int low_pc = get_low_pc(cpu->cd.m88k);                              \
+    cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)                           \
+                 << M88K_INSTR_ALIGNMENT_SHIFT);                        \
+    cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);                  \
+  }
 
 #define	ABORT_EXECUTION	  {	SYNCH_PC;				\
 				fatal("Execution aborted at: pc = 0x%08x\n", (int)cpu->pc); \
@@ -1824,8 +1823,7 @@ X(end_of_page)
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())
-	    / sizeof(struct m88k_instr_call);
+	int low_pc = get_low_pc(cpu->cd.m88k);
 	cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)
 	    << M88K_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);

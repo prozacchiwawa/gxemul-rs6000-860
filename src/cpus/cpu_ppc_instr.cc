@@ -35,8 +35,6 @@
 
 #include "float_emul.h"
 
-int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
-
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
 #define DOT1(n) X(n ## _dot) { instr(n)(cpu,ic); \
@@ -46,13 +44,10 @@ int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic);
 
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
-		/*  Synchronize the PC, and cause an FPU exception:  */  \
-      uint64_t low_pc = sync_low_pc(cpu, ic);                \
-      cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
-                             PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
-                                                            PPC_INSTR_ALIGNMENT_SHIFT); \
-		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);     \
-		return; } }
+      /*  Synchronize the PC, and cause an FPU exception:  */           \
+      sync_low_pc(cpu, cpu->cd.ppc);                                    \
+      ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);                         \
+      return; } }
 #endif
 
 
@@ -240,7 +235,7 @@ X(bclr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = sync_low_pc(cpu, ic) + 1;
+	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -312,7 +307,7 @@ X(bcctr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = sync_low_pc(cpu, ic) + 1;
+	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -388,7 +383,7 @@ X(bcl)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = sync_low_pc(cpu, ic) + 1;
+	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -461,7 +456,7 @@ X(bcl_samepage)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = sync_low_pc(cpu, ic) + 1;
+	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
                                         << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -1183,7 +1178,7 @@ X(llsc)
   uint64_t final_addr = 0;
 
 	/*  Synchronize the PC so the exception below can target the right location.  */
-  uint64_t low_pc = sync_low_pc(cpu, ic);
+  uint64_t low_pc = get_low_pc(cpu->cd.ppc, ic);
   cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
                          PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
                                                         PPC_INSTR_ALIGNMENT_SHIFT);

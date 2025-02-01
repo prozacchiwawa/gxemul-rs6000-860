@@ -223,6 +223,12 @@ struct sh_cpu {
 #define	SH_INT_ASSERTED		0x10
 #define	SH_INT_PRIO_MASK	0x0f
 
+template <> struct cpu_traits<sh_cpu> {
+  static constexpr int instr_alignment_shift() { return SH_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return SH_IC_ENTRIES_PER_PAGE; }
+  typedef struct sh_instr_call *instr_t;
+};
+
 /*  cpu_sh.c:  */
 void sh_cpu_interrupt_assert(struct interrupt *interrupt);
 void sh_cpu_interrupt_deassert(struct interrupt *interrupt);

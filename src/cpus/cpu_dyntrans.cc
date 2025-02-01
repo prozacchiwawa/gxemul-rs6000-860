@@ -46,8 +46,7 @@ static void gather_statistics(struct cpu *cpu)
 	struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
 	int i = 0;
 	uint64_t a;
-	int low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - (size_t)
-                cpu->cd.DYNTRANS_ARCH.get_ic_page()) / sizeof(struct DYNTRANS_IC);
+	int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
 
 	if (cpu->machine->statistics.file == NULL) {
 		fatal("statistics gathering with no filename set is"
@@ -146,9 +145,7 @@ static void gather_statistics(struct cpu *cpu)
 /*  For heavy debugging:  */
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;	\
 		{	\
-			int low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - \
-                    (size_t)cpu->cd.DYNTRANS_ARCH.get_ic_page()) /  \
-			    sizeof(struct DYNTRANS_IC);			\
+			int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
 			printf("cur_ic_page=%p ic=%p (low_pc=0x%x)\n",	\
              cpu->cd.DYNTRANS_ARCH.get_ic_page(),        \
 			    ic, low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT); \
@@ -454,10 +451,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		}
 	}
 
-    	cpu->n_translated_instrs += n_instrs;
+  cpu->n_translated_instrs += n_instrs;
 
 	/*  Synchronize the program counter:  */
-      low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.get_ic_page();
+  low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
 	if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
 		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);

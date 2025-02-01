@@ -32,7 +32,7 @@
  */
 
 #include "misc.h"
-
+#include "cpu_traits.h"
 
 struct cpu_family;
 
@@ -243,6 +243,12 @@ struct ppc_record_buf {
 #define	PPC_XER_SO	(1UL << 31)	/*  Summary Overflow  */
 #define	PPC_XER_OV	(1 << 30)	/*  Overflow  */
 #define	PPC_XER_CA	(1 << 29)	/*  Carry  */
+
+template <> struct cpu_traits<ppc_cpu> {
+  static constexpr int instr_alignment_shift() { return PPC_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return PPC_IC_ENTRIES_PER_PAGE; }
+  typedef struct ppc_instr_call *instr_t;
+};
 
 /*  cpu_ppc.c:  */
 int ppc_run_instr(struct cpu *cpu);

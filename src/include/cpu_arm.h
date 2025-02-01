@@ -33,6 +33,7 @@
 
 #include "misc.h"
 #include "interrupt.h"
+#include "cpu_traits.h"
 
 struct cpu_family;
 
@@ -239,6 +240,11 @@ struct arm_cpu {
 	uint32_t			is_userpage[N_VPH32_ENTRIES/32];
 };
 
+template <> struct cpu_traits<arm_cpu> {
+  static constexpr int instr_alignment_shift() { return ARM_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return ARM_IC_ENTRIES_PER_PAGE; }
+  typedef struct arm_instr_call *instr_t;
+};
 
 /*  System Control Coprocessor, control bits:  */
 #define	ARM_CONTROL_MMU		0x0001

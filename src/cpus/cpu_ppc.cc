@@ -2325,14 +2325,6 @@ int lha_does_update(int ra, int rs, bool update_form) {
   return !(!update_form || ra == rs || ra == 0);
 }
 
-int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
-  auto val = ic - cpu->cd.ppc.get_ic_page();
-  if (val < 0 || val > 0x1010) {
-    fprintf(stderr, "Bad sync low pc: %d\n", (int)val);
-  }
-  return val;
-}
-
 void ppc_no_trace(struct cpu *cpu, uint64_t pc) {
 }
 

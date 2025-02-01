@@ -40,6 +40,7 @@
 #include "../../config.h"
 
 #include "timer.h"
+#include "cpu_traits.h"
 
 /*
  *  Dyntrans misc declarations, used throughout the dyntrans code.
@@ -122,7 +123,6 @@ struct physpage_ranges {
 	uint16_t	length[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
 	uint16_t	count[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
 };
-
 
 /*
  *  Dyntrans "Instruction Translation Cache":
@@ -466,8 +466,27 @@ struct cpu {
 		struct ppc_cpu        ppc;
 		struct sh_cpu         sh;
 	} cd;
+
 };
 
+template <class T> int get_low_pc(T &ci) {
+  return ci.next_ic - ci.get_ic_page();
+}
+
+template <class Arch, class Instr> int get_low_pc(Arch &ci, Instr *ic) {
+  return ic - ci.get_ic_page();
+}
+
+template <class T> int sync_pc(struct cpu *cpu, T &arch) {
+  auto low_pc = get_low_pc(cpu, arch);
+  cpu->pc =
+    (cpu->pc &
+     ~((cpu_traits<T>::ic_entries_per_page()-1) <<
+       cpu_traits<T>::instr_alignment_shift())) +
+    (low_pc <<
+     cpu_traits<T>::instr_alignment_shift());
+  return low_pc;
+}
 
 /*  cpu.c:  */
 struct cpu *cpu_new(struct memory *mem, struct machine *machine,

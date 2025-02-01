@@ -350,7 +350,7 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
     ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
-    ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.cur_ic_phys, INVALIDATE_PADDR);
+    ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.get_ic_phys(), INVALIDATE_PADDR);
 	}
 
   if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {

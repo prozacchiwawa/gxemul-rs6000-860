@@ -159,13 +159,8 @@ public:                                                                 \
    return this->cur_ic_page;                                            \
  }                                                                      \
  void set_physpage(struct arch ## _tc_physpage *page) {                 \
-   if (&page->ics[0] != this->cur_ic_page) {                            \
-     abort();                                                           \
-   }                                                                    \
+   this->cur_ic_page = &page->ics[0];                                   \
    this->cur_physpage = page;                                           \
- }                                                                      \
- void set_ic_page(struct arch ## _instr_call *page) {                   \
-   this->cur_ic_page = page;                                            \
  }
 
 /*

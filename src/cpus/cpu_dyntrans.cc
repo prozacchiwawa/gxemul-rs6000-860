@@ -72,7 +72,6 @@ static void gather_statistics(struct cpu *cpu)
 			break;
 		case 'p':
 			/*  Physical program counter address:  */
-			cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
 			a = cpu->cd.DYNTRANS_ARCH.get_physpage()->physaddr;
 			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
@@ -353,8 +352,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 	cached_pc = cpu->pc;
 
 	cpu->n_translated_instrs = 0;
-
-	cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
 
   if (GdblibCheckWaiting(cpu)) {
     if (GdblibSerialInterrupt(cpu)) {
@@ -850,7 +847,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 
   cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cached_pc & ~0xfff;
   cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
-	cpu->cd.DYNTRANS_ARCH.set_ic_page(&ppp->ics[0]);
+  cpu->cd.DYNTRANS_ARCH.set_physpage(ppp);
 
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
@@ -907,7 +904,7 @@ void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
   auto ppp = static_cast<DYNTRANS_TC_PHYSPAGE*>(host_pages.ppp);
   cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cpu->pc & ~0xfff;
   cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
-	cpu->cd.DYNTRANS_ARCH.set_ic_page(&ppp->ics[0]);
+  cpu->cd.DYNTRANS_ARCH.set_physpage(ppp);
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
 
@@ -1831,8 +1828,6 @@ cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
 	 */
 
 	/*  Make sure cur_physpage is in synch:  */
-  cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
-
 	{
 		int x = addr & (DYNTRANS_PAGESIZE - 1);
 		int addr_per_translation_range = DYNTRANS_PAGESIZE / (8 *

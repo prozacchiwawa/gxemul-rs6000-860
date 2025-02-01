@@ -181,7 +181,8 @@ struct alpha_cpu {
 	VPH64(alpha,ALPHA)
 };
 
-template <> struct cpu_traits<alpha_cpu> {
+template <> class cpu_traits<alpha_cpu> {
+ public:
   static constexpr int instr_alignment_shift() { return ALPHA_INSTR_ALIGNMENT_SHIFT; }
   static constexpr int ic_entries_per_page() { return ALPHA_IC_ENTRIES_PER_PAGE; }
   typedef struct alpha_instr_call *instr_t;

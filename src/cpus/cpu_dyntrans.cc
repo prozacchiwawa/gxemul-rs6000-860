@@ -110,9 +110,9 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef DYNTRANS_PPC
 /*  The normal instruction execution core:  */
-#define I	{ \
+#define I	{                                                             \
     cpu->cd.ppc.icount++;                                               \
-    ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;                              \
+    next_insn(ic, cpu->cd.DYNTRANS_ARCH);                               \
     if (ppc_recording) {                                                \
       auto ptr = &ppc_recording[ppc_recording_offset];                  \
       memcpy(&ptr->iword, ic->instr, sizeof(uint32_t));                 \
@@ -137,20 +137,20 @@ static void gather_statistics(struct cpu *cpu)
   }
 #else
 /*  The normal instruction execution core:  */
-#define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++; ic->f(cpu, ic);
+#define I	next_insn(ic, cpu->cd.DYNTRANS_ARCH); ic->f(cpu, ic);
 #endif
 
 #else
 
 /*  For heavy debugging:  */
-#define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;	\
-		{	\
-			int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
-			printf("cur_ic_page=%p ic=%p (low_pc=0x%x)\n",	\
-             cpu->cd.DYNTRANS_ARCH.get_ic_page(),        \
-			    ic, low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT); \
-		} \
-		ic->f(cpu, ic);
+#define I	next_insn(ic, cpu->cd.DYNTRANS_ARCH);           \
+  {                                                       \
+    int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);       \
+    printf("cur_ic_page=%p ic=%p (low_pc=0x%x)\n",        \
+           cpu->cd.DYNTRANS_ARCH.get_ic_page(),           \
+           ic, low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT); \
+  }                                                       \
+  ic->f(cpu, ic);
 
 #endif
 

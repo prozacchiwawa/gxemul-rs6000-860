@@ -244,7 +244,8 @@ struct ppc_record_buf {
 #define	PPC_XER_OV	(1 << 30)	/*  Overflow  */
 #define	PPC_XER_CA	(1 << 29)	/*  Carry  */
 
-template <> struct cpu_traits<ppc_cpu> {
+template <> class cpu_traits<ppc_cpu> {
+ public:
   static constexpr int instr_alignment_shift() { return PPC_INSTR_ALIGNMENT_SHIFT; }
   static constexpr int ic_entries_per_page() { return PPC_IC_ENTRIES_PER_PAGE; }
   typedef struct ppc_instr_call *instr_t;

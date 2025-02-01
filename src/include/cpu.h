@@ -473,8 +473,18 @@ template <class T> int get_low_pc(T &ci) {
   return ci.next_ic - ci.get_ic_page();
 }
 
-template <class Arch, class Instr> int get_low_pc(Arch &ci, Instr *ic) {
+template <class Arch> int get_low_pc(Arch &ci, struct cpu_traits<Arch>::instr_t *ic) {
   return ic - ci.get_ic_page();
+}
+
+template <class Arch, class Instr=typename cpu_traits<Arch>::instr_t>
+int get_low_pc(Arch &ci, Instr *ic) {
+  return ic - ci.get_ic_page();
+}
+
+template <class T, class U=typename cpu_traits<T>::instr_t>
+inline void next_insn(U &ic, T &arch) {
+  ic = arch.next_ic++;
 }
 
 template <class T> int sync_pc(struct cpu *cpu, T &arch) {

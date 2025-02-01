@@ -845,8 +845,7 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		    JUST_MARK_AS_NON_WRITABLE | INVALIDATE_PADDR);
 	}
 
-  cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cached_pc & ~0xfff;
-  cpu->cd.DYNTRANS_ARCH.set_physpage(ppp);
+  cpu->cd.DYNTRANS_ARCH.set_physpage(cached_pc & ~0xfff, ppp);
 
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
@@ -901,8 +900,7 @@ void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
 
   // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.get_ic_page(), &ppp->ics[0]);
   auto ppp = static_cast<DYNTRANS_TC_PHYSPAGE*>(host_pages.ppp);
-  cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cpu->pc & ~0xfff;
-  cpu->cd.DYNTRANS_ARCH.set_physpage(ppp);
+  cpu->cd.DYNTRANS_ARCH.set_physpage(cpu->pc & ~0xfff, ppp);
 	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
 

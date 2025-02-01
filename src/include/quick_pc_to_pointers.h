@@ -12,7 +12,7 @@
     uint32_t pc_tmp32 = cpu->pc;                                        \
     struct DYNTRANS_TC_PHYSPAGE *ppp_tmp = cpu->cd.DYNTRANS_ARCH.phys_page[pc_tmp32 >> 12]; \
     if (ppp_tmp != NULL) {                                              \
-      cpu->cd.DYNTRANS_ARCH.set_physpage(ppp_tmp);                      \
+      cpu->cd.DYNTRANS_ARCH.set_physpage(pc_tmp32 & ~0xfff, ppp_tmp);   \
       cpu->cd.DYNTRANS_ARCH.next_ic =                                   \
 		    cpu->cd.DYNTRANS_ARCH.get_ic_page() +                           \
 		    DYNTRANS_PC_TO_IC_ENTRY(pc_tmp32);                              \

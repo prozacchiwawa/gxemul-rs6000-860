@@ -142,12 +142,12 @@ struct physpage_ranges {
  *  current page, NOT shifted right.)
  */
 #define DYNTRANS_ITC(arch)	\
-  uint64_t              cur_ic_virt;                                    \
   struct arch ## _instr_call  *next_ic;                                 \
   struct arch ## _tc_physpage *physpage_template;                       \
   void (*combination_check)(struct cpu *,                               \
                             struct arch ## _instr_call *, int low_addr); \
 private:                                                                \
+ uint64_t              cur_ic_virt;                                     \
  struct arch ## _tc_physpage *cur_physpage;                             \
 public:                                                                 \
  uint64_t get_ic_phys() const { return this->cur_physpage->physaddr; }  \
@@ -157,7 +157,8 @@ public:                                                                 \
  struct arch ## _instr_call *get_ic_page() const {                      \
    return &this->cur_physpage->ics[0];                                  \
  }                                                                      \
- void set_physpage(struct arch ## _tc_physpage *page) {                 \
+ void set_physpage(uint64_t virt, struct arch ## _tc_physpage *page) {  \
+   this->cur_ic_virt = virt;                                            \
    this->cur_physpage = page;                                           \
  }
 

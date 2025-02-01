@@ -35,7 +35,7 @@
 void sync_pc(void)
 {
 	printf("\tuint32_t tmp, low_pc = ((size_t)ic - (size_t)\n"
-	    "\t    cpu->cd.arm.cur_ic_page)/sizeof(struct arm_instr_call);\n");
+	    "\t    cpu->cd.arm.get_ic_page())/sizeof(struct arm_instr_call);\n");
 	printf("\ttmp = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1) <<\n"
 	    "\t    ARM_INSTR_ALIGNMENT_SHIFT);\n");
 	printf("\ttmp += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT) + 8;\n");

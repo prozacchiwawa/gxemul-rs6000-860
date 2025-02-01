@@ -135,7 +135,7 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 #ifdef A__PC
 	if (ic->arg[0] == (size_t)&cpu->cd.arm.r[ARM_PC]) {
 		uint32_t low_pc = ((size_t)ic - (size_t)
-		    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                       cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 		VAR_A = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1)
 		    << ARM_INSTR_ALIGNMENT_SHIFT);
 		VAR_A += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT) + 8;
@@ -211,7 +211,7 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 #else
 		if ((old_pc & ~mask_within_page) ==
 		    ((uint32_t)cpu->pc & ~mask_within_page)) {
-			cpu->cd.arm.next_ic = cpu->cd.arm.cur_ic_page +
+			cpu->cd.arm.next_ic = cpu->cd.arm.get_ic_page() +
 			    ((cpu->pc & mask_within_page) >>
 			    ARM_INSTR_ALIGNMENT_SHIFT);
 		} else

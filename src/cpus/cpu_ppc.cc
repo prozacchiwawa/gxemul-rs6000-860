@@ -2036,7 +2036,7 @@ int f64_isnan(float64_t f) {
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
       /*  Synchronize the PC, and cause an FPU exception:  */           \
       uint64_t low_pc = ((size_t)ic -                                   \
-                         (size_t)cpu->cd.ppc.cur_ic_page)               \
+                         (size_t)cpu->cd.ppc.get_ic_page())             \
 		    / sizeof(struct ppc_instr_call);                                \
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
@@ -2048,7 +2048,7 @@ int f64_isnan(float64_t f) {
 #define FPU_EXN { if (cpu->cd.ppc.msr & (PPC_MSR_FE0 | PPC_MSR_FE1)) {  \
       /*  Synchronize the PC, and cause an FPU exception:  */           \
       uint64_t low_pc = ((size_t)ic -                                   \
-                         (size_t)cpu->cd.ppc.cur_ic_page)               \
+                         (size_t)cpu->cd.ppc.get_ic_page())             \
 		    / sizeof(struct ppc_instr_call);                                \
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
@@ -2326,7 +2326,7 @@ int lha_does_update(int ra, int rs, bool update_form) {
 }
 
 int sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
-  auto val = ic - cpu->cd.ppc.cur_ic_page;
+  auto val = ic - cpu->cd.ppc.get_ic_page();
   if (val < 0 || val > 0x1010) {
     fprintf(stderr, "Bad sync low pc: %d\n", (int)val);
   }

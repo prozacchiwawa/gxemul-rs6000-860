@@ -35,7 +35,7 @@
 
 
 #define SYNCH_PC                {                                       \
-                int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page) \
+    int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())      \
                     / sizeof(struct m88k_instr_call);                   \
                 cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)               \
                     << M88K_INSTR_ALIGNMENT_SHIFT);                     \
@@ -1824,7 +1824,7 @@ X(end_of_page)
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
+	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())
 	    / sizeof(struct m88k_instr_call);
 	cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)
 	    << M88K_INSTR_ALIGNMENT_SHIFT);
@@ -1916,7 +1916,7 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct m88k_instr_call *)=NULL;
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
+	low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())
 	    / sizeof(struct m88k_instr_call);
 
 	/*  Special case for branch with delayslot on the next page:  */
@@ -2324,7 +2324,7 @@ X(to_be_translated)
 
 		/*  Prepare both samepage and offset style args.
 		    (Only one will be used in the actual instruction.)  */
-		ic->arg[0] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+		ic->arg[0] = (size_t) ( cpu->cd.m88k.get_ic_page() +
 		    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		ic->arg[1] = offset;
 		ic->arg[2] = (addr & 0xffc) + 4;    /*  Return offset
@@ -2373,7 +2373,7 @@ X(to_be_translated)
 		if (offset >= 0 && offset <= 0xffc &&
 		    samepage_function != NULL) {
 			ic->f = samepage_function;
-			ic->arg[2] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+			ic->arg[2] = (size_t) ( cpu->cd.m88k.get_ic_page() +
 			    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		}
 		break;
@@ -2394,7 +2394,7 @@ X(to_be_translated)
 		if (offset >= 0 && offset <= 0xffc &&
 		    samepage_function != NULL) {
 			ic->f = samepage_function;
-			ic->arg[2] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+			ic->arg[2] = (size_t) ( cpu->cd.m88k.get_ic_page() +
 			    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		}
 

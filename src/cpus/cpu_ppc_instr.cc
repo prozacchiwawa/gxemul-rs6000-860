@@ -211,7 +211,7 @@ X(bclr)
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
-			    cpu->cd.ppc.cur_ic_page +
+        cpu->cd.ppc.get_ic_page() +
 			    ((cpu->pc & mask_within_page) >>
 			    PPC_INSTR_ALIGNMENT_SHIFT);
 		} else {
@@ -258,7 +258,7 @@ X(bclr_l)
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
-			    cpu->cd.ppc.cur_ic_page +
+        cpu->cd.ppc.get_ic_page() +
 			    ((cpu->pc & mask_within_page) >>
 			    PPC_INSTR_ALIGNMENT_SHIFT);
 		} else {
@@ -294,7 +294,7 @@ X(bcctr)
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
-			    cpu->cd.ppc.cur_ic_page +
+        cpu->cd.ppc.get_ic_page() +
 			    ((cpu->pc & mask_within_page) >>
 			    PPC_INSTR_ALIGNMENT_SHIFT);
 		} else {
@@ -328,7 +328,7 @@ X(bcctr_l)
 		if ((old_pc  & ~mask_within_page) ==
 		    (cpu->pc & ~mask_within_page)) {
 			cpu->cd.ppc.next_ic =
-			    cpu->cd.ppc.cur_ic_page +
+        cpu->cd.ppc.get_ic_page() +
 			    ((cpu->pc & mask_within_page) >>
 			    PPC_INSTR_ALIGNMENT_SHIFT);
 		} else {
@@ -413,7 +413,7 @@ X(bcl)
  */
 X(b_samepage)
 {
-  cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+  cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
 }
 
 
@@ -437,21 +437,21 @@ X(bc_samepage)
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
 	if (ctr_ok && cond_ok) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
   }
 }
 X(bc_samepage_simple0)
 {
 	int bi31m = ic->arg[2];
 	if (!((cpu->cd.ppc.cr >> bi31m) & 1)) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
   }
 }
 X(bc_samepage_simple1)
 {
 	int bi31m = ic->arg[2];
 	if ((cpu->cd.ppc.cr >> bi31m) & 1) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
   }
 }
 X(bcl_samepage)
@@ -475,7 +475,7 @@ X(bcl_samepage)
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
 	if (ctr_ok && cond_ok) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
   }
 }
 
@@ -530,10 +530,10 @@ X(bl_samepage)
 	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
-	cpu->cd.ppc.next_ic = cpu->cd.ppc.cur_ic_page + ic->arg[0];
+	cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
 
 	/*  Calculate new PC (for the trace)  */
-	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.cur_ic_page;
+	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.get_ic_page();
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->functioncall_trace(cpu, cpu->pc);
@@ -1344,7 +1344,7 @@ X(loose_lhaux)
   uint8_t raw_value[2];
 
   /*  Synchronize the PC:  */
-  int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
+  int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.get_ic_page())
     / sizeof(struct ppc_instr_call);
   cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
   cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -2384,7 +2384,7 @@ X(xori) { reg(ic->arg[2]) = reg(ic->arg[0]) ^ (uint32_t)ic->arg[1]; }
 X(lfs)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.cur_ic_page;
+	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.get_ic_page();
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2413,7 +2413,7 @@ X(lfs)
 X(lfsx)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.cur_ic_page;
+	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.get_ic_page();
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2660,7 +2660,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.get_ic_page()) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2691,7 +2691,7 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.cur_ic_page) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.get_ic_page()) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2864,7 +2864,7 @@ X(to_be_translated)
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ic - cpu->cd.ppc.cur_ic_page;
+	low_pc = ic - cpu->cd.ppc.get_ic_page();
 	addr = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);

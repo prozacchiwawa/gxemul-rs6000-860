@@ -208,7 +208,7 @@ uint8_t condition_gt[16] = { 1,0,1,0, 0,0,0,0, 0,1,0,1, 0,0,0,0 };
 X(invalid) {
 	uint32_t low_pc;
 	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+            cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1)
 	    << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
@@ -494,7 +494,7 @@ X(bl_samepage_trace)
 
 	/*  Synchronize the program counter:  */
 	low_pc = ((size_t)cpu->cd.arm.next_ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+            cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1)
 	    << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
@@ -709,7 +709,7 @@ X(ret_trace)
 	 *  need to update all pointers, just next_ic.
 	 */
 	if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
-		cpu->cd.arm.next_ic = cpu->cd.arm.cur_ic_page +
+		cpu->cd.arm.next_ic = cpu->cd.arm.get_ic_page() +
 		    ((cpu->pc & mask_within_page) >> ARM_INSTR_ALIGNMENT_SHIFT);
 	} else {
 		/*  Find the new physical page and update pointers:  */
@@ -799,7 +799,7 @@ X(msr_imm_spsr)
 		{
 			/*  Synchronize the program counter:  */
 			uint32_t old_pc, low_pc = ((size_t)ic - (size_t)
-			    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                                 cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 			cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 			cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 			old_pc = cpu->pc;
@@ -862,7 +862,7 @@ Y(mrs_spsr)
  */
 X(mcr_mrc) {
 	uint32_t low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                     cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 	arm_mcr_mrc(cpu, ic->arg[0]);
@@ -870,7 +870,7 @@ X(mcr_mrc) {
 Y(mcr_mrc)
 X(cdp) {
 	uint32_t low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                     cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 	arm_cdp(cpu, ic->arg[0]);
@@ -956,7 +956,7 @@ X(swp)
 
 	/*  Synchronize the program counter:  */
 	uint32_t low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                     cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 
@@ -983,7 +983,7 @@ X(swpb)
 
 	/*  Synchronize the program counter:  */
 	uint32_t low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                     cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 
@@ -1073,7 +1073,7 @@ X(bdt_load)
 
 	/*  Synchronize the program counter:  */
 	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+            cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 
@@ -1259,7 +1259,7 @@ X(bdt_store)
 
 	/*  Synchronize the program counter:  */
 	low_pc = ((size_t)ic - (size_t)
-	    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+            cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1) << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
 
@@ -1594,7 +1594,7 @@ X(netbsd_idle)
 
 		/*  Synch the program counter.  */
 		uint32_t low_pc = ((size_t)ic - (size_t)
-		    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+                       cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
 		cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1)
 		    << ARM_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
@@ -2544,7 +2544,7 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct arm_instr_call *);
 
 	/*  Figure out the address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.arm.cur_ic_page)
+	low_pc = ((size_t)ic - (size_t)cpu->cd.arm.get_ic_page())
 	    / sizeof(struct arm_instr_call);
 	addr = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1) <<
 	    ARM_INSTR_ALIGNMENT_SHIFT);
@@ -3097,11 +3097,11 @@ X(to_be_translated)
 			    (new_pc & ~mask_within_page)) {
 				ic->f = samepage_function;
 				ic->arg[0] = (size_t) (
-				    cpu->cd.arm.cur_ic_page +
+                               cpu->cd.arm.get_ic_page() +
 				    ((new_pc & mask_within_page) >>
 				    ARM_INSTR_ALIGNMENT_SHIFT));
 				ic->arg[1] = (size_t) (
-				    cpu->cd.arm.cur_ic_page +
+                               cpu->cd.arm.get_ic_page() +
 				    (((addr & mask_within_page) + 4) >>
 				    ARM_INSTR_ALIGNMENT_SHIFT));
 			} else if (main_opcode == 0x0a) {

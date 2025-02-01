@@ -76,8 +76,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
+	int low_pc = ic - cpu->cd.ppc.get_ic_page();
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 

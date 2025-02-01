@@ -35,7 +35,7 @@
 
 
 #define	SYNCH_PC		{					\
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.cur_ic_page) \
+		int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())  \
 		    / sizeof(struct sh_instr_call);			\
 		cpu->pc &= ~((SH_IC_ENTRIES_PER_PAGE-1)			\
 		    << SH_INSTR_ALIGNMENT_SHIFT);			\
@@ -3181,7 +3181,7 @@ X(end_of_page)
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.cur_ic_page)
+	int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())
 	    / sizeof(struct sh_instr_call);
 	cpu->pc &= ~((SH_IC_ENTRIES_PER_PAGE-1)
 	    << SH_INSTR_ALIGNMENT_SHIFT);
@@ -3221,7 +3221,7 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct sh_instr_call *);
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.sh.cur_ic_page)
+	low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())
 	    / sizeof(struct sh_instr_call);
 
 	/*  Special case for branch with delayslot on the next page:  */
@@ -3945,7 +3945,7 @@ X(to_be_translated)
 		/*  samepage branches:  */
 		if (samepage_function != NULL && ic->arg[0] < 0x1000 &&
 		    (addr & 0xfff) < 0xffe) {
-			ic->arg[1] = (size_t) (cpu->cd.sh.cur_ic_page +
+			ic->arg[1] = (size_t) (cpu->cd.sh.get_ic_page() +
 			    (ic->arg[0] >> SH_INSTR_ALIGNMENT_SHIFT));
 			ic->f = samepage_function;
 		}
@@ -4001,7 +4001,7 @@ X(to_be_translated)
 		/*  samepage branches:  */
 		if (samepage_function != NULL && ic->arg[0] < 0x1000 &&
 		    (addr & 0xfff) < 0xffe) {
-			ic->arg[0] = (size_t) (cpu->cd.sh.cur_ic_page +
+			ic->arg[0] = (size_t) (cpu->cd.sh.get_ic_page() +
 			    (ic->arg[0] >> SH_INSTR_ALIGNMENT_SHIFT));
 			ic->f = samepage_function;
 		}

@@ -74,7 +74,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct m88k_instr_call *ic)
 	uint64_t x;
 
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
+	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.get_ic_page())
 	    / sizeof(struct m88k_instr_call);
 	cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)<<M88K_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);

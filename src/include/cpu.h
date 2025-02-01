@@ -141,14 +141,29 @@ struct physpage_ranges {
  *  instructions; low_addr is the offset of the translated instruction in the
  *  current page, NOT shifted right.)
  */
-#define DYNTRANS_ITC(arch)	struct arch ## _tc_physpage *cur_physpage;  \
+#define DYNTRANS_ITC(arch)	\
   uint64_t              cur_ic_phys;                                    \
   uint64_t              cur_ic_virt;                                    \
-  struct arch ## _instr_call  *cur_ic_page;                             \
   struct arch ## _instr_call  *next_ic;                                 \
   struct arch ## _tc_physpage *physpage_template;                       \
   void (*combination_check)(struct cpu *,                               \
-                            struct arch ## _instr_call *, int low_addr);
+                            struct arch ## _instr_call *, int low_addr); \
+private:                                                                \
+ struct arch ## _instr_call  *cur_ic_page;                              \
+ struct arch ## _tc_physpage *cur_physpage;                             \
+public:                                                                 \
+ struct arch ## _tc_physpage *get_physpage() const {                    \
+   return this->cur_physpage;                                           \
+ }                                                                      \
+ struct arch ## _instr_call *get_ic_page() const {                      \
+   return this->cur_ic_page;                                            \
+ }                                                                      \
+ void set_physpage(struct arch ## _tc_physpage *page) {                 \
+   this->cur_physpage = page;                                           \
+ }                                                                      \
+ void set_ic_page(struct arch ## _instr_call *page) {                   \
+   this->cur_ic_page = page;                                            \
+ }
 
 /*
  *  Virtual -> physical -> host address translation TLB entries:

@@ -47,7 +47,7 @@ static void gather_statistics(struct cpu *cpu)
 	int i = 0;
 	uint64_t a;
 	int low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - (size_t)
-	    cpu->cd.DYNTRANS_ARCH.cur_ic_page) / sizeof(struct DYNTRANS_IC);
+                cpu->cd.DYNTRANS_ARCH.get_ic_page()) / sizeof(struct DYNTRANS_IC);
 
 	if (cpu->machine->statistics.file == NULL) {
 		fatal("statistics gathering with no filename set is"
@@ -72,9 +72,8 @@ static void gather_statistics(struct cpu *cpu)
 			break;
 		case 'p':
 			/*  Physical program counter address:  */
-			cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
-			    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
-			a = cpu->cd.DYNTRANS_ARCH.cur_physpage->physaddr;
+			cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
+			a = cpu->cd.DYNTRANS_ARCH.get_physpage()->physaddr;
 			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
 			a += low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT;
@@ -149,10 +148,10 @@ static void gather_statistics(struct cpu *cpu)
 #define I	ic = cpu->cd.DYNTRANS_ARCH.next_ic ++;	\
 		{	\
 			int low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - \
-			    (size_t)cpu->cd.DYNTRANS_ARCH.cur_ic_page) / \
+                    (size_t)cpu->cd.DYNTRANS_ARCH.get_ic_page()) /  \
 			    sizeof(struct DYNTRANS_IC);			\
 			printf("cur_ic_page=%p ic=%p (low_pc=0x%x)\n",	\
-			    cpu->cd.DYNTRANS_ARCH.cur_ic_page,		\
+             cpu->cd.DYNTRANS_ARCH.get_ic_page(),        \
 			    ic, low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT); \
 		} \
 		ic->f(cpu, ic);
@@ -166,7 +165,7 @@ static void gather_statistics(struct cpu *cpu)
 		nr_of_I_calls ++;					\
 		if (ic->f == NULL) {					\
 			int low_pc = ((size_t)cpu->cd.DYNTRANS_ARCH.next_ic - \
-			    (size_t)cpu->cd.DYNTRANS_ARCH.cur_ic_page) / \
+			    (size_t)cpu->cd.DYNTRANS_ARCH.get_ic_page()) / \
 			    sizeof(struct DYNTRANS_IC);			\
 			cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) << \
 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);		\
@@ -176,7 +175,7 @@ static void gather_statistics(struct cpu *cpu)
 			printf("Next ic = %p\n", cpu->cd.		\
 				DYNTRANS_ARCH.next_ic);			\
 			printf("cur ic page = %p\n", cpu->cd.		\
-				DYNTRANS_ARCH.cur_ic_page);		\
+				DYNTRANS_ARCH.get_ic_page());		\
 			cpu->running = 0;				\
 			return 0;					\
 		}							\
@@ -355,8 +354,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
 	cpu->n_translated_instrs = 0;
 
-	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
-	    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+	cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
 
   if (GdblibCheckWaiting(cpu)) {
     if (GdblibSerialInterrupt(cpu)) {
@@ -462,7 +460,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     	cpu->n_translated_instrs += n_instrs;
 
 	/*  Synchronize the program counter:  */
-	low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+      low_pc = cpu->cd.DYNTRANS_ARCH.next_ic - cpu->cd.DYNTRANS_ARCH.get_ic_page();
 	if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
 		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
@@ -852,9 +850,9 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 
   cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cached_pc & ~0xfff;
   cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
-	cpu->cd.DYNTRANS_ARCH.cur_ic_page = &ppp->ics[0];
+	cpu->cd.DYNTRANS_ARCH.set_ic_page(&ppp->ics[0]);
 
-	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.cur_ic_page +
+	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
 
 	/*  printf("cached_pc=0x%016" PRIx64"  pagenr=%lli  table_index=%lli, "
@@ -905,12 +903,12 @@ void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
   //    cpu->cd.DYNTRANS_ARCH.cur_ic_phys
   //    );
 
-  // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.cur_ic_page, &ppp->ics[0]);
+  // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.get_ic_page(), &ppp->ics[0]);
   auto ppp = static_cast<DYNTRANS_TC_PHYSPAGE*>(host_pages.ppp);
   cpu->cd.DYNTRANS_ARCH.cur_ic_virt = cpu->pc & ~0xfff;
   cpu->cd.DYNTRANS_ARCH.cur_ic_phys = ppp->physaddr;
-	cpu->cd.DYNTRANS_ARCH.cur_ic_page = &ppp->ics[0];
-	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.cur_ic_page +
+	cpu->cd.DYNTRANS_ARCH.set_ic_page(&ppp->ics[0]);
+	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
 	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
 
 	/*  printf("cached_pc=0x%016" PRIx64"  pagenr=%lli  table_index=%lli, "
@@ -1833,17 +1831,16 @@ cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
 	 */
 
 	/*  Make sure cur_physpage is in synch:  */
-	cpu->cd.DYNTRANS_ARCH.cur_physpage = (struct DYNTRANS_TC_PHYSPAGE *)
-	    cpu->cd.DYNTRANS_ARCH.cur_ic_page;
+  cpu->cd.DYNTRANS_ARCH.set_physpage((struct DYNTRANS_TC_PHYSPAGE *)cpu->cd.DYNTRANS_ARCH.get_ic_page());
 
 	{
 		int x = addr & (DYNTRANS_PAGESIZE - 1);
 		int addr_per_translation_range = DYNTRANS_PAGESIZE / (8 *
-		    sizeof(cpu->cd.DYNTRANS_ARCH.cur_physpage->
+        sizeof(cpu->cd.DYNTRANS_ARCH.get_physpage()->
 		    translations_bitmap));
 		x /= addr_per_translation_range;
 
-		cpu->cd.DYNTRANS_ARCH.cur_physpage->
+		cpu->cd.DYNTRANS_ARCH.get_physpage()->
 		    translations_bitmap |= (1 << x);
 	}
 

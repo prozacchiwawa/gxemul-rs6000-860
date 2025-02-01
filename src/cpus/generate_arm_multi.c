@@ -101,7 +101,7 @@ void generate_opcode(uint32_t opcode)
 
 	if (!load && opcode & 0x8000) {
 		printf("\tuint32_t tmp_pc = ((size_t)ic - (size_t)\n\t"
-		    "    cpu->cd.arm.cur_ic_page) / sizeof(struct "
+		    "    cpu->cd.arm.get_ic_page()) / sizeof(struct "
 		    "arm_instr_call);\n"
 		    "\ttmp_pc = ((cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1)"
 		    "\n\t    << ARM_INSTR_ALIGNMENT_SHIFT)))\n"

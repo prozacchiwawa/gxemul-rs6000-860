@@ -304,17 +304,17 @@ void ppc_cpu_dumpinfo(struct cpu *cpu)
 /*
  *  reg_access_msr():
  */
-void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
+int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
                     ppc_instr_call *ic, int check_for_interrupts)
 {
 	if (valuep == NULL) {
 		fatal("reg_access_msr(): NULL\n");
-		return;
+		return 0;
 	}
 
   if (!writeflag) {
     *valuep = cpu->cd.ppc.msr;
-    return;
+    return 0;
   }
 
 	uint64_t old = cpu->cd.ppc.msr;
@@ -354,19 +354,22 @@ void reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	}
 
   if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
-    return;
+    return 0;
   }
 
   if (cpu->cd.ppc.dec_intr_pending &&
       !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
     cpu->cd.ppc.dec_intr_pending = 0;
     ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-    return;
+    return 1;
   }
 
   if (cpu->cd.ppc.irq_asserted) {
     ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
+    return 1;
   }
+
+  return 0;
 }
 
 
@@ -648,7 +651,7 @@ void ppc_cpu_tlbdump(struct machine *m, int x, int rawflag)
 void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
-  fprintf(stderr, "ppc irq raised\n");
+  // fprintf(stderr, "ppc irq raised\n");
 	cpu->cd.ppc.irq_asserted = 1;
 }
 
@@ -659,7 +662,7 @@ void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
-  fprintf(stderr, "ppc irq lowered\n");
+  // fprintf(stderr, "ppc irq lowered\n");
 	cpu->cd.ppc.irq_asserted = 0;
 }
 

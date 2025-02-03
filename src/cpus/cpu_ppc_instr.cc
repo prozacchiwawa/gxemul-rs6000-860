@@ -50,6 +50,30 @@
       return; } }
 #endif
 
+template <class T>
+static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, uint64_t addr) {
+	uint64_t old_pc = cpu->pc;
+
+  auto alignment_shift = cpu_traits<T>::instr_alignment_shift();
+  auto entries_per_page = cpu_traits<T>::ic_entries_per_page();
+
+  uint64_t mask_within_page =
+    ((entries_per_page-1) << alignment_shift)
+    | ((1 << alignment_shift) - 1);
+
+  cpu->pc = addr & ~((1 << alignment_shift) - 1);
+  /*  TODO: trace in separate (duplicate) function?  */
+  cpu->functioncall_end_trace(cpu);
+  if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
+    cpu->cd.DYNTRANS_ARCH.next_ic =
+      cpu->cd.DYNTRANS_ARCH.get_ic_page() +
+      ((cpu->pc & mask_within_page) >>
+       alignment_shift);
+  } else {
+    /*  Find the new physical page and update pointers:  */
+    quick_pc_to_pointers(cpu);
+  }
+}
 
 
 /*
@@ -186,7 +210,6 @@ X(bclr)
 {
 	unsigned int bo = ic->arg[0], bi31m = ic->arg[1];
 	int ctr_ok, cond_ok;
-	uint64_t old_pc = cpu->pc;
 	MODE_uint_t tmp, addr = cpu->cd.ppc.spr[SPR_LR];
 	if (!(bo & 4)) {
 		cpu->cd.ppc.spr[SPR_CTR] --;
@@ -197,22 +220,7 @@ X(bclr)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (ctr_ok && cond_ok) {
-		uint64_t mask_within_page =
-		    ((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT)
-		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		/*  TODO: trace in separate (duplicate) function?  */
-    cpu->functioncall_end_trace(cpu);
-		if ((old_pc  & ~mask_within_page) ==
-		    (cpu->pc & ~mask_within_page)) {
-			cpu->cd.ppc.next_ic =
-        cpu->cd.ppc.get_ic_page() +
-			    ((cpu->pc & mask_within_page) >>
-			    PPC_INSTR_ALIGNMENT_SHIFT);
-		} else {
-			/*  Find the new physical page and update pointers:  */
-			quick_pc_to_pointers(cpu);
-		}
+    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
 X(bclr_20)
@@ -241,25 +249,7 @@ X(bclr_l)
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (ctr_ok && cond_ok) {
-		uint64_t mask_within_page =
-		    ((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT)
-		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		/*  TODO: trace in separate (duplicate) function?  */
-		//if (cpu->machine->show_trace_tree)
-		//	cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
-		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace(cpu, cpu->pc);
-		if ((old_pc  & ~mask_within_page) ==
-		    (cpu->pc & ~mask_within_page)) {
-			cpu->cd.ppc.next_ic =
-        cpu->cd.ppc.get_ic_page() +
-			    ((cpu->pc & mask_within_page) >>
-			    PPC_INSTR_ALIGNMENT_SHIFT);
-		} else {
-			/*  Find the new physical page and update pointers:  */
-			quick_pc_to_pointers(cpu);
-		}
+    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
 
@@ -279,23 +269,7 @@ X(bcctr)
 	int cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (cond_ok) {
-		uint64_t mask_within_page =
-		    ((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT)
-		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		/*  TODO: trace in separate (duplicate) function?  */
-		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
-		if ((old_pc  & ~mask_within_page) ==
-		    (cpu->pc & ~mask_within_page)) {
-			cpu->cd.ppc.next_ic =
-        cpu->cd.ppc.get_ic_page() +
-			    ((cpu->pc & mask_within_page) >>
-			    PPC_INSTR_ALIGNMENT_SHIFT);
-		} else {
-			/*  Find the new physical page and update pointers:  */
-			quick_pc_to_pointers(cpu);
-		}
+    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
 X(bcctr_l)
@@ -313,23 +287,7 @@ X(bcctr_l)
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (cond_ok) {
-		uint64_t mask_within_page =
-		    ((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT)
-		    | ((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		cpu->pc = addr & ~((1 << PPC_INSTR_ALIGNMENT_SHIFT) - 1);
-		/*  TODO: trace in separate (duplicate) function?  */
-		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace(cpu, cpu->pc);
-		if ((old_pc  & ~mask_within_page) ==
-		    (cpu->pc & ~mask_within_page)) {
-			cpu->cd.ppc.next_ic =
-        cpu->cd.ppc.get_ic_page() +
-			    ((cpu->pc & mask_within_page) >>
-			    PPC_INSTR_ALIGNMENT_SHIFT);
-		} else {
-			/*  Find the new physical page and update pointers:  */
-			quick_pc_to_pointers(cpu);
-		}
+    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
 

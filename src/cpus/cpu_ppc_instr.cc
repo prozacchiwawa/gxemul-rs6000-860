@@ -1841,14 +1841,12 @@ X(mfmsr)
  */
 X(mtmsr)
 {
-	MODE_uint_t old_pc;
 	uint64_t x = reg(ic->arg[0]);
 
 	/*  TODO: check permission!  */
 
 	/*  Synchronize the PC (pointing to _after_ this instruction)  */
 	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[1];
-	old_pc = cpu->pc;
 
 	if (!ic->arg[2]) {
 		uint64_t y;
@@ -1856,15 +1854,9 @@ X(mtmsr)
 		x = (y & 0xffffffff00000000ULL) | (x & 0xffffffffULL);
 	}
 
-	reg_access_msr(cpu, &x, 1, ic, 1);
-
-	/*
-	 *  Super-ugly hack:  If the pc wasn't changed (i.e. if there was no
-	 *  exception while accessing the msr), then we _decrease_ the PC by 4
-	 *  again. This is because the next ic could be an end_of_page.
-	 */
-	if ((MODE_uint_t)cpu->pc == old_pc)
+	if (!reg_access_msr(cpu, &x, 1, ic, 1)) {
 		cpu->pc -= 4;
+  }
 }
 
 

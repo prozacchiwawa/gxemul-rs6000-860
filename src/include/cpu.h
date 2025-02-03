@@ -473,12 +473,8 @@ template <class T> int get_low_pc(T &ci) {
   return ci.next_ic - ci.get_ic_page();
 }
 
-template <class Arch> int get_low_pc(Arch &ci, struct cpu_traits<Arch>::instr_t *ic) {
-  return ic - ci.get_ic_page();
-}
-
-template <class Arch, class Instr=typename cpu_traits<Arch>::instr_t>
-int get_low_pc(Arch &ci, Instr *ic) {
+template <class T, class U=typename cpu_traits<T>::instr_t>
+inline int get_low_pc(T &ci, U *ic) {
   return ic - ci.get_ic_page();
 }
 
@@ -487,14 +483,15 @@ inline void next_insn(U &ic, T &arch) {
   ic = arch.next_ic++;
 }
 
-template <class T> int sync_pc(struct cpu *cpu, T &arch) {
-  auto low_pc = get_low_pc(cpu, arch);
+template <class T, class U=typename cpu_traits<T>::instr_t>
+inline int sync_pc(struct cpu *cpu, T &arch, U *ic) {
+  auto low_pc = get_low_pc(arch, ic);
+  uint64_t pc_low_mask =
+    (cpu_traits<T>::ic_entries_per_page() <<
+     cpu_traits<T>::instr_alignment_shift()) - 1;
   cpu->pc =
-    (cpu->pc &
-     ~((cpu_traits<T>::ic_entries_per_page()-1) <<
-       cpu_traits<T>::instr_alignment_shift())) +
-    (low_pc <<
-     cpu_traits<T>::instr_alignment_shift());
+  (cpu->pc & ~pc_low_mask) +
+  (low_pc << cpu_traits<T>::instr_alignment_shift());
   return low_pc;
 }
 

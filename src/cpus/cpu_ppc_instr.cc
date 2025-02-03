@@ -45,7 +45,7 @@
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
       /*  Synchronize the PC, and cause an FPU exception:  */           \
-      sync_low_pc(cpu, cpu->cd.ppc);                                    \
+      sync_pc(cpu, cpu->cd.ppc, ic);                                    \
       ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);                         \
       return; } }
 #endif
@@ -1136,10 +1136,7 @@ X(llsc)
   uint64_t final_addr = 0;
 
 	/*  Synchronize the PC so the exception below can target the right location.  */
-  uint64_t low_pc = get_low_pc(cpu->cd.ppc, ic);
-  cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
-                         PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<
-                                                        PPC_INSTR_ALIGNMENT_SHIFT);
+  sync_pc(cpu, cpu->cd.ppc, ic);
 
   if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
     // Will throw.
@@ -1297,10 +1294,7 @@ X(loose_lhaux)
   uint8_t raw_value[2];
 
   /*  Synchronize the PC:  */
-  int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.get_ic_page())
-    / sizeof(struct ppc_instr_call);
-  cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-  cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+  sync_pc(cpu, cpu->cd.ppc, ic);
 
   if (page) {
     auto addr = full_addr & 0xfff;

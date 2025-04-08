@@ -76,9 +76,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 	/*  Synchronize the PC:  */
-	int low_pc = ic - cpu->cd.ppc.get_ic_page();
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+  sync_pc(cpu, cpu->cd.ppc, ic);
 
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
@@ -102,6 +100,13 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    data[0];
 #endif
 #ifdef LS_H
+  auto update =
+#ifdef LS_UPDATE
+    true
+#else
+    false
+#endif
+    ;
 	reg(ic->arg[0]) =
 #ifndef LS_ZERO
 	    (int16_t)
@@ -314,16 +319,10 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
   page[addr^offset] = reg(ic->arg[0]);
 #endif
 #ifdef LS_H
-  if (reg(ic->arg[0]) == 0x2ad4) {
-    fprintf(stderr, "2ad4 halfword write to %08x: %08x\n", (unsigned int)addr, (unsigned int)cpu->pc);
-  }
   page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 8;
   page[(addr+1)^offset^swizzle] = reg(ic->arg[0]);
 #endif
 #ifdef LS_W
-  if (reg(ic->arg[0]) == 0x2ad40000) {
-    fprintf(stderr, "2ad40000 word write to %08x: %08x\n", (unsigned int)addr, (unsigned int)cpu->pc);
-  }
   page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 24;
   page[(addr+1)^offset^swizzle] = reg(ic->arg[0]) >> 16;
   page[(addr+2)^offset^swizzle] = reg(ic->arg[0]) >> 8;

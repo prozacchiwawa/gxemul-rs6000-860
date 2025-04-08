@@ -915,7 +915,7 @@ void emul_run(struct emul *emul)
 		}
 	}
 
-	if (n > 0) {
+	if (n > 0 && !quiet_mode) {
 		printf("Press enter to quit.\n");
 		while (!console_charavail(MAIN_CONSOLE)) {
 			x11_check_event(emul);

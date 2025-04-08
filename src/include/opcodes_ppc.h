@@ -217,15 +217,13 @@
 #define	PPC_HI6_LMW		0x2e
 #define	PPC_HI6_STMW		0x2f
 #define	PPC_HI6_LFS		0x30
-
+#define PPC_HI6_LFSU  0x31
 #define	PPC_HI6_LFD		0x32
-
+#define PPC_HI6_LFDU  0x33
 #define	PPC_HI6_STFS		0x34
 #define PPC_HI6_STFSU   0x35
-
 #define	PPC_HI6_STFD		0x36
 #define PPC_HI6_STFDU   0x37
-
 #define	PPC_HI6_LD		0x3a
 #define	PPC_HI6_59		0x3b
 #define	  PPC_59_FDIVS		  18

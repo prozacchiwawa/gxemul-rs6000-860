@@ -323,16 +323,18 @@ X(bc)
 {
 	MODE_uint_t tmp;
 	unsigned int ctr_ok, cond_ok, bi31m = ic->arg[2], bo = ic->arg[1];
-	if (!(bo & 4))
+	if (!(bo & 4)) {
 		cpu->cd.ppc.spr[SPR_CTR] --;
+  }
 	ctr_ok = (bo >> 2) & 1;
 	tmp = cpu->cd.ppc.spr[SPR_CTR];
 	ctr_ok |= ( (tmp == 0) == ((bo >> 1) & 1) );
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> (bi31m)) & 1)  );
-	if (ctr_ok && cond_ok)
+	if (ctr_ok && cond_ok) {
 		instr(b)(cpu,ic);
+  }
 }
 X(bcl)
 {
@@ -381,8 +383,9 @@ X(bc_samepage)
 {
 	MODE_uint_t tmp;
 	unsigned int ctr_ok, cond_ok, bi31m = ic->arg[2], bo = ic->arg[1];
-	if (!(bo & 4))
+	if (!(bo & 4)) {
 		cpu->cd.ppc.spr[SPR_CTR] --;
+  }
 	ctr_ok = (bo >> 2) & 1;
 	tmp = cpu->cd.ppc.spr[SPR_CTR];
 	ctr_ok |= ( (tmp == 0) == ((bo >> 1) & 1) );
@@ -455,7 +458,7 @@ X(bla)
 X(bl)
 {
 	/*  Calculate LR:  */
-	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
+	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
 	/*  Calculate new PC from start of page + arg[0]  */
@@ -480,7 +483,7 @@ X(bl_samepage)
 	uint32_t low_pc;
 
 	/*  Calculate LR:  */
-	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) 
+	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
 	cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
@@ -515,7 +518,7 @@ X(cntlzw)
 
 /*
  *  cmpd:  Compare Doubleword
- *
+ *o
  *  arg[0] = ptr to ra
  *  arg[1] = ptr to rb
  *  arg[2] = 28 - 4*bf
@@ -656,7 +659,7 @@ X(cmpw_cr0)
 X(cmplw)
 {
 	uint32_t tmp = reg(ic->arg[0]), tmp2 = reg(ic->arg[1]);
-	int bf_shift = ic->arg[2], c;
+	int bf_shift = ic->arg[2], c = 0;
 	if (tmp < tmp2)
 		c = 8;
 	else if (tmp > tmp2)
@@ -664,7 +667,8 @@ X(cmplw)
 	else
 		c = 2;
 	/*  SO bit, copied from XER  */
-	c |= ((cpu->cd.ppc.spr[SPR_XER] >> 31) & 1);
+  uint32_t xer = (cpu->cd.ppc.spr[SPR_XER] >> 31);
+	c |= (xer & 1);
 	cpu->cd.ppc.cr &= ~(0xf << bf_shift);
 	cpu->cd.ppc.cr |= (c << bf_shift);
 }
@@ -680,7 +684,7 @@ X(cmplw)
 X(cmpwi)
 {
 	int32_t tmp = reg(ic->arg[0]), imm = ic->arg[1];
-	int bf_shift = ic->arg[2], c;
+	int bf_shift = ic->arg[2], c = 0;
 	if (tmp < imm)
 		c = 8;
 	else if (tmp > imm)
@@ -725,7 +729,8 @@ X(cmplwi)
 	else
 		c = 2;
 	/*  SO bit, copied from XER  */
-	c |= ((cpu->cd.ppc.spr[SPR_XER] >> 31) & 1);
+  uint32_t xer = (cpu->cd.ppc.spr[SPR_XER] >> 31);
+	c |= (xer & 1);
 	cpu->cd.ppc.cr &= ~(0xf << bf_shift);
 	cpu->cd.ppc.cr |= (c << bf_shift);
 }
@@ -1871,6 +1876,8 @@ X(lmw) {
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
+  sync_pc(cpu, cpu->cd.ppc, ic);
+
 	while (rs <= 31) {
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -1893,11 +1900,10 @@ X(stmw) {
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
+  sync_pc(cpu, cpu->cd.ppc, ic);
+
 	while (rs <= 31) {
 		uint32_t tmp = cpu->cd.ppc.gpr[rs];
-    if (tmp == 0x2ad40000) {
-      fprintf(stderr, "stmw rs=%d 2ad40000 pc = %08x\n", rs, (unsigned int)cpu->pc);
-    }
     d[3 ^ swizzle] = tmp; d[2 ^ swizzle] = tmp >> 8;
     d[1 ^ swizzle] = tmp >> 16; d[0 ^ swizzle] = tmp >> 24;
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
@@ -1930,7 +1936,7 @@ X(lswi)
 	int sub = 0;
 
   int swizzle = 0, offset = 0;
-  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
   if (ic->arg[2] & 1) {
     nb = (ic->arg[2] >> 1);
@@ -1941,6 +1947,8 @@ X(lswi)
       return;
     }
   }
+
+  sync_pc(cpu, cpu->cd.ppc, ic);
 
 	while (nb > 0) {
 		unsigned char d;
@@ -1971,7 +1979,7 @@ X(stswi)
 	int sub = 0;
 
   int swizzle = 0, offset = 0;
-  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
   if (ic->arg[2] & 1) {
     nb = (ic->arg[2] >> 1);
@@ -1982,6 +1990,10 @@ X(stswi)
       return;
     }
   }
+
+  sync_pc(cpu, cpu->cd.ppc, ic);
+  // fprintf(stderr, "%08x stswi %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
+
 
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
@@ -2444,7 +2456,7 @@ X(stfs_update)
 #else
     ppc_loadstore
 #endif
-    [2 + 4 + 16 + 32](cpu, ic);
+    [2 + 4 + 32](cpu, ic);
 
 	ic->arg[0] = (size_t)old_arg0;
 }
@@ -2493,7 +2505,7 @@ X(stfd_update)
 #else
     ppc_loadstore
 #endif
-    [3 + 4 + 16 + 32](cpu, ic);
+    [3 + 4 + 32](cpu, ic);
 }
 X(stfdx)
 {
@@ -2522,6 +2534,8 @@ X(lvx)
 	uint8_t data[16];
 	uint64_t hi, lo;
 	int rs = ic->arg[0];
+
+  abort();
 
 	if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
 	    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -2554,6 +2568,8 @@ X(stvx)
 	MODE_uint_t addr = reg(ic->arg[1]) + reg(ic->arg[2]);
 	int rs = ic->arg[0];
 	uint64_t hi = cpu->cd.ppc.vr_hi[rs], lo = cpu->cd.ppc.vr_lo[rs];
+
+  abort();
 
 	data[0] = hi >> 56;
 	data[1] = hi >> 48;
@@ -2761,18 +2777,10 @@ X(end_of_page)
 
 
 X(dump_registers) {
-  auto additions = (dump_register_state_t *)ic->arg[0];
-  ic->arg[0] = additions->arg0;
-  auto new_f = (void (*)(struct cpu *, struct ppc_instr_call *))additions->f;
-  new_f(cpu, ic);
-  auto old_pc = cpu->pc;
-  cpu->pc = ic->pc;
   cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
-  cpu->pc = old_pc;
   if (cpu->machine->register_dump) {
     ppc_cpu_register_dump(cpu, true, false);
   }
-  ic->arg[0] = (ssize_t)additions;
 }
 
 /*****************************************************************************/
@@ -2797,7 +2805,6 @@ X(to_be_translated)
 	    bfa, fp, byterev, nb, mb, me;
 	void (*samepage_function)(struct cpu *, struct ppc_instr_call *);
 	void (*rc_f)(struct cpu *, struct ppc_instr_call *);
-  auto found = dump_registers.end();
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
@@ -3009,26 +3016,28 @@ X(to_be_translated)
     ic->arg[2] = iword & 0xffff;
     break;
 
-	case PPC_HI6_LBZ:
-	case PPC_HI6_LBZU:
-	case PPC_HI6_LHZ:
-	case PPC_HI6_LHZU:
 	case PPC_HI6_LWZ:
 	case PPC_HI6_LWZU:
-	case PPC_HI6_LD:
-	case PPC_HI6_LFD:
-	case PPC_HI6_LFS:
+	case PPC_HI6_LBZ:
+	case PPC_HI6_LBZU:
 	case PPC_HI6_STB:
 	case PPC_HI6_STBU:
-	case PPC_HI6_STH:
-	case PPC_HI6_STHU:
 	case PPC_HI6_STW:
 	case PPC_HI6_STWU:
-	case PPC_HI6_STD:
-	case PPC_HI6_STFD:
+	case PPC_HI6_LHZ:
+	case PPC_HI6_LHZU:
+	case PPC_HI6_STH:
+	case PPC_HI6_STHU:
+	case PPC_HI6_LFS:
+  case PPC_HI6_LFSU:
+	case PPC_HI6_LFD:
+  case PPC_HI6_LFDU:
 	case PPC_HI6_STFS:
-  case PPC_HI6_STFDU:
   case PPC_HI6_STFSU:
+	case PPC_HI6_STFD:
+  case PPC_HI6_STFDU:
+	case PPC_HI6_LD:
+  case PPC_HI6_STD:
 		rs = (iword >> 21) & 31;
 		ra = (iword >> 16) & 31;
 		imm = (int16_t)iword;
@@ -3041,20 +3050,34 @@ X(to_be_translated)
 		case PPC_HI6_LHZU: load=1; size=1; update=1; break;
 		case PPC_HI6_LWZ:  load=1; size=2; break;
 		case PPC_HI6_LWZU: load=1; size=2; update=1; break;
-		case PPC_HI6_LD:   load=1; size=3; break;
-		case PPC_HI6_LFD:  load=1; size=3; fp=1;ic->f=instr(lfd);break;
-		case PPC_HI6_LFS:  load=1; size=2; fp=1;ic->f=instr(lfs);break;
 		case PPC_HI6_STB:  break;
 		case PPC_HI6_STBU: update=1; break;
 		case PPC_HI6_STH:  size=1; break;
 		case PPC_HI6_STHU: size=1; update=1; break;
 		case PPC_HI6_STW:  size=2; break;
 		case PPC_HI6_STWU: size=2; update=1; break;
-		case PPC_HI6_STD:  size=3; break;
-		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
+		case PPC_HI6_LFS:  load=1; size=2; fp=1;ic->f=instr(lfs);break;
+    case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs);break;
+		case PPC_HI6_LFD:  load=1; size=3; fp=1;ic->f=instr(lfd);break;
+    case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd);break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
-    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
 		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
+		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
+    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
+		case PPC_HI6_LD:
+      fprintf(stderr, "ld doesn't differentiate its lower bits\n");
+      abort();
+      load=1; size=3;
+      break;
+    case PPC_HI6_STD:
+      fprintf(stderr, "No distinghising types of STD\n");
+      abort();
+      size=3;
+      break;
+    default:
+      fprintf(stderr, "unhandled irregular store case %08x\n", (unsigned int)iword);
+      abort();
+      break;
 		}
 		if (ic->f == NULL) {
 			ic->f =
@@ -3102,8 +3125,9 @@ X(to_be_translated)
 				samepage_function = bo & 8?
 				    instr(bc_samepage_simple1) :
 				    instr(bc_samepage_simple0);
-			} else
+			} else {
 				samepage_function = instr(bc_samepage);
+      }
 		}
 		ic->arg[0] = (ssize_t)(tmp_addr + (addr & 0xffc));
 		ic->arg[1] = bo;
@@ -4070,7 +4094,7 @@ X(to_be_translated)
 				}
 				break;
 			default:{
-        fprintf(stderr, "PPC_63: unknown xo %d\n", xo);
+        fprintf(stderr, "PPC_63: unknown xo %d (%08x)\n", xo, iword);
         goto bad;
       }
       }
@@ -4081,15 +4105,6 @@ X(to_be_translated)
     fprintf(stderr, "unknown ppc hi6 %d\n", main_opcode);
     goto bad;
   }
-  }
-
-  // If we should dump for this address, change the ic.
-  found = dump_registers.find(ic->pc);
-  if (found != dump_registers.end()) {
-    found->second->f = (void *)ic->f;
-    found->second->arg0 = ic->arg[0];
-    ic->arg[0] = (uint64_t)found->second.get();
-    ic->f = instr(dump_registers);
   }
 
  end:

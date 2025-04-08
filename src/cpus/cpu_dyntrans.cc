@@ -188,12 +188,13 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef CPU_BITS_32
 struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
+  auto cpu_translate = !!(cpu->cd.ppc.msr & PPC_MSR_IR);
   auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
   return host_load_store_t {
-    cpu->cd.DYNTRANS_ARCH.phys_addr[index],
-    cpu->cd.DYNTRANS_ARCH.phys_page[index],
-    cpu->cd.DYNTRANS_ARCH.host_load[index],
-    cpu->cd.DYNTRANS_ARCH.host_store[index],
+    cpu->cd.DYNTRANS_ARCH.phys_addr[N_VPH32_ENTRIES * cpu_translate + index],
+    cpu->cd.DYNTRANS_ARCH.phys_page[N_VPH32_ENTRIES * cpu_translate + index],
+    cpu->cd.DYNTRANS_ARCH.host_load[N_VPH32_ENTRIES * cpu_translate + index],
+    cpu->cd.DYNTRANS_ARCH.host_store[N_VPH32_ENTRIES * cpu_translate + index],
   };
 }
 
@@ -362,7 +363,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     cpu->ninstrs;
 
 #ifdef DYNTRANS_PPC
-  if (cpu->machine->instruction_trace) {
+  if (cpu->machine->show_trace_tree) {
     cpu->functioncall_trace = ppc_trace;
     cpu->functioncall_end_trace = ppc_end_trace;
   } else {
@@ -373,31 +374,9 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
   auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
 #ifdef DYNTRANS_PPC
-    if (ic->f == ppc_instr_dump_registers) {
-      I;
-      return;
-    }
-
-    auto this_pc = cpu->pc;
-    auto old_ptr = ic;
-    auto old_setting = dump_registers.find(this_pc);
-    bool remove = false;
-    if (old_setting == dump_registers.end()) {
-      remove = true;
-      dump_registers.insert(std::pair(this_pc, std::make_unique<dump_register_state_t>((void *)old_ptr->f, ic->arg[0])));
-      old_setting = dump_registers.find(this_pc);
-      old_ptr->arg[0] = (ssize_t)old_setting->second.get();
-      old_ptr->f = ppc_instr_dump_registers;
-    }
+    ppc_instr_dump_registers(cpu, ic);
 #endif
     I;
-#ifdef DYNTRANS_PPC
-    if (remove) {
-      old_ptr->f = (void(*)(struct cpu *, struct ppc_instr_call *))old_setting->second->f;
-      old_ptr->arg[0] = old_setting->second->arg0;
-      dump_registers.erase(this_pc);
-    }
-#endif
   };
 
   struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
@@ -769,9 +748,9 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 	}
 
 	if (cpu->translation_cache_cur_ofs >= dyntrans_cache_size) {
-#ifdef UNSTABLE_DEVEL
+    // #ifdef UNSTABLE_DEVEL
 		fatal("[ dyntrans: resetting the translation cache ]\n");
-#endif
+    // #endif
 		cpu_create_or_reset_tc(cpu);
 	}
 
@@ -1485,9 +1464,10 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
  *  Update the virtual memory translation tables.
  */
 void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
-	unsigned char *host_page, int writeflag, uint64_t paddr_page)
+	unsigned char *host_page, int flags, uint64_t paddr_page)
 {
 	int found, r, useraccess = 0;
+  auto writeflag = flags & 1;
 
 #ifdef MODE32
 	uint32_t index;
@@ -1499,6 +1479,40 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		    paddr_page);
 		exit(1);
 	}
+
+  // sync_pc(cpu, cpu->cd.DYNTRANS_ARCH);
+
+  static std::vector<std::string> tc_lines;
+  static auto last_map = paddr_page;
+
+  char strbuf[1024];
+  sprintf(strbuf, "UPDATE_TRANSLATION_TABLE %" PRIx64 " host_page %p writeflag %d paddr_page %" PRIx64, vaddr_page, host_page, writeflag, paddr_page);
+
+  auto print_str = std::string(strbuf);
+  auto found_str = false;
+  for (auto i = tc_lines.begin(); i != tc_lines.end(); i++) {
+    if (*i == print_str) {
+      found_str = true;
+      break;
+    }
+  }
+
+  if (vaddr_page == 0x80127000) {
+    last_map = paddr_page;
+    fprintf(stderr, "%08x >> %s\n", (unsigned int)cpu->pc, print_str.c_str());
+    if (paddr_page != last_map) {
+      fprintf(stderr, "single_step enabled due to changed mapping\n");
+      single_step = ENTER_SINGLE_STEPPING;
+    }
+  }
+
+  if (!found_str) {
+    tc_lines.push_back(print_str);
+    if (tc_lines.size() > 100) {
+      tc_lines.erase(tc_lines.begin());
+    }
+    fprintf(stderr, "%08x %s\n", (unsigned int)cpu->pc, print_str.c_str());
+  }
 
 	/*  fatal("update_translation_table(): v=0x%x, h=%p w=%i"
 	    " p=0x%x\n", (int)vaddr_page, host_page, writeflag,
@@ -1943,8 +1957,10 @@ bad:	/*
 	/*  Clear the translation, in case it was "half-way" done:  */
 	ic->f = TO_BE_TRANSLATED;
 
-	if (cpu->translation_readahead)
+	if (cpu->translation_readahead) {
+		fprintf(stderr, "bad: readahead failed at %08x\n", (unsigned int)addr);
 		return;
+	}
 
   fprintf(stderr, "to be translated failed iword = %08x @ %08x\n", iword, (unsigned int)addr);
 	quiet_mode = 0;

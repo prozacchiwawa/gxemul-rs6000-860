@@ -128,7 +128,7 @@ DEVICE_TICK(mc146818)
   if (d->ticks++ >= 0x1000) {
     d->ticks = 0;
     d->time++;
-    fprintf(stderr, "mc146818: +1sec\n");
+    // fprintf(stderr, "mc146818: +1sec\n");
     pti++;
   }
 

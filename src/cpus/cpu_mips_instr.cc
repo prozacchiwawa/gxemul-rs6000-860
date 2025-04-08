@@ -2618,7 +2618,7 @@ X(sw_loop)
 	unsigned char *page;
 	int partial = 0;
 
-	page = cpu->cd.mips.host_store[rX >> 12];
+	page = cpu->cd.mips.vph32.host_store[rX >> 12];
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || (rX & 3) != 0 || rZ != 0) {
@@ -2730,7 +2730,7 @@ X(netbsd_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-	page = (int32_t *) cpu->cd.mips.host_load[pageindex];
+	page = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex];
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || page[i] != 0)
@@ -2763,12 +2763,12 @@ X(linux_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-	page = (int32_t *) cpu->cd.mips.host_load[pageindex];
+	page = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex];
 
 	addr2 = reg(ic[5].arg[1]) + (int32_t)ic[5].arg[2];
 	pageindex2 = addr2 >> 12;
 	i2 = (addr2 & 0xfff) >> 2;
-	page2 = (int32_t *) cpu->cd.mips.host_load[pageindex2];
+	page2 = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex2];
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || page[i] != 0 || page2[i2] != 0)
@@ -2794,7 +2794,7 @@ X(netbsd_strlen)
 	uint32_t pageindex = rx >> 12;
 	int i;
 
-	page = (signed char *) cpu->cd.mips.host_load[pageindex];
+	page = (signed char *) cpu->cd.mips.vph32.host_load[pageindex];
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL) {
@@ -3465,7 +3465,7 @@ X(to_be_translated)
 
 	/*  Read the instruction word from memory:  */
 #ifdef MODE32
-	page = cpu->cd.mips.host_load[(uint32_t)addr >> 12];
+	page = cpu->cd.mips.vph32.host_load[(uint32_t)addr >> 12];
 #else
 	{
 		const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;

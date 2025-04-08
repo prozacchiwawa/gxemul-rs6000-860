@@ -228,9 +228,9 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 	    ;
 	unsigned char *page = cpu->cd.arm.
 #ifdef A__L
-	    host_load
+    vph32.host_load
 #else
-	    host_store
+    vph32.host_store
 #endif
 	    [addr >> 12];
 

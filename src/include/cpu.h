@@ -201,18 +201,17 @@ public:                                                                 \
  *  names. Used so far only for usermode addresses in M88K emulation.
  */
 #define	N_VPH32_ENTRIES		1048576
-#define	VPH32(arch,ARCH)						\
-	unsigned char		*host_load[N_VPH32_ENTRIES];		\
-	unsigned char		*host_store[N_VPH32_ENTRIES];		\
-	uint32_t		phys_addr[N_VPH32_ENTRIES];		\
-	struct arch ## _tc_physpage  *phys_page[N_VPH32_ENTRIES];	\
-	uint8_t			vaddr_to_tlbindex[N_VPH32_ENTRIES];
-#define	VPH32_16BITVPHENTRIES(arch,ARCH)				\
-	unsigned char		*host_load[N_VPH32_ENTRIES];		\
-	unsigned char		*host_store[N_VPH32_ENTRIES];		\
-	uint32_t		phys_addr[N_VPH32_ENTRIES];		\
-	struct arch ## _tc_physpage  *phys_page[N_VPH32_ENTRIES];	\
-	uint16_t		vaddr_to_tlbindex[N_VPH32_ENTRIES];
+
+template <typename TcPhyspage, typename VaddrToTlb> struct vph32 {
+	unsigned char *host_load[N_VPH32_ENTRIES];
+	unsigned char *host_store[N_VPH32_ENTRIES];
+	uint32_t phys_addr[N_VPH32_ENTRIES];
+	TcPhyspage *phys_page[N_VPH32_ENTRIES];
+	VaddrToTlb vaddr_to_tlbindex[N_VPH32_ENTRIES];
+};
+
+#define	VPH32(arch,ARCH) struct vph32<arch ## _tc_physpage, uint8_t> vph32;
+#define	VPH32_16BITVPHENTRIES(arch,ARCH) struct vph32<arch ## _tc_physpage, uint16_t> vph32;
 #define	VPH32EXTENDED(arch,ARCH,ex)					\
 	unsigned char		*host_load_ ## ex[N_VPH32_ENTRIES];	\
 	unsigned char		*host_store_ ## ex[N_VPH32_ENTRIES];	\

@@ -188,19 +188,18 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef CPU_BITS_32
 struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-  auto cpu_translate = !!(cpu->cd.ppc.msr & PPC_MSR_IR);
   auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
   return host_load_store_t {
-    cpu->cd.DYNTRANS_ARCH.phys_addr[N_VPH32_ENTRIES * cpu_translate + index],
-    cpu->cd.DYNTRANS_ARCH.phys_page[N_VPH32_ENTRIES * cpu_translate + index],
-    cpu->cd.DYNTRANS_ARCH.host_load[N_VPH32_ENTRIES * cpu_translate + index],
-    cpu->cd.DYNTRANS_ARCH.host_store[N_VPH32_ENTRIES * cpu_translate + index],
+    cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index],
+    cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index],
+    cpu->cd.DYNTRANS_ARCH.vph32.host_load[index],
+    cpu->cd.DYNTRANS_ARCH.vph32.host_store[index],
   };
 }
 
 void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
   auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
-  cpu->cd.DYNTRANS_ARCH.phys_page[index] = ppp;
+  cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = ppp;
 }
 #endif
 
@@ -1008,16 +1007,17 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 	if (flags & JUST_MARK_AS_NON_WRITABLE) {
 		/*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
 		    (int)vaddr_page);  */
-		cpu->cd.DYNTRANS_ARCH.host_store[index] = NULL;
+		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
 	} else {
-		int tlbi = cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[index];
-		cpu->cd.DYNTRANS_ARCH.host_load[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.host_store[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.phys_addr[index] = 0;
-		cpu->cd.DYNTRANS_ARCH.phys_page[index] = NULL;
-		if (tlbi > 0)
+		int tlbi = cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index];
+		cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = NULL;
+		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
+		cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = 0;
+		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
+		if (tlbi > 0) {
 			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[tlbi-1].valid = 0;
-		cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[index] = 0;
+    }
+		cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index] = 0;
 	}
 #else
 	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
@@ -1431,7 +1431,7 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 #ifdef MODE32
 				uint32_t index =
 				    DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-				cpu->cd.DYNTRANS_ARCH.phys_page[index] = NULL;
+				cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
 #else
 				const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
 				const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
@@ -1557,7 +1557,7 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 	 *          for the entry with the lowest time stamp, just choosing
 	 *          one at random will work as well.
 	 */
-	found = (int)cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[
+	found = (int)cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[
 	    DYNTRANS_ADDR_TO_PAGENR(vaddr_page)] - 1;
 #else
 	x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
@@ -1599,12 +1599,12 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		/*  Add the new translation to the table:  */
 #ifdef MODE32
 		index = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-		cpu->cd.DYNTRANS_ARCH.host_load[index] = host_page;
-		cpu->cd.DYNTRANS_ARCH.host_store[index] =
+		cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = host_page;
+		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
 		    writeflag? host_page : NULL;
-		cpu->cd.DYNTRANS_ARCH.phys_addr[index] = paddr_page;
-		cpu->cd.DYNTRANS_ARCH.phys_page[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.vaddr_to_tlbindex[index] = r + 1;
+		cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = paddr_page;
+		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
+		cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index] = r + 1;
 #ifdef DYNTRANS_ARM
 		if (useraccess)
 			cpu->cd.DYNTRANS_ARCH.is_userpage[index >> 5]
@@ -1704,25 +1704,27 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag = 0;
 #ifdef MODE32
 		index = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-		cpu->cd.DYNTRANS_ARCH.phys_page[index] = NULL;
+		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
 #ifdef DYNTRANS_ARM
 		cpu->cd.DYNTRANS_ARCH.is_userpage[index>>5] &= ~(1<<(index&31));
 		if (useraccess)
 			cpu->cd.DYNTRANS_ARCH.is_userpage[index >> 5]
 			    |= 1 << (index & 31);
 #endif
-		if (cpu->cd.DYNTRANS_ARCH.phys_addr[index] == paddr_page) {
-			if (writeflag & MEM_WRITE)
-				cpu->cd.DYNTRANS_ARCH.host_store[index] =
+		if (cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] == paddr_page) {
+			if (writeflag & MEM_WRITE) {
+				cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
 				    host_page;
-			if (writeflag & MEM_DOWNGRADE)
-				cpu->cd.DYNTRANS_ARCH.host_store[index] = NULL;
+      }
+			if (writeflag & MEM_DOWNGRADE) {
+				cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
+      }
 		} else {
 			/*  Change the entire physical/host mapping:  */
-			cpu->cd.DYNTRANS_ARCH.host_load[index] = host_page;
-			cpu->cd.DYNTRANS_ARCH.host_store[index] =
+			cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = host_page;
+			cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
 			    writeflag? host_page : NULL;
-			cpu->cd.DYNTRANS_ARCH.phys_addr[index] = paddr_page;
+			cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = paddr_page;
 		}
 #else	/*  !MODE32  */
 		x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;

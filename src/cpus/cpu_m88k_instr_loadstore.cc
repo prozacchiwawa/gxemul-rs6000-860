@@ -250,9 +250,9 @@ void LS_N(struct cpu *cpu, struct m88k_instr_call *ic)
 #endif
 #else
 #ifdef LS_LOAD
-	uint8_t *p = cpu->cd.m88k.host_load[addr >> 12];
+	uint8_t *p = cpu->cd.m88k.vph32.host_load[addr >> 12];
 #else
-	uint8_t *p = cpu->cd.m88k.host_store[addr >> 12];
+	uint8_t *p = cpu->cd.m88k.vph32.host_store[addr >> 12];
 #endif
 #endif
 

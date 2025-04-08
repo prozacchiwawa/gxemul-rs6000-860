@@ -10,7 +10,7 @@
 #else
 #define	quick_pc_to_pointers(cpu) {                                     \
     uint32_t pc_tmp32 = cpu->pc;                                        \
-    struct DYNTRANS_TC_PHYSPAGE *ppp_tmp = cpu->cd.DYNTRANS_ARCH.phys_page[pc_tmp32 >> 12]; \
+    struct DYNTRANS_TC_PHYSPAGE *ppp_tmp = cpu->cd.DYNTRANS_ARCH.vph32.phys_page[pc_tmp32 >> 12]; \
     if (ppp_tmp != NULL) {                                              \
       cpu->cd.DYNTRANS_ARCH.set_physpage(pc_tmp32 & ~0xfff, ppp_tmp);   \
       cpu->cd.DYNTRANS_ARCH.next_ic =                                   \

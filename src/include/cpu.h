@@ -41,6 +41,15 @@
 
 #include "timer.h"
 #include "cpu_traits.h"
+#include "mem_flags.h"
+
+#define	JUST_MARK_AS_NON_WRITABLE	1
+#define	INVALIDATE_ALL			2
+#define	INVALIDATE_PADDR		4
+#define	INVALIDATE_VADDR		8
+#define	INVALIDATE_VADDR_UPPER4		16	/*  useful for PPC emulation  */
+#define INVALIDATE_IDENTITY 32
+
 
 /*
  *  Dyntrans misc declarations, used throughout the dyntrans code.
@@ -202,16 +211,178 @@ public:                                                                 \
  */
 #define	N_VPH32_ENTRIES		1048576
 
-template <typename TcPhyspage, typename VaddrToTlb> struct vph32 {
+struct host_load_store_t {
+  uint64_t physaddr;
+  void *ppp;
+  uint8_t *host_load;
+  uint8_t *host_store;
+};
+
+template <typename TcPhyspage> constexpr bool is_arm() { return false; }
+template <> constexpr bool is_arm<struct arm_tc_physpage>() { return true; }
+
+template <typename TcPhyspage> constexpr int max_vph_tlb_entries() { return 128; }
+template <> constexpr int max_vph_tlb_entries<struct arm_tc_physpage>() { return 384; }
+
+template <typename TcPhyspage, typename VaddrToTlb, typename VpgTlbEntry> struct vph32 {
+private:
 	unsigned char *host_load[N_VPH32_ENTRIES];
 	unsigned char *host_store[N_VPH32_ENTRIES];
 	uint32_t phys_addr[N_VPH32_ENTRIES];
 	TcPhyspage *phys_page[N_VPH32_ENTRIES];
 	VaddrToTlb vaddr_to_tlbindex[N_VPH32_ENTRIES];
+	VpgTlbEntry *vph_tlb_entry;
+  uint32_t *is_userpage;
+
+public:
+  void add_tlb_data(uint32_t *is_userpage, VpgTlbEntry *vph_tlb_entry) {
+    this->is_userpage = is_userpage;
+    this->vph_tlb_entry = vph_tlb_entry;
+  }
+
+  static uint64_t addr_to_pagenr(uint64_t addr) {
+    return addr >> 12;
+  }
+
+  host_load_store_t get_cached_tlb_pages(uint64_t addr) {
+    auto index = addr_to_pagenr(addr & 0xffffffff);
+    return host_load_store_t {
+      phys_addr[index],
+      phys_page[index],
+      host_load[index],
+      host_store[index],
+    };
+  }
+
+  void set_tlb_physpage(uint64_t addr, TcPhyspage *ppp) {
+    auto index = addr_to_pagenr(addr & 0xffffffff);
+    phys_page[index] = ppp;
+  }
+
+  void clear_writable(uint64_t addr) {
+    auto index = addr_to_pagenr(addr & 0xffffffff);
+    host_store[index] = nullptr;
+  }
+
+  void clear_phys(uint64_t vaddr_page) {
+    uint32_t index = addr_to_pagenr(vaddr_page & 0xffffffff);
+    phys_page[index] = nullptr;
+  }
+
+  int clear_cache(uint64_t addr) {
+    auto index = addr_to_pagenr(addr & 0xffffffff);
+		host_load[index] = nullptr;
+		host_store[index] = nullptr;
+		phys_addr[index] = 0;
+		phys_page[index] = nullptr;
+		int tlbi = vaddr_to_tlbindex[index];
+		vaddr_to_tlbindex[index] = 0;
+    return tlbi;
+  }
+
+  void update_cache_page
+  (uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, int r) {
+		auto index = addr_to_pagenr(vaddr_page);
+		host_load[index] = host_page;
+		host_store[index] = writeflag? host_page : nullptr;
+		phys_addr[index] = paddr_page;
+		phys_page[index] = nullptr;
+		vaddr_to_tlbindex[index] = r + 1;
+  }
+
+  void invalidate_tlb_entry(uint64_t vaddr_page, int flags)
+  {
+    uint32_t index = addr_to_pagenr(vaddr_page);
+
+    if (is_arm<TcPhyspage>()) {
+      is_userpage[index >> 5] &= ~(1 << (index & 31));
+    }
+
+    if (flags & JUST_MARK_AS_NON_WRITABLE) {
+      /*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
+          (int)vaddr_page);  */
+      clear_writable(vaddr_page);
+    } else {
+      int tlbi = clear_cache(vaddr_page);
+      if (tlbi > 0) {
+        vph_tlb_entry[tlbi-1].valid = 0;
+      }
+    }
+  }
+
+  void update_make_valid_translation
+  (uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag) {
+    uint32_t index = addr_to_pagenr(vaddr_page);
+    auto useraccess = 0;
+    auto found = (int)vaddr_to_tlbindex[addr_to_pagenr(vaddr_page)] - 1;
+
+    if (found < 0) {
+      /*  Create the new TLB entry, overwriting a "random" entry:  */
+      static unsigned int x = 0;
+      auto r = (x++) % max_vph_tlb_entries<TcPhyspage>();
+
+      if (vph_tlb_entry[r].valid) {
+        /*  This one has to be invalidated first:  */
+        invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, 0);
+      }
+
+      vph_tlb_entry[r].valid = 1;
+      vph_tlb_entry[r].host_page = host_page;
+      vph_tlb_entry[r].paddr_page = paddr_page;
+      vph_tlb_entry[r].vaddr_page = vaddr_page;
+      vph_tlb_entry[r].writeflag = writeflag & MEM_WRITE;
+
+      /*  Add the new translation to the table:  */
+      update_cache_page
+        (vaddr_page, paddr_page, host_page, writeflag, r);
+
+      if (is_arm<TcPhyspage>() && useraccess) {
+        is_userpage[index >> 5] |= 1 << (index & 31);
+      }
+    } else {
+      /*
+       *  The translation was already in the TLB.
+       *	Writeflag = 0:  Do nothing.
+       *	Writeflag = 1:  Make sure the page is writable.
+       *	Writeflag = MEM_DOWNGRADE: Downgrade to readonly.
+       */
+      auto r = found;
+      if (writeflag & MEM_WRITE) {
+        vph_tlb_entry[r].writeflag = 1;
+      }
+      if (writeflag & MEM_DOWNGRADE) {
+        vph_tlb_entry[r].writeflag = 0;
+      }
+
+      index = addr_to_pagenr(vaddr_page);
+      phys_page[index] = nullptr;
+      if (is_arm<TcPhyspage>()) {
+        is_userpage[index>>5] &= ~(1<<(index&31));
+        if (useraccess)
+          is_userpage[index >> 5]
+            |= 1 << (index & 31);
+      }
+
+      if (phys_addr[index] == paddr_page) {
+        if (writeflag & MEM_WRITE) {
+          host_store[index] = host_page;
+        }
+        if (writeflag & MEM_DOWNGRADE) {
+          host_store[index] = nullptr;
+        }
+      } else {
+        /*  Change the entire physical/host mapping:  */
+        host_load[index] = host_page;
+        host_store[index] = writeflag ? host_page : nullptr;
+        phys_addr[index] = paddr_page;
+      }
+    }
+  }
 };
 
-#define	VPH32(arch,ARCH) struct vph32<arch ## _tc_physpage, uint8_t> vph32;
-#define	VPH32_16BITVPHENTRIES(arch,ARCH) struct vph32<arch ## _tc_physpage, uint16_t> vph32;
+#define	VPH32(arch,ARCH) \
+  struct vph32<arch ## _tc_physpage, uint8_t, arch ## _vpg_tlb_entry> vph32;
+#define	VPH32_16BITVPHENTRIES(arch,ARCH) struct vph32<arch ## _tc_physpage, uint16_t, arch ## _vpg_tlb_entry> vph32;
 #define	VPH32EXTENDED(arch,ARCH,ex)					\
 	unsigned char		*host_load_ ## ex[N_VPH32_ENTRIES];	\
 	unsigned char		*host_store_ ## ex[N_VPH32_ENTRIES];	\
@@ -521,14 +692,6 @@ struct cpu_family *cpu_family_ptr_by_number(int arch);
 void cpu_init(void);
 
 
-#define	JUST_MARK_AS_NON_WRITABLE	1
-#define	INVALIDATE_ALL			2
-#define	INVALIDATE_PADDR		4
-#define	INVALIDATE_VADDR		8
-#define	INVALIDATE_VADDR_UPPER4		16	/*  useful for PPC emulation  */
-#define INVALIDATE_IDENTITY 32
-
-
 /*  Note: 64-bit processors running in 32-bit mode use a 32-bit
     display format, even though the underlying data is 64-bits.  */
 #define	CPU_SETTINGS_ADD_REGISTER64(name, var)				   \
@@ -560,13 +723,6 @@ void cpu_init(void);
 	fp->init_tables = n ## _cpu_init_tables;			\
 	return 1;							\
 	}
-
-struct host_load_store_t {
-  uint64_t physaddr;
-  void *ppp;
-  uint8_t *host_load;
-  uint8_t *host_store;
-};
 
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))

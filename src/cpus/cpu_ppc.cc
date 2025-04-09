@@ -240,6 +240,8 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		interrupt_handler_register(&templ);
 	}
 
+  cpu->cd.ppc.vph32.add_tlb_data(nullptr, cpu->cd.ppc.vph_tlb_entry);
+
 	return 1;
 }
 

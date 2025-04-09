@@ -226,14 +226,14 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 	    + offset
 #endif
 	    ;
-	unsigned char *page = cpu->cd.arm.
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(addr);
+	unsigned char *page =
 #ifdef A__L
-    vph32.host_load
+    host_page.host_load
 #else
-    vph32.host_store
+    host_page.host_store
 #endif
-	    [addr >> 12];
-
+    ;
 
 #if !defined(A__P) && defined(A__W)
 	/*

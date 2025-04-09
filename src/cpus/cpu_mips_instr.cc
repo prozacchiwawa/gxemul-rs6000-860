@@ -2618,7 +2618,8 @@ X(sw_loop)
 	unsigned char *page;
 	int partial = 0;
 
-	page = cpu->cd.mips.vph32.host_store[rX >> 12];
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(rX);
+	page = host_page.host_store;
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || (rX & 3) != 0 || rZ != 0) {
@@ -2730,7 +2731,8 @@ X(netbsd_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-	page = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex];
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
+  page = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || page[i] != 0)
@@ -2763,12 +2765,14 @@ X(linux_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-	page = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex];
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
+	page = (int32_t *)host_page.host_load;
 
 	addr2 = reg(ic[5].arg[1]) + (int32_t)ic[5].arg[2];
 	pageindex2 = addr2 >> 12;
 	i2 = (addr2 & 0xfff) >> 2;
-	page2 = (int32_t *) cpu->cd.mips.vph32.host_load[pageindex2];
+  host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr2);
+	page2 = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL || page[i] != 0 || page2[i2] != 0)
@@ -2794,7 +2798,8 @@ X(netbsd_strlen)
 	uint32_t pageindex = rx >> 12;
 	int i;
 
-	page = (signed char *) cpu->cd.mips.vph32.host_load[pageindex];
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(rx);
+  page = (signed char *)host_page.host_load;
 
 	/*  Fallback:  */
 	if (cpu->delay_slot || page == NULL) {
@@ -3465,7 +3470,8 @@ X(to_be_translated)
 
 	/*  Read the instruction word from memory:  */
 #ifdef MODE32
-	page = cpu->cd.mips.vph32.host_load[(uint32_t)addr >> 12];
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
+	page = host_page.host_load;
 #else
 	{
 		const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;

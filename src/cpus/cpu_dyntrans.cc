@@ -188,18 +188,11 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef CPU_BITS_32
 struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-  auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
-  return host_load_store_t {
-    cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index],
-    cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index],
-    cpu->cd.DYNTRANS_ARCH.vph32.host_load[index],
-    cpu->cd.DYNTRANS_ARCH.vph32.host_store[index],
-  };
+  return cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(addr);
 }
 
 void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
-  auto index = DYNTRANS_ADDR_TO_PAGENR(addr & 0xffffffff);
-  cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = ppp;
+  cpu->cd.DYNTRANS_ARCH.vph32.set_tlb_physpage(addr, ppp);
 }
 #endif
 
@@ -753,7 +746,11 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		cpu_create_or_reset_tc(cpu);
 	}
 
-	pagenr = DYNTRANS_ADDR_TO_PAGENR(host_pages.physaddr);
+#ifdef MODE32
+	pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(host_pages.physaddr);
+#else
+  pagenr = DYNTRANS_ADDR_TO_PAGENR(host_pages.physaddr);
+#endif
 	table_index = PAGENR_TO_TABLE_INDEX(pagenr);
 
 	physpage_entryp = &(((uint32_t *)cpu->translation_cache)[table_index]);
@@ -989,37 +986,14 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
  *  is just downgraded to non-writable (ie the host store page is set to
  *  NULL). Otherwise, the entire translation is removed.
  */
-static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 #ifdef MODE32
-	uint32_t
-#else
-	uint64_t
-#endif
-	vaddr_page, int flags)
+void CPU32(cpu_dyntrans_invalidate_tlb_entry)(struct cpu *cpu, uint64_t vaddr_page, int flags)
 {
-#ifdef MODE32
-	uint32_t index = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-
-#ifdef DYNTRANS_ARM
-	cpu->cd.DYNTRANS_ARCH.is_userpage[index >> 5] &= ~(1 << (index & 31));
-#endif
-
-	if (flags & JUST_MARK_AS_NON_WRITABLE) {
-		/*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
-		    (int)vaddr_page);  */
-		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
-	} else {
-		int tlbi = cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index];
-		cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = 0;
-		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
-		if (tlbi > 0) {
-			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[tlbi-1].valid = 0;
-    }
-		cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index] = 0;
-	}
+  cpu->cd.DYNTRANS_ARCH.vph32.invalidate_tlb_entry(vaddr_page, flags);
+}
 #else
+void CPU64(cpu_dyntrans_invalidate_tlb_entry)(struct cpu *cpu, uint64_t vaddr_page, int flags)
+{
 	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
 	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
 	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
@@ -1044,78 +1018,6 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 		return;
 	}
 
-#ifdef BUGHUNT
-
-{
-	/*  Consistency check, for debugging:  */
-	int x1, x1b; // x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	//struct DYNTRANS_L3_64_TABLE *l3;
-
-	for (x1 = 0; x1 <= mask1; x1 ++) {
-		l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-		if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy)
-			continue;
-		/*  Make sure that this l2 isn't used more than 1 time!  */
-		for (x1b = 0; x1b <= mask1; x1b ++)
-			if (x1 != x1b &&
-			    l2 == cpu->cd.DYNTRANS_ARCH.l1_64[x1b]) {
-				fatal("L2 reuse: %p\n", l2);
-				exit(1);
-			}
-	}
-}
-
-/*  Count how many pages are actually in use:  */
-{
-	int n=0, i;
-	for (i=0; i<=mask3; i++)
-		if (l3->vaddr_to_tlbindex[i])
-			n++;
-	if (n != l3->refcount) {
-		printf("Z: %i in use, but refcount = %i!\n", n, l3->refcount);
-		exit(1);
-	}
-
-	n = 0;
-	for (i=0; i<=mask3; i++)
-		if (l3->host_load[i] != NULL)
-			n++;
-	if (n != l3->refcount) {
-		printf("ZHL: %i in use, but refcount = %i!\n", n, l3->refcount);
-		exit(1);
-	}
-}
-#endif
-
-/*
-	int found = -1;
-	for (int q = 0; q < 192; ++q)
-	{
-		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[q].vaddr_page == vaddr_page &&
-			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[q].valid)
-		{
-			if (found >= 0)
-			{
-				printf("ALREADY FOUND = %i\n", found);
-				int zz = found;
-				printf("%03i: ", zz);
-				printf("vaddr=%016llx\n", (long long)cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].vaddr_page);
-				printf("valid=%i\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].valid);
-
-				zz = q;
-				printf("%03i: ", zz);
-				printf("vaddr=%016llx\n", (long long)cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].vaddr_page);
-				printf("valid=%i\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].valid);
-
-				exit(1);
-			}
-			
-			found = q;
-		}
-	}
-*/
-
 	l3->host_load[x3] = NULL;
 	l3->host_store[x3] = NULL;
 	l3->phys_addr[x3] = 0;
@@ -1124,16 +1026,6 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[
 		    l3->vaddr_to_tlbindex[x3] - 1].valid = 0;
 		l3->refcount --;
-	} else {/*
-		printf("APA: vaddr_page=%016llx l3->refcount = %i\n", (long long)vaddr_page, l3->refcount);
-		for (int zz = 0; zz < 128; ++zz)
-		{
-			printf("%03i: ", zz);
-			printf("vaddr=%016llx\n", (long long)cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].vaddr_page);
-			printf("valid=%i\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[zz].valid);
-		}
-		
-		exit(1);*/
 	}
 	l3->vaddr_to_tlbindex[x3] = 0;
 
@@ -1146,19 +1038,6 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 		l3->next = cpu->cd.DYNTRANS_ARCH.next_free_l3;
 		cpu->cd.DYNTRANS_ARCH.next_free_l3 = l3;
 		l2->l3[x2] = cpu->cd.DYNTRANS_ARCH.l3_64_dummy;
-
-#ifdef BUGHUNT
-/*  Make sure that we're placing a CLEAN page on the
-    freelist:  */
-{
-	int i;
-	for (i=0; i<=mask3; i++)
-		if (l3->host_load[i] != NULL) {
-			fatal("TRYING TO RETURN A NON-CLEAN L3 PAGE!\n");
-			exit(1);
-		}
-}
-#endif
 		l2->refcount --;
 		if (l2->refcount < 0) {
 			fatal("xxx_invalidate_tlb_entry(): Refcount bug L2.\n");
@@ -1171,10 +1050,17 @@ static void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu,
 			    cpu->cd.DYNTRANS_ARCH.l2_64_dummy;
 		}
 	}
-#endif
 }
 #endif
 
+void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu, uint64_t vaddr_page, int flags) {
+#ifdef MODE32
+  CPU32(cpu_dyntrans_invalidate_tlb_entry)(cpu, vaddr_page, flags);
+#else
+  CPU64(cpu_dyntrans_invalidate_tlb_entry)(cpu, vaddr_page, flags);
+#endif
+}
+#endif
 
 #ifdef DYNTRANS_INVALIDATE_TC
 /*
@@ -1314,7 +1200,11 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 		uint32_t physpage_ofs, *physpage_entryp;
 		struct DYNTRANS_TC_PHYSPAGE *ppp, *prev_ppp;
 
-		pagenr = DYNTRANS_ADDR_TO_PAGENR(addr);
+#ifdef MODE32
+		pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(addr);
+#else
+    pagenr = DYNTRANS_ADDR_TO_PAGENR(addr);
+#endif
 		table_index = PAGENR_TO_TABLE_INDEX(pagenr);
 
 		physpage_entryp = &(((uint32_t *)cpu->
@@ -1429,9 +1319,7 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 			    (flags & INVALIDATE_PADDR && paddr_page == addr) ||
 			    (flags & INVALIDATE_VADDR && vaddr_page == addr)) {
 #ifdef MODE32
-				uint32_t index =
-				    DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-				cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
+        cpu->cd.DYNTRANS_ARCH.vph32.clear_phys(vaddr_page);
 #else
 				const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
 				const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
@@ -1455,21 +1343,15 @@ void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 }
 #endif	/*  DYNTRANS_INVALIDATE_TC_CODE  */
 
-
-
 #ifdef DYNTRANS_UPDATE_TRANSLATION_TABLE
-/*
- *  XXX_update_translation_table():
- *
- *  Update the virtual memory translation tables.
- */
-void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
-	unsigned char *host_page, int flags, uint64_t paddr_page)
+#ifdef MODE32
+void CPU32(cpu_dyntrans_update_translation_table)
+  (struct cpu *cpu, uint64_t vaddr_page,
+   unsigned char *host_page, int flags, uint64_t paddr_page)
 {
 	int found, r, useraccess = 0;
   auto writeflag = flags & 1;
 
-#ifdef MODE32
 	uint32_t index;
 	vaddr_page &= 0xffffffffULL;
 
@@ -1517,18 +1399,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 	/*  fatal("update_translation_table(): v=0x%x, h=%p w=%i"
 	    " p=0x%x\n", (int)vaddr_page, host_page, writeflag,
 	    (int)paddr_page);  */
-#else	/*  !MODE32  */
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	/*  fatal("update_translation_table(): v=0x%016" PRIx64", h=%p w=%i"
-	    " p=0x%016" PRIx64"\n", (uint64_t)vaddr_page, host_page, writeflag,
-	    (uint64_t)paddr_page);  */
-#endif
 
 	assert((vaddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
 	assert((paddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
@@ -1548,7 +1418,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 
 	/*  Scan the current TLB entries:  */
 
-#ifdef MODE32
 	/*
 	 *  NOTE 1: vaddr_to_tlbindex is one more than the index, so that
 	 *          0 becomes -1, which means a miss.
@@ -1557,9 +1426,45 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 	 *          for the entry with the lowest time stamp, just choosing
 	 *          one at random will work as well.
 	 */
-	found = (int)cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[
-	    DYNTRANS_ADDR_TO_PAGENR(vaddr_page)] - 1;
+  cpu->cd.DYNTRANS_ARCH.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+}
 #else
+void CPU64(cpu_dyntrans_update_translation_table)
+  (struct cpu *cpu, uint64_t vaddr_page,
+   unsigned char *host_page, int flags, uint64_t paddr_page)
+{
+	int found, r, useraccess = 0;
+  auto writeflag = flags & 1;
+
+	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
+	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
+	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
+	uint32_t x1, x2, x3;
+	struct DYNTRANS_L2_64_TABLE *l2;
+	struct DYNTRANS_L3_64_TABLE *l3;
+
+	/*  fatal("update_translation_table(): v=0x%016" PRIx64", h=%p w=%i"
+	    " p=0x%016" PRIx64"\n", (uint64_t)vaddr_page, host_page, writeflag,
+	    (uint64_t)paddr_page);  */
+
+	assert((vaddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
+	assert((paddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
+
+	if (writeflag & MEMORY_USER_ACCESS) {
+		writeflag &= ~MEMORY_USER_ACCESS;
+		useraccess = 1;
+	}
+
+	useraccess = useraccess;  // shut up compiler warning about unused var
+
+#ifdef DYNTRANS_M88K
+	/*  TODO  */
+	if (useraccess)
+		return;
+#endif
+
+	/*  Scan the current TLB entries:  */
+
 	x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
 	x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
 	x3 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N))
@@ -1575,7 +1480,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		else
 			found = (int)l3->vaddr_to_tlbindex[x3] - 1;
 	}
-#endif
 
 	if (found < 0) {
 		/*  Create the new TLB entry, overwriting a "random" entry:  */
@@ -1597,20 +1501,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		    writeflag & MEM_WRITE;
 
 		/*  Add the new translation to the table:  */
-#ifdef MODE32
-		index = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-		cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = host_page;
-		cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
-		    writeflag? host_page : NULL;
-		cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = paddr_page;
-		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
-		cpu->cd.DYNTRANS_ARCH.vph32.vaddr_to_tlbindex[index] = r + 1;
-#ifdef DYNTRANS_ARM
-		if (useraccess)
-			cpu->cd.DYNTRANS_ARCH.is_userpage[index >> 5]
-			    |= 1 << (index & 31);
-#endif
-#else	/* !MODE32  */
 		l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
 		if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy) {
 			if (cpu->cd.DYNTRANS_ARCH.next_free_l2 != NULL) {
@@ -1665,31 +1555,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 		l3->phys_page[x3] = NULL;
 		l3->vaddr_to_tlbindex[x3] = r + 1;
 		l3->refcount ++;
-
-#ifdef BUGHUNT
-/*  Count how many pages are actually in use:  */
-{
-	int n=0, i;
-	for (i=0; i<=mask3; i++)
-		if (l3->vaddr_to_tlbindex[i])
-			n++;
-	if (n != l3->refcount) {
-		printf("X: %i in use, but refcount = %i!\n", n, l3->refcount);
-		exit(1);
-	}
-
-	n = 0;
-	for (i=0; i<=mask3; i++)
-		if (l3->host_load[i] != NULL)
-			n++;
-	if (n != l3->refcount) {
-		printf("XHL: %i in use, but refcount = %i!\n", n, l3->refcount);
-		exit(1);
-	}
-}
-#endif
-
-#endif	/* !MODE32  */
 	} else {
 		/*
 		 *  The translation was already in the TLB.
@@ -1702,31 +1567,6 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag = 1;
 		if (writeflag & MEM_DOWNGRADE)
 			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag = 0;
-#ifdef MODE32
-		index = DYNTRANS_ADDR_TO_PAGENR(vaddr_page);
-		cpu->cd.DYNTRANS_ARCH.vph32.phys_page[index] = NULL;
-#ifdef DYNTRANS_ARM
-		cpu->cd.DYNTRANS_ARCH.is_userpage[index>>5] &= ~(1<<(index&31));
-		if (useraccess)
-			cpu->cd.DYNTRANS_ARCH.is_userpage[index >> 5]
-			    |= 1 << (index & 31);
-#endif
-		if (cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] == paddr_page) {
-			if (writeflag & MEM_WRITE) {
-				cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
-				    host_page;
-      }
-			if (writeflag & MEM_DOWNGRADE) {
-				cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] = NULL;
-      }
-		} else {
-			/*  Change the entire physical/host mapping:  */
-			cpu->cd.DYNTRANS_ARCH.vph32.host_load[index] = host_page;
-			cpu->cd.DYNTRANS_ARCH.vph32.host_store[index] =
-			    writeflag? host_page : NULL;
-			cpu->cd.DYNTRANS_ARCH.vph32.phys_addr[index] = paddr_page;
-		}
-#else	/*  !MODE32  */
 		x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
 		x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
 		x3 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N))
@@ -1744,39 +1584,29 @@ void DYNTRANS_UPDATE_TRANSLATION_TABLE(struct cpu *cpu, uint64_t vaddr_page,
 			l3->host_store[x3] = writeflag? host_page : NULL;
 			l3->phys_addr[x3] = paddr_page;
 		}
-		
+
 		/*  HM!  /2013-11-17  */
 		/*  Should this be here?  2014-08-02  */
 		//l3->phys_page[x3] = NULL;
 
-#ifdef BUGHUNT
-/*  Count how many pages are actually in use:  */
-{
-	int n=0, i;
-	for (i=0; i<=mask3; i++)
-		if (l3->vaddr_to_tlbindex[i])
-			n++;
-	if (n != l3->refcount) {
-		printf("Y: %i in use, but refcount = %i!\n", n, l3->refcount);
-		exit(1);
-	}
-
-	n = 0;
-	for (i=0; i<=mask3; i++)
-		if (l3->host_load[i] != NULL)
-			n++;
-	if (n != l3->refcount) {
-		printf("YHL: %i in use, but refcount = %i!\n", n, l3->refcount);
-		printf("Entry r = %i\n", r);
-		printf("Valid = %i\n",
-cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
-		exit(1);
 	}
 }
 #endif
 
-#endif	/*  !MODE32  */
-	}
+/*
+ *  XXX_update_translation_table():
+ *
+ *  Update the virtual memory translation tables.
+ */
+void DYNTRANS_UPDATE_TRANSLATION_TABLE
+(struct cpu *cpu, uint64_t vaddr_page,
+ unsigned char *host_page, int flags, uint64_t paddr_page)
+{
+#ifdef MODE32
+  CPU32(cpu_dyntrans_update_translation_table)(cpu, vaddr_page, host_page, flags, paddr_page);
+#else
+  CPU64(cpu_dyntrans_update_translation_table)(cpu, vaddr_page, host_page, flags, paddr_page);
+#endif
 }
 #endif	/*  DYNTRANS_UPDATE_TRANSLATION_TABLE  */
 
@@ -1910,14 +1740,29 @@ cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid);
 	if (!single_step && !cpu->machine->instruction_trace &&
 	    cpu->machine->breakpoints.n == 0) {
 		uint64_t baseaddr = cpu->pc;
-		uint64_t pagenr = DYNTRANS_ADDR_TO_PAGENR(baseaddr);
+#ifdef MODE32
+		uint64_t pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(baseaddr);
+#else
+    uint64_t pagenr = DYNTRANS_ADDR_TO_PAGENR(baseaddr);
+#endif
 		int i = 1;
 
 		cpu->translation_readahead = MAX_DYNTRANS_READAHEAD;
 
-		while (DYNTRANS_ADDR_TO_PAGENR(baseaddr +
-		    (i << DYNTRANS_INSTR_ALIGNMENT_SHIFT)) == pagenr &&
-		    cpu->translation_readahead > 0) {
+		while (
+#ifdef MODE32
+           cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr
+           (baseaddr +
+            (i << DYNTRANS_INSTR_ALIGNMENT_SHIFT))
+#else
+           DYNTRANS_ADDR_TO_PAGENR
+           (baseaddr +
+            (i << DYNTRANS_INSTR_ALIGNMENT_SHIFT))
+#endif
+           == pagenr
+           && cpu->translation_readahead > 0
+           )
+      {
 			void (*old_f)(struct cpu *,
 			    struct DYNTRANS_IC *) = ic[i].f;
 

@@ -116,10 +116,11 @@ void LS_N(struct cpu *cpu, struct mips_instr_call *ic)
 	MODE_uint_t addr = reg(ic->arg[1]) + (int32_t)ic->arg[2];
 	unsigned char *p;
 #ifdef MODE32
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
 #ifdef LS_LOAD
-	p = cpu->cd.mips.vph32.host_load[addr >> 12];
+	p = host_page.host_load;
 #else
-	p = cpu->cd.mips.vph32.host_store[addr >> 12];
+	p = host_page.host_store;
 #endif
 #else	/*  !MODE32  */
 	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;

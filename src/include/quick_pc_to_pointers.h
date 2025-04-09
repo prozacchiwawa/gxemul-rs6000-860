@@ -10,7 +10,7 @@
 #else
 #define	quick_pc_to_pointers(cpu) {                                     \
     uint32_t pc_tmp32 = cpu->pc;                                        \
-    auto host_page = cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(pc_tmp32); \
+    auto host_page = cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(cpu, pc_tmp32); \
     struct DYNTRANS_TC_PHYSPAGE *ppp_tmp = (struct DYNTRANS_TC_PHYSPAGE *)host_page.ppp; \
     if (ppp_tmp != NULL) {                                              \
       cpu->cd.DYNTRANS_ARCH.set_physpage(pc_tmp32 & ~0xfff, ppp_tmp);   \

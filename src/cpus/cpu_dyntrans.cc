@@ -188,7 +188,7 @@ static void gather_statistics(struct cpu *cpu)
 
 #ifdef CPU_BITS_32
 struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-  return cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(addr);
+  return cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(cpu, addr);
 }
 
 void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
@@ -198,47 +198,11 @@ void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_
 
 #ifdef CPU_BITS_64
 struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	/*  fatal("X3: addr=%016" PRIx64" x1=%x x2=%x x3=%x\n",
-	    (uint64_t)addr, (int)x1, (int)x2, (int)x3);  */
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	/*  fatal("  l2 = %p\n", l2);  */
-	l3 = l2->l3[x2];
-	/*  fatal("  l3 = %p\n", l3);  */
-  return host_load_store_t {
-    l3->phys_addr[x3],
-    l3->phys_page[x3],
-    l3->host_load[x3],
-    l3->host_store[x3]
-  };
+  cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
 }
 
 void CPU64(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	/*  fatal("X3: addr=%016" PRIx64" x1=%x x2=%x x3=%x\n",
-	    (uint64_t)addr, (int)x1, (int)x2, (int)x3);  */
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	/*  fatal("  l2 = %p\n", l2);  */
-	l3 = l2->l3[x2];
-  l3->phys_page[x3] = ppp;
+  cpu->cd.DYNTRANS_ARCH.vph64.set_tlb_physpage(cpu, addr, ppp);
 }
 #endif
 
@@ -959,17 +923,7 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	if (cpu->is_32bit)
 		return;
 
-	dummy_l2 = (struct DYNTRANS_L2_64_TABLE *) zeroed_alloc(sizeof(struct DYNTRANS_L2_64_TABLE));
-	dummy_l3 = (struct DYNTRANS_L3_64_TABLE *) zeroed_alloc(sizeof(struct DYNTRANS_L3_64_TABLE));
-
-	cpu->cd.DYNTRANS_ARCH.l2_64_dummy = dummy_l2;
-	cpu->cd.DYNTRANS_ARCH.l3_64_dummy = dummy_l3;
-
-	for (x1 = 0; x1 < (1 << DYNTRANS_L1N); x1 ++)
-		cpu->cd.DYNTRANS_ARCH.l1_64[x1] = dummy_l2;
-
-	for (x2 = 0; x2 < (1 << DYNTRANS_L2N); x2 ++)
-		dummy_l2->l3[x2] = dummy_l3;
+  cpu->cd.DYNTRANS_ARCH.vph64.init_tables();
 #endif
 }
 #endif	/*  DYNTRANS_INIT_TABLES  */
@@ -994,62 +948,7 @@ void CPU32(cpu_dyntrans_invalidate_tlb_entry)(struct cpu *cpu, uint64_t vaddr_pa
 #else
 void CPU64(cpu_dyntrans_invalidate_tlb_entry)(struct cpu *cpu, uint64_t vaddr_page, int flags)
 {
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N))& mask3;
-
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy)
-		return;
-
-	l3 = l2->l3[x2];
-	if (l3 == cpu->cd.DYNTRANS_ARCH.l3_64_dummy)
-		return;
-
-	if (flags & JUST_MARK_AS_NON_WRITABLE) {
-		l3->host_store[x3] = NULL;
-		return;
-	}
-
-	l3->host_load[x3] = NULL;
-	l3->host_store[x3] = NULL;
-	l3->phys_addr[x3] = 0;
-	l3->phys_page[x3] = NULL;
-	if (l3->vaddr_to_tlbindex[x3] != 0) {
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[
-		    l3->vaddr_to_tlbindex[x3] - 1].valid = 0;
-		l3->refcount --;
-	}
-	l3->vaddr_to_tlbindex[x3] = 0;
-
-	if (l3->refcount < 0) {
-		fatal("xxx_invalidate_tlb_entry(): huh? Refcount bug.\n");
-		exit(1);
-	}
-
-	if (l3->refcount == 0) {
-		l3->next = cpu->cd.DYNTRANS_ARCH.next_free_l3;
-		cpu->cd.DYNTRANS_ARCH.next_free_l3 = l3;
-		l2->l3[x2] = cpu->cd.DYNTRANS_ARCH.l3_64_dummy;
-		l2->refcount --;
-		if (l2->refcount < 0) {
-			fatal("xxx_invalidate_tlb_entry(): Refcount bug L2.\n");
-			exit(1);
-		}
-		if (l2->refcount == 0) {
-			l2->next = cpu->cd.DYNTRANS_ARCH.next_free_l2;
-			cpu->cd.DYNTRANS_ARCH.next_free_l2 = l2;
-			cpu->cd.DYNTRANS_ARCH.l1_64[x1] =
-			    cpu->cd.DYNTRANS_ARCH.l2_64_dummy;
-		}
-	}
+  cpu->cd.DYNTRANS_ARCH.vph64.invalidate_tlb_entry(vaddr_page, flags);
 }
 #endif
 
@@ -1085,89 +984,11 @@ void DYNTRANS_INVALIDATE_TLB_ENTRY(struct cpu *cpu, uint64_t vaddr_page, int fla
  */
 void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
 {
-	int r;
 #ifdef MODE32
-	uint32_t
+  cpu->cd.DYNTRANS_ARCH.vph32.invalidate_tc(cpu, addr, flags);
 #else
-	uint64_t
+  abort();
 #endif
-	    addr_page = addr & ~(DYNTRANS_PAGESIZE - 1);
-
-	/*  fatal("invalidate(): ");  */
-
-	/*  Quick case for _one_ virtual addresses: see note above.  */
-	if (flags & INVALIDATE_VADDR) {
-		/*  fatal("vaddr 0x%08x\n", (int)addr_page);  */
-		DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, addr_page, flags);
-		return;
-	}
-
-	/*  Invalidate everything:  */
-#ifdef DYNTRANS_PPC
-	if (flags & INVALIDATE_ALL && flags & INVALIDATE_VADDR_UPPER4) {
-		/*  fatal("all, upper4 (PowerPC segment)\n");  */
-		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
-			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid &&
-			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page
-           & 0xf0000000) == addr_page) {
-				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-                                      DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-                                      0);
-				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
-			}
-		}
-		return;
-	}
-  if ((flags & INVALIDATE_ALL) && (flags & INVALIDATE_IDENTITY)) {
-    // Invalidate mappings that overlap ram.
-		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
-			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid &&
-			    (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page < cpu->mem->physical_max)) {
-        // fprintf(stderr, "dyntrans: invalidate overlapping map %" PRIx64 "\n", cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page);
-	//			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-	//			DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-	//			0);
-        DYNTRANS_INVALIDATE_TC(cpu, cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page, INVALIDATE_VADDR);
-				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
-			}
-		}
-		return;
-  }
-#endif
-	if (flags & INVALIDATE_ALL) {
-		/*  fatal("all\n");  */
-		for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
-			if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
-				DYNTRANS_INVALIDATE_TLB_ENTRY(cpu, cpu->cd.
-				    DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-				    0);
-				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
-			}
-		}
-		return;
-	}
-
-	/*  Invalidate a physical page:  */
-
-	if (!(flags & INVALIDATE_PADDR))
-		fatal("HUH? Invalidate: Not vaddr, all, or paddr?\n");
-
-	/*  fatal("addr 0x%08x\n", (int)addr_page);  */
-
-	for (r=0; r<DYNTRANS_MAX_VPH_TLB_ENTRIES; r++) {
-		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid && addr_page
-		    == cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page) {
-			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu,
-			    cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-			    flags);
-			if (flags & JUST_MARK_AS_NON_WRITABLE)
-				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-				    .writeflag = 0;
-			else
-				cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-				    .valid = 0;
-		}
-	}
 }
 #endif	/*  DYNTRANS_INVALIDATE_TC  */
 
@@ -1182,164 +1003,6 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
  */
 void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 {
-	int r;
-#ifdef MODE32
-	uint32_t
-#else
-	uint64_t
-#endif
-	    vaddr_page, paddr_page;
-
-	addr &= ~(DYNTRANS_PAGESIZE-1);
-
-	/*  printf("DYNTRANS_INVALIDATE_TC_CODE addr=0x%08x flags=%i\n",
-	    (int)addr, flags);  */
-
-	if (flags & INVALIDATE_PADDR) {
-		int pagenr, table_index;
-		uint32_t physpage_ofs, *physpage_entryp;
-		struct DYNTRANS_TC_PHYSPAGE *ppp, *prev_ppp;
-
-#ifdef MODE32
-		pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(addr);
-#else
-    pagenr = DYNTRANS_ADDR_TO_PAGENR(addr);
-#endif
-		table_index = PAGENR_TO_TABLE_INDEX(pagenr);
-
-		physpage_entryp = &(((uint32_t *)cpu->
-		    translation_cache)[table_index]);
-		physpage_ofs = *physpage_entryp;
-
-		/*  Return immediately if there is no code translation
-		    for this page.  */
-		if (physpage_ofs == 0)
-			return;
-
-		prev_ppp = ppp = NULL;
-
-		/*  Traverse the physical page chain:  */
-		while (physpage_ofs != 0) {
-			prev_ppp = ppp;
-			ppp = (struct DYNTRANS_TC_PHYSPAGE *)
-			    (cpu->translation_cache + physpage_ofs);
-
-			/*  If we found the page in the cache,
-			    then we're done:  */
-			if (ppp->physaddr == addr)
-				break;
-
-			/*  Try the next page in the chain:  */
-			physpage_ofs = ppp->next_ofs;
-		}
-
-		/*  If there is no translation, there is no need to go
-		    on and try to remove it from the vph_tlb_entry array:  */
-		if (physpage_ofs == 0)
-			return;
-
-#if 0
-		/*
-		 *  "Bypass" the page, removing it from the code cache.
-		 *
-		 *  NOTE/TODO: This gives _TERRIBLE_ performance with self-
-		 *  modifying code, or when a single page is used for both
-		 *  code and (writable) data.
-		 */
-		if (ppp != NULL) {
-			if (prev_ppp != NULL)
-				prev_ppp->next_ofs = ppp->next_ofs;
-			else
-				*physpage_entryp = ppp->next_ofs;
-		}
-#else
-		prev_ppp = prev_ppp;	// shut up compiler warning
-
-		/*
-		 *  Instead of removing the page from the code cache, each
-		 *  entry can be set to "to_be_translated". This is slow in
-		 *  the general case, but in the case of self-modifying code,
-		 *  it might be faster since we don't risk wasting cache
-		 *  memory as quickly (which would force unnecessary Restarts).
-		 */
-		if (ppp != NULL && ppp->translations_bitmap != 0) {
-			uint32_t x = ppp->translations_bitmap;	/*  TODO:
-				urk Should be same type as the bitmap */
-			int i, j, n, m;
-
-#ifdef DYNTRANS_ARM
-			/*
-			 *  Note: On ARM, PC-relative load instructions are
-			 *  implemented as immediate mov instructions. When
-			 *  setting parts of the page to "to be translated",
-			 *  we cannot keep track of which of the immediate
-			 *  movs that were affected, so we need to clear
-			 *  the entire page. (ARM only; not for the general
-			 *  case.)
-			 */
-			x = 0xffffffff;
-#endif
-			n = 8 * sizeof(x);
-			m = DYNTRANS_IC_ENTRIES_PER_PAGE / n;
-
-			for (i=0; i<n; i++) {
-				if (x & 1) {
-					for (j=0; j<m; j++)
-						ppp->ics[i*m + j].f =
-						    TO_BE_TRANSLATED;
-				}
-
-				x >>= 1;
-			}
-
-			ppp->translations_bitmap = 0;
-
-			/*  Clear the list of translatable ranges:  */
-			if (ppp->translation_ranges_ofs != 0) {
-				struct physpage_ranges *physpage_ranges =
-				    (struct physpage_ranges *)
-				    (cpu->translation_cache +
-				    ppp->translation_ranges_ofs);
-				physpage_ranges->next_ofs = 0;
-				physpage_ranges->n_entries_used = 0;
-			}
-		}
-#endif
-	}
-
-	/*  Invalidate entries in the VPH table:  */
-	for (r = 0; r < DYNTRANS_MAX_VPH_TLB_ENTRIES; r ++) {
-		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
-			vaddr_page = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-			    .vaddr_page & ~(DYNTRANS_PAGESIZE-1);
-			paddr_page = cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r]
-			    .paddr_page & ~(DYNTRANS_PAGESIZE-1);
-
-			if (flags & INVALIDATE_ALL ||
-			    (flags & INVALIDATE_PADDR && paddr_page == addr) ||
-			    (flags & INVALIDATE_VADDR && vaddr_page == addr)) {
-#ifdef MODE32
-        cpu->cd.DYNTRANS_ARCH.vph32.clear_phys(vaddr_page);
-#else
-				const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-				const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-				const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-				uint32_t x1, x2, x3;
-				struct DYNTRANS_L2_64_TABLE *l2;
-				struct DYNTRANS_L3_64_TABLE *l3;
-
-				x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
-				x2 = (vaddr_page >> (64-DYNTRANS_L1N -
-				    DYNTRANS_L2N)) & mask2;
-				x3 = (vaddr_page >> (64-DYNTRANS_L1N -
-				    DYNTRANS_L2N - DYNTRANS_L3N)) & mask3;
-				l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-				l3 = l2->l3[x2];
-				l3->phys_page[x3] = NULL;
-#endif
-			}
-		}
-	}
 }
 #endif	/*  DYNTRANS_INVALIDATE_TC_CODE  */
 
@@ -1410,11 +1073,11 @@ void CPU32(cpu_dyntrans_update_translation_table)
 
 	useraccess = useraccess;  // shut up compiler warning about unused var
 
-#ifdef DYNTRANS_M88K
-	/*  TODO  */
-	if (useraccess)
-		return;
-#endif
+  if (is_m88k<struct DYNTRANS_TC_PHYSPAGE>()) {
+    /*  TODO  */
+    if (useraccess)
+      return;
+  }
 
 	/*  Scan the current TLB entries:  */
 
@@ -1433,163 +1096,8 @@ void CPU64(cpu_dyntrans_update_translation_table)
   (struct cpu *cpu, uint64_t vaddr_page,
    unsigned char *host_page, int flags, uint64_t paddr_page)
 {
-	int found, r, useraccess = 0;
   auto writeflag = flags & 1;
-
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-
-	/*  fatal("update_translation_table(): v=0x%016" PRIx64", h=%p w=%i"
-	    " p=0x%016" PRIx64"\n", (uint64_t)vaddr_page, host_page, writeflag,
-	    (uint64_t)paddr_page);  */
-
-	assert((vaddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
-	assert((paddr_page & (DYNTRANS_PAGESIZE-1)) == 0);
-
-	if (writeflag & MEMORY_USER_ACCESS) {
-		writeflag &= ~MEMORY_USER_ACCESS;
-		useraccess = 1;
-	}
-
-	useraccess = useraccess;  // shut up compiler warning about unused var
-
-#ifdef DYNTRANS_M88K
-	/*  TODO  */
-	if (useraccess)
-		return;
-#endif
-
-	/*  Scan the current TLB entries:  */
-
-	x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N))
-	    & mask3;
-
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy)
-		found = -1;
-	else {
-		l3 = l2->l3[x2];
-		if (l3 == cpu->cd.DYNTRANS_ARCH.l3_64_dummy)
-			found = -1;
-		else
-			found = (int)l3->vaddr_to_tlbindex[x3] - 1;
-	}
-
-	if (found < 0) {
-		/*  Create the new TLB entry, overwriting a "random" entry:  */
-		static unsigned int x = 0;
-		r = (x++) % DYNTRANS_MAX_VPH_TLB_ENTRIES;
-
-		if (cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid) {
-			/*  This one has to be invalidated first:  */
-			DYNTRANS_INVALIDATE_TLB_ENTRY(cpu,
-			    cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page,
-			    0);
-		}
-
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid = 1;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].host_page = host_page;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].paddr_page = paddr_page;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].vaddr_page = vaddr_page;
-		cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag =
-		    writeflag & MEM_WRITE;
-
-		/*  Add the new translation to the table:  */
-		l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-		if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy) {
-			if (cpu->cd.DYNTRANS_ARCH.next_free_l2 != NULL) {
-				l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1] =
-				    cpu->cd.DYNTRANS_ARCH.next_free_l2;
-				cpu->cd.DYNTRANS_ARCH.next_free_l2 = l2->next;
-			} else {
-				int i;
-				CHECK_ALLOCATION(l2 =
-				    cpu->cd.DYNTRANS_ARCH.l1_64[x1] =
-				    (struct DYNTRANS_L2_64_TABLE *) malloc(
-				    sizeof(struct DYNTRANS_L2_64_TABLE)));
-				l2->refcount = 0;
-				for (i=0; i<(1 << DYNTRANS_L2N); i++)
-					l2->l3[i] = cpu->cd.DYNTRANS_ARCH.
-					    l3_64_dummy;
-			}
-			if (l2->refcount != 0) {
-				fatal("Huh? l2 Refcount problem.\n");
-				exit(1);
-			}
-		}
-		if (l2 == cpu->cd.DYNTRANS_ARCH.l2_64_dummy) {
-			fatal("INTERNAL ERROR L2 reuse\n");
-			exit(1);
-		}
-		l3 = l2->l3[x2];
-		if (l3 == cpu->cd.DYNTRANS_ARCH.l3_64_dummy) {
-			if (cpu->cd.DYNTRANS_ARCH.next_free_l3 != NULL) {
-				l3 = l2->l3[x2] =
-				    cpu->cd.DYNTRANS_ARCH.next_free_l3;
-				cpu->cd.DYNTRANS_ARCH.next_free_l3 = l3->next;
-			} else {
-				l3 = l2->l3[x2] = (struct DYNTRANS_L3_64_TABLE *)
-				    zeroed_alloc(sizeof(
-				    struct DYNTRANS_L3_64_TABLE));
-			}
-			if (l3->refcount != 0) {
-				fatal("Huh? l3 Refcount problem.\n");
-				exit(1);
-			}
-			l2->refcount ++;
-		}
-		if (l3 == cpu->cd.DYNTRANS_ARCH.l3_64_dummy) {
-			fatal("INTERNAL ERROR L3 reuse\n");
-			exit(1);
-		}
-
-		l3->host_load[x3] = host_page;
-		l3->host_store[x3] = writeflag? host_page : NULL;
-		l3->phys_addr[x3] = paddr_page;
-		l3->phys_page[x3] = NULL;
-		l3->vaddr_to_tlbindex[x3] = r + 1;
-		l3->refcount ++;
-	} else {
-		/*
-		 *  The translation was already in the TLB.
-		 *	Writeflag = 0:  Do nothing.
-		 *	Writeflag = 1:  Make sure the page is writable.
-		 *	Writeflag = MEM_DOWNGRADE: Downgrade to readonly.
-		 */
-		r = found;
-		if (writeflag & MEM_WRITE)
-			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag = 1;
-		if (writeflag & MEM_DOWNGRADE)
-			cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].writeflag = 0;
-		x1 = (vaddr_page >> (64-DYNTRANS_L1N)) & mask1;
-		x2 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-		x3 = (vaddr_page >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N))
-		    & mask3;
-		l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-		l3 = l2->l3[x2];
-		if (l3->phys_addr[x3] == paddr_page) {
-			if (writeflag & MEM_WRITE)
-				l3->host_store[x3] = host_page;
-			if (writeflag & MEM_DOWNGRADE)
-				l3->host_store[x3] = NULL;
-		} else {
-			/*  Change the entire physical/host mapping:  */
-			l3->host_load[x3] = host_page;
-			l3->host_store[x3] = writeflag? host_page : NULL;
-			l3->phys_addr[x3] = paddr_page;
-		}
-
-		/*  HM!  /2013-11-17  */
-		/*  Should this be here?  2014-08-02  */
-		//l3->phys_page[x3] = NULL;
-
-	}
+  cpu->cd.DYNTRANS_ARCH.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
 }
 #endif
 

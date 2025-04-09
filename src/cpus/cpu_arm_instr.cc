@@ -1104,7 +1104,7 @@ X(bdt_load)
 				addr -= sizeof(uint32_t);
 		}
 
-    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(addr);
+    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);
 		page = host_page.host_load;
 		if (page != NULL) {
 			uint32_t *p32 = (uint32_t *) page;
@@ -1302,7 +1302,7 @@ X(bdt_store)
 				addr -= sizeof(uint32_t);
 		}
 
-    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(addr);
+    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);
 		page = host_page.host_store;
 		if (page != NULL) {
 			uint32_t *p32 = (uint32_t *) page;
@@ -1400,7 +1400,7 @@ X(netbsd_memset)
 
 		/*  printf("addr = 0x%08x\n", addr);  */
 
-    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(addr);
+    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);
 		page = host_page.host_store;
 		/*  No page translation? Continue non-combined.  */
 		if (page == NULL)
@@ -1452,8 +1452,8 @@ X(netbsd_memcpy)
 			return;
 		}
 
-    auto host_page_0 = cpu->cd.arm.vph32.get_cached_tlb_pages(addr_r0);
-    auto host_page_1 = cpu->cd.arm.vph32.get_cached_tlb_pages(addr_r1);
+    auto host_page_0 = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr_r0);
+    auto host_page_1 = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr_r1);
 		page_0 = host_page_0.host_store;
 		page_1 = host_page_1.host_store;
 
@@ -1531,7 +1531,7 @@ X(netbsd_cacheclean2)
  */
 X(netbsd_scanc)
 {
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu->cd.arm.r[1]);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, cpu->cd.arm.r[1]);
   unsigned char *page = host_page.host_load;
 	uint32_t t;
 
@@ -1542,7 +1542,7 @@ X(netbsd_scanc)
 
 	t = page[cpu->cd.arm.r[1] & 0xfff];
 	t += cpu->cd.arm.r[2];
-  host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(t);
+  host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, t);
 	page = host_page.host_load;
 
 	if (page == NULL) {
@@ -1580,7 +1580,7 @@ X(netbsd_idle)
 	uint32_t *p;
 	uint32_t rX;
 
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(rY);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, rY);
     p = (uint32_t *) host_page.host_load;
 	if (p == NULL) {
 		instr(load_w0_word_u1_p1_imm)(cpu, ic);
@@ -1638,7 +1638,7 @@ X(strlen)
 
 	do {
 		rX ++;
-    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(rX);
+    auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, rX);
 		p = host_page.host_load;
 		if (p == NULL) {
 			cpu->n_translated_instrs += (n_loops * 3);
@@ -1691,7 +1691,7 @@ X(xchg)
 X(netbsd_copyin)
 {
 	uint32_t r0 = cpu->cd.arm.r[0], ofs = (r0 & 0xffc), index = r0 >> 12;
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(r0);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, r0);
 	unsigned char *p = host_page.host_load;
 	uint32_t *p32 = (uint32_t *) p, *q32;
 	int ok = cpu->cd.arm.is_userpage[index >> 5] & (1 << (index & 31));
@@ -1727,7 +1727,7 @@ X(netbsd_copyin)
 X(netbsd_copyout)
 {
 	uint32_t r1 = cpu->cd.arm.r[1], ofs = (r1 & 0xffc), index = r1 >> 12;
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(r1);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, r1);
   unsigned char *p = host_page.host_store;
 	uint32_t *p32 = (uint32_t *) p, *q32;
 	int ok = cpu->cd.arm.is_userpage[index >> 5] & (1 << (index & 31));
@@ -2564,7 +2564,7 @@ X(to_be_translated)
 	addr &= ~((1 << ARM_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(addr);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);
   page = host_page.host_load;
 
 	if (page != NULL) {

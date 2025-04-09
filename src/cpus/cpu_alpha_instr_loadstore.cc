@@ -128,6 +128,7 @@ static void LS_GENERIC_N(struct cpu *cpu, struct alpha_instr_call *ic)
 static void LS_N(struct cpu *cpu, struct alpha_instr_call *ic)
 {
 	unsigned char *page;
+  uint64_t c;
 	uint64_t addr = (*((uint64_t *)ic->arg[1]))
 #ifndef LS_IGNORE_OFFSET
 	    + (int32_t)ic->arg[2]
@@ -135,21 +136,6 @@ static void LS_N(struct cpu *cpu, struct alpha_instr_call *ic)
 	    ;
 
   auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr);
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3, c;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
-	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	/*  fatal("X3: addr=%016"PRIx64" x1=%x x2=%x x3=%x\n",
-	    (uint64_t) addr, (int) x1, (int) x2, (int) x3);  */
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	/*  fatal("  l2 = %p\n", l2);  */
-	l3 = l2->l3[x2];
-	/*  fatal("  l3 = %p\n", l3);  */
 #ifdef LS_LOAD
 	page = host_pages.host_load;
 #else

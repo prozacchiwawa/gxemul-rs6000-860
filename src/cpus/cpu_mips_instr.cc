@@ -2618,7 +2618,7 @@ X(sw_loop)
 	unsigned char *page;
 	int partial = 0;
 
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(rX);
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, rX);
 	page = host_page.host_store;
 
 	/*  Fallback:  */
@@ -2731,7 +2731,7 @@ X(netbsd_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr);
   page = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2765,13 +2765,13 @@ X(linux_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr);
 	page = (int32_t *)host_page.host_load;
 
 	addr2 = reg(ic[5].arg[1]) + (int32_t)ic[5].arg[2];
 	pageindex2 = addr2 >> 12;
 	i2 = (addr2 & 0xfff) >> 2;
-  host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr2);
+  host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr2);
 	page2 = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2798,7 +2798,7 @@ X(netbsd_strlen)
 	uint32_t pageindex = rx >> 12;
 	int i;
 
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(rx);
+  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, rx);
   page = (signed char *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -3469,23 +3469,15 @@ X(to_be_translated)
 	addr &= ~((1 << MIPS_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
+  auto host_page =
 #ifdef MODE32
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(addr);
-	page = host_page.host_load;
+    cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr)
 #else
-	{
-		const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-		const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-		const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-		uint32_t x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-		uint32_t x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-		uint32_t x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-
-		    DYNTRANS_L3N)) & mask3;
-		struct DYNTRANS_L2_64_TABLE *l2 = cpu->cd.mips.l1_64[x1];
-		struct DYNTRANS_L3_64_TABLE *l3 = l2->l3[x2];
-		page = l3->host_load[x3];
-	}
+    cpu->cd.mips.vph64.get_cached_tlb_pages(cpu, addr)
 #endif
+    ;
+
+  page = host_page.host_load;
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */

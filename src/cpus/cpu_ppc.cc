@@ -67,7 +67,7 @@ extern "C" {
  *  this cpu_type_name.
  */
 int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
-	int cpu_id, char *cpu_type_name)
+                int cpu_id, char *cpu_type_name)
 {
 	int any_cache = 0;
 	int i, found;

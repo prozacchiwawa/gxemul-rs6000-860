@@ -249,7 +249,7 @@ void LS_N(struct cpu *cpu, struct m88k_instr_call *ic)
 	uint8_t *p = cpu->cd.m88k.host_store_usr[addr >> 12];
 #endif
 #else
-  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(addr);
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, addr);
 #ifdef LS_LOAD
 	uint8_t *p = host_page.host_load;
 #else

@@ -1695,7 +1695,7 @@ X(idle)
 {
 	uint32_t rY = reg(ic[0].arg[1]) + ic[0].arg[2];
 	uint32_t index = rY >> 12;
-  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(rY);
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, rY);
   unsigned char *p = host_page.host_load;
 	uint32_t *p32 = (uint32_t *) p;
 	uint32_t v;
@@ -1738,7 +1738,7 @@ X(idle_with_tb1)
 {
 	uint32_t rY = reg(ic[1].arg[1]) + ic[1].arg[2];
 	uint32_t index = rY >> 12;
-  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(rY);
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, rY);
 	unsigned char *p = host_page.host_load;
 	uint32_t *p32 = (uint32_t *) p;
 	uint32_t v;
@@ -1933,7 +1933,7 @@ X(to_be_translated)
 	addr &= ~((1 << M88K_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(addr);
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, addr);
   page = host_page.host_load;
 
 	if (page != NULL) {

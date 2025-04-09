@@ -145,9 +145,15 @@ struct ppc_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(ppc)
+private:
 	VPH_TLBS(ppc,PPC)
+public:
 	VPH32(ppc,PPC)
 	VPH64(ppc,PPC)
+
+  friend int ppc_cpu_new
+  (struct cpu *cpu, struct memory *mem, struct machine *machine,
+   int cpu_id, char *cpu_type_name);
 };
 
 #define PPC_RECORDING_LENGTH (8 * 1024 * 1024)

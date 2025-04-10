@@ -229,7 +229,7 @@ public:
     }
   }
 
-  void invalidate_tc_code(struct cpu *cpu, uint64_t addr, int flags, decltype(((TcPhyspage*)0)->ics) to_be_translated) {
+  void invalidate_tc_code(struct cpu *cpu, uint64_t addr, int flags, decltype(((TcPhyspage*)0)->ics->f) to_be_translated) {
     int r;
     uint32_t vaddr_page, paddr_page;
 
@@ -241,7 +241,7 @@ public:
     if (flags & INVALIDATE_PADDR) {
       int pagenr, table_index;
       uint32_t physpage_ofs, *physpage_entryp;
-      struct DYNTRANS_TC_PHYSPAGE *ppp, *prev_ppp;
+      TcPhyspage *ppp, *prev_ppp;
 
       pagenr = addr_to_pagenr(addr);
       table_index = PAGENR_TO_TABLE_INDEX(pagenr);

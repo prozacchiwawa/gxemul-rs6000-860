@@ -78,6 +78,8 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	/*  Synchronize the PC:  */
   sync_pc(cpu, cpu->cd.ppc, ic);
 
+  assert(cpu->pc == ic->pc);
+
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
 		fatal("PPC LOAD/STORE misalignment across page boundary: TODO"

@@ -312,7 +312,7 @@ public:
     }
   }
 
-  void invalidate_tc_code(struct cpu *cpu, uint64_t addr, int flags, decltype(((TcPhyspage*)0)->ics) to_be_translated) {
+  void invalidate_tc_code(struct cpu *cpu, uint64_t addr, int flags, decltype(((TcPhyspage*)0)->ics->f) to_be_translated) {
     int r;
     uint64_t vaddr_page, paddr_page;
 
@@ -408,7 +408,7 @@ public:
         if (flags & INVALIDATE_ALL ||
             (flags & INVALIDATE_PADDR && paddr_page == addr) ||
             (flags & INVALIDATE_VADDR && vaddr_page == addr)) {
-          cpu->cd.DYNTRANS_ARCH.vph64.clear_phys(vaddr_page);
+          clear_phys(vaddr_page);
         }
       }
     }

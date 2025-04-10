@@ -3178,11 +3178,10 @@ X(to_be_translated)
 			    ((PPC_IC_ENTRIES_PER_PAGE-1) << 2) | 3;
 			uint64_t old_pc = addr;
 			uint64_t new_pc = old_pc + (int32_t)tmp_addr;
-			if ((old_pc & ~mask_within_page) ==
-			    (new_pc & ~mask_within_page)) {
+			if ((old_pc & ~mask_within_page) == (new_pc & ~mask_within_page)) {
 				ic->f = samepage_function;
 				ic->arg[0] = ((new_pc & mask_within_page) >> 2);
-			}
+      }
 		}
 		if (aa_bit) {
 			if (lk_bit) {

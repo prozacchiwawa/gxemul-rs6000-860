@@ -116,20 +116,6 @@
 		int				refcount;		\
 	};
 
-
-/*
- *  This structure contains a list of ranges within an emulated
- *  physical page that contain translatable code.
- */
-#define	PHYSPAGE_RANGES_ENTRIES_PER_LIST		20
-struct physpage_ranges {
-	uint32_t	next_ofs;	/*  0 for end of chain  */
-	uint32_t	n_entries_used;
-	uint16_t	base[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-	uint16_t	length[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-	uint16_t	count[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-};
-
 /*
  *  Dyntrans "Instruction Translation Cache":
  *

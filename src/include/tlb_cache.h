@@ -61,4 +61,17 @@ template <> constexpr int max_vph_tlb_entries<struct arm_tc_physpage>() { return
 
 template <typename TcPhyspage> constexpr int ic_entries_per_page() { return 1024; }
 
+/*
+ *  This structure contains a list of ranges within an emulated
+ *  physical page that contain translatable code.
+ */
+#define	PHYSPAGE_RANGES_ENTRIES_PER_LIST		20
+struct physpage_ranges {
+	uint32_t	next_ofs;	/*  0 for end of chain  */
+	uint32_t	n_entries_used;
+	uint16_t	base[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
+	uint16_t	length[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
+	uint16_t	count[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
+};
+
 #endif//TLB_CACHE_H

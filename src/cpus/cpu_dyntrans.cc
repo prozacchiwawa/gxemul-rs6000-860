@@ -1003,6 +1003,11 @@ void DYNTRANS_INVALIDATE_TC(struct cpu *cpu, uint64_t addr, int flags)
  */
 void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
 {
+#ifdef MODE32
+  cpu->cd.DYNTRANS_ARCH.vph32.invalidate_tc_code(cpu, addr, flags, TO_BE_TRANSLATED);
+#else
+  cpu->cd.DYNTRANS_ARCH.vph64.invalidate_tc_code(cpu, addr, flags, TO_BE_TRANSLATED);
+#endif
 }
 #endif	/*  DYNTRANS_INVALIDATE_TC_CODE  */
 

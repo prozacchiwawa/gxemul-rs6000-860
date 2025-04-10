@@ -84,15 +84,6 @@ int main(int argc, char *argv[])
 	printf("#include \"cpu_dyntrans.cc\"\n");
 	printf("#undef DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF\n\n");
 
-	printf("#define DYNTRANS_INVAL_ENTRY\n");
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_INVAL_ENTRY\n\n");
-
-	printf("#define DYNTRANS_INVALIDATE_TC "
-	    "%s_invalidate_translation_caches\n", a);
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_INVALIDATE_TC\n\n");
-
 	printf("#define DYNTRANS_INVALIDATE_TC_CODE "
 	    "%s_invalidate_code_translation\n", a);
 	printf("#include \"cpu_dyntrans.cc\"\n");

@@ -413,7 +413,52 @@ public:
       }
     }
   }
-};
 
+  void invalidate_tc(struct cpu *cpu, uint64_t addr, int flags)
+  {
+    int r;
+    uint64_t addr_page = addr & ~(pagesize<TcPhyspage>() - 1);
+
+    /*  fatal("invalidate(): ");  */
+
+    /*  Quick case for _one_ virtual addresses: see note above.  */
+    if (flags & INVALIDATE_VADDR) {
+      /*  fatal("vaddr 0x%08x\n", (int)addr_page);  */
+      invalidate_tlb_entry(addr_page, flags);
+      return;
+    }
+
+    /*  Invalidate everything:  */
+    if (flags & INVALIDATE_ALL) {
+      /*  fatal("all\n");  */
+      for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
+        if (vph_tlb_entry[r].valid) {
+          invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, 0);
+          vph_tlb_entry[r].valid=0;
+        }
+      }
+      return;
+    }
+
+    /*  Invalidate a physical page:  */
+
+    if (!(flags & INVALIDATE_PADDR))
+      fprintf(stderr, "HUH? Invalidate: Not vaddr, all, or paddr?\n");
+
+    /*  fatal("addr 0x%08x\n", (int)addr_page);  */
+
+    for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
+      if (vph_tlb_entry[r].valid && addr_page
+          == vph_tlb_entry[r].paddr_page) {
+        invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, flags);
+        if (flags & JUST_MARK_AS_NON_WRITABLE) {
+          vph_tlb_entry[r].writeflag = 0;
+        } else {
+          vph_tlb_entry[r].valid = 0;
+        }
+      }
+    }
+  }
+};
 
 #endif//TLB_CACHE64_H

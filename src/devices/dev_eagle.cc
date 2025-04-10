@@ -226,7 +226,7 @@ DEVICE_ACCESS(eagle_92)
         uint64_t write_data = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
         fprintf(stderr, "%s %08x: port 92\n", "write", (unsigned int)cpu->pc);
         cpu->cd.ppc.bytelane_swap_latch = (write_data & 2) >> 1;
-        ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+        cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
     } else {
         memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, 0);
     }

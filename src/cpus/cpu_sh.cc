@@ -107,8 +107,9 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	cpu->run_instr = sh_run_instr;
 	cpu->update_translation_table = sh_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    sh_invalidate_translation_caches;
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.sh.vph32.invalidate_tc(cpu, paddr, flags);
+  };
 	cpu->invalidate_code_translation =
 	    sh_invalidate_code_translation;
 

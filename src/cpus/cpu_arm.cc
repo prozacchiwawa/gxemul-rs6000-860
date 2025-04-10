@@ -98,8 +98,9 @@ int arm_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->run_instr = arm_run_instr;
 	cpu->memory_rw = arm_memory_rw;
 	cpu->update_translation_table = arm_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    arm_invalidate_translation_caches;
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.arm.vph32.invalidate_tc(cpu, paddr, flags);
+  };
 	cpu->invalidate_code_translation = arm_invalidate_code_translation;
 	cpu->translate_v2p = arm_translate_v2p;
 

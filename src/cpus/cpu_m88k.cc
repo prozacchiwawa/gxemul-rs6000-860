@@ -119,8 +119,9 @@ int m88k_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->run_instr = m88k_run_instr;
 	cpu->memory_rw = m88k_memory_rw;
 	cpu->update_translation_table = m88k_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    m88k_invalidate_translation_caches;
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.m88k.vph32.invalidate_tc(cpu, paddr, flags);
+  };
 	cpu->invalidate_code_translation = m88k_invalidate_code_translation;
 	cpu->translate_v2p = m88k_translate_v2p;
 

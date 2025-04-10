@@ -87,8 +87,9 @@ int alpha_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->run_instr = alpha_run_instr;
 	cpu->translate_v2p = alpha_translate_v2p;
 	cpu->update_translation_table = alpha_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    alpha_invalidate_translation_caches;
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.alpha.vph64.invalidate_tc(cpu, paddr, flags);
+  };
 	cpu->invalidate_code_translation = alpha_invalidate_code_translation;
 
 	cpu->cd.alpha.cpu_type = cpu_type_defs[i];

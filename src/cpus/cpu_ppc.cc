@@ -120,15 +120,17 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (cpu->is_32bit) {
 		cpu->run_instr = ppc32_run_instr;
 		cpu->update_translation_table = ppc32_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    ppc32_invalidate_translation_caches;
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.ppc.vph32.invalidate_tc(cpu, paddr, flags);
+    };
 		cpu->invalidate_code_translation =
 		    ppc32_invalidate_code_translation;
 	} else {
 		cpu->run_instr = ppc_run_instr;
 		cpu->update_translation_table = ppc_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    ppc_invalidate_translation_caches;
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.ppc.vph64.invalidate_tc(cpu, paddr, flags);
+    };
 		cpu->invalidate_code_translation =
 		    ppc_invalidate_code_translation;
 	}
@@ -349,9 +351,9 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 
 	if (old_le != new_le) {
 		fprintf(stderr, "old LE %d new LE %d\n", old_le, new_le);
-		ppc_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+    cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
-    ppc32_invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
+    cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
     ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.get_ic_phys(), INVALIDATE_PADDR);
 	}
 

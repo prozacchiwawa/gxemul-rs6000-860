@@ -121,15 +121,17 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (cpu->is_32bit) {
 		cpu->run_instr = mips32_run_instr;
 		cpu->update_translation_table = mips32_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    mips32_invalidate_translation_caches;
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph32.invalidate_tc(cpu, paddr, flags);
+    };
 		cpu->invalidate_code_translation =
 		    mips32_invalidate_code_translation;
 	} else {
 		cpu->run_instr = mips_run_instr;
 		cpu->update_translation_table = mips_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    mips_invalidate_translation_caches;
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph64.invalidate_tc(cpu, paddr, flags);
+    };
 		cpu->invalidate_code_translation =
 		    mips_invalidate_code_translation;
 	}

@@ -36,6 +36,7 @@
 #include <inttypes.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <functional>
 
 /*  This is needed for undefining 'mips', 'ppc' etc. on weird systems:  */
 #include "../../config.h"
@@ -321,8 +322,7 @@ struct cpu {
 	void		(*update_translation_table)(struct cpu *,
 			    uint64_t vaddr_page, unsigned char *host_page,
 			    int writeflag, uint64_t paddr_page);
-	void		(*invalidate_translation_caches)(struct cpu *,
-			    uint64_t paddr, int flags);
+	std::function<void(struct cpu *, uint64_t paddr, int flags)> invalidate_translation_caches;
 	void		(*invalidate_code_translation)(struct cpu *,
 			    uint64_t paddr, int flags);
 	void		(*useremul_syscall)(struct cpu *cpu, uint32_t code);

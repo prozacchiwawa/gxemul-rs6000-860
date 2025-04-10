@@ -1700,10 +1700,10 @@ X(mtspr) {
     int regnr = ((spr - SPR_IBAT0U) / 2) & 3;
     int lower = (spr - SPR_IBAT0U) & 1;
     // fprintf(stderr, "BAT CHANGE\n");
-    CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
+    cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (spr == SPR_SDR1) {
     // fprintf(stderr, "SDR1 CHANGE\n");
-    CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
+    cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
   reg(ic->arg[1]) = reg(ic->arg[0]);
 }
@@ -1762,7 +1762,7 @@ X(rfid)
 
 X(isync)
 {
-  CPU32(invalidate_translation_caches)(cpu, cpu->pc, INVALIDATE_ALL);
+  cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   ppc_update_for_icount(cpu);
 }
 

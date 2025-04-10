@@ -101,7 +101,9 @@ int arm_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.arm.vph32.invalidate_tc(cpu, paddr, flags);
   };
-	cpu->invalidate_code_translation = arm_invalidate_code_translation;
+	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.arm.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.arm.physpage_template->ics->f);
+  };
 	cpu->translate_v2p = arm_translate_v2p;
 
 	cpu->cd.arm.cpu_type = cpu_type_defs[found];

@@ -122,7 +122,9 @@ int m88k_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.m88k.vph32.invalidate_tc(cpu, paddr, flags);
   };
-	cpu->invalidate_code_translation = m88k_invalidate_code_translation;
+	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.m88k.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.m88k.physpage_template->ics->f);
+  };
 	cpu->translate_v2p = m88k_translate_v2p;
 
 	cpu->cd.m88k.cpu_type = cpu_type_defs[found];

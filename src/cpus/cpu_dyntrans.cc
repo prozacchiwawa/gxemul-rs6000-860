@@ -928,23 +928,6 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 }
 #endif	/*  DYNTRANS_INIT_TABLES  */
 
-#ifdef DYNTRANS_INVALIDATE_TC_CODE
-/*
- *  XXX_invalidate_code_translation():
- *
- *  Invalidate code translations for a specific physical address, a specific
- *  virtual address, or for all entries in the cache.
- */
-void DYNTRANS_INVALIDATE_TC_CODE(struct cpu *cpu, uint64_t addr, int flags)
-{
-#ifdef MODE32
-  cpu->cd.DYNTRANS_ARCH.vph32.invalidate_tc_code(cpu, addr, flags, TO_BE_TRANSLATED);
-#else
-  cpu->cd.DYNTRANS_ARCH.vph64.invalidate_tc_code(cpu, addr, flags, TO_BE_TRANSLATED);
-#endif
-}
-#endif	/*  DYNTRANS_INVALIDATE_TC_CODE  */
-
 #ifdef DYNTRANS_UPDATE_TRANSLATION_TABLE
 #ifdef MODE32
 void CPU32(cpu_dyntrans_update_translation_table)

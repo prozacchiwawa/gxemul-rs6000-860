@@ -124,16 +124,18 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.mips.vph32.invalidate_tc(cpu, paddr, flags);
     };
-		cpu->invalidate_code_translation =
-		    mips32_invalidate_code_translation;
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.mips.physpage_template->ics->f);
+    };
 	} else {
 		cpu->run_instr = mips_run_instr;
 		cpu->update_translation_table = mips_update_translation_table;
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.mips.vph64.invalidate_tc(cpu, paddr, flags);
     };
-		cpu->invalidate_code_translation =
-		    mips_invalidate_code_translation;
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph64.invalidate_tc_code(cpu, paddr, flags, cpu->cd.mips.physpage_template->ics->f);
+    };
 	}
 
 	cpu->instruction_has_delayslot = mips_cpu_instruction_has_delayslot;

@@ -110,8 +110,9 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.sh.vph32.invalidate_tc(cpu, paddr, flags);
   };
-	cpu->invalidate_code_translation =
-	    sh_invalidate_code_translation;
+  cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.sh.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.sh.physpage_template->ics->f);
+  };
 
 	/*  Only show name and caches etc for CPU nr 0 (in SMP machines):  */
 	if (cpu_id == 0) {

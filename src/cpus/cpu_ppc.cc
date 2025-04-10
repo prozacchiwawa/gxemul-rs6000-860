@@ -123,16 +123,18 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.ppc.vph32.invalidate_tc(cpu, paddr, flags);
     };
-		cpu->invalidate_code_translation =
-		    ppc32_invalidate_code_translation;
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.ppc.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.ppc.physpage_template->ics->f);
+    };
 	} else {
 		cpu->run_instr = ppc_run_instr;
 		cpu->update_translation_table = ppc_update_translation_table;
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.ppc.vph64.invalidate_tc(cpu, paddr, flags);
     };
-		cpu->invalidate_code_translation =
-		    ppc_invalidate_code_translation;
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.ppc.vph64.invalidate_tc_code(cpu, paddr, flags, cpu->cd.ppc.physpage_template->ics->f);
+    };
 	}
 
 	cpu->translate_v2p = ppc_translate_v2p;
@@ -354,7 +356,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
-    ppc32_invalidate_code_translation(cpu, cpu->cd.ppc.get_ic_phys(), INVALIDATE_PADDR);
+    cpu->invalidate_code_translation(cpu, cpu->cd.ppc.get_ic_phys(), INVALIDATE_PADDR);
 	}
 
   if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {

@@ -120,7 +120,16 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	if (cpu->is_32bit) {
 		cpu->run_instr = mips32_run_instr;
-		cpu->update_translation_table = mips32_update_translation_table;
+    cpu->update_translation_table = []
+      (struct cpu *cpu,
+       uint64_t vaddr_page,
+       unsigned char *host_page,
+       int flags,
+       uint64_t paddr_page
+       ) {
+      auto writeflag = flags & 1;
+      cpu->cd.mips.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+    };
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.mips.vph32.invalidate_tc(cpu, paddr, flags);
     };
@@ -129,7 +138,16 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
     };
 	} else {
 		cpu->run_instr = mips_run_instr;
-		cpu->update_translation_table = mips_update_translation_table;
+    cpu->update_translation_table = []
+      (struct cpu *cpu,
+       uint64_t vaddr_page,
+       unsigned char *host_page,
+       int flags,
+       uint64_t paddr_page
+       ) {
+      auto writeflag = flags & 1;
+      cpu->cd.mips.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+    };
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.mips.vph64.invalidate_tc(cpu, paddr, flags);
     };

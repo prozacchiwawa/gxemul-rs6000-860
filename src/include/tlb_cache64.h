@@ -459,6 +459,26 @@ public:
       }
     }
   }
+
+  /*
+   *  XXX_tc_allocate_default_page():
+   *
+   *  Create a default page (with just pointers to instr(to_be_translated)
+   *  at cpu->translation_cache_cur_ofs.
+   */
+  static void allocate_physpage(struct cpu *cpu, uint64_t physaddr, TcPhyspage *templ)
+  {
+    auto ppp = (TcPhyspage *)(cpu->translation_cache + cpu->translation_cache_cur_ofs);
+
+    /*  Copy the entire template page first:  */
+    memcpy(ppp, templ, sizeof(TcPhyspage));
+
+    ppp->physaddr = physaddr & ~(pagesize<TcPhyspage>() - 1);
+
+    cpu->translation_cache_cur_ofs += sizeof(TcPhyspage);
+
+    cpu->translation_cache_cur_ofs = (cpu->translation_cache_cur_ofs + (PHYSPAGE_CACHE_ALIGN - 1)) & ~(PHYSPAGE_CACHE_ALIGN - 1);
+  }
 };
 
 #endif//TLB_CACHE64_H

@@ -118,7 +118,16 @@ int m88k_cpu_new(struct cpu *cpu, struct memory *mem,
 
 	cpu->run_instr = m88k_run_instr;
 	cpu->memory_rw = m88k_memory_rw;
-	cpu->update_translation_table = m88k_update_translation_table;
+	cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.m88k.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+  };
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.m88k.vph32.invalidate_tc(cpu, paddr, flags);
   };

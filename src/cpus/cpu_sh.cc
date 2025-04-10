@@ -106,7 +106,16 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	cpu->translate_v2p = sh_translate_v2p;
 
 	cpu->run_instr = sh_run_instr;
-	cpu->update_translation_table = sh_update_translation_table;
+  cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.sh.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+  };
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.sh.vph32.invalidate_tc(cpu, paddr, flags);
   };

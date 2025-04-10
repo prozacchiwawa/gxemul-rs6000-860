@@ -86,7 +86,16 @@ int alpha_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->memory_rw = alpha_memory_rw;
 	cpu->run_instr = alpha_run_instr;
 	cpu->translate_v2p = alpha_translate_v2p;
-	cpu->update_translation_table = alpha_update_translation_table;
+	cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.alpha.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+  };
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.alpha.vph64.invalidate_tc(cpu, paddr, flags);
   };

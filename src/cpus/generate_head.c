@@ -105,8 +105,6 @@ int main(int argc, char *argv[])
 	    uppercase(a));
 	printf("#define DYNTRANS_PC_TO_IC_ENTRY %s_PC_TO_IC_ENTRY\n",
 	    uppercase(a));
-	printf("#define DYNTRANS_TC_ALLOCATE "
-	    "%s_tc_allocate_default_page\n", a);
 	printf("#define DYNTRANS_TC_PHYSPAGE %s_tc_physpage\n", a);
 	printf("#define DYNTRANS_PC_TO_POINTERS %s_pc_to_pointers\n", a);
 	printf("#define DYNTRANS_PC_TO_POINTERS_GENERIC "

@@ -84,11 +84,6 @@ int main(int argc, char *argv[])
 	printf("#include \"cpu_dyntrans.cc\"\n");
 	printf("#undef DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF\n\n");
 
-	printf("#define DYNTRANS_UPDATE_TRANSLATION_TABLE "
-	    "%s_update_translation_table\n", a);
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_UPDATE_TRANSLATION_TABLE\n\n");
-
 	printf("#define MEMORY_RW %s_memory_rw\n", a);
 	printf("#define MEM_%s\n", uppercase(a));
 	printf("#include \"memory_rw.cc\"\n");

@@ -40,6 +40,8 @@
 #define	N_BASE_TABLE_ENTRIES		65536
 #define	PAGENR_TO_TABLE_INDEX(a)	((a) & (N_BASE_TABLE_ENTRIES-1))
 
+#define PHYSPAGE_CACHE_ALIGN 64
+
 struct host_load_store_t {
   uint64_t physaddr;
   void *ppp;

@@ -564,39 +564,6 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 }
 #endif	/*  DYNTRANS_FUNCTION_TRACE_DEF  */
 
-
-
-#ifdef DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF
-/*
- *  XXX_tc_allocate_default_page():
- *
- *  Create a default page (with just pointers to instr(to_be_translated)
- *  at cpu->translation_cache_cur_ofs.
- */
-static void DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF(struct cpu *cpu,
-	uint64_t physaddr)
-{
-	struct DYNTRANS_TC_PHYSPAGE *ppp;
-
-	ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
-	    + cpu->translation_cache_cur_ofs);
-
-	/*  Copy the entire template page first:  */
-	memcpy(ppp, cpu->cd.DYNTRANS_ARCH.physpage_template, sizeof(
-	    struct DYNTRANS_TC_PHYSPAGE));
-
-	ppp->physaddr = physaddr & ~(DYNTRANS_PAGESIZE - 1);
-
-	cpu->translation_cache_cur_ofs += sizeof(struct DYNTRANS_TC_PHYSPAGE);
-
-	cpu->translation_cache_cur_ofs --;
-	cpu->translation_cache_cur_ofs |= 63;
-	cpu->translation_cache_cur_ofs ++;
-}
-#endif	/*  DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF  */
-
-
-
 #ifdef DYNTRANS_PC_TO_POINTERS_FUNC
 /*
  *  XXX_pc_to_pointers_generic():
@@ -753,7 +720,11 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 		    cpu->translation_cache_cur_ofs;
 
 		/*  Allocate a default page, with to_be_translated entries:  */
-		DYNTRANS_TC_ALLOCATE(cpu, host_pages.physaddr);
+#ifdef MODE32
+    cpu->cd.DYNTRANS_ARCH.vph32.allocate_physpage(cpu, host_pages.physaddr, cpu->cd.DYNTRANS_ARCH.physpage_template);
+#else
+    cpu->cd.DYNTRANS_ARCH.vph64.allocate_physpage(cpu, host_pages.physaddr, cpu->cd.DYNTRANS_ARCH.physpage_template);
+#endif
 
 		ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
 		    + physpage_ofs);
@@ -927,43 +898,6 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 #endif
 }
 #endif	/*  DYNTRANS_INIT_TABLES  */
-
-#ifdef DYNTRANS_UPDATE_TRANSLATION_TABLE
-#ifdef MODE32
-void CPU32(cpu_dyntrans_update_translation_table)
-  (struct cpu *cpu, uint64_t vaddr_page,
-   unsigned char *host_page, int flags, uint64_t paddr_page)
-{
-  auto writeflag = flags & 1;
-  cpu->cd.DYNTRANS_ARCH.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
-}
-#else
-void CPU64(cpu_dyntrans_update_translation_table)
-  (struct cpu *cpu, uint64_t vaddr_page,
-   unsigned char *host_page, int flags, uint64_t paddr_page)
-{
-  auto writeflag = flags & 1;
-  cpu->cd.DYNTRANS_ARCH.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
-}
-#endif
-
-/*
- *  XXX_update_translation_table():
- *
- *  Update the virtual memory translation tables.
- */
-void DYNTRANS_UPDATE_TRANSLATION_TABLE
-(struct cpu *cpu, uint64_t vaddr_page,
- unsigned char *host_page, int flags, uint64_t paddr_page)
-{
-#ifdef MODE32
-  CPU32(cpu_dyntrans_update_translation_table)(cpu, vaddr_page, host_page, flags, paddr_page);
-#else
-  CPU64(cpu_dyntrans_update_translation_table)(cpu, vaddr_page, host_page, flags, paddr_page);
-#endif
-}
-#endif	/*  DYNTRANS_UPDATE_TRANSLATION_TABLE  */
-
 
 /*****************************************************************************/
 

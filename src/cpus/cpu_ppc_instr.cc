@@ -761,9 +761,9 @@ X(dcbz)
 		    cacheline_size : sizeof(cacheline);
     auto host_pages =
 #ifdef MODE32
-      CPU32(get_cached_tlb_pages)(cpu, addr)
+      CPU32(get_cached_tlb_pages)(cpu, addr, false)
 #else
-      CPU64(get_cached_tlb_pages)(cpu, addr)
+      CPU64(get_cached_tlb_pages)(cpu, addr, false)
 #endif
       ;
     auto page = host_pages.host_store;
@@ -1154,9 +1154,9 @@ X(llsc)
 
   auto host_pages =
 #ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr)
+    ppc32_get_cached_tlb_pages(cpu, addr, false)
 #else
-    ppc64_get_cached_tlb_pages(cpu, addr)
+    ppc64_get_cached_tlb_pages(cpu, addr, false)
 #endif
     ;
 
@@ -1287,9 +1287,9 @@ X(loose_lhaux)
 
   auto host_pages =
 #ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, full_addr)
+    ppc32_get_cached_tlb_pages(cpu, full_addr, false)
 #else
-    ppc64_get_cached_tlb_pages(cpu, full_addr)
+    ppc64_get_cached_tlb_pages(cpu, full_addr, false)
 #endif
     ;
   auto page = host_pages.host_load;
@@ -2821,9 +2821,9 @@ X(to_be_translated)
 	/*  Read the instruction word from memory:  */
   auto host_pages =
 #ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr)
+    ppc32_get_cached_tlb_pages(cpu, addr, true)
 #else
-    ppc64_get_cached_tlb_pages(cpu, addr)
+    ppc64_get_cached_tlb_pages(cpu, addr, true)
 #endif
     ;
   page = host_pages.host_load;

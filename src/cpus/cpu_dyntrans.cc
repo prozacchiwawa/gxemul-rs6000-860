@@ -202,17 +202,17 @@ static void gather_statistics(struct cpu *cpu)
 */
 
 #ifdef CPU_BITS_32
-struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
-  return cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(cpu, addr);
+struct host_load_store_t CPU32(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr, bool instr) {
+  return cpu->cd.DYNTRANS_ARCH.vph32.get_cached_tlb_pages(cpu, addr, instr);
 }
 
 void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
-  cpu->cd.DYNTRANS_ARCH.vph32.set_tlb_physpage(addr, ppp);
+  cpu->cd.DYNTRANS_ARCH.vph32.set_tlb_physpage(cpu, addr, ppp);
 }
 #endif
 
 #ifdef CPU_BITS_64
-struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr) {
+struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr, bool instr) {
   cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
 }
 

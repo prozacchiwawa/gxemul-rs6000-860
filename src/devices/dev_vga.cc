@@ -841,7 +841,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, int fg_color_mix, uint8_t *pix
   int copy_if_equal = !!(d->bee8_regs[0xe] & 0x80);
   int prev_pixel;
   int nowrite;
-  uint8_t pixel;
+  uint8_t pixel = 0;
   int pix;
 
   /* Compute write target */

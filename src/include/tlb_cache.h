@@ -78,6 +78,12 @@ template <typename TcPhyspage> constexpr int pc_to_ic_entry(uint64_t pc) {
   return useful_address / factor;
 }
 
+template <typename TcPhyspage> int cpu_get_addr_space(struct cpu *cpu, bool instr) {
+  return 0;
+}
+struct ppc_tc_physpage;
+template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr);
+
 /*
  *  This structure contains a list of ranges within an emulated
  *  physical page that contain translatable code.

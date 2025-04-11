@@ -124,10 +124,11 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
        uint64_t vaddr_page,
        unsigned char *host_page,
        int flags,
-       uint64_t paddr_page
+       uint64_t paddr_page,
+       bool instr
        ) {
       auto writeflag = flags & 1;
-      cpu->cd.ppc.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+      cpu->cd.ppc.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
     };
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.ppc.vph32.invalidate_tc(cpu, paddr, flags);
@@ -142,10 +143,11 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
        uint64_t vaddr_page,
        unsigned char *host_page,
        int flags,
-       uint64_t paddr_page
+       uint64_t paddr_page,
+       bool instr
        ) {
       auto writeflag = flags & 1;
-      cpu->cd.ppc.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+      cpu->cd.ppc.vph64.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
     };
 		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
       cpu->cd.ppc.vph64.invalidate_tc(cpu, paddr, flags);
@@ -2368,6 +2370,17 @@ void ppc_no_end_trace(struct cpu *cpu) {
 
 void ppc_end_trace(struct cpu *cpu) {
   cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+}
+
+template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr) {
+  const auto msr = cpu->cd.ppc.msr;
+  if ((msr & PPC_MSR_DR) && !instr) {
+    return 1;
+  } else if ((msr & PPC_MSR_IR) && instr) {
+    return 2;
+  } else {
+    return 0;
+  }
 }
 
 #include "memory_ppc.cc"

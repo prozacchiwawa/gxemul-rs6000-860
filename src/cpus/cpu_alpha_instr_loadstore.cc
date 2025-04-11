@@ -135,7 +135,7 @@ static void LS_N(struct cpu *cpu, struct alpha_instr_call *ic)
 #endif
 	    ;
 
-  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr);
+  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr, false);
 #ifdef LS_LOAD
 	page = host_pages.host_load;
 #else

@@ -226,7 +226,7 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 	    + offset
 #endif
 	    ;
-  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr, false);
 	unsigned char *page =
 #ifdef A__L
     host_page.host_load

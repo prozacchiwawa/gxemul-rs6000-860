@@ -54,9 +54,9 @@ void generate_multi(int store, int endianness, int n)
   for (i=0; i<n; i++) {
     printf("\tauto pages%i =\n"
            "#ifdef MODE32\n"
-           "\t\tCPU32(get_cached_tlb_pages)(cpu, addr%i)\n"
+           "\t\tCPU32(get_cached_tlb_pages)(cpu, addr%i, false)\n"
            "#else\n"
-           "\t\tCPU64(get_cached_tlb_pages)(cpu, addr%i)\n"
+           "\t\tCPU64(get_cached_tlb_pages)(cpu, addr%i, false)\n"
            "#endif\n"
            "\t;\n", i, i, i);
   }

@@ -774,7 +774,7 @@ X(to_be_translated)
 	cpu->pc = addr;
 
 	/*  Read the instruction word from memory:  */
-  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr);
+  auto host_pages = CPU64(get_cached_tlb_pages)(cpu, addr, true);
   page = host_pages.host_load;
 
 	if (page != NULL) {

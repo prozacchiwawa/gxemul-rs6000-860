@@ -310,7 +310,7 @@ struct cpu {
 			    int writeflag, int cache_flags);
 	int		(*translate_v2p)(struct cpu *, uint64_t vaddr,
 			    uint64_t *return_paddr, int flags);
-  std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page)> update_translation_table;
+  std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page, bool instr)> update_translation_table;
 	std::function<void(struct cpu *, uint64_t paddr, int flags)> invalidate_translation_caches;
   std::function<void(struct cpu *, uint64_t paddr, int flags)> invalidate_code_translation;
 	void		(*useremul_syscall)(struct cpu *cpu, uint32_t code);

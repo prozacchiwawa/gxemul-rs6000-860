@@ -111,10 +111,11 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
      uint64_t vaddr_page,
      unsigned char *host_page,
      int flags,
-     uint64_t paddr_page
+     uint64_t paddr_page,
+     bool instr
      ) {
     auto writeflag = flags & 1;
-    cpu->cd.sh.vph32.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+    cpu->cd.sh.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
   };
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.sh.vph32.invalidate_tc(cpu, paddr, flags);

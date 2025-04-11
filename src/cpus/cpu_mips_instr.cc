@@ -2576,7 +2576,7 @@ X(sw_loop)
 	unsigned char *page;
 	int partial = 0;
 
-  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rX);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rX, false);
 	page = host_page.host_store;
 
 	/*  Fallback:  */
@@ -2695,7 +2695,7 @@ X(netbsd_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr, false);
   page = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2729,13 +2729,13 @@ X(linux_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr, false);
 	page = (int32_t *)host_page.host_load;
 
 	addr2 = reg(ic[5].arg[1]) + (int32_t)ic[5].arg[2];
 	pageindex2 = addr2 >> 12;
 	i2 = (addr2 & 0xfff) >> 2;
-  host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr2);
+  host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr2, false);
 	page2 = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2762,7 +2762,7 @@ X(netbsd_strlen)
 	uint32_t pageindex = rx >> 12;
 	int i;
 
-  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rx);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rx, false);
   page = (signed char *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -3443,7 +3443,7 @@ X(to_be_translated)
 	addr &= ~((1 << MIPS_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr, false);
 
   page = host_page.host_load;
 

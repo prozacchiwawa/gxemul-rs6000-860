@@ -207,7 +207,7 @@ public:
   }
 
   void update_make_valid_translation
-  (uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag)
+  (Cpu *cpu, uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, bool instr)
   {
     int found, r, useraccess = 0;
 
@@ -276,7 +276,7 @@ public:
           next_free_l2 = l2->next;
         } else {
           int i;
-          l2 = l1_64[x1] = (L2Table *) malloc(sizeof(L2Table *));
+          l2 = l1_64[x1] = (L2Table *) malloc(sizeof(L2Table));
           l2->refcount = 0;
           for (i=0; i<(1 << dyntrans_l2n<TcPhyspage>()); i++)
             l2->l3[i] = l3_64_dummy;
@@ -523,7 +523,7 @@ public:
         memory_paddr_to_hostaddr(cpu->mem, host_pages.physaddr, MEM_READ);
       if (host_page != NULL) {
         cpu->update_translation_table
-          (cpu, cached_pc & ~q, host_page, 0, host_pages.physaddr);
+          (cpu, cached_pc & ~q, host_page, 0, host_pages.physaddr, true);
       }
     }
 

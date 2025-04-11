@@ -220,9 +220,9 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
   auto pages =
 #ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr)
+    ppc32_get_cached_tlb_pages(cpu, addr, false)
 #else
-    ppc64_get_cached_tlb_pages(cpu, addr)
+    ppc64_get_cached_tlb_pages(cpu, addr, false)
 #endif
     ;
 

@@ -14,11 +14,11 @@ extern unsigned char *memory_paddr_to_hostaddr
 
 template <typename TcPhyspage, typename VaddrToTlb, typename VpgTlbEntry, typename Cpu> struct vph32 {
 private:
-	unsigned char *host_load[2 * N_VPH32_ENTRIES];
-	unsigned char *host_store[2 * N_VPH32_ENTRIES];
-	uint32_t phys_addr[2 * N_VPH32_ENTRIES];
-	TcPhyspage *phys_page[2 * N_VPH32_ENTRIES];
-	VaddrToTlb vaddr_to_tlbindex[2 * N_VPH32_ENTRIES];
+	unsigned char *host_load[3 * N_VPH32_ENTRIES];
+	unsigned char *host_store[3 * N_VPH32_ENTRIES];
+	uint32_t phys_addr[3 * N_VPH32_ENTRIES];
+	TcPhyspage *phys_page[3 * N_VPH32_ENTRIES];
+	VaddrToTlb vaddr_to_tlbindex[3 * N_VPH32_ENTRIES];
   uint64_t cur_ic_virt;
   TcPhyspage *cur_physpage;
   TcPhyspage *physpage_template;
@@ -67,8 +67,9 @@ public:
     physpage_map = new std::map<uint64_t, TcPhyspage>();
   }
 
-  host_load_store_t get_cached_tlb_pages(Cpu *cpu, uint64_t addr) {
+  host_load_store_t get_cached_tlb_pages(Cpu *cpu, uint64_t addr, bool instr) {
     auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
     return host_load_store_t {
       phys_addr[index],
       phys_page[index],
@@ -77,23 +78,26 @@ public:
     };
   }
 
-  void set_tlb_physpage(uint64_t addr, TcPhyspage *ppp) {
+  void set_tlb_physpage(Cpu *cpu, uint64_t addr, TcPhyspage *ppp) {
     auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, true);
     phys_page[index] = ppp;
   }
 
-  void clear_writable(uint64_t addr) {
+  void clear_writable(Cpu *cpu, uint64_t addr) {
     auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
     host_store[index] = nullptr;
   }
 
-  void clear_phys(uint64_t vaddr_page) {
+  void clear_phys(Cpu *cpu, uint64_t vaddr_page, bool instr) {
     uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page & 0xffffffff);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
     phys_page[index] = nullptr;
   }
 
-  int clear_cache(uint64_t addr) {
+  int clear_cache(Cpu *cpu, uint64_t addr, bool instr) {
     auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
 		host_load[index] = nullptr;
 		host_store[index] = nullptr;
 		phys_addr[index] = 0;
@@ -112,7 +116,7 @@ public:
     /*  Quick case for _one_ virtual addresses: see note above.  */
     if (flags & INVALIDATE_VADDR) {
       /*  fatal("vaddr 0x%08x\n", (int)addr_page);  */
-      this->invalidate_tlb_entry(addr_page, flags);
+      this->invalidate_tlb_entry(cpu, addr_page, flags, false);
       return;
     }
 
@@ -147,7 +151,7 @@ public:
       /*  fatal("all\n");  */
       for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
         if (vph_tlb_entry[r].valid) {
-          invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, 0);
+          invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, 0, false);
           vph_tlb_entry[r].valid=0;
         }
       }
@@ -164,7 +168,7 @@ public:
 
     for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
       if (vph_tlb_entry[r].valid && addr_page == vph_tlb_entry[r].paddr_page) {
-        this->invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, flags);
+        this->invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, flags, false);
         if (flags & JUST_MARK_AS_NON_WRITABLE) {
           vph_tlb_entry[r].writeflag = 0;
         } else
@@ -174,8 +178,9 @@ public:
   }
 
   void update_cache_page
-  (uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, int r) {
+  (Cpu *cpu, uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, int r, bool instr) {
 		auto index = addr_to_pagenr<TcPhyspage>(vaddr_page);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
 		host_load[index] = host_page;
 		host_store[index] = writeflag? host_page : nullptr;
 		phys_addr[index] = paddr_page;
@@ -183,9 +188,10 @@ public:
 		vaddr_to_tlbindex[index] = r + 1;
   }
 
-  void invalidate_tlb_entry(uint64_t vaddr_page, int flags)
+  void invalidate_tlb_entry(Cpu *cpu, uint64_t vaddr_page, int flags, bool instr)
   {
     uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
 
     if (is_arm<TcPhyspage>()) {
       is_userpage[index >> 5] &= ~(1 << (index & 31));
@@ -194,9 +200,9 @@ public:
     if (flags & JUST_MARK_AS_NON_WRITABLE) {
       /*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
           (int)vaddr_page);  */
-      clear_writable(vaddr_page);
+      clear_writable(cpu, vaddr_page);
     } else {
-      int tlbi = clear_cache(vaddr_page);
+      int tlbi = clear_cache(cpu, vaddr_page, instr);
       if (tlbi > 0) {
         vph_tlb_entry[tlbi-1].valid = 0;
       }
@@ -204,10 +210,12 @@ public:
   }
 
   void update_make_valid_translation
-  (uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag) {
+  (Cpu *cpu, uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, bool instr) {
     uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+
     auto useraccess = 0;
-    auto found = (int)vaddr_to_tlbindex[addr_to_pagenr<TcPhyspage>(vaddr_page)] - 1;
+    auto found = (int)vaddr_to_tlbindex[index] - 1;
 
     if (found < 0) {
       /*  Create the new TLB entry, overwriting a "random" entry:  */
@@ -216,7 +224,7 @@ public:
 
       if (vph_tlb_entry[r].valid) {
         /*  This one has to be invalidated first:  */
-        invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, 0);
+        invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, 0, instr);
       }
 
       vph_tlb_entry[r].valid = 1;
@@ -227,7 +235,7 @@ public:
 
       /*  Add the new translation to the table:  */
       update_cache_page
-        (vaddr_page, paddr_page, host_page, writeflag, r);
+        (cpu, vaddr_page, paddr_page, host_page, writeflag, r, instr);
 
       if (is_arm<TcPhyspage>() && useraccess) {
         is_userpage[index >> 5] |= 1 << (index & 31);
@@ -248,6 +256,8 @@ public:
       }
 
       index = addr_to_pagenr<TcPhyspage>(vaddr_page);
+      index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+
       phys_page[index] = nullptr;
       if (is_arm<TcPhyspage>()) {
         is_userpage[index>>5] &= ~(1<<(index&31));
@@ -309,7 +319,7 @@ public:
         if (flags & INVALIDATE_ALL ||
             (flags & INVALIDATE_PADDR && paddr_page == addr) ||
             (flags & INVALIDATE_VADDR && vaddr_page == addr)) {
-          clear_phys(vaddr_page);
+          clear_phys(cpu, vaddr_page, true);
         }
       }
     }
@@ -332,7 +342,7 @@ public:
     int ok;
     TcPhyspage *ppp;
 
-    auto host_pages = get_cached_tlb_pages(cpu, cached_pc);
+    auto host_pages = get_cached_tlb_pages(cpu, cached_pc, true);
 
     /*  Virtual to physical address translation:  */
     ok = 0;
@@ -364,7 +374,7 @@ public:
             Update cached_pc:  */
         cached_pc = cpu->pc;
 
-        host_pages = get_cached_tlb_pages(cpu, cached_pc);
+        host_pages = get_cached_tlb_pages(cpu, cached_pc, true);
 
         if (host_pages.host_load) {
           paddr = host_pages.physaddr;
@@ -397,7 +407,7 @@ public:
         memory_paddr_to_hostaddr(cpu->mem, host_pages.physaddr, MEM_READ);
       if (host_page != NULL) {
         cpu->update_translation_table
-          (cpu, cached_pc & ~q, host_page, 0, host_pages.physaddr);
+          (cpu, cached_pc & ~q, host_page, 0, host_pages.physaddr, true);
       }
     }
 
@@ -410,7 +420,7 @@ public:
 
     /*  Here, ppp points to a valid physical page struct.  */
     if (host_pages.host_load != nullptr) {
-      set_tlb_physpage(cached_pc, ppp);
+      set_tlb_physpage(cpu, cached_pc, ppp);
     }
 
     /*
@@ -431,7 +441,7 @@ public:
   void move_to_physpage(Cpu *cpu) {
     uint32_t cached_pc = cpu->pc;
 
-    auto host_pages = get_cached_tlb_pages(cpu, cached_pc);
+    auto host_pages = get_cached_tlb_pages(cpu, cached_pc, true);
 
     if (host_pages.ppp == nullptr) {
       pc_to_pointers_generic(cpu);

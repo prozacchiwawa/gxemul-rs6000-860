@@ -109,7 +109,7 @@ void generate_opcode(uint32_t opcode)
 	if (p)
 		printf("\taddr %s 4;\n", u? "+=" : "-=");
 
-  printf("\tauto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr);\n");
+  printf("\tauto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr, false);\n");
 	printf("\tpage = host_page.host_%s;\n",
 	    load? "load" : "store");
 

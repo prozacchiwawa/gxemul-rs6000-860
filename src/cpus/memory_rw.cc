@@ -333,7 +333,9 @@ not just the device in question.
             cpu->update_translation_table
               (cpu,
                vaddr & ~offset_mask, host_addr,
-               wf, orig_paddr & ~offset_mask);
+               wf, orig_paddr & ~offset_mask,
+               !!(misc_flags & CACHE_INSTRUCTION)
+               );
           }
 				}
 
@@ -498,11 +500,12 @@ not just the device in question.
 #endif
 	    && !(ok & MEMORY_NOT_FULL_PAGE)
 	    && !no_exceptions)
-		cpu->update_translation_table(cpu, vaddr & ~offset_mask,
-		    memblock, (misc_flags & MEMORY_USER_ACCESS) |
-		    (cache == CACHE_INSTRUCTION?
-			(writeflag == MEM_WRITE? 1 : 0) : ok - 1),
-		    paddr & ~offset_mask);
+		cpu->update_translation_table
+      (cpu, vaddr & ~offset_mask,
+       memblock, (misc_flags & MEMORY_USER_ACCESS) |
+       (cache == CACHE_INSTRUCTION?
+        (writeflag == MEM_WRITE? 1 : 0) : ok - 1),
+       paddr & ~offset_mask, cache == CACHE_INSTRUCTION);
 
 	/*
 	 *  If writing, or if mapping a page where writing is ok later on,

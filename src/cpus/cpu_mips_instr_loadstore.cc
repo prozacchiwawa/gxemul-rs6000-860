@@ -115,13 +115,7 @@ void LS_N(struct cpu *cpu, struct mips_instr_call *ic)
 	MODE_uint_t addr = reg(ic->arg[1]) + (int32_t)ic->arg[2];
 	unsigned char *p;
 
-  auto host_page =
-#ifdef MODE32
-    cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr)
-#else
-    cpu->cd.mips.vph64.get_cached_tlb_pages(cpu, addr)
-#endif
-    ;
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr, false);
 
 #ifdef LS_LOAD
 	p = host_page.host_load;

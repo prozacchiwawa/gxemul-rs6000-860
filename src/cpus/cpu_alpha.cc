@@ -52,7 +52,7 @@
 
 
 /*  Alpha symbolic register names:  */
-static const char *alpha_regname[N_ALPHA_REGS] = ALPHA_REG_NAMES; 
+static const char *alpha_regname[N_ALPHA_REGS] = ALPHA_REG_NAMES;
 
 void alpha_irq_interrupt_assert(struct interrupt *interrupt);
 void alpha_irq_interrupt_deassert(struct interrupt *interrupt);
@@ -91,10 +91,10 @@ int alpha_cpu_new(struct cpu *cpu, struct memory *mem,
      uint64_t vaddr_page,
      unsigned char *host_page,
      int flags,
-     uint64_t paddr_page
-     ) {
+     uint64_t paddr_page,
+     bool instr) {
     auto writeflag = flags & 1;
-    cpu->cd.alpha.vph64.update_make_valid_translation(vaddr_page, paddr_page, host_page, writeflag);
+    cpu->cd.alpha.vph64.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
   };
 	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
     cpu->cd.alpha.vph64.invalidate_tc(cpu, paddr, flags);

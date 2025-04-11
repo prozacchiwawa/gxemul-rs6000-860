@@ -45,7 +45,6 @@ X(nop)
 {
 }
 
-
 /*
  *  call_pal:  PALcode call
  *
@@ -54,8 +53,7 @@ X(nop)
 X(call_pal)
 {
 	/*  Synchronize PC first:  */
-	uint64_t old_pc, low_pc = ((size_t)ic - (size_t)
-                             cpu->cd.alpha.get_ic_page()) / sizeof(struct alpha_instr_call);
+	uint64_t old_pc, low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ALPHA_IC_ENTRIES_PER_PAGE-1) <<
 	    ALPHA_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT);
@@ -65,7 +63,7 @@ X(call_pal)
 
 	if (!cpu->running) {
 		cpu->n_translated_instrs --;
-		cpu->cd.alpha.next_ic = &nothing_call;
+		cpu->cd.alpha.vph64.do_nothing(&nothing_call);
 	} else if (cpu->pc != old_pc) {
 		/*  The PC value was changed by the palcode call.  */
 		/*  Find the new physical page and update the translation
@@ -88,8 +86,7 @@ X(jsr)
 	    << ALPHA_INSTR_ALIGNMENT_SHIFT) |
 	    ((1 << ALPHA_INSTR_ALIGNMENT_SHIFT) - 1);
 
-	low_pc = ((size_t)ic - (size_t)
-            cpu->cd.alpha.get_ic_page()) / sizeof(struct alpha_instr_call);
+	low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ALPHA_IC_ENTRIES_PER_PAGE-1)
 	    << ALPHA_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT) + 4;
@@ -102,8 +99,7 @@ X(jsr)
 	 *  already in, then just set cpu->cd.alpha.next_ic.
 	 */
 	if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
-		cpu->cd.alpha.next_ic = cpu->cd.alpha.get_ic_page() +
-		    ((cpu->pc & mask_within_page) >> 2);
+		cpu->cd.alpha.vph64.set_next_ic(cpu->pc);
 	} else {
 		/*  Find the new physical page and update pointers:  */
 		alpha_pc_to_pointers(cpu);
@@ -143,8 +139,7 @@ X(jsr_0)
 	 *  already in, then just set cpu->cd.alpha.next_ic.
 	 */
 	if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
-		cpu->cd.alpha.next_ic = cpu->cd.alpha.get_ic_page() +
-		    ((cpu->pc & mask_within_page) >> 2);
+		cpu->cd.alpha.vph64.set_next_ic(cpu->pc);
 	} else {
 		/*  Find the new physical page and update pointers:  */
 		alpha_pc_to_pointers(cpu);
@@ -174,8 +169,7 @@ X(br)
 	uint64_t low_pc;
 
 	/*  Calculate new PC from this instruction + arg[0]  */
-	low_pc = ((size_t)ic - (size_t)
-            cpu->cd.alpha.get_ic_page()) / sizeof(struct alpha_instr_call);
+	low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ALPHA_IC_ENTRIES_PER_PAGE-1)
 	    << ALPHA_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT);
@@ -197,8 +191,7 @@ X(br_return)
 	uint64_t low_pc;
 
 	/*  Calculate new PC from this instruction + arg[0]  */
-	low_pc = ((size_t)ic - (size_t)
-            cpu->cd.alpha.get_ic_page()) / sizeof(struct alpha_instr_call);
+	low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ALPHA_IC_ENTRIES_PER_PAGE-1)
 	    << ALPHA_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT);
@@ -320,11 +313,11 @@ X(bgt)
 /*
  *  br_samepage:  Branch (to within the same translated page)
  *
- *  arg[0] = pointer to new alpha_instr_call
+ *  arg[0] = new pc
  */
 X(br_samepage)
 {
-	cpu->cd.alpha.next_ic = (struct alpha_instr_call *) ic->arg[0];
+	cpu->cd.alpha.vph64.set_next_ic(ic->arg[0]);
 }
 
 
@@ -339,14 +332,13 @@ X(br_return_samepage)
 {
 	uint64_t low_pc;
 
-	low_pc = ((size_t)ic - (size_t)
-            cpu->cd.alpha.get_ic_page()) / sizeof(struct alpha_instr_call);
+	low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ALPHA_IC_ENTRIES_PER_PAGE-1)
 	    << ALPHA_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT);
 	*((int64_t *)ic->arg[1]) = cpu->pc + 4;
 
-	cpu->cd.alpha.next_ic = (struct alpha_instr_call *) ic->arg[0];
+	cpu->cd.alpha.vph64.set_next_ic(ic->arg[0]);
 }
 
 
@@ -774,8 +766,7 @@ X(to_be_translated)
 	int opcode, ra, rb, func, rc, imm, load, loadstore_type, fp, llsc;
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.alpha.get_ic_page())
-	    / sizeof(struct alpha_instr_call);
+	low_pc = cpu->cd.alpha.VPH.sync_low_pc(cpu, ic);
 	addr = cpu->pc & ~((ALPHA_IC_ENTRIES_PER_PAGE-1) <<
 	    ALPHA_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << ALPHA_INSTR_ALIGNMENT_SHIFT);
@@ -1285,9 +1276,7 @@ X(to_be_translated)
 			if ((old_pc & ~mask_within_page) ==
 			    (new_pc & ~mask_within_page)) {
 				ic->f = samepage_function;
-				ic->arg[0] = (size_t) (
-                               cpu->cd.alpha.get_ic_page() +
-				    ((new_pc & mask_within_page) >> 2));
+				ic->arg[0] = new_pc;
 			}
 		}
 		break;

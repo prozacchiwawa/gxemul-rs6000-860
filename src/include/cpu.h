@@ -76,29 +76,41 @@
  *  list, and so forth. (Bad, O(n) find/insert complexity. Should be fixed some
  *  day. TODO)  See definition of physpage_ranges below.
  */
-#define DYNTRANS_MISC_DECLARATIONS(arch,ARCH,addrtype)  struct \
-	arch ## _instr_call {					\
-		void	(*f)(struct cpu *, struct arch ## _instr_call *); \
-    uint8_t instr[1 << ARCH ## _INSTR_ALIGNMENT_SHIFT];     \
-    uint64_t pc;                                            \
-		size_t	arg[ARCH ## _N_IC_ARGS];                        \
-	};                                                        \
-                                                            \
-	/*  Translation cache struct for each physical page:  */	\
-	struct arch ## _tc_physpage {					\
-		struct arch ## _instr_call ics[ARCH ## _IC_ENTRIES_PER_PAGE+2];\
-		uint32_t	next_ofs;	/*  (0 for end of chain)  */ \
-		uint32_t	translations_bitmap;			\
-		uint32_t	translation_ranges_ofs;			\
-		addrtype	physaddr;				\
-	};								\
-									\
-	struct arch ## _vpg_tlb_entry {					\
-		uint8_t		valid;					\
-		uint8_t		writeflag;				\
-		addrtype	vaddr_page;				\
-		addrtype	paddr_page;				\
-		unsigned char	*host_page;				\
+#define DYNTRANS_TRANSLATIONS_BITMAP(ARCH) struct translations_bitmap { \
+    uint32_t data[(ARCH ## _IC_ENTRIES_PER_PAGE + 31) / 32];            \
+    void set(int x) { data[x / 32] |= 1 << (x & 31); }                  \
+    bool check(int x) const { return !!(data[x / 32] & (1 << (x & 31))); } \
+    bool empty() const {                                                \
+      for (size_t i = 0; i < sizeof(data) / sizeof(data[0]); i++) {       \
+        if (data[i]) { return false; }                                  \
+      }                                                                 \
+      return true;                                                      \
+    }                                                                   \
+  } translations_bitmap
+
+#define DYNTRANS_MISC_DECLARATIONS(arch,ARCH,addrtype)  struct      \
+	arch ## _instr_call {                                             \
+		void	(*f)(struct cpu *, struct arch ## _instr_call *);         \
+    uint8_t instr[1 << ARCH ## _INSTR_ALIGNMENT_SHIFT];             \
+    uint64_t pc;                                                    \
+		size_t	arg[ARCH ## _N_IC_ARGS];                                \
+	};                                                                \
+                                                                    \
+	/*  Translation cache struct for each physical page:  */          \
+	struct arch ## _tc_physpage {                                     \
+		struct arch ## _instr_call ics[ARCH ## _IC_ENTRIES_PER_PAGE+2]; \
+		uint32_t	next_ofs;	/*  (0 for end of chain)  */                \
+		DYNTRANS_TRANSLATIONS_BITMAP(ARCH);                             \
+		uint32_t	translation_ranges_ofs;                               \
+		addrtype	physaddr;                                             \
+	};                                                                \
+                                                                    \
+	struct arch ## _vpg_tlb_entry {                                   \
+		uint8_t		valid;                                                \
+		uint8_t		writeflag;                                            \
+		addrtype	vaddr_page;                                           \
+		addrtype	paddr_page;                                           \
+		unsigned char	*host_page;                                       \
 	};
 
 #define	DYNTRANS_MISC64_DECLARATIONS(arch,ARCH,tlbindextype)		\
@@ -135,25 +147,8 @@
  *  current page, NOT shifted right.)
  */
 #define DYNTRANS_ITC(arch)	\
-  struct arch ## _instr_call  *next_ic;                                 \
-  struct arch ## _tc_physpage *physpage_template;                       \
   void (*combination_check)(struct cpu *,                               \
-                            struct arch ## _instr_call *, int low_addr); \
-private:                                                                \
- uint64_t              cur_ic_virt;                                     \
- struct arch ## _tc_physpage *cur_physpage;                             \
-public:                                                                 \
- uint64_t get_ic_phys() const { return this->cur_physpage->physaddr; }  \
- struct arch ## _tc_physpage *get_physpage() const {                    \
-   return this->cur_physpage;                                           \
- }                                                                      \
- struct arch ## _instr_call *get_ic_page() const {                      \
-   return &this->cur_physpage->ics[0];                                  \
- }                                                                      \
- void set_physpage(uint64_t virt, struct arch ## _tc_physpage *page) {  \
-   this->cur_ic_virt = virt;                                            \
-   this->cur_physpage = page;                                           \
- }
+                            struct arch ## _instr_call *, int low_addr);
 
 /*
  *  Virtual -> physical -> host address translation TLB entries:
@@ -162,10 +157,6 @@ public:                                                                 \
  *  Regardless of whether 32-bit or 64-bit address translation is used, the
  *  same TLB entry structure is used.
  */
-#define	VPH_TLBS(arch,ARCH)						\
-	struct arch ## _vpg_tlb_entry					\
-	    vph_tlb_entry[ARCH ## _MAX_VPH_TLB_ENTRIES];
-
 #define	VPH32(arch,ARCH) \
   struct vph32<arch ## _tc_physpage, uint8_t, arch ## _vpg_tlb_entry, struct cpu> vph32;
 #define	VPH32_16BITVPHENTRIES(arch,ARCH) struct vph32<arch ## _tc_physpage, uint16_t, arch ## _vpg_tlb_entry, struct cpu> vph32;
@@ -176,7 +167,7 @@ public:                                                                 \
 	struct arch ## _tc_physpage  *phys_page_ ## ex[N_VPH32_ENTRIES];\
 	uint8_t			vaddr_to_tlbindex_ ## ex[N_VPH32_ENTRIES];
 
-#define	VPH64(arch,ARCH) struct vph64<struct arch ## _tc_physpage, struct arch ## _l3_64_table, arch ## _l2_64_table, arch ## _vpg_tlb_entry> vph64;
+#define	VPH64(arch,ARCH) struct vph64<struct arch ## _tc_physpage, struct arch ## _l3_64_table, arch ## _l2_64_table, arch ## _vpg_tlb_entry, struct cpu> vph64;
 
 /*  Include all CPUs' header files here:  */
 #include "cpu_alpha.h"
@@ -375,8 +366,6 @@ struct cpu {
 
 	/*  Instruction translation cache:  */
 	int		n_translated_instrs;
-	unsigned char	*translation_cache;
-	size_t		translation_cache_cur_ofs;
 
 
 	/*
@@ -396,32 +385,6 @@ struct cpu {
 	} cd;
 
 };
-
-template <class T> int get_low_pc(T &ci) {
-  return ci.next_ic - ci.get_ic_page();
-}
-
-template <class T, class U=typename cpu_traits<T>::instr_t>
-inline int get_low_pc(T &ci, U *ic) {
-  return ic - ci.get_ic_page();
-}
-
-template <class T, class U=typename cpu_traits<T>::instr_t>
-inline void next_insn(U &ic, T &arch) {
-  ic = arch.next_ic++;
-}
-
-template <class T, class U=typename cpu_traits<T>::instr_t>
-inline int sync_pc(struct cpu *cpu, T &arch, U *ic) {
-  auto low_pc = get_low_pc(arch, ic);
-  uint64_t pc_low_mask =
-    (cpu_traits<T>::ic_entries_per_page() <<
-     cpu_traits<T>::instr_alignment_shift()) - 1;
-  cpu->pc =
-  (cpu->pc & ~pc_low_mask) +
-  (low_pc << cpu_traits<T>::instr_alignment_shift());
-  return low_pc;
-}
 
 /*  cpu.c:  */
 struct cpu *cpu_new(struct memory *mem, struct machine *machine,

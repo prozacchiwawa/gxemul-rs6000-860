@@ -34,7 +34,7 @@
 
 void sync_pc(void)
 {
-	printf("\tuint32_t tmp, low_pc = get_low_pc(cpu->cd.arm);\n");
+	printf("\tuint32_t tmp, low_pc = cpu->cd.arm.vph32.sync_low_pc(cpu, cpu->cd.arm.vph32.get_next_ic());\n");
 	printf("\ttmp = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1) <<\n"
 	    "\t    ARM_INSTR_ALIGNMENT_SHIFT);\n");
 	printf("\ttmp += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT) + 8;\n");

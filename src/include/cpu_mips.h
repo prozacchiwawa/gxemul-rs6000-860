@@ -277,7 +277,6 @@ struct mips_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(mips)
-	VPH_TLBS(mips,MIPS)
 	VPH32(mips,MIPS)
 	VPH64(mips,MIPS)
 };

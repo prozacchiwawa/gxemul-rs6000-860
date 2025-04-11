@@ -51,7 +51,6 @@
 #define DYNTRANS_32
 #include "tmp_arm_head.cc"
 
-
 /*  ARM symbolic register names and condition strings:  */
 static const char *arm_regname[N_ARM_REGS] = ARM_REG_NAMES;
 static const char *arm_condition_string[16] = ARM_CONDITION_STRINGS;
@@ -111,7 +110,7 @@ int arm_cpu_new(struct cpu *cpu, struct memory *mem,
     cpu->cd.arm.vph32.invalidate_tc(cpu, paddr, flags);
   };
 	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
-    cpu->cd.arm.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.arm.physpage_template->ics->f);
+    cpu->cd.arm.vph32.invalidate_tc_code(cpu, paddr, flags);
   };
 	cpu->translate_v2p = arm_translate_v2p;
 
@@ -715,7 +714,7 @@ void arm_exception(struct cpu *cpu, int exception_nr)
 	cpu->cd.arm.r[ARM_LR] = retaddr;
 	cpu->pc = cpu->cd.arm.r[ARM_PC] = exception_nr * 4 +
 	    ((cpu->cd.arm.control & ARM_CONTROL_V)? 0xffff0000 : 0);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 
 

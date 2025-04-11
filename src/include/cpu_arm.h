@@ -233,7 +233,6 @@ struct arm_cpu {
 	 *  host address translation:
 	 */
 	DYNTRANS_ITC(arm)
-	VPH_TLBS(arm,ARM)
 	VPH32_16BITVPHENTRIES(arm,ARM)
 
 	/*  ARM specific: */

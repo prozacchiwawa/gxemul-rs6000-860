@@ -109,7 +109,7 @@ char *memory_conv_to_string(struct cpu *cpu, struct memory *mem,
 	uint64_t addr, char *buf, int bufsize);
 
 unsigned char *memory_paddr_to_hostaddr(struct memory *mem,
-	uint64_t paddr, int writeflag);
+                                        uint64_t paddr, int writeflag);
 
 #include "mem_flags.h"
 

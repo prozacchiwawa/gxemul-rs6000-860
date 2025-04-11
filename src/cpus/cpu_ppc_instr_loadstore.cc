@@ -76,7 +76,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 #endif
 	/*  Synchronize the PC:  */
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
   assert(cpu->pc == ic->pc);
 

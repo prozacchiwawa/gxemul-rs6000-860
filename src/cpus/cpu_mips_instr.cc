@@ -39,23 +39,27 @@
  *  coprocessor number n, and causes a CoProcessor Unusable exception if it
  *  is not set.  (Note: For coprocessor 0 checks, use cop0_availability_check!)
  */
-#ifndef	COPROC_AVAILABILITY_CHECK
-#define	COPROC_AVAILABILITY_CHECK(x)		{		\
-		const int cpnr = (x);					\
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())  \
-		    / sizeof(struct mips_instr_call);			\
-		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)		\
-		    << MIPS_INSTR_ALIGNMENT_SHIFT);			\
-		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);	\
-		if (!(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] &	\
-		    ((1 << cpnr) << STATUS_CU_SHIFT)) ) {		\
-			mips_cpu_exception(cpu, EXCEPTION_CPU,		\
-			    0, 0, cpnr, 0, 0, 0);			\
-			return;						\
-		}							\
-	}
+#ifdef MODE32
+#define quick_pc_to_pointers quick_pc_to_pointers32
+#else
+#define quick_pc_to_pointers quick_pc_to_pointers64
 #endif
 
+#ifndef	COPROC_AVAILABILITY_CHECK
+#define	COPROC_AVAILABILITY_CHECK(x)		{               \
+		const int cpnr = (x);                               \
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic); \
+		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)           \
+                 << MIPS_INSTR_ALIGNMENT_SHIFT);        \
+		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);	\
+		if (!(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] &    \
+          ((1 << cpnr) << STATUS_CU_SHIFT)) ) {         \
+			mips_cpu_exception(cpu, EXCEPTION_CPU,            \
+                         0, 0, cpnr, 0, 0, 0);          \
+			return;                                           \
+		}                                                   \
+	}
+#endif
 
 #ifndef	COP0_AVAILABILITY_CHECK_INCLUDED
 #define	COP0_AVAILABILITY_CHECK_INCLUDED
@@ -94,8 +98,7 @@ int cop0_availability_check(struct cpu *cpu, struct mips_instr_call *ic)
 	}
 
 	if (in_usermode) {
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -131,14 +134,12 @@ X(invalid)
 X(reserved)
 {
 	/*  Synchronize the PC and cause an exception:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 	mips_cpu_exception(cpu, EXCEPTION_RI, 0, 0, 0, 0, 0, 0);
 }
-
 
 /*
  *  cpu:  Cause a CoProcessor Unusable exception.
@@ -148,7 +149,7 @@ X(reserved)
 X(cpu)
 {
 	/*  Synchronize the PC and cause an exception:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
+	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.VPH.get_ic_page())
 	    / sizeof(struct mips_instr_call);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -189,9 +190,9 @@ X(beq)
 			old_pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1) <<
 			    MIPS_INSTR_ALIGNMENT_SHIFT);
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
-			quick_pc_to_pointers(cpu);
+			quick_pc_to_pointers32(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -204,10 +205,9 @@ X(beq_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -218,18 +218,18 @@ X(beq_samepage_addiu)
 	reg(ic[1].arg[1]) = (int32_t)
 	    ((int32_t)reg(ic[1].arg[0]) + (int32_t)ic[1].arg[2]);
 	if (rs == rt)
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+		cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 	else
-		cpu->cd.mips.next_ic ++;
+		cpu->cd.mips.VPH.bump_ic();
 }
 X(beq_samepage_nop)
 {
 	MODE_uint_t rs = reg(ic->arg[0]), rt = reg(ic->arg[1]);
 	cpu->n_translated_instrs ++;
 	if (rs == rt)
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+		cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 	else
-		cpu->cd.mips.next_ic ++;
+		cpu->cd.mips.VPH.bump_ic();
 }
 X(bne)
 {
@@ -248,7 +248,7 @@ X(bne)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -261,10 +261,9 @@ X(bne_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -275,18 +274,18 @@ X(bne_samepage_addiu)
 	reg(ic[1].arg[1]) = (int32_t)
 	    ((int32_t)reg(ic[1].arg[0]) + (int32_t)ic[1].arg[2]);
 	if (rs != rt)
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+		cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 	else
-		cpu->cd.mips.next_ic ++;
+		cpu->cd.mips.VPH.bump_ic();
 }
 X(bne_samepage_nop)
 {
 	MODE_uint_t rs = reg(ic->arg[0]), rt = reg(ic->arg[1]);
 	cpu->n_translated_instrs ++;
 	if (rs != rt)
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+		cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 	else
-		cpu->cd.mips.next_ic ++;
+		cpu->cd.mips.VPH.bump_ic();
 }
 X(b)
 {
@@ -310,7 +309,7 @@ X(b_samepage)
 	ic[1].f(cpu, ic+1);
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT))
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+		cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 	cpu->delay_slot = NOT_DELAYED;
 }
 
@@ -341,7 +340,7 @@ X(beql)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -355,10 +354,9 @@ X(beql_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -380,7 +378,7 @@ X(bnel)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -394,10 +392,9 @@ X(bnel_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -427,7 +424,7 @@ X(blez)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -440,10 +437,9 @@ X(blez_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -465,7 +461,7 @@ X(blezl)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -479,10 +475,9 @@ X(blezl_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -512,7 +507,7 @@ X(bltz)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -525,10 +520,9 @@ X(bltz_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -550,7 +544,7 @@ X(bltzl)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -564,10 +558,9 @@ X(bltzl_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -597,7 +590,7 @@ X(bgez)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -610,10 +603,9 @@ X(bgez_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -635,7 +627,7 @@ X(bgezl)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -649,10 +641,9 @@ X(bgezl_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -672,8 +663,7 @@ X(bgezal)
 	int x = (rs >= 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -690,7 +680,7 @@ X(bgezal)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -700,8 +690,7 @@ X(bgezal_samepage)
 	int x = (rs >= 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -711,10 +700,9 @@ X(bgezal_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -725,8 +713,7 @@ X(bgezall)
 	int x = (rs >= 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -744,7 +731,7 @@ X(bgezall)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -754,8 +741,7 @@ X(bgezall_samepage)
 	int x = (rs >= 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -766,10 +752,9 @@ X(bgezall_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -789,8 +774,7 @@ X(bltzal)
 	int x = (rs < 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -807,7 +791,7 @@ X(bltzal)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -817,8 +801,7 @@ X(bltzal_samepage)
 	int x = (rs < 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -828,10 +811,9 @@ X(bltzal_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -842,8 +824,7 @@ X(bltzall)
 	int x = (rs < 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -861,7 +842,7 @@ X(bltzall)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -871,8 +852,7 @@ X(bltzall_samepage)
 	int x = (rs < 0), low_pc;
 
 	cpu->delay_slot = TO_BE_DELAYED;
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -883,10 +863,9 @@ X(bltzall_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -916,7 +895,7 @@ X(bgtz)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -929,10 +908,9 @@ X(bgtz_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -954,7 +932,7 @@ X(bgtzl)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -968,10 +946,9 @@ X(bgtzl_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		if (x)
-			cpu->cd.mips.next_ic = (struct mips_instr_call *)
-			    ic->arg[2];
+			cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 		else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -1387,8 +1364,7 @@ X(tge)
 	MODE_int_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a >= b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1400,8 +1376,7 @@ X(tgeu)
 	MODE_uint_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a >= b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1413,8 +1388,7 @@ X(tlt)
 	MODE_int_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a < b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1426,8 +1400,7 @@ X(tltu)
 	MODE_uint_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a < b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1439,8 +1412,7 @@ X(teq)
 	MODE_uint_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a == b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1452,8 +1424,7 @@ X(tne)
 	MODE_uint_t a = reg(ic->arg[0]), b = reg(ic->arg[1]);
 	if (a != b) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1477,8 +1448,7 @@ X(add)
 
 	if ((rs >= 0 && rt >= 0 && rd < 0) || (rs < 0 && rt < 0 && rd >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1494,8 +1464,7 @@ X(dadd)
 
 	if ((rs >= 0 && rt >= 0 && rd < 0) || (rs < 0 && rt < 0 && rd >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1512,8 +1481,7 @@ X(sub)
 
 	if ((rs >= 0 && rt >= 0 && rd < 0) || (rs < 0 && rt < 0 && rd >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1530,8 +1498,7 @@ X(dsub)
 
 	if ((rs >= 0 && rt >= 0 && rd < 0) || (rs < 0 && rt < 0 && rd >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1752,8 +1719,7 @@ X(addi)
 
 	if ((rs >= 0 && imm >= 0 && rt < 0) || (rs < 0 && imm < 0 && rt >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1773,8 +1739,7 @@ X(daddi)
 
 	if ((rs >= 0 && imm >= 0 && rt < 0) || (rs < 0 && imm < 0 && rt >= 0)) {
 		/*  Synch. PC and cause an exception:  */
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-		    / sizeof(struct mips_instr_call);
+		int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 		cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT);
 		cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -1957,7 +1922,7 @@ X(cop1_bc)
 			cpu->pc = old_pc + (int32_t)ic->arg[2];
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.mips.next_ic ++;
+			cpu->cd.mips.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -1979,16 +1944,14 @@ X(cop1_slow)
  */
 X(syscall)
 {
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)<< MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 	mips_cpu_exception(cpu, EXCEPTION_SYS, 0, 0, 0, 0, 0, 0);
 }
 X(break)
 {
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)<< MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 	mips_cpu_exception(cpu, EXCEPTION_BP, 0, 0, 0, 0, 0, 0);
@@ -2000,7 +1963,7 @@ X(reboot)
 
 	cpu->running = 0;
 	debugger_n_steps_left_before_interaction = 0;
-	cpu->cd.mips.next_ic = &nothing_call;
+  cpu->cd.mips.VPH.do_nothing(&nothing_call);
 }
 
 
@@ -2011,8 +1974,7 @@ X(promemul)
 {
 	/*  Synchronize the PC and call the correct emulation layer:  */
 	MODE_int_t old_pc;
-	int res, low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int res, low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)<< MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 	old_pc = cpu->pc;
@@ -2204,7 +2166,7 @@ X(idle)
 	if (status & STATUS_IE && (status & cause & STATUS_IM_MASK))
 		return;
 
-	cpu->cd.mips.next_ic = ic;
+	cpu->cd.mips.VPH.do_nothing(&nothing_call);
 	cpu->is_halted = 1;
 	cpu->has_been_idling = 1;
 
@@ -2276,8 +2238,7 @@ X(ll)
 	uint8_t word[sizeof(uint32_t)];
 
 	/*  Synch. PC and load using slow memory_rw():  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -2314,8 +2275,7 @@ X(lld)
 	uint8_t word[sizeof(uint64_t)];
 
 	/*  Synch. PC and load using slow memory_rw():  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -2357,8 +2317,7 @@ X(sc)
 	uint8_t word[sizeof(uint32_t)];
 
 	/*  Synch. PC and store using slow memory_rw():  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -2415,8 +2374,7 @@ X(scd)
 	uint8_t word[sizeof(uint64_t)];
 
 	/*  Synch. PC and store using slow memory_rw():  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -2618,7 +2576,7 @@ X(sw_loop)
 	unsigned char *page;
 	int partial = 0;
 
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, rX);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rX);
 	page = host_page.host_store;
 
 	/*  Fallback:  */
@@ -2648,9 +2606,11 @@ X(sw_loop)
 	reg(ic->arg[0]) = rX + bytes_to_write;
 
 	cpu->n_translated_instrs += bytes_to_write / 4 * 3 - 1;
-	cpu->cd.mips.next_ic = partial?
-	    (struct mips_instr_call *) &ic[0] :
-	    (struct mips_instr_call *) &ic[3];
+  // XXX
+  abort();
+	// cpu->cd.mips.VPH.set_next_ic = partial?
+	//     (struct mips_instr_call *) &ic[0] :
+	//     (struct mips_instr_call *) &ic[3];
 }
 
 
@@ -2675,7 +2635,9 @@ X(multi_addu_3)
 	reg(ic[1].arg[2]) = (int32_t)(reg(ic[1].arg[0]) + reg(ic[1].arg[1]));
 	reg(ic[2].arg[2]) = (int32_t)(reg(ic[2].arg[0]) + reg(ic[2].arg[1]));
 	cpu->n_translated_instrs += 2;
-	cpu->cd.mips.next_ic = ic + 3;
+  // XXX
+  abort();
+	// cpu->cd.mips.next_ic = ic + 3;
 }
 
 
@@ -2707,7 +2669,9 @@ X(netbsd_r3k_picache_do_inv)
 	cpu->n_translated_instrs += (ry - rx + 4) / 4 * 3 + 4;
 
 	/*  Run the last mtc0 instruction:  */
-	cpu->cd.mips.next_ic = ic + 8;
+  // XXX
+  abort();
+	// cpu->cd.mips.next_ic = ic + 8;
 }
 
 
@@ -2731,7 +2695,7 @@ X(netbsd_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
   page = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2765,13 +2729,13 @@ X(linux_pmax_idle)
 	addr = reg(ic[0].arg[0]) + (int32_t)ic[1].arg[2];
 	pageindex = addr >> 12;
 	i = (addr & 0xfff) >> 2;
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
 	page = (int32_t *)host_page.host_load;
 
 	addr2 = reg(ic[5].arg[1]) + (int32_t)ic[5].arg[2];
 	pageindex2 = addr2 >> 12;
 	i2 = (addr2 & 0xfff) >> 2;
-  host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr2);
+  host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr2);
 	page2 = (int32_t *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2798,7 +2762,7 @@ X(netbsd_strlen)
 	uint32_t pageindex = rx >> 12;
 	int i;
 
-  auto host_page = cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, rx);
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, rx);
   page = (signed char *)host_page.host_load;
 
 	/*  Fallback:  */
@@ -2828,10 +2792,12 @@ X(netbsd_strlen)
 	reg(ic[2].arg[0]) = rv;
 
 	/*  Done with the loop? Or continue on the next rx page?  */
-	if (rv == 0)
-		cpu->cd.mips.next_ic = ic + 4;
-	else
-		cpu->cd.mips.next_ic = ic;
+  // XXX
+  abort();
+	// if (rv == 0)
+	// 	cpu->cd.mips.next_ic = ic + 4;
+	// else
+	// 	cpu->cd.mips.next_ic = ic;
 }
 #endif
 
@@ -2855,10 +2821,12 @@ X(addiu_bne_samepage_addiu)
 	rt = reg(ic[1].arg[1]);
 	reg(ic[2].arg[1]) = (int32_t)
 	    ((int32_t)reg(ic[2].arg[0]) + (int32_t)ic[2].arg[2]);
-	if (rs != rt)
-		cpu->cd.mips.next_ic = (struct mips_instr_call *) ic[1].arg[2];
-	else
-		cpu->cd.mips.next_ic = ic + 3;
+  // XXX
+  abort();
+	// if (rs != rt)
+	// 	cpu->cd.mips.next_ic = (struct mips_instr_call *) ic[1].arg[2];
+	// else
+	// 	cpu->cd.mips.next_ic = ic + 3;
 }
 
 
@@ -2878,7 +2846,9 @@ X(xor_andi_sll)
 	reg(ic[2].arg[2]) = (int32_t)(reg(ic[2].arg[0])<<(int32_t)ic[2].arg[1]);
 
 	cpu->n_translated_instrs += 2;
-	cpu->cd.mips.next_ic = ic + 3;
+  // XXX
+	abort();
+  // cpu->cd.mips.next_ic = ic + 3;
 }
 
 
@@ -2897,7 +2867,9 @@ X(andi_sll)
 	reg(ic[1].arg[2]) = (int32_t)(reg(ic[1].arg[0])<<(int32_t)ic[1].arg[1]);
 
 	cpu->n_translated_instrs ++;
-	cpu->cd.mips.next_ic = ic + 2;
+  // XXX
+  abort();
+	// cpu->cd.mips.next_ic = ic + 2;
 }
 
 
@@ -2916,7 +2888,9 @@ X(lui_ori)
 	reg(ic[1].arg[1]) = reg(ic[1].arg[0]) | (uint32_t)ic[1].arg[2];
 
 	cpu->n_translated_instrs ++;
-	cpu->cd.mips.next_ic = ic + 2;
+  // XXX
+  abort();
+	// cpu->cd.mips.next_ic = ic + 2;
 }
 
 
@@ -2936,7 +2910,9 @@ X(lui_addiu)
 	    ((int32_t)reg(ic[1].arg[0]) + (int32_t)ic[1].arg[2]);
 
 	cpu->n_translated_instrs ++;
-	cpu->cd.mips.next_ic = ic + 2;
+  // XXX
+  abort();
+	// cpu->cd.mips.next_ic = ic + 2;
 }
 
 
@@ -2950,7 +2926,7 @@ X(b_samepage_addiu)
 	reg(ic[1].arg[1]) = (int32_t)
 	    ( (int32_t)reg(ic[1].arg[0]) + (int32_t)ic[1].arg[2] );
 	cpu->n_translated_instrs ++;
-	cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+	cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 }
 
 
@@ -2964,7 +2940,7 @@ X(b_samepage_daddiu)
 	*(uint64_t *)ic[1].arg[1] = *(uint64_t *)ic[1].arg[0] +
 	    (int32_t)ic[1].arg[2];
 	cpu->n_translated_instrs ++;
-	cpu->cd.mips.next_ic = (struct mips_instr_call *) ic->arg[2];
+	cpu->cd.mips.VPH.set_next_ic(ic->arg[2]);
 }
 
 
@@ -3008,7 +2984,7 @@ X(end_of_page)
 	 */
 	/*  fatal("[ end_of_page: delay slot across page boundary! ]\n");  */
 
-	instr(to_be_translated)(cpu, cpu->cd.mips.next_ic);
+	instr(to_be_translated)(cpu, cpu->cd.mips.VPH.get_next_ic());
 
 	/*  The instruction in the delay slot has now executed.  */
 	/*  fatal("[ end_of_page: back from executing the delay slot, %i ]\n",
@@ -3023,8 +2999,7 @@ X(end_of_page)
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
@@ -3452,8 +3427,7 @@ X(to_be_translated)
 	int store, signedness, size;
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 
 	/*  Special case for branch with delayslot on the next page:  */
 	if (cpu->delay_slot == TO_BE_DELAYED && low_pc == 0) {
@@ -3469,13 +3443,7 @@ X(to_be_translated)
 	addr &= ~((1 << MIPS_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-  auto host_page =
-#ifdef MODE32
-    cpu->cd.mips.vph32.get_cached_tlb_pages(cpu, addr)
-#else
-    cpu->cd.mips.vph64.get_cached_tlb_pages(cpu, addr)
-#endif
-    ;
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr);
 
   page = host_page.host_load;
 
@@ -3887,9 +3855,6 @@ X(to_be_translated)
 		    within the same page? Then use the samepage_function:  */
 		if ((uint32_t)ic->arg[2] < ((MIPS_IC_ENTRIES_PER_PAGE - 1)
 		    << MIPS_INSTR_ALIGNMENT_SHIFT) && (addr & 0xffc) < 0xffc) {
-			ic->arg[2] = (size_t) (cpu->cd.mips.get_ic_page() +
-			    ((ic->arg[2] >> MIPS_INSTR_ALIGNMENT_SHIFT)
-			    & (MIPS_IC_ENTRIES_PER_PAGE - 1)));
 			ic->f = samepage_function;
 		}
 		if (cpu->delay_slot) {
@@ -4432,9 +4397,6 @@ X(to_be_translated)
 			if ((uint32_t)ic->arg[2] < ((MIPS_IC_ENTRIES_PER_PAGE-1)
 			    << MIPS_INSTR_ALIGNMENT_SHIFT) && (addr & 0xffc)
 			    < 0xffc) {
-				ic->arg[2] = (size_t) (cpu->cd.mips.get_ic_page()+
-				    ((ic->arg[2] >> MIPS_INSTR_ALIGNMENT_SHIFT)
-				    & (MIPS_IC_ENTRIES_PER_PAGE - 1)));
 				ic->f = samepage_function;
 			}
 			if (cpu->delay_slot) {

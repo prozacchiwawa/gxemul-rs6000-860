@@ -317,16 +317,16 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 }
 
 void stwbrx_remember(uint32_t addr) {
-  int pl1 = (addr >> 22) & 1023;
+  uint32_t pl1 = (addr >> 22) & 1023;
   if (!stwbrx_cache[pl1]) {
-    stwbrx_cache[pl1] = (uint32_t **)calloc(sizeof(uint32_t*), 1024);
+    stwbrx_cache[pl1] = (uint32_t **)calloc(1024, sizeof(uint32_t*));
   }
-  int pl2 = (addr >> 12) & 1023;
+  uint32_t pl2 = (addr >> 12) & 1023;
   if (!stwbrx_cache[pl1][pl2]) {
-    stwbrx_cache[pl1][pl2] = (uint32_t *)calloc(sizeof(uint32_t), 1024);
+    stwbrx_cache[pl1][pl2] = (uint32_t *)calloc(1024, sizeof(uint32_t));
   }
-  int word = (addr & 4095) / 8;
-  int bit = ((addr & 4095) >> 3) % 32;
+  uint32_t word = (addr & 4095) >> 3;
+  uint32_t bit = word % 32;
   stwbrx_cache[pl1][pl2][word] |= 1 << bit;
 }
 

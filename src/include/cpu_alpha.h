@@ -177,7 +177,6 @@ struct alpha_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(alpha)
-	VPH_TLBS(alpha,ALPHA)
 	VPH64(alpha,ALPHA)
 };
 

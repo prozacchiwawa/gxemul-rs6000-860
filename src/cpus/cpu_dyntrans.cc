@@ -42,64 +42,68 @@ void ppc_instr_dump_registers(struct cpu *cpu, struct ppc_instr_call *ic);
  */
 static void gather_statistics(struct cpu *cpu)
 {
-	char ch, buf[60];
-	struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
-	int i = 0;
-	uint64_t a;
-	int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
+// 	char ch, buf[60];
+// 	struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
+// 	int i = 0;
+// 	uint64_t a;
+// 	int low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
 
-	if (cpu->machine->statistics.file == NULL) {
-		fatal("statistics gathering with no filename set is"
-		    " meaningless\n");
-		return;
-	}
+// 	if (cpu->machine->statistics.file == NULL) {
+// 		fatal("statistics gathering with no filename set is"
+// 		    " meaningless\n");
+// 		return;
+// 	}
 
-	/*  low_pc must be within the page!  */
-	if (low_pc < 0 || low_pc > DYNTRANS_IC_ENTRIES_PER_PAGE)
-		return;
+// 	/*  low_pc must be within the page!  */
+// 	if (low_pc < 0 || low_pc > DYNTRANS_IC_ENTRIES_PER_PAGE)
+// 		return;
 
-	buf[0] = '\0';
+// 	buf[0] = '\0';
 
-	while ((ch = cpu->machine->statistics.fields[i]) != '\0') {
-		if (i != 0)
-			strlcat(buf, " ", sizeof(buf));
+// 	while ((ch = cpu->machine->statistics.fields[i]) != '\0') {
+// 		if (i != 0)
+// 			strlcat(buf, " ", sizeof(buf));
 
-		switch (ch) {
-		case 'i':
-			snprintf(buf + strlen(buf), sizeof(buf),
-			    "%p", (void *)ic->f);
-			break;
-		case 'p':
-			/*  Physical program counter address:  */
-			a = cpu->cd.DYNTRANS_ARCH.get_physpage()->physaddr;
-			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
-			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-			a += low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT;
-			if (cpu->is_32bit)
-				snprintf(buf + strlen(buf), sizeof(buf),
-				    "0x%08" PRIx32, (uint32_t)a);
-			else
-				snprintf(buf + strlen(buf), sizeof(buf),
-				    "0x%016" PRIx64, (uint64_t)a);
-			break;
-		case 'v':
-			/*  Virtual program counter address:  */
-			a = cpu->pc;
-			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
-			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-			a += low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT;
-			if (cpu->is_32bit)
-				snprintf(buf + strlen(buf), sizeof(buf),
-				    "0x%08" PRIx32, (uint32_t)a);
-			else
-				snprintf(buf + strlen(buf), sizeof(buf),
-				    "0x%016" PRIx64, (uint64_t)a);
-			break;
-		}
-		i++;
-	}
+// 		switch (ch) {
+// 		case 'i':
+// 			snprintf(buf + strlen(buf), sizeof(buf),
+// 			    "%p", (void *)ic->f);
+// 			break;
+// 		case 'p':
+// 			/*  Physical program counter address:  */
+// #ifdef MODE32
+// 			a = cpu->cd.DYNTRANS_ARCH.vph32.get_physpage()->physaddr;
+// #else
+// 			a = cpu->cd.DYNTRANS_ARCH.vph64.get_physpage()->physaddr;
+// #endif
+// 			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
+// 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+// 			a += low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT;
+// 			if (cpu->is_32bit)
+// 				snprintf(buf + strlen(buf), sizeof(buf),
+// 				    "0x%08" PRIx32, (uint32_t)a);
+// 			else
+// 				snprintf(buf + strlen(buf), sizeof(buf),
+// 				    "0x%016" PRIx64, (uint64_t)a);
+// 			break;
+// 		case 'v':
+// 			/*  Virtual program counter address:  */
+// 			a = cpu->pc;
+// 			a &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
+// 			    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+// 			a += low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT;
+// 			if (cpu->is_32bit)
+// 				snprintf(buf + strlen(buf), sizeof(buf),
+// 				    "0x%08" PRIx32, (uint32_t)a);
+// 			else
+// 				snprintf(buf + strlen(buf), sizeof(buf),
+// 				    "0x%016" PRIx64, (uint64_t)a);
+// 			break;
+// 		}
+// 		i++;
+// 	}
 
-	fprintf(cpu->machine->statistics.file, "%s\n", buf);
+// 	fprintf(cpu->machine->statistics.file, "%s\n", buf);
 }
 
 
@@ -112,7 +116,7 @@ static void gather_statistics(struct cpu *cpu)
 /*  The normal instruction execution core:  */
 #define I	{                                                             \
     cpu->cd.ppc.icount++;                                               \
-    next_insn(ic, cpu->cd.DYNTRANS_ARCH);                               \
+    ic = cpu->cd.ppc.VPH.next_insn();                                   \
     if (ppc_recording) {                                                \
       auto ptr = &ppc_recording[ppc_recording_offset];                  \
       memcpy(&ptr->iword, ic->instr, sizeof(uint32_t));                 \
@@ -136,8 +140,19 @@ static void gather_statistics(struct cpu *cpu)
     ic->f(cpu, ic);                                                     \
   }
 #else
+
 /*  The normal instruction execution core:  */
-#define I	next_insn(ic, cpu->cd.DYNTRANS_ARCH); ic->f(cpu, ic);
+#ifdef MODE32
+#define I	do {                                  \
+  ic = cpu->cd.DYNTRANS_ARCH.vph32.next_insn(); \
+  ic->f(cpu, ic);                               \
+  } while (0)
+#else
+#define I	do {                                  \
+  ic = cpu->cd.DYNTRANS_ARCH.vph64.next_insn(); \
+  ic->f(cpu, ic);                               \
+  } while (0)
+#endif
 #endif
 
 #else
@@ -202,10 +217,20 @@ struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t a
 }
 
 void CPU64(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
-  cpu->cd.DYNTRANS_ARCH.vph64.set_tlb_physpage(cpu, addr, ppp);
+  cpu->cd.DYNTRANS_ARCH.vph64.set_tlb_physpage(addr, ppp);
 }
 #endif
 
+static inline int sync_pc(struct cpu *cpu, struct DYNTRANS_IC *ic) {
+  auto low_pc = cpu->cd.DYNTRANS_ARCH.VPH.sync_low_pc(cpu, ic);
+  uint64_t pc_low_mask =
+    (cpu_traits<decltype(cpu->cd.DYNTRANS_ARCH)>::ic_entries_per_page() <<
+     cpu_traits<decltype(cpu->cd.DYNTRANS_ARCH)>::instr_alignment_shift()) - 1;
+  cpu->pc =
+    (cpu->pc & ~pc_low_mask) +
+    (low_pc << cpu_traits<decltype(cpu->cd.DYNTRANS_ARCH)>::instr_alignment_shift());
+  return low_pc;
+}
 #endif	/*  STATIC STUFF  */
 
 
@@ -335,7 +360,11 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
     I;
   };
 
-  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.next_ic;
+#ifdef MODE32
+  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.vph32.get_next_ic();
+#else
+  struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.vph64.get_next_ic();
+#endif
 	if (single_step & 0xff) {
 		/*
 		 *  Single-step:
@@ -389,7 +418,11 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   cpu->n_translated_instrs += n_instrs;
 
 	/*  Synchronize the program counter:  */
-  low_pc = get_low_pc(cpu->cd.DYNTRANS_ARCH);
+#ifdef MODE32
+  low_pc = cpu->cd.DYNTRANS_ARCH.vph32.get_low_pc();
+#else
+  low_pc = cpu->cd.DYNTRANS_ARCH.vph64.get_low_pc();
+#endif
 	if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
 		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
 		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
@@ -573,193 +606,10 @@ void DYNTRANS_FUNCTION_TRACE_DEF(struct cpu *cpu, int n_args)
 void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 {
 #ifdef MODE32
-	uint32_t
+  cpu->cd.DYNTRANS_ARCH.vph32.pc_to_pointers_generic(cpu);
 #else
-	uint64_t
+  cpu->cd.DYNTRANS_ARCH.vph64.pc_to_pointers_generic(cpu);
 #endif
-	    cached_pc = cpu->pc;
-	uint32_t physpage_ofs;
-	int ok, pagenr, table_index;
-	uint32_t *physpage_entryp;
-	struct DYNTRANS_TC_PHYSPAGE *ppp;
-
-  auto host_pages =
-#ifdef MODE32
-    CPU32(get_cached_tlb_pages)(cpu, cached_pc)
-#else
-    CPU64(get_cached_tlb_pages)(cpu, cached_pc)
-#endif
-    ;
-
-	/*  Virtual to physical address translation:  */
-	ok = 0;
-  if (host_pages.host_load != nullptr) {
-    ok = 1;
-  }
-
-	if (!ok) {
-		uint64_t paddr;
-		if (cpu->translate_v2p != NULL) {
-			uint64_t vaddr =
-#if defined(MODE32) && defined(DYNTRANS_MIPS)
-			/*  32-bit MIPS is _sign_ extend, not zero.  */
-			    (int32_t)
-#endif
-			    cached_pc;
-			ok = cpu->translate_v2p(
-			    cpu, vaddr, &paddr, FLAG_INSTR);
-		} else {
-			paddr = cached_pc;
-			ok = 1;
-		}
-		if (!ok) {
-			/*
-			 *  The PC is now set to the exception handler.
-			 *  Try to find the paddr in the translation arrays,
-			 *  or if that fails, call translate_v2p for the
-			 *  exception handler.
-			 */
-			/*  fatal("TODO: instruction vaddr=>paddr translation "
-			    "failed. vaddr=0x%" PRIx64"\n", (uint64_t)cached_pc);
-			fatal("!! cpu->pc=0x%" PRIx64"\n", (uint64_t)cpu->pc); */
-
-			/*  If there was an exception, the PC has changed.
-			    Update cached_pc:  */
-			cached_pc = cpu->pc;
-
-      host_pages =
-#ifdef MODE32
-        CPU32(get_cached_tlb_pages)(cpu, cached_pc)
-#else
-        CPU64(get_cached_tlb_pages)(cpu, cached_pc)
-#endif
-        ;
-      if (host_pages.host_load) {
-        paddr = host_pages.physaddr;
-        ok = 1;
-      }
-
-			if (!ok) {
-				ok = cpu->translate_v2p(cpu, cpu->pc, &paddr,
-				    FLAG_INSTR);
-			}
-
-			/*  printf("EXCEPTION HANDLER: vaddr = 0x%x ==> "
-			    "paddr = 0x%x\n", (int)cpu->pc, (int)paddr);
-			fatal("!? cpu->pc=0x%" PRIx64"\n", (uint64_t)cpu->pc); */
-
-			if (!ok) {
-				fatal("FATAL: could not find physical"
-				    " address of the exception handler?");
-				exit(1);
-			}
-		}
-
-		host_pages.physaddr = paddr;
-	}
-
-	host_pages.physaddr &= ~(DYNTRANS_PAGESIZE - 1);
-
-  if (host_pages.host_load == nullptr) {
-		int q = DYNTRANS_PAGESIZE - 1;
-		unsigned char *host_page = memory_paddr_to_hostaddr(cpu->mem,
-		    host_pages.physaddr, MEM_READ);
-		if (host_page != NULL) {
-			cpu->update_translation_table(cpu, cached_pc & ~q,
-			    host_page, 0, host_pages.physaddr);
-		}
-	}
-
-	if (cpu->translation_cache_cur_ofs >= dyntrans_cache_size) {
-    // #ifdef UNSTABLE_DEVEL
-		fatal("[ dyntrans: resetting the translation cache ]\n");
-    // #endif
-		cpu_create_or_reset_tc(cpu);
-	}
-
-#ifdef MODE32
-	pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(host_pages.physaddr);
-#else
-  pagenr = DYNTRANS_ADDR_TO_PAGENR(host_pages.physaddr);
-#endif
-	table_index = PAGENR_TO_TABLE_INDEX(pagenr);
-
-	physpage_entryp = &(((uint32_t *)cpu->translation_cache)[table_index]);
-	physpage_ofs = *physpage_entryp;
-	ppp = NULL;
-
-	/*  Traverse the physical page chain:  */
-	while (physpage_ofs != 0) {
-		ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
-		    + physpage_ofs);
-
-		/*  If we found the page in the cache, then we're done:  */
-		if (ppp->physaddr == host_pages.physaddr)
-			break;
-
-		/*  Try the next page in the chain:  */
-		physpage_ofs = ppp->next_ofs;
-	}
-
-	/*
-	 *  If the offset is 0, then no translation exists yet for this
-	 *  physical address. Let's create a new page, and add it first in
-	 *  the chain.
-	 */
-	if (physpage_ofs == 0) {
-		uint32_t previous_first_page_in_chain;
-
-		/*  fatal("CREATING page %lli (physaddr 0x%" PRIx64"), table "
-		    "index %i\n", (long long)pagenr, (uint64_t)physaddr,
-		    (int)table_index);  */
-
-		previous_first_page_in_chain = *physpage_entryp;
-
-		/*  Insert the new page first in the chain:  */
-		*physpage_entryp = physpage_ofs =
-		    cpu->translation_cache_cur_ofs;
-
-		/*  Allocate a default page, with to_be_translated entries:  */
-#ifdef MODE32
-    cpu->cd.DYNTRANS_ARCH.vph32.allocate_physpage(cpu, host_pages.physaddr, cpu->cd.DYNTRANS_ARCH.physpage_template);
-#else
-    cpu->cd.DYNTRANS_ARCH.vph64.allocate_physpage(cpu, host_pages.physaddr, cpu->cd.DYNTRANS_ARCH.physpage_template);
-#endif
-
-		ppp = (struct DYNTRANS_TC_PHYSPAGE *)(cpu->translation_cache
-		    + physpage_ofs);
-
-		/*  Point to the other pages in the same chain:  */
-		ppp->next_ofs = previous_first_page_in_chain;
-	}
-
-	/*  Here, ppp points to a valid physical page struct.  */
-  if (host_pages.host_load != nullptr) {
-#ifdef MODE32
-    CPU32(set_tlb_physpage)(cpu, cached_pc, ppp);
-#else
-    CPU64(set_tlb_physpage)(cpu, cached_pc, ppp);
-#endif
-  }
-
-	/*
-	 *  If there are no translations yet on this page, then mark it
-	 *  as non-writable. If there are already translations, then it
-	 *  should already have been marked as non-writable.
-	 */
-	if (ppp->translations_bitmap == 0) {
-		cpu->invalidate_translation_caches(cpu, host_pages.physaddr,
-		    JUST_MARK_AS_NON_WRITABLE | INVALIDATE_PADDR);
-	}
-
-  cpu->cd.DYNTRANS_ARCH.set_physpage(cached_pc & ~0xfff, ppp);
-
-	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
-	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
-
-	/*  printf("cached_pc=0x%016" PRIx64"  pagenr=%lli  table_index=%lli, "
-	    "physpage_ofs=0x%016" PRIx64"\n", (uint64_t)cached_pc, (long long)
-	    pagenr, (long long)table_index, (uint64_t)physpage_ofs);  */
 }
 
 
@@ -779,37 +629,10 @@ void DYNTRANS_PC_TO_POINTERS_GENERIC(struct cpu *cpu)
 void DYNTRANS_PC_TO_POINTERS_FUNC(struct cpu *cpu)
 {
 #ifdef MODE32
-	uint32_t
+  cpu->cd.DYNTRANS_ARCH.vph32.move_to_physpage(cpu);
 #else
-	uint64_t
+  cpu->cd.DYNTRANS_ARCH.vph64.move_to_physpage(cpu);
 #endif
-	    cached_pc = cpu->pc;
-
-  auto host_pages =
-#ifdef MODE32
-    CPU32(get_cached_tlb_pages)(cpu, cached_pc)
-#else
-    CPU64(get_cached_tlb_pages)(cpu, cached_pc)
-#endif
-    ;
-
-	if (host_pages.ppp == nullptr) {
-    DYNTRANS_PC_TO_POINTERS_GENERIC(cpu);
-    return;
-  }
-
-  // fprintf
-  //   (stderr, "%08x quick cur_ic return: prev virt %" PRIx64 " phys %" PRIx64 "\n",
-  //    (unsigned int)cpu->pc,
-  //    cpu->cd.DYNTRANS_ARCH.cur_ic_virt,
-  //    cpu->cd.DYNTRANS_ARCH.cur_ic_phys
-  //    );
-
-  // fprintf(stderr, "update ic page %p vs %p\n", cpu->cd.DYNTRANS_ARCH.get_ic_page(), &ppp->ics[0]);
-  auto ppp = static_cast<DYNTRANS_TC_PHYSPAGE*>(host_pages.ppp);
-  cpu->cd.DYNTRANS_ARCH.set_physpage(cpu->pc & ~0xfff, ppp);
-	cpu->cd.DYNTRANS_ARCH.next_ic = cpu->cd.DYNTRANS_ARCH.get_ic_page() +
-	    DYNTRANS_PC_TO_IC_ENTRY(cached_pc);
 
 	/*  printf("cached_pc=0x%016" PRIx64"  pagenr=%lli  table_index=%lli, "
 	    "physpage_ofs=0x%016" PRIx64"\n", (uint64_t)cached_pc, (long long)
@@ -863,12 +686,17 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	    (struct DYNTRANS_TC_PHYSPAGE *) malloc(sizeof(struct DYNTRANS_TC_PHYSPAGE)));
 
 	ppp->next_ofs = 0;
-	ppp->translations_bitmap = 0;
+	memset(&ppp->translations_bitmap, 0, sizeof(ppp->translations_bitmap));
 	ppp->translation_ranges_ofs = 0;
 	/*  ppp->physaddr is filled in by the page allocator  */
 
-	for (i=0; i<DYNTRANS_IC_ENTRIES_PER_PAGE; i++)
-		ppp->ics[i].f = TO_BE_TRANSLATED;
+  auto fill = [&cpu, &ppp]() {
+    for (auto i=0; i<DYNTRANS_IC_ENTRIES_PER_PAGE; i++) {
+      ppp->ics[i].f = TO_BE_TRANSLATED;
+    }
+  };
+
+  fill();
 
 	/*  End-of-page:  */
 	ppp->ics[DYNTRANS_IC_ENTRIES_PER_PAGE + 0].f =
@@ -886,13 +714,24 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	    instr(end_of_page2);
 #endif
 
-	cpu->cd.DYNTRANS_ARCH.physpage_template = ppp;
+#ifdef MODE32
+  cpu->cd.DYNTRANS_ARCH.vph32.set_physpage_template(ppp);
+#elif defined(DYNTRANS_DUALMODE_32)
+  if (cpu->is_32bit) {
+    cpu->cd.DYNTRANS_ARCH.vph32.set_physpage_template(ppp);
+  } else {
+    cpu->cd.DYNTRANS_ARCH.vph64.set_physpage_template(ppp);
+  }
+#else
+  cpu->cd.DYNTRANS_ARCH.vph64.set_physpage_template(ppp);
+#endif
 
 
 	/*  Prepare 64-bit virtual address translation tables:  */
 #ifndef MODE32
-	if (cpu->is_32bit)
+	if (cpu->is_32bit) {
 		return;
+  }
 
   cpu->cd.DYNTRANS_ARCH.vph64.init_tables();
 #endif
@@ -956,14 +795,15 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 
 	/*  Make sure cur_physpage is in synch:  */
 	{
-		int x = addr & (DYNTRANS_PAGESIZE - 1);
-		int addr_per_translation_range = DYNTRANS_PAGESIZE / (8 *
-        sizeof(cpu->cd.DYNTRANS_ARCH.get_physpage()->
-		    translations_bitmap));
-		x /= addr_per_translation_range;
+		int x = (addr & (DYNTRANS_PAGESIZE - 1)) >> DYNTRANS_INSTR_ALIGNMENT_SHIFT;
 
-		cpu->cd.DYNTRANS_ARCH.get_physpage()->
-		    translations_bitmap |= (1 << x);
+#ifdef MODE32
+		cpu->cd.DYNTRANS_ARCH.vph32.get_physpage()->
+      translations_bitmap.set(x);
+#else
+		cpu->cd.DYNTRANS_ARCH.vph64.get_physpage()->
+      translations_bitmap.set(x);
+#endif
 	}
 
 
@@ -1028,25 +868,15 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	if (!single_step && !cpu->machine->instruction_trace &&
 	    cpu->machine->breakpoints.n == 0) {
 		uint64_t baseaddr = cpu->pc;
-#ifdef MODE32
-		uint64_t pagenr = cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr(baseaddr);
-#else
-    uint64_t pagenr = DYNTRANS_ADDR_TO_PAGENR(baseaddr);
-#endif
+		uint64_t pagenr = addr_to_pagenr<struct DYNTRANS_TC_PHYSPAGE *>(baseaddr);
 		int i = 1;
 
 		cpu->translation_readahead = MAX_DYNTRANS_READAHEAD;
 
 		while (
-#ifdef MODE32
-           cpu->cd.DYNTRANS_ARCH.vph32.addr_to_pagenr
+           addr_to_pagenr<struct DYNTRANS_TC_PHYSPAGE *>
            (baseaddr +
             (i << DYNTRANS_INSTR_ALIGNMENT_SHIFT))
-#else
-           DYNTRANS_ADDR_TO_PAGENR
-           (baseaddr +
-            (i << DYNTRANS_INSTR_ALIGNMENT_SHIFT))
-#endif
            == pagenr
            && cpu->translation_readahead > 0
            )
@@ -1107,8 +937,11 @@ stop_running_translated:
   /* Simple evaluator here? to make tracepoints? */
 	debugger_n_steps_left_before_interaction = 0;
 
-	ic = cpu->cd.DYNTRANS_ARCH.next_ic = &nothing_call;
-	cpu->cd.DYNTRANS_ARCH.next_ic ++;
+#ifdef MODE32
+  ic = cpu->cd.DYNTRANS_ARCH.vph32.bad_translation(&nothing_call);
+#else
+  ic = cpu->cd.DYNTRANS_ARCH.vph64.bad_translation(&nothing_call);
+#endif
 
 #ifdef DYNTRANS_DELAYSLOT
 	/*  Special hack: If the bad instruction was in a delay slot,

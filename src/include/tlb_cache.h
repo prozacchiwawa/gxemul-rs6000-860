@@ -38,9 +38,11 @@
 #define INVALIDATE_IDENTITY 32
 
 #define	N_BASE_TABLE_ENTRIES		65536
-#define	PAGENR_TO_TABLE_INDEX(a)	((a) & (N_BASE_TABLE_ENTRIES-1))
 
 #define PHYSPAGE_CACHE_ALIGN 64
+
+struct cpu;
+extern void cpu_create_or_reset_tc(struct cpu *cpu);
 
 struct host_load_store_t {
   uint64_t physaddr;
@@ -55,13 +57,26 @@ template <> constexpr bool is_arm<struct arm_tc_physpage>() { return true; }
 template <typename TcPhyspage> constexpr bool is_m88k() { return false; }
 template <> constexpr bool is_m88k<struct m88k_tc_physpage>() { return true; }
 
+template <typename TcPhyspage> constexpr bool is_mips() { return false; }
+template <> constexpr bool is_mips<struct mips_tc_physpage>() { return true; }
+
 template <typename TcPhyspage> constexpr int pagesize() { return 1 << 12; }
 template <> constexpr int pagesize<struct alpha_tc_physpage>() { return 1 << 13; }
 
 template <typename TcPhyspage> constexpr int max_vph_tlb_entries() { return 128; }
 template <> constexpr int max_vph_tlb_entries<struct arm_tc_physpage>() { return 384; }
 
+template <typename TcPhyspage> uint64_t addr_to_pagenr(uint64_t addr) {
+  return addr / pagesize<TcPhyspage>();
+}
+
 template <typename TcPhyspage> constexpr int ic_entries_per_page() { return 1024; }
+template <typename TcPhyspage> constexpr int pc_to_ic_entry(uint64_t pc) {
+  auto factor = pagesize<TcPhyspage>() / ic_entries_per_page<TcPhyspage>();
+  uint64_t mask = pagesize<TcPhyspage>() - 1;
+  uint64_t useful_address = pc & mask;
+  return useful_address / factor;
+}
 
 /*
  *  This structure contains a list of ranges within an emulated

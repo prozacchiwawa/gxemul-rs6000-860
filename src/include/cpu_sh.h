@@ -176,7 +176,6 @@ struct sh_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(sh)
-	VPH_TLBS(sh,SH)
 	VPH32(sh,SH)
 };
 

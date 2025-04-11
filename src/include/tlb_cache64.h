@@ -23,18 +23,58 @@ template <typename TcPhyspage> constexpr int dyntrans_l1n() { return 17; }
 template <typename TcPhyspage> constexpr int dyntrans_l2n() { return 17; }
 template <typename TcPhyspage> constexpr int dyntrans_l3n() { return 17; }
 
-template <typename TcPhyspage, typename L3Table, typename L2Table, typename VpgTlbEntry> struct vph64 {
+template <typename TcPhyspage, typename L3Table, typename L2Table, typename VpgTlbEntry, typename Cpu> struct vph64 {
 private:
 	L3Table *l3_64_dummy;
 	L3Table *next_free_l3;
 	L2Table *l2_64_dummy;
 	L2Table *next_free_l2;
 	L2Table *l1_64[1 << dyntrans_l1n<TcPhyspage>()];
+  uint64_t cur_ic_virt;
+  TcPhyspage *cur_physpage;
+  TcPhyspage *physpage_template;
+  decltype(&((TcPhyspage *)0)->ics[0]) next_ic;
+  std::map<uint64_t, TcPhyspage> *physpage_map;
+
+  // Pointers to other cpu members (consider moving them here)
 	VpgTlbEntry *vph_tlb_entry;
   uint32_t *is_userpage;
 
 public:
-  struct host_load_store_t get_cached_tlb_pages(struct cpu *cpu, uint64_t addr) {
+  TcPhyspage *get_physpage() const {
+    return this->cur_physpage;
+  }
+
+  decltype(&((TcPhyspage *)0)->ics[0]) get_ic_page() const {
+    return &this->cur_physpage->ics[0];
+  }
+
+  decltype(&((TcPhyspage *)0)->ics[0]) get_next_ic() const {
+    return this->next_ic;
+  }
+
+  decltype(&((TcPhyspage *)0)->ics[0]) next_insn() {
+    return next_ic++;
+  }
+
+  uint64_t get_low_pc() const {
+    auto inumber = next_ic - &cur_physpage->ics[0];
+    auto factor = pagesize<TcPhyspage>() / ic_entries_per_page<TcPhyspage>();
+    return factor * inumber;
+  }
+
+  uint64_t get_ic_phys() const { return this->cur_physpage->physaddr; }
+  void set_physpage(uint64_t virt, TcPhyspage *page) {
+    this->cur_ic_virt = virt;
+    this->cur_physpage = page;
+  }
+
+  void set_physpage_template(TcPhyspage *templ) {
+    physpage_template = templ;
+    physpage_map = new std::map<uint64_t, TcPhyspage>();
+  }
+
+  struct host_load_store_t get_cached_tlb_pages(Cpu *cpu, uint64_t addr) {
     const uint32_t mask1 = (1 << dyntrans_l1n<TcPhyspage>()) - 1;
     const uint32_t mask2 = (1 << dyntrans_l2n<TcPhyspage>()) - 1;
     const uint32_t mask3 = (1 << dyntrans_l3n<TcPhyspage>()) - 1;
@@ -115,7 +155,7 @@ public:
     }
   }
 
-  void set_tlb_physpage(struct cpu *cpu, uint64_t addr, TcPhyspage *ppp) {
+  void set_tlb_physpage(uint64_t addr, TcPhyspage *ppp) {
     const uint32_t mask1 = (1 << dyntrans_l1n<TcPhyspage>()) - 1;
     const uint32_t mask2 = (1 << dyntrans_l2n<TcPhyspage>()) - 1;
     const uint32_t mask3 = (1 << dyntrans_l3n<TcPhyspage>()) - 1;
@@ -312,9 +352,9 @@ public:
     }
   }
 
-  void invalidate_tc_code(struct cpu *cpu, uint64_t addr, int flags, decltype(((TcPhyspage*)0)->ics->f) to_be_translated) {
+  void invalidate_tc_code(Cpu *cpu, uint64_t addr, int flags) {
     int r;
-    uint64_t vaddr_page, paddr_page;
+    uint32_t vaddr_page, paddr_page;
 
     addr &= ~(pagesize<TcPhyspage>()-1);
 
@@ -322,88 +362,29 @@ public:
         (int)addr, flags);  */
 
     if (flags & INVALIDATE_PADDR) {
-      int pagenr, table_index;
-      uint32_t physpage_ofs, *physpage_entryp;
-      TcPhyspage *ppp, *prev_ppp;
+      TcPhyspage *ppp;
 
-      pagenr = addr / pagesize<TcPhyspage>();
-      table_index = PAGENR_TO_TABLE_INDEX(pagenr);
-
-      physpage_entryp = &(((uint32_t *)cpu->translation_cache)[table_index]);
-      physpage_ofs = *physpage_entryp;
-
-      /*  Return immediately if there is no code translation
-          for this page.  */
-      if (physpage_ofs == 0)
+      auto found = physpage_map->find(addr);
+      if (found == physpage_map->end()) {
         return;
-
-      prev_ppp = ppp = NULL;
-
-      /*  Traverse the physical page chain:  */
-      while (physpage_ofs != 0) {
-        prev_ppp = ppp;
-        ppp = (TcPhyspage *)(cpu->translation_cache + physpage_ofs);
-
-        /*  If we found the page in the cache,
-            then we're done:  */
-        if (ppp->physaddr == addr)
-          break;
-
-        /*  Try the next page in the chain:  */
-        physpage_ofs = ppp->next_ofs;
       }
 
-      /*  If there is no translation, there is no need to go
-          on and try to remove it from the vph_tlb_entry array:  */
-      if (physpage_ofs == 0)
-        return;
+      ppp = &found->second;
 
-      prev_ppp = prev_ppp;	// shut up compiler warning
-
-      /*
-       *  Instead of removing the page from the code cache, each
-       *  entry can be set to "to_be_translated". This is slow in
-       *  the general case, but in the case of self-modifying code,
-       *  it might be faster since we don't risk wasting cache
-       *  memory as quickly (which would force unnecessary Restarts).
-       */
-      if (ppp != NULL && ppp->translations_bitmap != 0) {
-        uint32_t x = ppp->translations_bitmap;	/*  TODO: urk Should be same type as the bitmap */
-        int i, j, n, m;
-
-        n = 8 * sizeof(x);
-        m = ic_entries_per_page<TcPhyspage>() / n;
-
-        for (i=0; i<n; i++) {
-          if (x & 1) {
-            for (j=0; j<m; j++)
-              ppp->ics[i*m + j].f = to_be_translated;
-          }
-
-          x >>= 1;
+      if (ppp != nullptr && !ppp->translations_bitmap.empty()) {
+        for (auto i = 0; i < ic_entries_per_page<TcPhyspage>(); i++) {
+          ppp->ics[i].f = physpage_template->ics[0].f;
         }
 
-        ppp->translations_bitmap = 0;
-
-        /*  Clear the list of translatable ranges:  */
-        if (ppp->translation_ranges_ofs != 0) {
-          struct physpage_ranges *physpage_ranges =
-				    (struct physpage_ranges *)
-				    (cpu->translation_cache +
-             ppp->translation_ranges_ofs);
-          physpage_ranges->next_ofs = 0;
-          physpage_ranges->n_entries_used = 0;
-        }
+        memset(&ppp->translations_bitmap, 0, sizeof(ppp->translations_bitmap));
       }
     }
 
     /*  Invalidate entries in the VPH table:  */
     for (r = 0; r < max_vph_tlb_entries<TcPhyspage>(); r ++) {
       if (vph_tlb_entry[r].valid) {
-        vaddr_page = vph_tlb_entry[r]
-			    .vaddr_page & ~(pagesize<TcPhyspage>()-1);
-        paddr_page = vph_tlb_entry[r]
-			    .paddr_page & ~(pagesize<TcPhyspage>()-1);
+        vaddr_page = vph_tlb_entry[r].vaddr_page & ~(pagesize<TcPhyspage>()-1);
+        paddr_page = vph_tlb_entry[r].paddr_page & ~(pagesize<TcPhyspage>()-1);
 
         if (flags & INVALIDATE_ALL ||
             (flags & INVALIDATE_PADDR && paddr_page == addr) ||
@@ -414,7 +395,7 @@ public:
     }
   }
 
-  void invalidate_tc(struct cpu *cpu, uint64_t addr, int flags)
+  void invalidate_tc(Cpu *cpu, uint64_t addr, int flags)
   {
     int r;
     uint64_t addr_page = addr & ~(pagesize<TcPhyspage>() - 1);
@@ -466,18 +447,152 @@ public:
    *  Create a default page (with just pointers to instr(to_be_translated)
    *  at cpu->translation_cache_cur_ofs.
    */
-  static void allocate_physpage(struct cpu *cpu, uint64_t physaddr, TcPhyspage *templ)
+  TcPhyspage *allocate_physpage(Cpu *cpu, uint64_t physaddr)
   {
-    auto ppp = (TcPhyspage *)(cpu->translation_cache + cpu->translation_cache_cur_ofs);
+    auto found = physpage_map->insert(std::make_pair(physaddr, *physpage_template));
+    return &found.first->second;
+  }
 
-    /*  Copy the entire template page first:  */
-    memcpy(ppp, templ, sizeof(TcPhyspage));
+  void pc_to_pointers_generic(Cpu *cpu) {
+    uint32_t cached_pc = cpu->pc;
+    int ok;
+    TcPhyspage *ppp;
 
-    ppp->physaddr = physaddr & ~(pagesize<TcPhyspage>() - 1);
+    auto host_pages = get_cached_tlb_pages(cpu, cached_pc);
 
-    cpu->translation_cache_cur_ofs += sizeof(TcPhyspage);
+    /*  Virtual to physical address translation:  */
+    ok = 0;
+    if (host_pages.host_load != nullptr) {
+      ok = 1;
+    }
 
-    cpu->translation_cache_cur_ofs = (cpu->translation_cache_cur_ofs + (PHYSPAGE_CACHE_ALIGN - 1)) & ~(PHYSPAGE_CACHE_ALIGN - 1);
+    if (!ok) {
+      uint64_t paddr;
+      if (cpu->translate_v2p != NULL) {
+        uint64_t vaddr = is_mips<TcPhyspage>() ? (int32_t)cached_pc : cached_pc;
+        ok = cpu->translate_v2p(cpu, vaddr, &paddr, FLAG_INSTR);
+      } else {
+        paddr = cached_pc;
+        ok = 1;
+      }
+      if (!ok) {
+        /*
+         *  The PC is now set to the exception handler.
+         *  Try to find the paddr in the translation arrays,
+         *  or if that fails, call translate_v2p for the
+         *  exception handler.
+         */
+        /*  fatal("TODO: instruction vaddr=>paddr translation "
+            "failed. vaddr=0x%" PRIx64"\n", (uint64_t)cached_pc);
+            fatal("!! cpu->pc=0x%" PRIx64"\n", (uint64_t)cpu->pc); */
+
+        /*  If there was an exception, the PC has changed.
+            Update cached_pc:  */
+        cached_pc = cpu->pc;
+
+        host_pages = get_cached_tlb_pages(cpu, cached_pc);
+
+        if (host_pages.host_load) {
+          paddr = host_pages.physaddr;
+          ok = 1;
+        }
+
+        if (!ok) {
+          ok = cpu->translate_v2p(cpu, cpu->pc, &paddr, FLAG_INSTR);
+        }
+
+        /*  printf("EXCEPTION HANDLER: vaddr = 0x%x ==> "
+            "paddr = 0x%x\n", (int)cpu->pc, (int)paddr);
+            fatal("!? cpu->pc=0x%" PRIx64"\n", (uint64_t)cpu->pc); */
+
+        if (!ok) {
+          fprintf(stderr, "FATAL: could not find physical"
+                " address of the exception handler?");
+          exit(1);
+        }
+      }
+
+      host_pages.physaddr = paddr;
+    }
+
+    host_pages.physaddr &= ~(pagesize<TcPhyspage>() - 1);
+
+    if (host_pages.host_load == nullptr) {
+      int q = pagesize<TcPhyspage>() - 1;
+      unsigned char *host_page =
+        memory_paddr_to_hostaddr(cpu->mem, host_pages.physaddr, MEM_READ);
+      if (host_page != NULL) {
+        cpu->update_translation_table
+          (cpu, cached_pc & ~q, host_page, 0, host_pages.physaddr);
+      }
+    }
+
+    auto found = physpage_map->find(host_pages.physaddr);
+    if (found != physpage_map->end()) {
+      ppp = &found->second;
+    } else {
+      ppp = allocate_physpage(cpu, host_pages.physaddr);
+    }
+
+    /*  Here, ppp points to a valid physical page struct.  */
+    if (host_pages.host_load != nullptr) {
+      set_tlb_physpage(cached_pc, ppp);
+    }
+
+    /*
+     *  If there are no translations yet on this page, then mark it
+     *  as non-writable. If there are already translations, then it
+     *  should already have been marked as non-writable.
+     */
+    if (ppp->translations_bitmap.empty()) {
+      cpu->invalidate_translation_caches
+        (cpu, host_pages.physaddr, JUST_MARK_AS_NON_WRITABLE | INVALIDATE_PADDR);
+    }
+
+    set_physpage(cached_pc & ~0xfff, ppp);
+
+    set_next_ic(cached_pc);
+  }
+
+  void move_to_physpage(Cpu *cpu) {
+    uint64_t cached_pc = cpu->pc;
+
+    auto host_pages = get_cached_tlb_pages(cpu, cached_pc);
+
+    if (host_pages.ppp == nullptr) {
+      pc_to_pointers_generic(cpu);
+      return;
+    }
+
+    auto ppp = static_cast<TcPhyspage*>(host_pages.ppp);
+    set_physpage(cpu->pc & ~(pagesize<TcPhyspage>() - 1), ppp);
+    next_ic = get_ic_page() + pc_to_ic_entry<TcPhyspage>(cached_pc);
+  }
+
+  void nothing() {
+    next_ic --;
+  }
+
+  void bump_ic() {
+    next_ic ++;
+  }
+
+  void do_nothing(decltype(&((TcPhyspage*)0)->ics[0]) nothing_call) {
+    next_ic = nothing_call;
+  }
+
+  decltype(&((TcPhyspage*)0)->ics[0]) bad_translation(decltype(&((TcPhyspage*)0)->ics[0]) nothing_call) {
+    do_nothing(nothing_call);
+    next_ic ++;
+    return nothing_call;
+  }
+
+  void set_next_ic(uint64_t pc) {
+    next_ic = get_ic_page() + pc_to_ic_entry<TcPhyspage>(pc);
+  }
+
+  uint64_t sync_low_pc(Cpu *cpu, decltype(&((TcPhyspage*)0)->ics[0]) ic) {
+    return ((size_t)ic - (size_t)get_ic_page()) / sizeof(*ic);
   }
 };
 

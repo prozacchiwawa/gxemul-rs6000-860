@@ -57,7 +57,6 @@
 #define A__STRD
 #endif
 
-
 /*
  *  General load/store, by using memory_rw(). If at all possible, memory_rw()
  *  then inserts the page into the translation array, so that the fast
@@ -104,12 +103,13 @@ void A__NAME__general(struct cpu *cpu, struct arm_instr_call *ic)
 	    -
 #endif
 #ifdef A__REG
-	    reg_func(cpu, ic);
+	    reg_func(cpu, ic)
 #else
-	    ic->arg[1];
+	    ic->arg[1]
 #endif
+    ;
 
-	low_pc = ((size_t)ic - (size_t)cpu->cd.arm.get_ic_page()) / sizeof(struct arm_instr_call);
+  low_pc = arm_sync_low_pc(cpu, ic);
 	cpu->pc &= ~((ARM_IC_ENTRIES_PER_PAGE-1)
 	    << ARM_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
@@ -333,8 +333,7 @@ void A__NAME_PC(struct cpu *cpu, struct arm_instr_call *ic)
 	if (ic->arg[0] == (size_t)(&cpu->cd.arm.tmp_pc)) {
 		/*  tmp_pc = current PC + 8:  */
 		uint32_t low_pc, tmp;
-		low_pc = ((size_t)ic - (size_t) cpu->cd.arm.get_ic_page()) /
-		    sizeof(struct arm_instr_call);
+		low_pc = arm_sync_low_pc(cpu, ic);
 		tmp = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1) <<
 		    ARM_INSTR_ALIGNMENT_SHIFT);
 		tmp += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);
@@ -351,8 +350,7 @@ void A__NAME_PC(struct cpu *cpu, struct arm_instr_call *ic)
 	/*  Store:  */
 	uint32_t low_pc, tmp;
 	/*  Calculate tmp from this instruction's PC + 12  */
-	low_pc = ((size_t)ic - (size_t) cpu->cd.arm.get_ic_page()) /
-	    sizeof(struct arm_instr_call);
+	low_pc = arm_sync_low_pc(cpu, ic);
 	tmp = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1) <<
 	    ARM_INSTR_ALIGNMENT_SHIFT);
 	tmp += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT);

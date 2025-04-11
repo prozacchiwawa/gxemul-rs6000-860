@@ -106,7 +106,8 @@ void generate_multi(int store, int endianness, int n)
 	}
 
 	printf("\tcpu->n_translated_instrs += %i;\n", n - 1);
-	printf("\tcpu->cd.mips.next_ic += %i;\n", n - 1);
+  printf("\tabort();\n");
+	printf("\t// cpu->cd.mips.next_ic += %i;\n", n - 1);
 
 	printf("}\n\n");
 }

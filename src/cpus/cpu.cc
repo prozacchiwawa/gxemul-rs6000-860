@@ -95,8 +95,6 @@ struct cpu *cpu_new(struct memory *mem, struct machine *machine,
 	settings_add(cpu->settings, "running", 0, SETTINGS_TYPE_UINT8,
 	    SETTINGS_FORMAT_YESNO, (void *) &cpu->running);
 
-	cpu_create_or_reset_tc(cpu);
-
 	fp = first_cpu_family;
 
 	while (fp != NULL) {
@@ -296,22 +294,7 @@ void cpu_create_or_reset_tc(struct cpu *cpu)
 {
 	size_t s = dyntrans_cache_size + DYNTRANS_CACHE_MARGIN;
 
-	if (cpu->translation_cache == NULL)
-		cpu->translation_cache = (unsigned char *) zeroed_alloc(s);
-
-	/*  Create an empty table at the beginning of the translation cache:  */
-	memset(cpu->translation_cache, 0, sizeof(uint32_t)
-	    * N_BASE_TABLE_ENTRIES);
-
-	cpu->translation_cache_cur_ofs =
-	    N_BASE_TABLE_ENTRIES * sizeof(uint32_t);
-
-	/*
-	 *  There might be other translation pointers that still point to
-	 *  within the translation_cache region. Let's invalidate those too:
-	 */
-	if (cpu->invalidate_code_translation != NULL)
-		cpu->invalidate_code_translation(cpu, 0, INVALIDATE_ALL);
+  cpu->invalidate_code_translation(cpu, 0, INVALIDATE_ALL);
 }
 
 

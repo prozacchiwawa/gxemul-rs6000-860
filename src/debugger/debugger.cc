@@ -122,10 +122,7 @@ static void breakpoint_delete_number(struct machine *m, int x) {
   }
   m->breakpoints.n --;
 
-  /*  Clear translations:  */
-  for (int i=0; i<m->ncpus; i++)
-    if (m->cpus[i]->translation_cache != NULL)
-      cpu_create_or_reset_tc(m->cpus[i]);
+  // XXX make a way of telling the cpu to clear a breakpoint.
 }
 
 void breakpoint_delete(struct machine *m, uint64_t addr) {
@@ -157,12 +154,7 @@ void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int name
 
   m->breakpoints.n ++;
 
-  /*  Clear translations:  */
-  for (i=0; i<m->ncpus; i++) {
-    if (m->cpus[i]->translation_cache != NULL) {
-      cpu_create_or_reset_tc(m->cpus[i]);
-    }
-  }
+  // XXX make a way of telling the cpu to clear breakpoints.
 }
 
 void breakpoint_show(struct machine *m) {

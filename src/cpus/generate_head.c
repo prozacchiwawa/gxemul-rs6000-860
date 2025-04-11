@@ -141,13 +141,11 @@ int main(int argc, char *argv[])
 	    " struct %s_instr_call *ic)\n", a, a);
 
 	printf("\n/*\n *  nothing:  Do nothing.\n *\n"
-	    " *  The difference between this function and a \"nop\" "
-	    "instruction is that\n *  this function does not increase "
-	    "the program counter.  It is used to \"get out\" of running in "
-	    "translated\n *  mode.\n */\n");
-	printf("X(nothing)\n{\n");
-	printf("\tcpu->cd.%s.next_ic --;\n", a);
-	printf("}\n\n");
+         " *  The difference between this function and a \"nop\" "
+         "instruction is that\n *  this function does not increase "
+         "the program counter.  It is used to \"get out\" of running in "
+         "translated\n *  mode.\n */\n");
+	printf("X(nothing);\n\n");
 
 	/*  Ugly special hacks for SH[34]:  */
 	if (strcasecmp(argv[1], "sh") == 0) {

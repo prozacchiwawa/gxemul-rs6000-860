@@ -145,8 +145,6 @@ struct ppc_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(ppc)
-private:
-	VPH_TLBS(ppc,PPC)
 public:
 	VPH32(ppc,PPC)
 	VPH64(ppc,PPC)

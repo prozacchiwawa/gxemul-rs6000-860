@@ -33,20 +33,20 @@
  *  be increased by 3.)
  */
 
+#define quick_pc_to_pointers quick_pc_to_pointers32
 
-#define	SYNCH_PC		{					\
-		int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())  \
-		    / sizeof(struct sh_instr_call);			\
-		cpu->pc &= ~((SH_IC_ENTRIES_PER_PAGE-1)			\
-		    << SH_INSTR_ALIGNMENT_SHIFT);			\
+#define	SYNCH_PC		{                                 \
+    int low_pc = cpu->cd.sh.VPH.sync_low_pc(cpu, ic); \
+		cpu->pc &= ~((SH_IC_ENTRIES_PER_PAGE-1)           \
+                 << SH_INSTR_ALIGNMENT_SHIFT);        \
 		cpu->pc += (low_pc << SH_INSTR_ALIGNMENT_SHIFT);	\
 	}
 
-#define	ABORT_EXECUTION	  {	SYNCH_PC;				\
-				fatal("Execution aborted at: pc = 0x%08x\n", (int)cpu->pc); \
-				cpu->cd.sh.next_ic = &nothing_call;	\
-				cpu->running = 0;			\
-				debugger_n_steps_left_before_interaction = 0; }
+#define	ABORT_EXECUTION	  {	SYNCH_PC;                               \
+    fatal("Execution aborted at: pc = 0x%08x\n", (int)cpu->pc);     \
+    cpu->cd.sh.VPH.do_nothing(&nothing_call);                       \
+    cpu->running = 0;                                               \
+    debugger_n_steps_left_before_interaction = 0; }
 
 #define	RES_INST_IF_NOT_MD						\
 	if (!(cpu->cd.sh.sr & SH_SR_MD)) {				\
@@ -91,7 +91,8 @@ X(sleep)
 	    < cpu->cd.sh.int_level)
 		return;
 
-	cpu->cd.sh.next_ic = ic;
+  cpu->cd.sh.VPH.do_nothing(&nothing_call);
+	// cpu->cd.sh.next_ic = ic;
 	cpu->is_halted = 1;
 	cpu->has_been_idling = 1;
 
@@ -1893,7 +1894,7 @@ X(bra_samepage)
 	ic[1].f(cpu, ic+1);
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT))
-		cpu->cd.sh.next_ic = (struct sh_instr_call *) ic->arg[0];
+		cpu->cd.sh.VPH.set_next_ic(ic->arg[0]);
 	cpu->delay_slot = NOT_DELAYED;
 }
 X(bsr)
@@ -1945,7 +1946,7 @@ X(bsr_samepage)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->cd.sh.pr = old_pc + 4;
-		cpu->cd.sh.next_ic = (struct sh_instr_call *) ic->arg[0];
+		cpu->cd.sh.VPH.set_next_ic(ic->arg[0]);
 	}
 	cpu->delay_slot = NOT_DELAYED;
 }
@@ -2035,12 +2036,12 @@ X(bf)
 X(bt_samepage)
 {
 	if (cpu->cd.sh.sr & SH_SR_T)
-		cpu->cd.sh.next_ic = (struct sh_instr_call *) ic->arg[1];
+		cpu->cd.sh.VPH.set_next_ic(ic->arg[1]);
 }
 X(bf_samepage)
 {
 	if (!(cpu->cd.sh.sr & SH_SR_T))
-		cpu->cd.sh.next_ic = (struct sh_instr_call *) ic->arg[1];
+		cpu->cd.sh.VPH.set_next_ic(ic->arg[1]);
 }
 X(bt_s)
 {
@@ -2057,7 +2058,7 @@ X(bt_s)
 			cpu->pc = target;
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.sh.next_ic ++;
+			cpu->cd.sh.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -2076,7 +2077,7 @@ X(bf_s)
 			cpu->pc = target;
 			quick_pc_to_pointers(cpu);
 		} else
-			cpu->cd.sh.next_ic ++;
+			cpu->cd.sh.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -2089,10 +2090,9 @@ X(bt_s_samepage)
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->delay_slot = NOT_DELAYED;
 		if (cond)
-			cpu->cd.sh.next_ic =
-			    (struct sh_instr_call *) ic->arg[1];
+			cpu->cd.sh.VPH.set_next_ic(ic->arg[1]);
 		else
-			cpu->cd.sh.next_ic ++;
+			cpu->cd.sh.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -2105,10 +2105,9 @@ X(bf_s_samepage)
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->delay_slot = NOT_DELAYED;
 		if (cond)
-			cpu->cd.sh.next_ic =
-			    (struct sh_instr_call *) ic->arg[1];
+			cpu->cd.sh.VPH.set_next_ic(ic->arg[1]);
 		else
-			cpu->cd.sh.next_ic ++;
+			cpu->cd.sh.VPH.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -3033,7 +3032,7 @@ X(prom_emul)
 
 	if (!cpu->running) {
 		cpu->n_translated_instrs --;
-		cpu->cd.sh.next_ic = &nothing_call;
+		cpu->cd.sh.VPH.do_nothing(&nothing_call);
 	} else if ((uint32_t)cpu->pc != old_pc) {
 		/*  The PC value was changed by the PROM call.  */
 		quick_pc_to_pointers(cpu);
@@ -3091,11 +3090,14 @@ X(bt_samepage_wait_for_variable)
 		// Some bogus amount of instructions.
 		// TODO: Make nicer?
 		cpu->n_translated_instrs += 500;
-		cpu->cd.sh.next_ic = ic;	// "jump to z"
+		cpu->cd.sh.VPH.set_next_ic
+      (cpu->cd.sh.VPH.sync_low_pc(cpu, ic) << cpu_traits<decltype(cpu->cd.sh)>::instr_alignment_shift());
 	} else {
 		// otherwise, get out of the loop.
 		cpu->n_translated_instrs += 2;
-		cpu->cd.sh.next_ic = ic + 3;
+		// XXX
+    abort();
+    // cpu->cd.sh.next_ic = ic + 3;
 	}
 }
 
@@ -3166,7 +3168,7 @@ X(end_of_page)
 	 */
 	/*  fatal("[ end_of_page: delay slot across page boundary! ]\n");  */
 
-	instr(to_be_translated)(cpu, cpu->cd.sh.next_ic);
+	instr(to_be_translated)(cpu, cpu->cd.sh.VPH.get_next_ic());
 
 	/*  The instruction in the delay slot has now executed.  */
 	/*  fatal("[ end_of_page: back from executing the delay slot, %i ]\n",
@@ -3181,8 +3183,7 @@ X(end_of_page)
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())
-	    / sizeof(struct sh_instr_call);
+	int low_pc = cpu->cd.sh.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((SH_IC_ENTRIES_PER_PAGE-1)
 	    << SH_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << SH_INSTR_ALIGNMENT_SHIFT);
@@ -3221,8 +3222,7 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct sh_instr_call *);
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.sh.get_ic_page())
-	    / sizeof(struct sh_instr_call);
+	low_pc = cpu->cd.sh.VPH.sync_low_pc(cpu, ic);
 
 	/*  Special case for branch with delayslot on the next page:  */
 	if (cpu->delay_slot == TO_BE_DELAYED && low_pc == 0) {
@@ -3945,8 +3945,7 @@ X(to_be_translated)
 		/*  samepage branches:  */
 		if (samepage_function != NULL && ic->arg[0] < 0x1000 &&
 		    (addr & 0xfff) < 0xffe) {
-			ic->arg[1] = (size_t) (cpu->cd.sh.get_ic_page() +
-			    (ic->arg[0] >> SH_INSTR_ALIGNMENT_SHIFT));
+			ic->arg[1] = ic->arg[0];
 			ic->f = samepage_function;
 		}
 
@@ -4001,8 +4000,6 @@ X(to_be_translated)
 		/*  samepage branches:  */
 		if (samepage_function != NULL && ic->arg[0] < 0x1000 &&
 		    (addr & 0xfff) < 0xffe) {
-			ic->arg[0] = (size_t) (cpu->cd.sh.get_ic_page() +
-			    (ic->arg[0] >> SH_INSTR_ALIGNMENT_SHIFT));
 			ic->f = samepage_function;
 		}
 		break;

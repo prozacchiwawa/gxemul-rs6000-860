@@ -134,7 +134,7 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
       cpu->cd.mips.vph32.invalidate_tc(cpu, paddr, flags);
     };
     cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
-      cpu->cd.mips.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.mips.physpage_template->ics->f);
+      cpu->cd.mips.vph32.invalidate_tc_code(cpu, paddr, flags);
     };
 	} else {
 		cpu->run_instr = mips_run_instr;
@@ -152,7 +152,7 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
       cpu->cd.mips.vph64.invalidate_tc(cpu, paddr, flags);
     };
     cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
-      cpu->cd.mips.vph64.invalidate_tc_code(cpu, paddr, flags, cpu->cd.mips.physpage_template->ics->f);
+      cpu->cd.mips.vph64.invalidate_tc_code(cpu, paddr, flags);
     };
 	}
 

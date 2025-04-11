@@ -49,8 +49,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct mips_instr_call *ic)
 #endif
 
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.get_ic_page())
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)<<MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 

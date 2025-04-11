@@ -35,6 +35,12 @@
 
 #include "float_emul.h"
 
+#ifdef MODE32
+#define quick_pc_to_pointers quick_pc_to_pointers32
+#else
+#define quick_pc_to_pointers quick_pc_to_pointers64
+#endif
+
 #define DOT0(n) X(n ## _dot) { instr(n)(cpu,ic); \
 	update_cr0(cpu, reg(ic->arg[0])); }
 #define DOT1(n) X(n ## _dot) { instr(n)(cpu,ic); \
@@ -65,10 +71,7 @@ static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, uint64_
   /*  TODO: trace in separate (duplicate) function?  */
   cpu->functioncall_end_trace(cpu);
   if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
-    cpu->cd.DYNTRANS_ARCH.next_ic =
-      cpu->cd.DYNTRANS_ARCH.get_ic_page() +
-      ((cpu->pc & mask_within_page) >>
-       alignment_shift);
+    cpu->cd.DYNTRANS_ARCH.VPH.set_next_ic(cpu->pc);
   } else {
     /*  Find the new physical page and update pointers:  */
     quick_pc_to_pointers(cpu);
@@ -243,7 +246,7 @@ X(bclr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -281,7 +284,7 @@ X(bcctr_l)
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 
 	/*  Calculate return PC:  */
-	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -299,15 +302,14 @@ X(bcctr_l)
  */
 X(b)
 {
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (int32_t)ic->arg[0];
+	cpu->pc = ic->arg[0];
 
 	/*  Find the new physical page and update the translation pointers:  */
 	quick_pc_to_pointers(cpu);
 }
 X(ba)
 {
-	cpu->pc = (int32_t)ic->arg[0];
+	cpu->pc = ic->arg[0];
 	quick_pc_to_pointers(cpu);
 }
 
@@ -343,7 +345,7 @@ X(bcl)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -368,7 +370,7 @@ X(bcl)
  */
 X(b_samepage)
 {
-  cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+  cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
 }
 
 
@@ -393,21 +395,21 @@ X(bc_samepage)
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
 	if (ctr_ok && cond_ok) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+    cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
   }
 }
 X(bc_samepage_simple0)
 {
 	int bi31m = ic->arg[2];
 	if (!((cpu->cd.ppc.cr >> bi31m) & 1)) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+    cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
   }
 }
 X(bc_samepage_simple1)
 {
 	int bi31m = ic->arg[2];
 	if ((cpu->cd.ppc.cr >> bi31m) & 1) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+    cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
   }
 }
 X(bcl_samepage)
@@ -417,7 +419,7 @@ X(bcl_samepage)
 	int low_pc;
 
 	/*  Calculate LR:  */
-	low_pc = get_low_pc(cpu->cd.ppc, ic) + 1;
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic) + 1;
 	cpu->cd.ppc.spr[SPR_LR] = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
                                         << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -431,7 +433,7 @@ X(bcl_samepage)
 	cond_ok |= ( ((bo >> 3) & 1) ==
 	    ((cpu->cd.ppc.cr >> bi31m) & 1)  );
 	if (ctr_ok && cond_ok) {
-    cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+    cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
   }
 }
 
@@ -462,8 +464,7 @@ X(bl)
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
 	/*  Calculate new PC from start of page + arg[0]  */
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (int32_t)ic->arg[0];
+	cpu->pc = ic->arg[0];
 
 	cpu->functioncall_trace(cpu, cpu->pc);
 
@@ -486,14 +487,14 @@ X(bl_samepage)
 	cpu->cd.ppc.spr[SPR_LR] = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT)) + ic->arg[1];
 
-	cpu->cd.ppc.next_ic = cpu->cd.ppc.get_ic_page() + ic->arg[0];
+	cpu->cd.ppc.VPH.set_next_ic(ic->arg[0]);
 
 	/*  Calculate new PC (for the trace)  */
-	low_pc = cpu->cd.ppc.next_ic - cpu->cd.ppc.get_ic_page();
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, cpu->cd.ppc.VPH.get_next_ic());
 	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	cpu->functioncall_trace(cpu, cpu->pc);
-  cpu->cd.ppc.next_ic->f = ppc32_instr_to_be_translated;
+  cpu->cd.ppc.VPH.get_next_ic()->f = ppc32_instr_to_be_translated;
 }
 
 
@@ -1141,7 +1142,7 @@ X(llsc)
   uint64_t final_addr = 0;
 
 	/*  Synchronize the PC so the exception below can target the right location.  */
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
   if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
     // Will throw.
@@ -1299,7 +1300,7 @@ X(loose_lhaux)
   uint8_t raw_value[2];
 
   /*  Synchronize the PC:  */
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
   if (page) {
     auto addr = full_addr & 0xfff;
@@ -1876,7 +1877,7 @@ X(lmw) {
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
 	while (rs <= 31) {
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
@@ -1900,7 +1901,7 @@ X(stmw) {
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
 	while (rs <= 31) {
 		uint32_t tmp = cpu->cd.ppc.gpr[rs];
@@ -1948,7 +1949,7 @@ X(lswi)
     }
   }
 
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
 
 	while (nb > 0) {
 		unsigned char d;
@@ -1991,7 +1992,7 @@ X(stswi)
     }
   }
 
-  sync_pc(cpu, cpu->cd.ppc, ic);
+  sync_pc(cpu, ic);
   // fprintf(stderr, "%08x stswi %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
 
 
@@ -2335,7 +2336,7 @@ X(xori) { reg(ic->arg[2]) = reg(ic->arg[0]) ^ (uint32_t)ic->arg[1]; }
 X(lfs)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.get_ic_page();
+	uint64_t old_pc, low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2364,7 +2365,7 @@ X(lfs)
 X(lfsx)
 {
 	/*  Sync. PC in case of an exception, and remember it:  */
-	uint64_t old_pc, low_pc = ic - cpu->cd.ppc.get_ic_page();
+	uint64_t old_pc, low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
@@ -2615,7 +2616,7 @@ X(tw)
     || ((uregvala > uregvalb) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.get_ic_page()) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + cpu->cd.ppc.VPH.sync_low_pc(cpu, ic) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2646,7 +2647,7 @@ X(twi)
     || ((uregval > imm) && ((to & 1) != 0));
 
   if (do_trap) {
-    cpu->pc = (cpu->pc & ~0xfff) + (ic - cpu->cd.ppc.get_ic_page()) * 4;
+    cpu->pc = (cpu->pc & ~0xfff) + ppc_sync_low_pc(cpu, ic) * 4;
     ppc_exception(cpu, PPC_EXCEPTION_PRG, 1 << 17);
   }
 }
@@ -2712,7 +2713,7 @@ X(openfirmware)
 	of_emul(cpu);
 	if (cpu->running == 0) {
 		cpu->n_translated_instrs --;
-		cpu->cd.ppc.next_ic = &nothing_call;
+		cpu->cd.ppc.VPH.do_nothing(&nothing_call);
 		debugger_n_steps_left_before_interaction = 0;
 	}
 
@@ -2810,7 +2811,7 @@ X(to_be_translated)
   cpu_ppc_swizzle_offset(cpu, 4, 1, &swizzle, &offset);
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ic - cpu->cd.ppc.get_ic_page();
+	low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
 	addr = cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1)
 	    << PPC_INSTR_ALIGNMENT_SHIFT);
 	addr += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
@@ -3129,7 +3130,7 @@ X(to_be_translated)
 				samepage_function = instr(bc_samepage);
       }
 		}
-		ic->arg[0] = (ssize_t)(tmp_addr + (addr & 0xffc));
+		ic->arg[0] = addr + tmp_addr;
 		ic->arg[1] = bo;
 		ic->arg[2] = 31-bi;
 		/*  Branches are calculated as cur PC + offset.  */
@@ -3138,11 +3139,10 @@ X(to_be_translated)
 			uint64_t mask_within_page =
 			    ((PPC_IC_ENTRIES_PER_PAGE-1) << 2) | 3;
 			uint64_t old_pc = addr;
-			uint64_t new_pc = old_pc + (int32_t)tmp_addr;
-			if ((old_pc & ~mask_within_page) ==
-			    (new_pc & ~mask_within_page)) {
+
+			if ((addr & ~mask_within_page) ==
+			    (ic->arg[0] & ~mask_within_page)) {
 				ic->f = samepage_function;
-				ic->arg[0] = ((new_pc & mask_within_page) >> 2);
 			}
 		}
 		break;
@@ -3169,18 +3169,14 @@ X(to_be_translated)
 			ic->f = instr(b);
 			samepage_function = instr(b_samepage);
 		}
-		ic->arg[0] = (ssize_t)(tmp_addr + (addr & 0xffc));
+    ic->arg[0] = addr + (int32_t)tmp_addr;
 		ic->arg[1] = (addr & 0xffc) + 4;
 		/*  Branches are calculated as cur PC + offset.  */
 		/*  Special case: branch within the same page:  */
 		{
-			uint64_t mask_within_page =
-			    ((PPC_IC_ENTRIES_PER_PAGE-1) << 2) | 3;
-			uint64_t old_pc = addr;
-			uint64_t new_pc = old_pc + (int32_t)tmp_addr;
-			if ((old_pc & ~mask_within_page) == (new_pc & ~mask_within_page)) {
+			uint64_t mask_within_page = ((PPC_IC_ENTRIES_PER_PAGE-1) << 2) | 3;
+			if ((addr & ~mask_within_page) == (ic->arg[0] & ~mask_within_page)) {
 				ic->f = samepage_function;
-				ic->arg[0] = ((new_pc & mask_within_page) >> 2);
       }
 		}
 		if (aa_bit) {
@@ -3189,7 +3185,7 @@ X(to_be_translated)
 			} else {
 				ic->f = instr(ba);
 			}
-			ic->arg[0] = (ssize_t)tmp_addr;
+			ic->arg[0] = tmp_addr;
 		}
 		break;
 

@@ -69,6 +69,23 @@ int main(int argc, char *argv[])
 	printf("#define MODE32\n");
 	printf("#endif\n");
 
+  printf("#ifdef MODE32\n"
+         "#define VPH vph32\n"
+         "#elif defined(DYNTRANS_DUALMODE_32)\n"
+         // XXX for now, do this better.
+         "#define VPH vph32\n"
+         "#else\n"
+         "#define VPH vph64\n"
+         "#endif\n\n");
+	printf("\n/*\n *  nothing:  Do nothing.\n *\n"
+         " *  The difference between this function and a \"nop\" "
+         "instruction is that\n *  this function does not increase "
+         "the program counter.  It is used to \"get out\" of running in "
+         "translated\n *  mode.\n */\n");
+	printf("X(nothing)\n{\n");
+	printf("\tcpu->cd.%s.VPH.nothing();\n", a);
+	printf("}\n\n");
+
 	printf("#define DYNTRANS_FUNCTION_TRACE_DEF "
 	    "%s_cpu_functioncall_trace\n", a);
 	printf("#include \"cpu_dyntrans.cc\"\n");

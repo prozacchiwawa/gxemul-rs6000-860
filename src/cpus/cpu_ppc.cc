@@ -133,7 +133,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
       cpu->cd.ppc.vph32.invalidate_tc(cpu, paddr, flags);
     };
     cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
-      cpu->cd.ppc.vph32.invalidate_tc_code(cpu, paddr, flags, cpu->cd.ppc.physpage_template->ics->f);
+      cpu->cd.ppc.vph32.invalidate_tc_code(cpu, paddr, flags);
     };
 	} else {
 		cpu->run_instr = ppc_run_instr;
@@ -151,7 +151,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
       cpu->cd.ppc.vph64.invalidate_tc(cpu, paddr, flags);
     };
     cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
-      cpu->cd.ppc.vph64.invalidate_tc_code(cpu, paddr, flags, cpu->cd.ppc.physpage_template->ics->f);
+      cpu->cd.ppc.vph64.invalidate_tc_code(cpu, paddr, flags);
     };
 	}
 
@@ -262,7 +262,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		interrupt_handler_register(&templ);
 	}
 
-  cpu->cd.ppc.vph32.add_tlb_data(nullptr, cpu->cd.ppc.vph_tlb_entry);
+  cpu->cd.ppc.vph32.add_tlb_data(nullptr);
 
 	return 1;
 }
@@ -374,7 +374,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
-    cpu->invalidate_code_translation(cpu, cpu->cd.ppc.get_ic_phys(), INVALIDATE_PADDR);
+    cpu->invalidate_code_translation(cpu, cpu->cd.ppc.vph32.get_ic_phys(), INVALIDATE_PADDR);
 	}
 
   if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
@@ -2059,12 +2059,18 @@ int f64_isnan(float64_t f) {
   return exp == EXP_MASK && mantissa != 0;
 }
 
+static inline uint64_t ppc_sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
+  return
+    (
+     (size_t)ic -
+     (size_t)cpu->cd.ppc.vph32.get_ic_page()
+     ) / sizeof(*ic);
+}
+
 #ifndef CHECK_FOR_FPU_EXCEPTION
 #define CHECK_FOR_FPU_EXCEPTION { if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) { \
       /*  Synchronize the PC, and cause an FPU exception:  */           \
-      uint64_t low_pc = ((size_t)ic -                                   \
-                         (size_t)cpu->cd.ppc.get_ic_page())             \
-		    / sizeof(struct ppc_instr_call);                                \
+      uint64_t low_pc = ppc_sync_low_pc(cpu, ic);                           \
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
                                                             PPC_INSTR_ALIGNMENT_SHIFT); \
@@ -2074,9 +2080,7 @@ int f64_isnan(float64_t f) {
 
 #define FPU_EXN { if (cpu->cd.ppc.msr & (PPC_MSR_FE0 | PPC_MSR_FE1)) {  \
       /*  Synchronize the PC, and cause an FPU exception:  */           \
-      uint64_t low_pc = ((size_t)ic -                                   \
-                         (size_t)cpu->cd.ppc.get_ic_page())             \
-		    / sizeof(struct ppc_instr_call);                                \
+      uint64_t low_pc = ppc_sync_low_pc(cpu, ic);                           \
       cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<             \
                              PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc <<   \
                                                             PPC_INSTR_ALIGNMENT_SHIFT); \

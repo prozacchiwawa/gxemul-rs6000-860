@@ -266,7 +266,6 @@ struct m88k_cpu {
 	 *  supervisor mode).
 	 */
 	DYNTRANS_ITC(m88k)
-	VPH_TLBS(m88k,M88K)
 	VPH32(m88k,M88K)
 	VPH32EXTENDED(m88k,M88K,usr)
 };

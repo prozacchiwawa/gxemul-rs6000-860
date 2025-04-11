@@ -392,12 +392,18 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 			int addr = (y * logical_width + x) * d->bits_per_pixel;
 			switch (d->bits_per_pixel) {
 			case 8:	addr >>= 3;
+				if (addr >= d->gfx_mem_size) {
+					break;
+				}
 				c = d->gfx_mem[addr];
 				pixel[0] = d->fb->rgb_palette[c*3+0];
 				pixel[1] = d->fb->rgb_palette[c*3+1];
 				pixel[2] = d->fb->rgb_palette[c*3+2];
 				break;
 			case 4:	addr >>= 2;
+				if (addr >> 1 >= d->gfx_mem_size) {
+					break;
+				}
 				if (addr & 1)
 					c = d->gfx_mem[addr >> 1] >> 4;
 				else

@@ -261,7 +261,6 @@ public:
       }
 
       vph_tlb_entry[r].valid = 1;
-      vph_tlb_entry[r].host_page = host_page;
       vph_tlb_entry[r].paddr_page = paddr_page;
       vph_tlb_entry[r].vaddr_page = vaddr_page;
       vph_tlb_entry[r].writeflag =

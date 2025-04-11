@@ -110,7 +110,6 @@
 		uint8_t		writeflag;                                            \
 		addrtype	vaddr_page;                                           \
 		addrtype	paddr_page;                                           \
-		unsigned char	*host_page;                                       \
 	};
 
 #define	DYNTRANS_MISC64_DECLARATIONS(arch,ARCH,tlbindextype)		\

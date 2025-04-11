@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <map>
 #include "tlb_cache.h"
 
@@ -11,26 +12,88 @@ extern unsigned char *memory_paddr_to_hostaddr
 (struct memory *mem, uint64_t paddr, int writeflag);
 
 #define MAX_CACHE_SIZE (5 * 1024 * 1024)
+#define SMALL_ENTRIES 128
 
 template <typename TcPhyspage, typename VaddrToTlb, typename VpgTlbEntry, typename Cpu> struct vph32 {
 private:
-	unsigned char *host_load[3 * N_VPH32_ENTRIES];
-	unsigned char *host_store[3 * N_VPH32_ENTRIES];
-	uint32_t phys_addr[3 * N_VPH32_ENTRIES];
-	TcPhyspage *phys_page[3 * N_VPH32_ENTRIES];
-	VaddrToTlb vaddr_to_tlbindex[3 * N_VPH32_ENTRIES];
+  host_load_store_t *pages;
   uint64_t cur_ic_virt;
   TcPhyspage *cur_physpage;
   TcPhyspage *physpage_template;
   decltype(&((TcPhyspage *)0)->ics[0]) next_ic;
+  std::map<uint64_t, VaddrToTlb> *vaddr_to_tlbindex;
   std::map<uint64_t, TcPhyspage> *physpage_map;
 
   // Pointers to other cpu members (consider moving them here)
 	VpgTlbEntry vph_tlb_entry[max_vph_tlb_entries<TcPhyspage>()];
 
+  int max_tlb_entries;
   uint32_t *is_userpage;
 
 public:
+  int max_entries() const { return max_tlb_entries; }
+
+  void show_tlb(Cpu *cpu) {
+#if 0
+    fprintf(stderr, "CACHE STATE\n");
+    for (auto i = 0; i < max_entries(); i++) {
+      if (this->vph_tlb_entry[i].valid) {
+        auto code_host_page = get_cached_tlb_pages(cpu, this->vph_tlb_entry[i].vaddr_page, true);
+        auto data_host_page = get_cached_tlb_pages(cpu, this->vph_tlb_entry[i].vaddr_page, false);
+        fprintf
+          (stderr, "%d %s V %08x P %08x C %08x D %08x %s%s\n",
+           i,
+           this->vph_tlb_entry[i].writeflag ? "W" : "R",
+           (unsigned int)this->vph_tlb_entry[i].vaddr_page,
+           (unsigned int)this->vph_tlb_entry[i].paddr_page,
+           (unsigned int)code_host_page.physaddr,
+           (unsigned int)data_host_page.physaddr,
+           data_host_page.host_load ? "L" : "l",
+           data_host_page.host_store ? "S" : "s"
+           );
+      }
+    }
+    const char *cache_names[] = {
+      "PHYS", "DATA", "CODE"
+    };
+    for (auto j = 0; j < 3; j++) {
+      for (auto i = 0; i < N_VPH32_ENTRIES; i++) {
+        auto page_index = j * N_VPH32_ENTRIES + i;
+        auto page = &pages[page_index];
+        if (page->physaddr) {
+          auto found = vaddr_to_tlbindex->find(page_index);
+          auto idx = -1;
+          if (found != vaddr_to_tlbindex->end()) {
+            idx = found->second - 1;
+          }
+          fprintf(stderr, "%s %d %08x -> %08x\n", cache_names[j], idx, i * pagesize<TcPhyspage>(), page->physaddr);
+        }
+      }
+    }
+#endif
+  }
+
+  void invariant(Cpu *cpu) const {
+#if 0
+    const char *cache_names[] = {
+      "PHYS", "DATA", "CODE"
+    };
+    assert(vaddr_to_tlbindex->size() <= max_entries());
+    for (auto j = 0; j < 3; j++) {
+      for (auto i = 0; i < N_VPH32_ENTRIES; i++) {
+        auto page_index = j * N_VPH32_ENTRIES + i;
+        if (pages[page_index].physaddr) {
+          auto found = vaddr_to_tlbindex->find(page_index);
+          if (found == vaddr_to_tlbindex->end()) {
+            fprintf(stderr, "%s page %08x does not have a tlb index\n", cache_names[j], (unsigned int)(i * pagesize<TcPhyspage>()));
+            abort();
+          }
+        }
+      }
+    }
+#endif
+  }
+
   TcPhyspage *get_physpage() const {
     return this->cur_physpage;
   }
@@ -45,6 +108,13 @@ public:
 
   decltype(&((TcPhyspage *)0)->ics[0]) next_insn() {
     return next_ic++;
+  }
+
+  int get_page_index(Cpu *cpu, uint64_t vaddr, bool instr) const {
+    auto index = addr_to_pagenr<TcPhyspage>(vaddr & 0xffffffff);
+    assert(index < N_VPH32_ENTRIES);
+    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+    return index;
   }
 
   uint64_t get_ic_phys() const { return this->cur_physpage->physaddr; }
@@ -63,98 +133,73 @@ public:
   }
 
   void set_physpage_template(TcPhyspage *templ) {
+    max_tlb_entries = std::min(SMALL_ENTRIES, max_vph_tlb_entries<TcPhyspage>());
     physpage_template = templ;
     physpage_map = new std::map<uint64_t, TcPhyspage>();
+    vaddr_to_tlbindex = new std::map<uint64_t, VaddrToTlb>();
+    pages = (host_load_store_t *)calloc(3 * N_VPH32_ENTRIES, sizeof(host_load_store_t));
   }
 
   host_load_store_t get_cached_tlb_pages(Cpu *cpu, uint64_t addr, bool instr) {
-    auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
-    return host_load_store_t {
-      phys_addr[index],
-      phys_page[index],
-      host_load[index],
-      host_store[index],
-    };
+    auto index = get_page_index(cpu, addr, instr);
+    return pages[index];
   }
 
   void set_tlb_physpage(Cpu *cpu, uint64_t addr, TcPhyspage *ppp) {
-    auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, true);
-    phys_page[index] = ppp;
+    auto index = get_page_index(cpu, addr, true);
+    pages[index].ppp = ppp;
   }
 
   void clear_writable(Cpu *cpu, uint64_t addr) {
-    auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
-    host_store[index] = nullptr;
+    auto index = get_page_index(cpu, addr, false);
+    pages[index].host_store = nullptr;
   }
 
   void clear_phys(Cpu *cpu, uint64_t vaddr_page, bool instr) {
-    uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page & 0xffffffff);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
-    phys_page[index] = nullptr;
+    auto index = get_page_index(cpu, vaddr_page, instr);
+    pages[index].ppp = nullptr;
   }
 
-  int clear_cache(Cpu *cpu, uint64_t addr, bool instr) {
-    auto index = addr_to_pagenr<TcPhyspage>(addr & 0xffffffff);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
-		host_load[index] = nullptr;
-		host_store[index] = nullptr;
-		phys_addr[index] = 0;
-		phys_page[index] = nullptr;
-		int tlbi = vaddr_to_tlbindex[index];
-		vaddr_to_tlbindex[index] = 0;
-    return tlbi;
+protected:
+  int clear_cache(int index) {
+    pages[index] = host_load_store_t { };
+    auto found = vaddr_to_tlbindex->find(index);
+    int result = 0;
+    if (found != vaddr_to_tlbindex->end()) {
+      auto tlbi = found->second;
+      vaddr_to_tlbindex->erase(index);
+      result = tlbi;
+    }
+    return result;
   }
 
+  void decomission_vph(Cpu *cpu, int r) {
+    if (vph_tlb_entry[r].valid) {
+      invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, 0);
+      vph_tlb_entry[r].valid=0;
+    }
+  }
+
+public:
   void invalidate_tc(Cpu *cpu, uint64_t addr, int flags) {
     int r;
     uint64_t addr_page = addr & ~(pagesize<TcPhyspage>() - 1);
 
     /*  fatal("invalidate(): ");  */
 
+    /*  Invalidate everything:  */
+    if (flags & INVALIDATE_ALL) {
+      /*  fatal("all\n");  */
+      for (r=0; r<max_entries(); r++) {
+        decomission_vph(cpu, r);
+      }
+      return;
+    }
+
     /*  Quick case for _one_ virtual addresses: see note above.  */
     if (flags & INVALIDATE_VADDR) {
       /*  fatal("vaddr 0x%08x\n", (int)addr_page);  */
-      this->invalidate_tlb_entry(cpu, addr_page, flags, false);
-      return;
-    }
-
-    /*  Invalidate everything:  */
-#ifdef DYNTRANS_PPC
-    if (flags & INVALIDATE_ALL && flags & INVALIDATE_VADDR_UPPER4) {
-      /*  fatal("all, upper4 (PowerPC segment)\n");  */
-      for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
-        if (vph_tlb_entry[r].valid &&
-            (vph_tlb_entry[r].vaddr_page
-             & 0xf0000000) == addr_page) {
-          this->invalidate_tlb_entry(vph_tlb_entry[r].vaddr_page, 0);
-          cpu->cd.DYNTRANS_ARCH.vph_tlb_entry[r].valid=0;
-        }
-      }
-      return;
-    }
-
-    if ((flags & INVALIDATE_ALL) && (flags & INVALIDATE_IDENTITY)) {
-      // Invalidate mappings that overlap ram.
-      for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
-        if (vph_tlb_entry[r].valid &&
-            (vph_tlb_entry[r].vaddr_page < cpu->mem->physical_max)) {
-          this->invalidate_tc(cpu, vph_tlb_entry[r].vaddr_page, INVALIDATE_VADDR);
-          vph_tlb_entry[r].valid=0;
-        }
-      }
-      return;
-    }
-#endif
-    if (flags & INVALIDATE_ALL) {
-      /*  fatal("all\n");  */
-      for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
-        if (vph_tlb_entry[r].valid) {
-          invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, 0, false);
-          vph_tlb_entry[r].valid=0;
-        }
-      }
+      this->invalidate_tlb_entry(cpu, addr_page, flags);
       return;
     }
 
@@ -166,32 +211,43 @@ public:
 
     /*  fatal("addr 0x%08x\n", (int)addr_page);  */
 
-    for (r=0; r<max_vph_tlb_entries<TcPhyspage>(); r++) {
+    for (r=0; r<max_entries(); r++) {
       if (vph_tlb_entry[r].valid && addr_page == vph_tlb_entry[r].paddr_page) {
-        this->invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, flags, false);
+        this->invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, flags);
         if (flags & JUST_MARK_AS_NON_WRITABLE) {
           vph_tlb_entry[r].writeflag = 0;
-        } else
-          vph_tlb_entry[r].valid = 0;
+        } else {
+          decomission_vph(cpu, r);
+        }
       }
     }
+    show_tlb(cpu);
+    invariant(cpu);
   }
 
+protected:
   void update_cache_page
   (Cpu *cpu, uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, int r, bool instr) {
-		auto index = addr_to_pagenr<TcPhyspage>(vaddr_page);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
-		host_load[index] = host_page;
-		host_store[index] = writeflag? host_page : nullptr;
-		phys_addr[index] = paddr_page;
-		phys_page[index] = nullptr;
-		vaddr_to_tlbindex[index] = r + 1;
+    auto index = get_page_index(cpu, vaddr_page, instr);
+    auto old_tlbindex = vaddr_to_tlbindex->find(index);
+    if (old_tlbindex != vaddr_to_tlbindex->end()) {
+      fprintf(stderr, "we shouldn't orphan a cache page\n");
+      abort();
+    }
+    pages[index] = host_load_store_t {
+    physaddr: paddr_page,
+    ppp: nullptr,
+    host_load: host_page,
+    host_store: writeflag? host_page : nullptr
+    };
+		vaddr_to_tlbindex->insert(std::make_pair(index, r + 1));
+    show_tlb(cpu);
+    invariant(cpu);
   }
 
-  void invalidate_tlb_entry(Cpu *cpu, uint64_t vaddr_page, int flags, bool instr)
+  void invalidate_tlb_entry(Cpu *cpu, uint64_t vaddr_page, int flags)
   {
-    uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+    auto index = get_page_index(cpu, vaddr_page, false);
 
     if (is_arm<TcPhyspage>()) {
       is_userpage[index >> 5] &= ~(1 << (index & 31));
@@ -202,33 +258,42 @@ public:
           (int)vaddr_page);  */
       clear_writable(cpu, vaddr_page);
     } else {
-      int tlbi = clear_cache(cpu, vaddr_page, instr);
-      if (tlbi > 0) {
-        vph_tlb_entry[tlbi-1].valid = 0;
+      index %= N_VPH32_ENTRIES;
+      for (auto i = 0; i < 3; i++) {
+        auto real_index = i * N_VPH32_ENTRIES + index;
+        int tlbi = clear_cache(real_index);
+        if (tlbi > 0) {
+          decomission_vph(cpu, tlbi - 1);
+        }
       }
     }
+    invariant(cpu);
   }
 
+public:
   void update_make_valid_translation
   (Cpu *cpu, uint64_t vaddr_page, uint64_t paddr_page, uint8_t *host_page, int writeflag, bool instr) {
-    uint32_t index = addr_to_pagenr<TcPhyspage>(vaddr_page);
-    index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+    auto index = get_page_index(cpu, vaddr_page, instr);
 
     auto useraccess = 0;
-    auto found = (int)vaddr_to_tlbindex[index] - 1;
+    auto found = -1;
+
+    auto vf = vaddr_to_tlbindex->find(index);
+    if (vf != vaddr_to_tlbindex->end()) {
+      found = (int)vf->second - 1;
+    }
 
     if (found < 0) {
       /*  Create the new TLB entry, overwriting a "random" entry:  */
       static unsigned int x = 0;
-      auto r = (x++) % max_vph_tlb_entries<TcPhyspage>();
+      auto r = (x++) % max_entries();
 
       if (vph_tlb_entry[r].valid) {
         /*  This one has to be invalidated first:  */
-        invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, 0, instr);
+        decomission_vph(cpu, r);
       }
 
       vph_tlb_entry[r].valid = 1;
-      vph_tlb_entry[r].host_page = host_page;
       vph_tlb_entry[r].paddr_page = paddr_page;
       vph_tlb_entry[r].vaddr_page = vaddr_page;
       vph_tlb_entry[r].writeflag = writeflag & MEM_WRITE;
@@ -255,10 +320,9 @@ public:
         vph_tlb_entry[r].writeflag = 0;
       }
 
-      index = addr_to_pagenr<TcPhyspage>(vaddr_page);
-      index += N_VPH32_ENTRIES * cpu_get_addr_space<TcPhyspage>(cpu, instr);
+      auto index = get_page_index(cpu, vaddr_page, instr);
 
-      phys_page[index] = nullptr;
+      pages[index].ppp = nullptr;
       if (is_arm<TcPhyspage>()) {
         is_userpage[index>>5] &= ~(1<<(index&31));
         if (useraccess)
@@ -266,19 +330,18 @@ public:
             |= 1 << (index & 31);
       }
 
-      if (phys_addr[index] == paddr_page) {
-        if (writeflag & MEM_WRITE) {
-          host_store[index] = host_page;
-        }
-        if (writeflag & MEM_DOWNGRADE) {
-          host_store[index] = nullptr;
-        }
+      if (writeflag & MEM_DOWNGRADE) {
+        pages[index].host_store = nullptr;
       } else {
         /*  Change the entire physical/host mapping:  */
-        host_load[index] = host_page;
-        host_store[index] = writeflag ? host_page : nullptr;
-        phys_addr[index] = paddr_page;
+        auto p = &pages[index];
+        p->host_load = host_page;
+        p->host_store = writeflag ? host_page : nullptr;
+        p->physaddr = paddr_page;
       }
+
+      show_tlb(cpu);
+      invariant(cpu);
     }
   }
 
@@ -311,7 +374,7 @@ public:
     }
 
     /*  Invalidate entries in the VPH table:  */
-    for (r = 0; r < max_vph_tlb_entries<TcPhyspage>(); r ++) {
+    for (r = 0; r < max_entries(); r ++) {
       if (vph_tlb_entry[r].valid) {
         vaddr_page = vph_tlb_entry[r].vaddr_page & ~(pagesize<TcPhyspage>()-1);
         paddr_page = vph_tlb_entry[r].paddr_page & ~(pagesize<TcPhyspage>()-1);
@@ -323,6 +386,9 @@ public:
         }
       }
     }
+
+    show_tlb(cpu);
+    invariant(cpu);
   }
 
   /*
@@ -421,6 +487,7 @@ public:
     /*  Here, ppp points to a valid physical page struct.  */
     if (host_pages.host_load != nullptr) {
       set_tlb_physpage(cpu, cached_pc, ppp);
+      show_tlb(cpu);
     }
 
     /*
@@ -436,6 +503,7 @@ public:
     set_physpage(cached_pc & ~0xfff, ppp);
 
     set_next_ic(cached_pc);
+    invariant(cpu);
   }
 
   void move_to_physpage(Cpu *cpu) {
@@ -451,6 +519,7 @@ public:
     auto ppp = static_cast<TcPhyspage*>(host_pages.ppp);
     set_physpage(cpu->pc & ~(pagesize<TcPhyspage>() - 1), ppp);
     next_ic = get_ic_page() + pc_to_ic_entry<TcPhyspage>(cached_pc);
+    invariant(cpu);
   }
 
   void nothing() {

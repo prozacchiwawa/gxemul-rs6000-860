@@ -320,8 +320,6 @@ public:
         vph_tlb_entry[r].writeflag = 0;
       }
 
-      auto index = get_page_index(cpu, vaddr_page, instr);
-
       pages[index].ppp = nullptr;
       if (is_arm<TcPhyspage>()) {
         is_userpage[index>>5] &= ~(1<<(index&31));

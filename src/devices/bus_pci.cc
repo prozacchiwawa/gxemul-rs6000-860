@@ -197,25 +197,32 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
 	dev = pci_data->first_device;
 	while (dev != NULL) {
     // Check bars for a match to target addr.
+    uint32_t id = bus_pci_read_cfg(dev, 0);
     for (i = PCI_MAPREG_START; i < PCI_MAPREG_END; i += 4) {
-      uint32_t id = bus_pci_read_cfg(dev, 0);
       uint32_t bar = bus_pci_read_cfg(dev, i);
       if (!bar) {
         continue;
       }
 
-      uint32_t bar_addr = io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar);
+      uint32_t bar_addr = (io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar)) & 0x7fffffff;
       uint32_t bar_len = io ? PCI_MAPREG_IO_SIZE(bar) : PCI_MAPREG_MEM_SIZE(bar);
 
+      fprintf
+        (stderr, "[ pci: search for %s %s target %08x? bar %02x = %08x:%08x ]\n",
+         io ? "io" : "mem",
+         dev->name,
+         (unsigned int)target,
+         i,
+         (unsigned int)bar_addr,
+         (unsigned int)bar_len
+         );
+
       if (target >= bar_addr && target < bar_addr + bar_len) {
-        // Match: check our recorded mappings.  Exit one way or another so we
-        // can reuse i.
-        for (i = 0; i < pci_io_target; i++) {
-          if (id == pci_io_allocation[i].id && pci_io_allocation[i].io_space == io && target < bar_addr + pci_io_allocation[i].size) {
-            return pci_io_allocation[i].allocated_space + (target - bar_addr);
+        for (auto j = 0; j < pci_io_target; j++) {
+          if (id == pci_io_allocation[j].id && pci_io_allocation[j].io_space == io && target < bar_addr + pci_io_allocation[j].size) {
+            return pci_io_allocation[j].allocated_space + (target - bar_addr);
           }
         }
-        break;
       }
     }
 		dev = dev->next;

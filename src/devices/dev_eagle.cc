@@ -730,7 +730,7 @@ DEVINIT(eagle)
                          DM_DEFAULT, NULL);
 
   memory_device_register(devinit->machine->memory, "PCI IO Passthrough",
-                         isa_portbase + 0x01000000, 0xbf800000 - 0x81000000, dev_eagle_io_pass_access, d,
+                         isa_portbase + 0x01000000, 0xbffffff0 - 0x81000000, dev_eagle_io_pass_access, d,
                          DM_DEFAULT, NULL);
 
   memory_device_register(devinit->machine->memory, "PCI MEM Passthrough",

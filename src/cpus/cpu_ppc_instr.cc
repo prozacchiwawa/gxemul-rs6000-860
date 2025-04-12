@@ -1763,8 +1763,7 @@ X(rfid)
 
 X(isync)
 {
-  cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
-  ppc_update_for_icount(cpu);
+  // ppc_update_for_icount(cpu);
 }
 
 
@@ -4059,6 +4058,13 @@ X(to_be_translated)
 				ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 				ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				break;
+      case PPC_63_FCMPO:
+        // XXX - deal with ordered.
+				ic->f = instr(fcmpu);
+				ic->arg[0] = 28 - 4*(rt >> 2);
+				ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+				ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rb]);
+        break;
 			case PPC_63_FRSP:
 			case PPC_63_FCTIWZ:
 			case PPC_63_FNEG:

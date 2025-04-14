@@ -115,7 +115,6 @@ X(addi_symmetric)
 		cpu->cd.ppc.bytelane_swap[0] = cpu->cd.ppc.bytelane_swap_latch;
 		cpu->cd.ppc.bytelane_swap[1] = cpu->cd.ppc.bytelane_swap_latch;
 		stwbrx_cache_spill(cpu);
-		cpu->invalidate_translation_caches(cpu, 0, INVALIDATE_ALL | INVALIDATE_VADDR_UPPER4);
 	}
 	reg(ic->arg[2]) = reg(ic->arg[0]) + (int32_t)ic->arg[1];
 }
@@ -272,6 +271,7 @@ X(bcctr)
 	int cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (cond_ok) {
+    
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
@@ -4067,12 +4067,15 @@ X(to_be_translated)
         break;
 			case PPC_63_FRSP:
 			case PPC_63_FCTIWZ:
+      case PPC_63_FCTIW:
 			case PPC_63_FNEG:
 			case PPC_63_FABS:
 			case PPC_63_FMR:
 				switch (xo) {
 				case PPC_63_FRSP:   ic->f = instr(frsp); break;
 				case PPC_63_FCTIWZ: ic->f = instr(fctiwz);break;
+          // XXX check.
+				case PPC_63_FCTIW: ic->f = instr(fctiwz);break;
 				case PPC_63_FNEG:   ic->f = instr(fneg); break;
 				case PPC_63_FABS:   ic->f = instr(fabs); break;
 				case PPC_63_FMR:    ic->f = instr(fmr); break;

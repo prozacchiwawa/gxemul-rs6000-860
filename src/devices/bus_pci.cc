@@ -207,6 +207,7 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
       uint32_t bar_addr = (io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar)) & 0x7fffffff;
       uint32_t bar_len = io ? PCI_MAPREG_IO_SIZE(bar) : PCI_MAPREG_MEM_SIZE(bar);
 
+#if 0
       fprintf
         (stderr, "[ pci: search for %s %s target %08x? bar %02x = %08x:%08x ]\n",
          io ? "io" : "mem",
@@ -216,6 +217,7 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
          (unsigned int)bar_addr,
          (unsigned int)bar_len
          );
+#endif
 
       if (target >= bar_addr && target < bar_addr + bar_len) {
         for (auto j = 0; j < pci_io_target; j++) {
@@ -491,7 +493,11 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
   case 0x10:
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    PCI_SET_DATA(reg, value & ~0xffffff);
+    if (value & 0xffff == 0x55aa) {
+      PCI_SET_DATA(reg, value & ~0xffff);
+    } else {
+      PCI_SET_DATA(reg, value & ~0x1ffffff);
+    }
     return 1;
 
   case 0x30:
@@ -521,7 +527,7 @@ PCIINIT(s3_virge)
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 0;
-  assoc->size = 16 * 1024 * 1024;
+  assoc->size = 32 * 1024 * 1024;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 

@@ -50,13 +50,1321 @@
 #include "fonts/font8x10.cc"
 #include "fonts/font8x16.cc"
 
+#define S_CRTC 0
+#define S_SEQ 1
+#define S_GR 2
+#define S_ATT 3
+#define S_PRIMARY 4
+#define S_EXTENDED 5
+#define S_SEQ2 6
+#define S_CRT2 7
+#define S_BEE8 8
+
+#define ON_READ 1
+#define ON_WRITE 2
+#define ON_RW 3
+
+struct register_name_table_t {
+  int source;
+  int reg_index;
+  const char *reg_name;
+  int assert_fail_if_used;
+};
+
+const char *group_names[] = {
+  "CRTC",
+  "SEQ",
+  "GR",
+  "Attribute",
+  "Primary Registers 0x3b0+",
+  "Extended 0x8xxx-0xfxxx",
+  "Extended Sequencer",
+  "Extended CRTC",
+  "BEE8 Selector",
+  nullptr
+};
+
+struct register_name_table_t r_name_table[] = {
+  { source: S_PRIMARY,
+    reg_index: 0x00,
+    reg_name: "Attribute Controller Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x01,
+    reg_name: "Attribute Controller Data"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x02,
+    reg_name: "Misc. Output/Input Status 3c2"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x03,
+    reg_name: "Input Status 1"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x04,
+    reg_name: "VGA Sequencer Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x05,
+    reg_name: "VGA Sequencer Data"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x0c,
+    reg_name: "Misc. Output 3cc"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x0a,
+    reg_name: "Feature Control 3ca"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x1a,
+    reg_name: "Feature Control 3da"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x14,
+    reg_name: "CRT Control Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x15,
+    reg_name: "CRT Control Data"
+  },
+  { source: S_SEQ,
+    reg_index: 0x00,
+    reg_name: "Reset"
+  },
+  { source: S_SEQ,
+    reg_index: 0x01,
+    reg_name: "Clocking Mode"
+  },
+  { source: S_SEQ,
+    reg_index: 0x02,
+    reg_name: "Enable Write Planes"
+  },
+  { source: S_SEQ,
+    reg_index: 0x03,
+    reg_name: "Character Font Select"
+  },
+  { source: S_SEQ,
+    reg_index: 0x04,
+    reg_name: "Memory Mode Control"
+  },
+  { source: S_CRTC,
+    reg_index: 0x00,
+    reg_name: "Horizontal Total"
+  },
+  { source: S_CRTC,
+    reg_index: 0x01,
+    reg_name: "Horizontal Display End"
+  },
+  { source: S_CRTC,
+    reg_index: 0x02,
+    reg_name: "Start Horizontal Blank"
+  },
+  { source: S_CRTC,
+    reg_index: 0x03,
+    reg_name: "End Horizontal Blank"
+  },
+  { source: S_CRTC,
+    reg_index: 0x04,
+    reg_name: "Start Horizontal Sync Position"
+  },
+  { source: S_CRTC,
+    reg_index: 0x05,
+    reg_name: "End Horizontal Sync Position"
+  },
+  { source: S_CRTC,
+    reg_index: 0x06,
+    reg_name: "Vertial Total"
+  },
+  { source: S_CRTC,
+    reg_index: 0x07,
+    reg_name: "CRTC Overflow"
+  },
+  { source: S_CRTC,
+    reg_index: 0x08,
+    reg_name: "Preset Row Scan"
+  },
+  { source: S_CRTC,
+    reg_index: 0x09,
+    reg_name: "Maximum Scan Line"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0a,
+    reg_name: "Cursor Start Scan Line"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0b,
+    reg_name: "Cursor End Scan Line"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0c,
+    reg_name: "Start Address High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0d,
+    reg_name: "Start Address Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0e,
+    reg_name: "Cursor Location Address High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x0f,
+    reg_name: "Cursor Location Address Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x10,
+    reg_name: "Vertical Retrace Start"
+  },
+  { source: S_CRTC,
+    reg_index: 0x11,
+    reg_name: "Vertical Retrace End"
+  },
+  { source: S_CRTC,
+    reg_index: 0x12,
+    reg_name: "Vertical Display End"
+  },
+  { source: S_CRTC,
+    reg_index: 0x13,
+    reg_name: "Offset - Line Stride in bytes"
+  },
+  { source: S_CRTC,
+    reg_index: 0x14,
+    reg_name: "Underline Location"
+  },
+  { source: S_CRTC,
+    reg_index: 0x15,
+    reg_name: "Start Vertical Blank"
+  },
+  { source: S_CRTC,
+    reg_index: 0x16,
+    reg_name: "End Vertical Blank"
+  },
+  { source: S_CRTC,
+    reg_index: 0x17,
+    reg_name: "Mode Control - CGA Emulation"
+  },
+  { source: S_CRTC,
+    reg_index: 0x18,
+    reg_name: "Line Compare"
+  },
+  { source: S_CRTC,
+    reg_index: 0x22,
+    reg_name: "CPU Latch Data"
+  },
+  { source: S_CRTC,
+    reg_index: 0x24,
+    reg_name: "Attribute Controller Flag"
+  },
+  { source: S_CRTC,
+    reg_index: 0x26,
+    reg_name: "Attribute Controller Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x0e,
+    reg_name: "Graphics Controller Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x0f,
+    reg_name: "Graphics Controller Data"
+  },
+  { source: S_GR,
+    reg_index: 0x00,
+    reg_name: "Set/Reset"
+  },
+  { source: S_GR,
+    reg_index: 0x01,
+    reg_name: "Enable Set/Reset"
+  },
+  { source: S_GR,
+    reg_index: 0x02,
+    reg_name: "Color Compare"
+  },
+  { source: S_GR,
+    reg_index: 0x03,
+    reg_name: "Raster Operation/Rotate Counter"
+  },
+  { source: S_GR,
+    reg_index: 0x04,
+    reg_name: "Read Plane Select"
+  },
+  { source: S_GR,
+    reg_index: 0x05,
+    reg_name: "Graphics Controller Mode"
+  },
+  { source: S_GR,
+    reg_index: 0x06,
+    reg_name: "Memory Map Mode Control"
+  },
+  { source: S_GR,
+    reg_index: 0x07,
+    reg_name: "Color Don't Care"
+  },
+  { source: S_GR,
+    reg_index: 0x09,
+    reg_name: "Bit Mask"
+  },
+  { source: S_ATT,
+    reg_index: 0x00,
+    reg_name: "Palette Register 0"
+  },
+  { source: S_ATT,
+    reg_index: 0x01,
+    reg_name: "Palette Register 1"
+  },
+  { source: S_ATT,
+    reg_index: 0x02,
+    reg_name: "Palette Register 2"
+  },
+  { source: S_ATT,
+    reg_index: 0x03,
+    reg_name: "Palette Register 3"
+  },
+  { source: S_ATT,
+    reg_index: 0x04,
+    reg_name: "Palette Register 4"
+  },
+  { source: S_ATT,
+    reg_index: 0x05,
+    reg_name: "Palette Register 5"
+  },
+  { source: S_ATT,
+    reg_index: 0x06,
+    reg_name: "Palette Register 6"
+  },
+  { source: S_ATT,
+    reg_index: 0x07,
+    reg_name: "Palette Register 7"
+  },
+  { source: S_ATT,
+    reg_index: 0x08,
+    reg_name: "Palette Register 8"
+  },
+  { source: S_ATT,
+    reg_index: 0x09,
+    reg_name: "Palette Register 9"
+  },
+  { source: S_ATT,
+    reg_index: 0x0a,
+    reg_name: "Palette Register a"
+  },
+  { source: S_ATT,
+    reg_index: 0x0b,
+    reg_name: "Palette Register b"
+  },
+  { source: S_ATT,
+    reg_index: 0x0c,
+    reg_name: "Palette Register c"
+  },
+  { source: S_ATT,
+    reg_index: 0x0d,
+    reg_name: "Palette Register d"
+  },
+  { source: S_ATT,
+    reg_index: 0x0e,
+    reg_name: "Palette Register e"
+  },
+  { source: S_ATT,
+    reg_index: 0x0f,
+    reg_name: "Palette Register f"
+  },
+  { source: S_ATT,
+    reg_index: 0x10,
+    reg_name: "Attribute Mode Control"
+  },
+  { source: S_ATT,
+    reg_index: 0x11,
+    reg_name: "Border Control"
+  },
+  { source: S_ATT,
+    reg_index: 0x12,
+    reg_name: "Color Plane Enabled"
+  },
+  { source: S_ATT,
+    reg_index: 0x13,
+    reg_name: "Horizontal Pixel Panning"
+  },
+  { source: S_ATT,
+    reg_index: 0x14,
+    reg_name: "Pixel Padding"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x06,
+    reg_name: "DAC Mask"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x07,
+    reg_name: "DAC Read Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x08,
+    reg_name: "DAC Write Index"
+  },
+  { source: S_PRIMARY,
+    reg_index: 0x09,
+    reg_name: "DAC Data"
+  },
+  { source: S_SEQ,
+    reg_index: 0x08,
+    reg_name: "Extended Sequencer Lock"
+  },
+  { source: S_SEQ,
+    reg_index: 0x09,
+    reg_name: "Extended Sequencer 9"
+  },
+  { source: S_SEQ,
+    reg_index: 0x0a,
+    reg_name: "Extended Sequencer A"
+  },
+  { source: S_SEQ,
+    reg_index: 0x0d,
+    reg_name: "Extended Sequencer D"
+  },
+  { source: S_SEQ,
+    reg_index: 0x10,
+    reg_name: "MCLK Value Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x11,
+    reg_name: "MCLK Value High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x12,
+    reg_name: "DCLK Value Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x13,
+    reg_name: "DCLK Value High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x14,
+    reg_name: "CLKSYN Control 1"
+  },
+  { source: S_SEQ,
+    reg_index: 0x15,
+    reg_name: "CLKSYN Control 2"
+  },
+  { source: S_SEQ,
+    reg_index: 0x16,
+    reg_name: "CLKSYN Test High SR16"
+  },
+  { source: S_SEQ,
+    reg_index: 0x17,
+    reg_name: "CLKSYN Test High SR17"
+  },
+  { source: S_SEQ,
+    reg_index: 0x18,
+    reg_name: "RAMDAC/CLKSYN Control SR18"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1a,
+    reg_name: "Extended Sequencer 1a"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1b,
+    reg_name: "Extended Sequencer 1b"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1c,
+    reg_name: "Extended Sequencer 1c"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1d,
+    reg_name: "Extended Sequencer 1d"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1e,
+    reg_name: "Extended Sequencer 1e"
+  },
+  { source: S_SEQ,
+    reg_index: 0x1f,
+    reg_name: "Extended Sequencer 1f"
+  },
+  { source: S_SEQ,
+    reg_index: 0x20,
+    reg_name: "Extended Sequencer 20"
+  },
+  { source: S_SEQ,
+    reg_index: 0x21,
+    reg_name: "Extended Sequencer 21"
+  },
+  { source: S_SEQ,
+    reg_index: 0x22,
+    reg_name: "DCLK0 Value Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x23,
+    reg_name: "DCLK0 Value High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x24,
+    reg_name: "DCLK1 Value Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x25,
+    reg_name: "DCLK1 Value High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x26,
+    reg_name: "Paired Register Read/Write Select",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_SEQ,
+    reg_index: 0x27,
+    reg_name: "MCLK Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x28,
+    reg_name: "DCLK Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x29,
+    reg_name: "Flat Panel Frame Buffer"
+  },
+  { source: S_SEQ,
+    reg_index: 0x30,
+    reg_name: "Architectural Configuration"
+  },
+  { source: S_SEQ,
+    reg_index: 0x31,
+    reg_name: "Flat Panel Display Mode"
+  },
+  { source: S_SEQ,
+    reg_index: 0x32,
+    reg_name: "Flat Panel Polarity Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x34,
+    reg_name: "Flat Panel AC Modulation"
+  },
+  { source: S_SEQ,
+    reg_index: 0x35,
+    reg_name: "Flat Panel Modulation Clock Select"
+  },
+  { source: S_SEQ,
+    reg_index: 0x36,
+    reg_name: "Flat Panel Dither Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x37,
+    reg_name: "Flat Panel FRC Weight Select RAM Index"
+  },
+  { source: S_SEQ,
+    reg_index: 0x38,
+    reg_name: "Flat Panel FRC Weight Select RAM Data"
+  },
+  { source: S_SEQ,
+    reg_index: 0x39,
+    reg_name: "Flat Panel Algorithm Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x3a,
+    reg_name: "Flat Panel FRC Tuning 1"
+  },
+  { source: S_SEQ,
+    reg_index: 0x3b,
+    reg_name: "Flat Panel FRC Tuning 2"
+  },
+  { source: S_SEQ,
+    reg_index: 0x3c,
+    reg_name: "Flat Panel FRC Tuning 3"
+  },
+  { source: S_SEQ,
+    reg_index: 0x3d,
+    reg_name: "Flat Panel Configuraiton 1"
+  },
+  { source: S_SEQ,
+    reg_index: 0x40,
+    reg_name: "Flat Panel Dither Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x41,
+    reg_name: "Flat Panel Power Sequence Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x42,
+    reg_name: "Flat Panel Power Management Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x43,
+    reg_name: "Flat Panel Standby Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x44,
+    reg_name: "Flat Panel Power Management"
+  },
+  { source: S_SEQ,
+    reg_index: 0x45,
+    reg_name: "Flat Panel PLL Power Management"
+  },
+  { source: S_SEQ,
+    reg_index: 0x46,
+    reg_name: "Flat Panel Power Management Status"
+  },
+  { source: S_SEQ,
+    reg_index: 0x47,
+    reg_name: "CLUT Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x48,
+    reg_name: "Icon Mode"
+  },
+  { source: S_SEQ,
+    reg_index: 0x49,
+    reg_name: "Icon Color Stack"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4a,
+    reg_name: "Icon X Position High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4b,
+    reg_name: "Icon X Position Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4c,
+    reg_name: "Icon Y Position High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4d,
+    reg_name: "Icon Y Position Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4e,
+    reg_name: "Icon Address"
+  },
+  { source: S_SEQ,
+    reg_index: 0x4f,
+    reg_name: "Dual Scan STN Data Address"
+  },
+  { source: S_SEQ,
+    reg_index: 0x50,
+    reg_name: "Dual Scan STN Frame Buffer Size Low"
+  },
+  { source: S_SEQ,
+    reg_index: 0x51,
+    reg_name: "Dual Scan STN Frame Buffer Size High"
+  },
+  { source: S_SEQ,
+    reg_index: 0x52,
+    reg_name: "Flat Panel PWM Register"
+  },
+  { source: S_SEQ,
+    reg_index: 0x53,
+    reg_name: "Flat Panel PWM Duty Cycle"
+  },
+  { source: S_SEQ,
+    reg_index: 0x54,
+    reg_name: "Flat Panel Horizontal Compensation 1 SR54"
+  },
+  { source: S_SEQ,
+    reg_index: 0x55,
+    reg_name: "Flat Panel Horizontal Compensation 2 SR55"
+  },
+  { source: S_SEQ,
+    reg_index: 0x56,
+    reg_name: "Flat Panel Horizontal Compensation 1 SR56"
+  },
+  { source: S_SEQ,
+    reg_index: 0x57,
+    reg_name: "Flat Panel Vertical Compensation 1"
+  },
+  { source: S_SEQ,
+    reg_index: 0x58,
+    reg_name: "Flat Panel Horizontal Border"
+  },
+  { source: S_SEQ,
+    reg_index: 0x59,
+    reg_name: "Flat Panel Horizontal Expansion Factor SR59"
+  },
+  { source: S_SEQ,
+    reg_index: 0x5a,
+    reg_name: "Flat Panel Vertical Border"
+  },
+  { source: S_SEQ,
+    reg_index: 0x5b,
+    reg_name: "Flat Panel Horizontal Expansion Factor SR5b"
+  },
+  { source: S_SEQ,
+    reg_index: 0x5c,
+    reg_name: "Flat Panel Display Enable Position Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x5d,
+    reg_name: "Flat Panel/CRT Sync Position Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x5f,
+    reg_name: "FIFO Control SR5f"
+  },
+  { source: S_SEQ,
+    reg_index: 0x60,
+    reg_name: "Flat Panel Horizontal Total"
+  },
+  { source: S_SEQ,
+    reg_index: 0x61,
+    reg_name: "Flat Panel Horizontal Panel Size"
+  },
+  { source: S_SEQ,
+    reg_index: 0x62,
+    reg_name: "Flat Panel Horizontal Blank Start"
+  },
+  { source: S_SEQ,
+    reg_index: 0x63,
+    reg_name: "Flat Panel Horizontal Blank End"
+  },
+  { source: S_SEQ,
+    reg_index: 0x64,
+    reg_name: "Flat Panel Horizontal Sync Start"
+  },
+  { source: S_SEQ,
+    reg_index: 0x65,
+    reg_name: "Flat Panel Horizontal Sync End"
+  },
+  { source: S_SEQ,
+    reg_index: 0x66,
+    reg_name: "Flat Panel Horizontal Overflow"
+  },
+  { source: S_SEQ,
+    reg_index: 0x68,
+    reg_name: "Flat Panel Vertical Total"
+  },
+  { source: S_SEQ,
+    reg_index: 0x69,
+    reg_name: "Flat Panel Vertical Panel Size"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6a,
+    reg_name: "Flat Panel Vertical Blank Start"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6b,
+    reg_name: "Flat Panel Vertical Blank End"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6c,
+    reg_name: "Flat Panel Vertical Sync Start"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6d,
+    reg_name: "Flat Panel Vertical Sync End"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6e,
+    reg_name: "Flat Panel Vertical Overflow 1"
+  },
+  { source: S_SEQ,
+    reg_index: 0x6f,
+    reg_name: "Flat Panel Vertical Overflow 2"
+  },
+  { source: S_CRTC,
+    reg_index: 0x22,
+    reg_name: "CRT Test 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x2d,
+    reg_name: "Device ID High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x2e,
+    reg_name: "Device ID Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x2f,
+    reg_name: "Revision"
+  },
+  { source: S_CRTC,
+    reg_index: 0x30,
+    reg_name: "Chip ID/Rev"
+  },
+  { source: S_CRTC,
+    reg_index: 0x31,
+    reg_name: "Memory Configuration",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x32,
+    reg_name: "Backward Compatibility 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x33,
+    reg_name: "Backward Compatibiltiy 2"
+  },
+  { source: S_CRTC,
+    reg_index: 0x34,
+    reg_name: "Backward Compatibility 3"
+  },
+  { source: S_CRTC,
+    reg_index: 0x35,
+    reg_name: "CRT Register Lock"
+  },
+  { source: S_CRTC,
+    reg_index: 0x36,
+    reg_name: "Configuration 1",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x37,
+    reg_name: "Configuration 2",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x38,
+    reg_name: "Register Lock 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x39,
+    reg_name: "Register Lock 2"
+  },
+  { source: S_CRTC,
+    reg_index: 0x3a,
+    reg_name: "Misc. 1 CR3a",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x3b,
+    reg_name: "Start Display FIFO Fetch",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x3c,
+    reg_name: "Interlace Retrace Start"
+  },
+  { source: S_CRTC,
+    reg_index: 0x3d,
+    reg_name: "NTSC/PAL Control"
+  },
+  { source: S_CRTC,
+    reg_index: 0x40,
+    reg_name: "System Configuration",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x41,
+    reg_name: "BIOS Flag 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x42,
+    reg_name: "Mode Control CR42"
+  },
+  { source: S_CRTC,
+    reg_index: 0x43,
+    reg_name: "Extended Mode CR43"
+  },
+  { source: S_CRTC,
+    reg_index: 0x45,
+    reg_name: "Hardware Graphics Cursor Mode"
+  },
+  { source: S_CRTC,
+    reg_index: 0x46,
+    reg_name: "Hardware Graphics Cursor Origin X Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x47,
+    reg_name: "Hardware Graphics Cursor Origin X High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x48,
+    reg_name: "Hardware Graphics Cursor Origin Y Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x48,
+    reg_name: "Hardware Graphics Cursor Origin Y High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4a,
+    reg_name: "Hardware Graphics Cursor Foreground Stack"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4b,
+    reg_name: "Hardware Graphics Cursor Background Stack"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4c,
+    reg_name: "Hardware Graphics Cursor Start Address Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4d,
+    reg_name: "Hardware Graphics Cursor Start Address High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4e,
+    reg_name: "Hardware Graphics Cursor Pattern Display Start X Pixel Position"
+  },
+  { source: S_CRTC,
+    reg_index: 0x4f,
+    reg_name: "Hardware Graphics Cursor Pattern Display Start Y Pixel Position"
+  },
+  { source: S_CRTC,
+    reg_index: 0x50,
+    reg_name: "Extended System Control 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x51,
+    reg_name: "Extended System Control 2"
+  },
+  { source: S_CRTC,
+    reg_index: 0x52,
+    reg_name: "Extended BIOS Flag 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x53,
+    reg_name: "Extended Memory Control 1",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x54,
+    reg_name: "Extended Memory Control 2",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x55,
+    reg_name: "Extended DAC Control"
+  },
+  { source: S_CRTC,
+    reg_index: 0x56,
+    reg_name: "External Sync Control 1"
+  },
+  { source: S_CRTC,
+    reg_index: 0x58,
+    reg_name: "Linear Address Window Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x59,
+    reg_name: "Linear Address Window Position High"
+  },
+  { source: S_CRTC,
+    reg_index: 0x5a,
+    reg_name: "Linear Address Window Position Low"
+  },
+  { source: S_CRTC,
+    reg_index: 0x5c,
+    reg_name: "General Output Port"
+  },
+  { source: S_CRTC,
+    reg_index: 0x5d,
+    reg_name: "Extended Horizontal Overflow CR5D"
+  },
+  { source: S_CRTC,
+    reg_index: 0x5e,
+    reg_name: "Extended Vertical Ovreflow CR5E"
+  },
+  { source: S_CRTC,
+    reg_index: 0x60,
+    reg_name: "Extended Memory Control 3",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x61,
+    reg_name: "Extended Memory Control 4",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x63,
+    reg_name: "Horizontal Timing Control CR63"
+  },
+  { source: S_CRTC,
+    reg_index: 0x65,
+    reg_name: "Extended Miscellaneous Control CR65"
+  },
+  { source: S_CRTC,
+    reg_index: 0x66,
+    reg_name: "Extended Miscellaneous Control 1 CR66"
+  },
+  { source: S_CRTC,
+    reg_index: 0x67,
+    reg_name: "Extended Miscellaneous Control 2 CR67"
+  },
+  { source: S_CRTC,
+    reg_index: 0x68,
+    reg_name: "Configuration 3 CR68"
+  },
+  { source: S_CRTC,
+    reg_index: 0x69,
+    reg_name: "Extended System Control 3 CR69"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6a,
+    reg_name: "Extended System Control 4 CR6a"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6b,
+    reg_name: "Extended BIOS Flag 3"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6c,
+    reg_name: "Extended BIOS Flag 4"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6d,
+    reg_name: "Extended BIOS Flag 5"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6e,
+    reg_name: "Extended BIOS Flag 6"
+  },
+  { source: S_CRTC,
+    reg_index: 0x6f,
+    reg_name: "Configuration 4 CR6f"
+  },
+  { source: S_CRTC,
+    reg_index: 0x71,
+    reg_name: "Extended Miscellaneous Control 2 CR71"
+  },
+  { source: S_CRTC,
+    reg_index: 0x72,
+    reg_name: "Extended Memory Control 5",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x73,
+    reg_name: "Extended Memory Control 6",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x74,
+    reg_name: "Extended Memory Control 7",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x75,
+    reg_name: "Extended Memory Control 8",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_CRTC,
+    reg_index: 0x76,
+    reg_name: "Extended Memory Control 9",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x42e8,
+    reg_name: "Subsystem Status",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x4ae8,
+    reg_name: "Advanced Function Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x82e8,
+    reg_name: "Current Y Position",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x86e8,
+    reg_name: "Current X Position",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8ae8,
+    reg_name: "Destination Y Position"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8ee8,
+    reg_name: "Destination X Position"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x92e8,
+    reg_name: "Line Error Term",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x96e8,
+    reg_name: "Major Axis Pixel Count",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x9ae8,
+    reg_name: "Graphics Processor Status",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x9ee8,
+    reg_name: "Short Stroke Transfer Vector"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xa2e8,
+    reg_name: "Background Color"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xa6e8,
+    reg_name: "Foreground Color"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xaae8,
+    reg_name: "Bitplane Write Mask"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xaee8,
+    reg_name: "Bitplane Read Mask"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xb2e8,
+    reg_name: "Color Compare"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xb6e8,
+    reg_name: "Background Mix"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xbae8,
+    reg_name: "Foreground Mix"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xbee8,
+    reg_name: "Read Register Data",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_BEE8,
+    reg_index: 0,
+    reg_name: "Minor Axis Pixel Count"
+  },
+  { source: S_BEE8,
+    reg_index: 1,
+    reg_name: "Top Scissors"
+  },
+  { source: S_BEE8,
+    reg_index: 2,
+    reg_name: "Left Scissors"
+  },
+  { source: S_BEE8,
+    reg_index: 3,
+    reg_name: "Bottom Scissors"
+  },
+  { source: S_BEE8,
+    reg_index: 4,
+    reg_name: "Right Scissors"
+  },
+  { source: S_BEE8,
+    reg_index: 0x0a,
+    reg_name: "Pixel Control"
+  },
+  { source: S_BEE8,
+    reg_index: 0x0d,
+    reg_name: "Multifunction Control Miscellaneous 2",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_BEE8,
+    reg_index: 0x0e,
+    reg_name: "Multifunction Control Miscellaneous",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_BEE8,
+    reg_index: 0x0f,
+    reg_name: "Read Register Select"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xe2e8,
+    reg_name: "Pixel Data Transfer"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xe2ea,
+    reg_name: "Pixel Data Transfer Extended"
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8180,
+    reg_name: "Primary Stream Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8184,
+    reg_name: "Color/Chroma Key Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8190,
+    reg_name: "Secondary Stream Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8194,
+    reg_name: "Chroma Key Upper Bound",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x8198,
+    reg_name: "Secondary Stream Stretch/Filter Constants",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81a0,
+    reg_name: "Blend Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81c0,
+    reg_name: "Primary Stream Frame Buffer Address 0",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81c4,
+    reg_name: "Primary Stream Frame Buffer Address 1",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81c8,
+    reg_name: "Primary Stream Stride",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81cc,
+    reg_name: "Double Buffer/LPB Support",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81d0,
+    reg_name: "Secondary Stream Frame Buffer Address 0",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81d4,
+    reg_name: "Secondary Stream Frame Buffer Address 1",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81d8,
+    reg_name: "Secondary Stream Stride",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81dc,
+    reg_name: "Blend Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81e0,
+    reg_name: "K1 Vertical Scale Factor",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81e4,
+    reg_name: "K2 Vertical Scale Factor",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81e8,
+    reg_name: "DDA Vertical Accumulator Initial Value",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81ec,
+    reg_name: "Streams FIFO and RAS Controls",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81f0,
+    reg_name: "Primary Stream Window Start Coordinates",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81f4,
+    reg_name: "Primary Stream Widnow Size",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81f8,
+    reg_name: "Secondary Stream Window Start Coordinates",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0x81fc,
+    reg_name: "Secondary Stream Window Size",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff00,
+    reg_name: "LPB Mode",
+    assert_fail_if_used: ON_RW,
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff04,
+    reg_name: "LPB FIFO Status",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff08,
+    reg_name: "LPB Interrupt Flags",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff0c,
+    reg_name: "LPB Frame Buffer Address 0",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff10,
+    reg_name: "LPB Frame Buffer Address 1",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff14,
+    reg_name: "LPB Direct Read/Write Address",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff18,
+    reg_name: "LPB Direct Read/Write Data",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff1c,
+    reg_name: "LPB General Purpose Input/Output Port",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff20,
+    reg_name: "Serial Port",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff24,
+    reg_name: "LPB Video Input Window Size",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff28,
+    reg_name: "LPB Video Data Offsets",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff2c,
+    reg_name: "LPB Horizontal Decimation Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff30,
+    reg_name: "LPB Vertical Decimation Control",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff34,
+    reg_name: "LPB Line Stride",
+    assert_fail_if_used: ON_RW
+  },
+  { source: S_EXTENDED,
+    reg_index: 0xff40,
+    reg_name: "LPB Output FIFO",
+    assert_fail_if_used: ON_RW
+  },
+  { source: 0,
+    reg_index: 0,
+    reg_name: nullptr,
+    assert_fail_if_used: 0,
+  }
+};
+
 #define VGA_DEBUG 0
 
 #if VGA_DEBUG
-#define L(x) x
+#define L(x) do { x; } while (0)
 #else
 #define L(x) do { } while(0)
 #endif
+
+#define G(x) do { if (d->window_mapped) { x; } } while (0)
 
 /*  For videomem -> framebuffer updates:  */
 #define	VGA_TICK_SHIFT		18
@@ -64,7 +1372,7 @@
 #define	MAX_RETRACE_SCANLINES	420
 #define	N_IS1_READ_THRESHOLD	50
 
-#define	GFX_ADDR_WINDOW		(16 * 1024 * 1024)
+#define	GFX_ADDR_WINDOW		(32 * 1024 * 1024)
 
 #define	VGA_FB_ADDR	0x1c00000000ULL
 
@@ -166,8 +1474,32 @@ struct vga_data {
 
   /* Command */
   int s3_cmd_mx, s3_cmd_bus_size, s3_cmd_swap, s3_cmd_pxtrans;
+
+  /* Ext sequencer */
+  bool ext_seq_unlock;
+
+  /* Mapping */
+  bool window_mapped;
+  int window_address;
+
+  uint32_t plane_read_mask, plane_write_mask;
+  uint32_t adv_fun_4ae8;
+
+  uint8_t reg_8180_data[0x80];
+  uint8_t reg_ff00_data[0x100];
 };
 
+void swapdata(struct vga_data *d, uint8_t *data, int len) {
+  uint8_t spare;
+  if (!d->window_mapped) {
+    return;
+  }
+  for (int i = 0; i < len; i++) {
+    spare = data[len-i-1];
+    data[len-i-1] = data[i];
+    data[i] = spare;
+  }
+}
 
 inline uint16_t get_le_16(uint64_t idata) {
   return ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
@@ -178,6 +1510,70 @@ inline uint32_t get_le_32(uint64_t idata) {
   return get_le_16(idata >> 16) | (get_le_16(idata) << 16);
 }
 
+const char *vga_find_register_prim(int source, int id) {
+  for (int i = 0; r_name_table[i].reg_name; i++) {
+    if (r_name_table[i].source == source && r_name_table[i].reg_index == id) {
+      return r_name_table[i].reg_name;
+    }
+  }
+
+  return nullptr;
+}
+
+char vga_find_register_name_buf[100];
+const char *vga_find_register_name(struct vga_data *d, int source, int relative_addr) {
+  const char *result = nullptr;
+  if (source == S_PRIMARY && relative_addr == 0x01) {
+    result = vga_find_register_prim(S_ATT, d->attribute_reg_select);
+    if (result) {
+      return result;
+    }
+  }
+  if (source == S_PRIMARY && relative_addr == 0x05) {
+    if ((d->sequencer_reg[8] & 15) == 6) {
+      result = vga_find_register_prim(S_SEQ2, d->sequencer_reg_select);
+    }
+    if (!result) {
+      result = vga_find_register_prim(S_SEQ, d->sequencer_reg_select);
+    }
+
+    if (result) {
+      return result;
+    }
+  }
+  if (source == S_PRIMARY && relative_addr == 0x0f) {
+    result = vga_find_register_prim(S_GR, d->graphcontr_reg_select);
+    if (result) {
+      return result;
+    }
+  }
+
+  if (source == S_PRIMARY && relative_addr == 0x15) {
+    if (((d->crtc_reg[0x38] & 0xcc) == 0x48) && (d->crtc_reg[0x39] & 1)) {
+      result = vga_find_register_prim(S_CRT2, d->crtc_reg_select);
+    }
+    if (!result) {
+      result = vga_find_register_prim(S_CRTC, d->crtc_reg_select);
+    }
+
+    if (result) {
+      return result;
+    }
+  }
+
+  result = vga_find_register_prim(S_EXTENDED, relative_addr);
+  if (result) {
+    return result;
+  }
+
+  result = vga_find_register_prim(S_PRIMARY, relative_addr);
+  if (result) {
+    return result;
+  }
+
+  sprintf(vga_find_register_name_buf, "vga unknown register %s %x", group_names[source], relative_addr);
+  return vga_find_register_name_buf;
+}
 
 /*
  *  recalc_cursor_position():
@@ -228,10 +1624,12 @@ static void register_reset(struct vga_data *d)
 
   d->crtc_reg[0x13] = 0x50;
   d->crtc_reg[0x51] = 0;
-  d->crtc_reg[0x30] = 0xe0;
+  d->crtc_reg[0x30] = 0xe1;
   d->crtc_reg[0x2d] = 0x88;
   d->crtc_reg[0x2e] = 0x12;
-  d->crtc_reg[0x2f] = 1;
+  // Revision 0x40
+  d->crtc_reg[0x2f] = 0x40;
+  d->crtc_reg[0x36] = 4 << 5; // 2mb
 }
 
 
@@ -385,11 +1783,13 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-	for (y=y1; y<=y2; y++)
+	for (y=y1; y<=y2; y++) {
 		for (x=x1; x<=x2; x++) {
 			/*  addr is where to read from VGA memory, addr2 is
 			    where to write on the 24-bit framebuffer device  */
 			int addr = (y * logical_width + x) * d->bits_per_pixel;
+      addr += (d->crtc_reg[0x51] & 0xc) << 16;
+      addr += (d->crtc_reg[0x35] & 0xf) << 14;
 			switch (d->bits_per_pixel) {
 			case 8:	addr >>= 3;
 				if (addr >= d->gfx_mem_size) {
@@ -413,17 +1813,20 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 				pixel[2] = d->fb->rgb_palette[c*3+2];
 				break;
 			}
-			for (iy=y*ry; iy<(y+1)*ry; iy++)
-				for (ix=x*rx; ix<(x+1)*rx; ix++) {
-					uint32_t addr2 = (d->fb_max_x * iy
-					    + ix) * 3;
-					if (addr2 < d->fb_size)
-						dev_fb_access(machine->cpus[0],
-						    machine->memory, addr2,
-						    pixel, sizeof(pixel),
-						    MEM_WRITE, d->fb);
-				}
-		}
+
+      for (iy=y*ry; iy<(y+1)*ry; iy++) {
+        for (ix=x*rx; ix<(x+1)*rx; ix++) {
+          uint32_t addr2 = (d->fb_max_x * iy
+                            + ix) * 3;
+          if (addr2 < d->fb_size)
+            dev_fb_access(machine->cpus[0],
+                          machine->memory, addr2,
+                          pixel, sizeof(pixel),
+                          MEM_WRITE, d->fb);
+        }
+      }
+    }
+  }
 }
 
 
@@ -459,7 +1862,7 @@ static void vga_update_text(struct machine *machine, struct vga_data *d,
 		end = d->charcells_size - 1;
 
 	base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
-	    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
+          + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 
 	if (!machine->x11_md.in_use)
 		vga_update_textmode(machine, d, base, start, end);
@@ -639,7 +2042,6 @@ DEVICE_TICK(vga)
 		d->n_is1_reads = 0;
 }
 
-
 /*
  *  Reads and writes to the VGA video memory (pixels).
  */
@@ -651,11 +2053,20 @@ DEVICE_ACCESS(vga_graphics)
 
 	L(fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len));
 
+  //                 0x38000000
+  if (relative_addr > 0x1000000) {
+    fprintf(stderr, "[ vga: windowed, io address relative_addr %04x ]\n", relative_addr);
+    bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
+    return result;
+  }
+
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-	if (relative_addr + len >= d->gfx_mem_size)
+	if (relative_addr + len >= d->gfx_mem_size) {
+    fprintf(stderr, "[ vga: failed access at %08x+%x greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
 		return 0;
+  }
 
 	if (d->cur_mode != MODE_GRAPHICS)
 		return 1;
@@ -858,7 +2269,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, int fg_color_mix, uint8_t *pix
   d->modified = 1;
 
   if (d->s3_rem_height == 0) {
-    L(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
+    G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
     return;
   }
 
@@ -908,7 +2319,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, int fg_color_mix, uint8_t *pix
     if (!nowrite) {
       d->gfx_mem[target] = pixel;
     }
-    L(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix));
+    G(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix));
   }
 
   if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {
@@ -932,11 +2343,14 @@ void bitblt(cpu *cpu, struct vga_data *d) {
   int rows = std::min(clipping_bottom - clipping_top, d->s3_rem_height);
   int target_row = d->s3_desty;
 
-  L(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_destx, d->s3_desty, clipping_right, clipping_top + rows, d->s3_cur_x, d->s3_cur_y));
+  G(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_destx, d->s3_desty, clipping_right, clipping_top + rows, d->s3_cur_x, d->s3_cur_y));
+
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
   for (; rows > 0; d->s3_cur_y++, rows--, target_row++) {
-    uint8_t *source = &d->gfx_mem[d->s3_cur_y * 800 + d->s3_cur_x];
-    uint8_t *target = &d->gfx_mem[target_row * 800 + d->s3_destx];
+    uint8_t *source = &d->gfx_mem[d->s3_cur_y * logical_width + d->s3_cur_x];
+    uint8_t *target = &d->gfx_mem[target_row * logical_width + d->s3_destx];
     memmove(target, source, width_of_copy);
   }
   vga_update_graphics
@@ -959,7 +2373,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     break;
 
   default:
-    L(fprintf(stderr, "[ s3: unknown color source %d ]\n", color_source));
+    G(fprintf(stderr, "[ s3: unknown color source %d ]\n", color_source));
     break;
   }
 
@@ -972,7 +2386,6 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
   }
 }
 
-
 DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
 	struct vga_data *d = (struct vga_data *) extra;
   uint16_t written;
@@ -983,10 +2396,15 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     if (len == 1) {
       outval >>= relative_addr * 16;
     }
+    if (d->window_mapped) {
+      // XXX There's almost certainly an endian switch that's wanted.
+      outval = outval >> 8 | (outval << 8);
+    }
     memory_writemax64(cpu, data, len, outval);
   } else {
+    swapdata(d, data, len);
 		written = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
+    G(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
     d->s3_cmd_mx = !!(written & 2);
     d->s3_cmd_pxtrans = !!(written & 0x100);
     draws_up = written & (1 << 7) && d->s3_cmd_pxtrans;
@@ -1012,7 +2430,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
       break;
 
     default:
-      L(fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written));
+      G(fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written));
     }
   }
 
@@ -1025,9 +2443,10 @@ DEVICE_ACCESS(vga_s3_curx) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_cur_x = written;
-    L(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
+    G(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
   }
 
   return 1;
@@ -1039,9 +2458,10 @@ DEVICE_ACCESS(vga_s3_cury) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_cur_y = written;
-    L(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
+    G(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
   }
 
   return 1;
@@ -1053,8 +2473,9 @@ DEVICE_ACCESS(vga_s3_bg_color) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_bg_color = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written));
+    G(fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written));
   }
 
   return 1;
@@ -1066,8 +2487,9 @@ DEVICE_ACCESS(vga_s3_fg_color) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_fg_color = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written));
+    G(fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written));
   }
 
   return 1;
@@ -1079,8 +2501,9 @@ DEVICE_ACCESS(vga_s3_fg_color_mix) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_fg_color_mix = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
+    G(fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
   }
 
   return 1;
@@ -1092,8 +2515,9 @@ DEVICE_ACCESS(vga_s3_destx) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_destx = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
+    G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
   }
 
   return 1;
@@ -1105,8 +2529,9 @@ DEVICE_ACCESS(vga_s3_desty) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_desty = get_le_16(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set desty = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
+    G(fprintf(stderr, "[ s3: set desty = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
   }
 
   return 1;
@@ -1118,9 +2543,10 @@ DEVICE_ACCESS(vga_s3_major_axis_len) {
   uint16_t written;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     written = get_le_16(memory_readmax64(cpu, data, len));
     d->s3_draw_width = written + 1;
-    L(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
+    G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
   }
 
   return 1;
@@ -1132,8 +2558,9 @@ DEVICE_ACCESS(vga_s3_color_compare) {
   int write_index;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     d->s3_color_compare = get_le_32(memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare));
+    G(fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare));
   }
 
   return 1;
@@ -1147,12 +2574,13 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
   int write_index;
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     idata = memory_readmax64(cpu, data, len);
     written = ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
     write_index = written >> 12;
     d->bee8_regs[write_index] = written & 0xfff;
 
-    L(fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff)));
+    G(fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff)));
 
     switch (write_index) {
     case 0:
@@ -1180,6 +2608,7 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
   uint8_t to_write[4];
 
   if (writeflag == MEM_WRITE) {
+    swapdata(d, data, len);
     idata = memory_readmax64(cpu, data, len);
     if (d->s3_cmd_swap) {
       to_write[1] = idata;
@@ -1216,13 +2645,15 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
  *
  *  Writes to VGA CRTC registers.
  */
-static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
+static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct vga_data *d,
 	int regnr, int idata)
 {
 	int i, grayscale;
+  uint8_t dev_address[4] = { }, value[4] = { };
+  uint8_t idata_byte;
 
-  fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x ]\n",
-		    regnr, idata);
+  fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x (%s) ]\n",
+		    regnr, idata, vga_find_register_name(d, S_PRIMARY, 0x15));
 	switch (regnr) {
 	case VGA_CRTC_CURSOR_SCANLINE_START:		/*  0x0a  */
 	case VGA_CRTC_CURSOR_SCANLINE_END:		/*  0x0b  */
@@ -1355,6 +2786,44 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
 		reset_palette(d, grayscale);
 		register_reset(d);
 		break;
+  case 0x58:
+    if (idata & 1) {
+      d->window_mapped = true;
+      debug("[ vga_crtc: non-linear mode ]\n");
+    } else {
+      d->window_mapped = false;
+      debug("[ vga_crtc: linear mode ]\n");
+    }
+    break;
+  case 0x59:
+    debug("[ vga_crtc: set PCI bar upper byte ]\n");
+    idata_byte = idata;
+    dev_address[0] = 0x10;
+    dev_address[1] = 14 << 3;
+    dev_address[3] = 0x80;
+    // Set a pci address
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
+    value[3] = idata_byte;
+    value[1] = 0x55;
+    value[0] = 0xaa;
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
+    break;
+  case 0x5a:
+    debug("[ vga_crtc: set PCI bar lower upper byte ]\n");
+    idata_byte = idata;
+    dev_address[0] = 0x10;
+    dev_address[1] = 14 << 3;
+    dev_address[3] = 0x80;
+    // Set a pci address
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
+    // Write a byte
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
+    value[2] = idata_byte;
+    value[1] = 0x55;
+    value[0] = 0xaa;
+    cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
+    break;
 	default:
     break;
 	}
@@ -1366,7 +2835,7 @@ static void vga_crtc_reg_write(struct machine *machine, struct vga_data *d,
  *
  *  Writes to VGA Sequencer registers.
  */
-static void vga_sequencer_reg_write(struct machine *machine, struct vga_data *d,
+static void vga_sequencer_reg_write(struct machine *machine, struct cpu *cpu, struct vga_data *d,
 	int regnr, int idata)
 {
 	switch (regnr) {
@@ -1432,8 +2901,6 @@ DEVICE_ACCESS(vga_ctrl)
 	size_t i;
 	uint64_t idata = 0, odata = 0;
 
-  fprintf(stderr, "vga ctr at %08x\n", (unsigned int)cpu->pc);
-
 	for (i=0; i<len; i++) {
 		idata = data[i];
 
@@ -1494,8 +2961,8 @@ DEVICE_ACCESS(vga_ctrl)
 				    d->sequencer_reg_select];
 			else {
         d->sequencer_reg[d->sequencer_reg_select] = idata;
-        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x ]\n", d->sequencer_reg_select, (unsigned int)idata);
-        vga_sequencer_reg_write(cpu->machine, d, d->sequencer_reg_select, idata);
+        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
+        vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
 			}
 			break;
 
@@ -1591,13 +3058,13 @@ DEVICE_ACCESS(vga_ctrl)
 		case VGA_CRTC_DATA:			/*  0x15  */
 			if (writeflag == MEM_READ) {
 				odata = d->crtc_reg[d->crtc_reg_select];
-        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x ]\n",
-              d->crtc_reg_select, (unsigned int)odata);
+        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) ]\n",
+              d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr));
       } else {
         if (d->crtc_reg_select != 0x30) {
           d->crtc_reg[d->crtc_reg_select] = idata;
         }
-				vga_crtc_reg_write(cpu->machine, d,
+				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
 			}
 			break;
@@ -1632,19 +3099,12 @@ DEVICE_ACCESS(vga_ctrl)
 			}
 			L(fprintf(stderr, "input status 1: %08" PRIx64"\n", odata));
 			break;
-
-		default:
-			if (writeflag==MEM_READ) {
-				debug("[ vga_ctrl: read from 0x%08lx ]\n",
-				    (long)relative_addr);
-			} else {
-				debug("[ vga_ctrl: write to  0x%08lx: 0x%08x"
-				    " ]\n", (long)relative_addr, (int)idata);
-			}
 		}
 
 		if (writeflag == MEM_READ)
 			data[i] = odata;
+
+    fprintf(stderr, "vga ctr at %08x [%04x] %s %02x (%s)\n", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i], vga_find_register_name(d, S_PRIMARY, relative_addr));
 
 		/*  For multi-byte accesses:  */
 		relative_addr ++;
@@ -1653,6 +3113,90 @@ DEVICE_ACCESS(vga_ctrl)
 	return 1;
 }
 
+DEVICE_ACCESS(vga_s3_42e8) {
+	struct vga_data *d = (struct vga_data *) extra;
+  fprintf(stderr, "vga 42e8 (%s)\n", vga_find_register_name(d, S_EXTENDED, 0x42e8));
+  abort();
+}
+
+DEVICE_ACCESS(vga_s3_4ae8) {
+	struct vga_data *d = (struct vga_data *) extra;
+  fprintf(stderr, "vga 4ae8 (%s)\n", vga_find_register_name(d, S_EXTENDED, 0x4ae8));
+
+  if (writeflag == MEM_WRITE) {
+		d->adv_fun_4ae8 = memory_readmax64(cpu, data, len);
+  } else {
+    memory_writemax64(cpu, data, len, d->adv_fun_4ae8);
+  }
+
+  return 1;
+}
+
+DEVICE_ACCESS(vga_s3_92e8) {
+	struct vga_data *d = (struct vga_data *) extra;
+  fprintf(stderr, "vga 92e8 (%s)\n", vga_find_register_name(d, S_EXTENDED, 0x92e8));
+  abort();
+}
+
+DEVICE_ACCESS(vga_s3_9ee8) {
+	struct vga_data *d = (struct vga_data *) extra;
+  fprintf(stderr, "vga 9ee8 (%s)\n", vga_find_register_name(d, S_EXTENDED, 0x9ee8));
+  abort();
+}
+
+DEVICE_ACCESS(vga_s3_aae8) {
+	struct vga_data *d = (struct vga_data *) extra;
+
+  if (writeflag == MEM_WRITE) {
+		d->plane_write_mask = memory_readmax64(cpu, data, len);
+  } else {
+    memory_writemax64(cpu, data, len, d->plane_write_mask);
+  }
+  return 1;
+}
+
+DEVICE_ACCESS(vga_s3_aee8) {
+	struct vga_data *d = (struct vga_data *) extra;
+
+  if (writeflag == MEM_WRITE) {
+		d->plane_read_mask = memory_readmax64(cpu, data, len);
+  } else {
+    memory_writemax64(cpu, data, len, d->plane_read_mask);
+  }
+  return 1;
+}
+
+DEVICE_ACCESS(vga_s3_8180_range) {
+	struct vga_data *d = (struct vga_data *) extra;
+  relative_addr &= 0x7f;
+  if (writeflag == MEM_WRITE) {
+    memcpy(&d->reg_8180_data[relative_addr], data, len);
+  } else {
+    memcpy(data, &d->reg_8180_data[relative_addr], len);
+  }
+  fprintf(stderr, "vga 8180 %s", writeflag == MEM_WRITE ? "read" : "write");
+  for (int i = 0; i < len; i++) {
+    fprintf(stderr, " %02x", data[i]);
+  }
+  fprintf(stderr, " (%s)\n", vga_find_register_name(d, S_EXTENDED, 0x8180 + relative_addr));
+  return 1;
+}
+
+DEVICE_ACCESS(vga_s3_ff00_range) {
+	struct vga_data *d = (struct vga_data *) extra;
+  relative_addr &= 0xff;
+  if (writeflag == MEM_WRITE) {
+    memcpy(&d->reg_8180_data[relative_addr], data, len);
+  } else {
+    memcpy(data, &d->reg_8180_data[relative_addr], len);
+  }
+  fprintf(stderr, "vga ff00 %s", writeflag == MEM_WRITE ? "read" : "write");
+  for (int i = 0; i < len; i++) {
+    fprintf(stderr, " %02x", data[i]);
+  }
+  fprintf(stderr, " (%s)\n", vga_find_register_name(d, S_EXTENDED, 0xff00 + relative_addr));
+  return 1;
+}
 
 DEVICE_ACCESS(vga_option_rom)
 {
@@ -1793,41 +3337,68 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	memory_device_register(mem, "vga_ctrl", control_base,
 	    32, dev_vga_ctrl_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_control", VIRTUAL_ISA_PORTBASE | 0x80009ae8, 4,
-      dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
+	memory_device_register(mem, "vga_s3_subsystem_control", VIRTUAL_ISA_PORTBASE | 0x800042e8, 4,
+                         dev_vga_s3_42e8_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_adv_func_control", VIRTUAL_ISA_PORTBASE | 0x80004ae8, 4,
+                         dev_vga_s3_4ae8_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_8180_range", VIRTUAL_ISA_PORTBASE | 0x80008180, 0x80,
+                         dev_vga_s3_8180_range_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_cury", VIRTUAL_ISA_PORTBASE | 0x800082e8, 4,
+                         dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_curx", VIRTUAL_ISA_PORTBASE | 0x800086e8, 4,
 	    dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);
 
-	memory_device_register(mem, "vga_s3_cury", VIRTUAL_ISA_PORTBASE | 0x800082e8, 4,
-	    dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
-
-	memory_device_register(mem, "vga_s3_major_axis_len", VIRTUAL_ISA_PORTBASE | 0x800096e8, 4,
-	    dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
-
-	memory_device_register(mem, "vga_s3_pix_transfer", VIRTUAL_ISA_PORTBASE | 0x8000e2e8, 4,
-	    dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
-
-  memory_device_register(mem, "vga_s3_bg_color", VIRTUAL_ISA_PORTBASE | 0x8000a2e8, 4,
-      dev_vga_s3_bg_color_access, d, DM_DEFAULT, NULL);
-
-  memory_device_register(mem, "vga_s3_fg_color", VIRTUAL_ISA_PORTBASE | 0x8000a6e8, 4,
-      dev_vga_s3_fg_color_access, d, DM_DEFAULT, NULL);
-
-  memory_device_register(mem, "vga_s3_color_compare", VIRTUAL_ISA_PORTBASE | 0x8000b2e8, 4,
-      dev_vga_s3_color_compare_access, d, DM_DEFAULT, NULL);
-
-  memory_device_register(mem, "vga_s3_fg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000bae8, 4,
-                         dev_vga_s3_fg_color_mix_access, d, DM_DEFAULT, NULL);
+  memory_device_register(mem, "vga_s3_desty", VIRTUAL_ISA_PORTBASE | 0x80008ae8, 4,
+                         dev_vga_s3_desty_access, d, DM_DEFAULT, NULL);
 
   memory_device_register(mem, "vga_s3_destx", VIRTUAL_ISA_PORTBASE | 0x80008ee8, 4,
                          dev_vga_s3_destx_access, d, DM_DEFAULT, NULL);
 
-  memory_device_register(mem, "vga_s3_desty", VIRTUAL_ISA_PORTBASE | 0x80008ae8, 4,
-                         dev_vga_s3_desty_access, d, DM_DEFAULT, NULL);
+	memory_device_register(mem, "vga_s3_line_term_error", VIRTUAL_ISA_PORTBASE | 0x800092e8, 4,
+                         dev_vga_s3_92e8_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_major_axis_len", VIRTUAL_ISA_PORTBASE | 0x800096e8, 4,
+	    dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_control", VIRTUAL_ISA_PORTBASE | 0x80009ae8, 4,
+                         dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_short_stroke_transfer", VIRTUAL_ISA_PORTBASE | 0x80009ee8, 4,
+                         dev_vga_s3_9ee8_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_bg_color", VIRTUAL_ISA_PORTBASE | 0x8000a2e8, 4,
+                         dev_vga_s3_bg_color_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_fg_color", VIRTUAL_ISA_PORTBASE | 0x8000a6e8, 4,
+                         dev_vga_s3_fg_color_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_bitplane_write_mask", VIRTUAL_ISA_PORTBASE | 0x8000aae8, 4,
+                         dev_vga_s3_aae8_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_bitplane_read_mask", VIRTUAL_ISA_PORTBASE | 0x8000aee8, 4,
+                         dev_vga_s3_aee8_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_color_compare", VIRTUAL_ISA_PORTBASE | 0x8000b2e8, 4,
+                         dev_vga_s3_color_compare_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_bg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000b6e8, 4,
+                         dev_vga_s3_aee8_access, d, DM_DEFAULT, NULL);
+
+  memory_device_register(mem, "vga_s3_fg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000bae8, 4,
+                         dev_vga_s3_fg_color_mix_access, d, DM_DEFAULT, NULL);
 
   memory_device_register(mem, "vga_s3_pio_cmd", VIRTUAL_ISA_PORTBASE | 0x8000bee8, 4,
-      dev_vga_s3_pio_cmd_access, d, DM_DEFAULT, NULL);
+                         dev_vga_s3_pio_cmd_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_pix_transfer", VIRTUAL_ISA_PORTBASE | 0x8000e2e8, 4,
+	    dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
+
+	memory_device_register(mem, "vga_s3_ff00_range", VIRTUAL_ISA_PORTBASE | 0x8000ff00, 0x80,
+                         dev_vga_s3_ff00_range_access, d, DM_DEFAULT, NULL);
 
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
 	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "VGA");
@@ -1841,6 +3412,9 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 	d->update_y1 = 0;
 	d->update_y2 = d->max_y - 1;
 	d->modified = 1;
+
+  // Used when window_mapped is true.
+  d->window_address = 0;
 
 	machine_add_tickfunction(machine, dev_vga_tick, d, VGA_TICK_SHIFT);
 

@@ -236,6 +236,7 @@
 #define	PPC_HI6_63		0x3f
 #define	  PPC_63_FCMPU		  0
 #define	  PPC_63_FRSP		  12
+#define   PPC_63_FCTIW    14
 #define	  PPC_63_FCTIWZ		  15
 #define	  PPC_63_FDIV		  18
 #define	  PPC_63_FSUB		  20

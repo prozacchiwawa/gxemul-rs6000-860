@@ -99,8 +99,9 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
 	uint8_t data_buf[4];
   uint64_t target_addr;
 
-  if (real_addr >= 0x38000000 && real_addr < 0x39000000) {
-    target_addr = (BUS_PCI_IO_NATIVE_SPACE + 0x30000000) + (real_addr - 0x38000000);
+  if (real_addr >= 0xa0000 && real_addr < 0xb0000) {
+    // Pass through to the vga
+    target_addr = BUS_PCI_IO_NATIVE_SPACE + 0x30000000;
   } else {
     target_addr = bus_pci_get_io_target(cpu, d->pci_data, io_space, real_addr, len);
   }

@@ -268,6 +268,9 @@ struct vfb_data {
 #define	VFB_MFB_BT431			0x180000
 #define	VFB_MFB_VRAM			0x200000
 #define	VFB_CFB_BT459			0x200000
+
+#define	VGA_FB_ADDR	0x1c00000000ULL
+
 void set_grayscale_palette(struct vfb_data *d, int ncolors);
 void dev_fb_resize(struct vfb_data *d, int new_xsize, int new_ysize);
 void dev_fb_setcursor(struct vfb_data *d, int cursor_x, int cursor_y, int on, 

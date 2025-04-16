@@ -28,9 +28,11 @@
  *  Debugger commands. Included from debugger.c.
  */
 #include "crc.h"
+#include "devices.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <png.h>
 #include <map>
 
 /*
@@ -1603,6 +1605,72 @@ static void debugger_cmd_echo(struct machine *m, char *cmd_line) {
   fprintf(stderr, "echo: %s\n", cmd_line);
 }
 
+static void debugger_cmd_screenshot(struct machine *m, char *cmd_line) {
+  if (!strlen(cmd_line)) {
+    fprintf(stderr, "usage: ss [file.png]\n");
+    return;
+  }
+
+  FILE *f = fopen(cmd_line, "wb");
+  if (!f) {
+    fprintf(stderr, "Couldn't open screenshot file\n");
+    return;
+  }
+
+  png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if (!png) {
+    fprintf(stderr, "Couldn't initialize png\n");
+    return;
+  }
+
+  png_infop info = png_create_info_struct(png);
+  if (!info) {
+    fprintf(stderr, "Couldn't create png info\n");
+    return;
+  }
+
+  if (setjmp(png_jmpbuf(png))) {
+    fprintf(stderr, "png writing failed\n");
+    return;
+  }
+
+  png_init_io(png, f);
+
+  int width = 800, height = 600;
+
+  // Output is 8bit depth, RGBA format.
+  png_set_IHDR
+    (png,
+     info,
+     width, height,
+     8,
+     PNG_COLOR_TYPE_RGB,
+     PNG_INTERLACE_NONE,
+     PNG_COMPRESSION_TYPE_DEFAULT,
+     PNG_FILTER_TYPE_DEFAULT
+     );
+  png_write_info(png, info);
+
+  std::vector<png_byte*> row_pointers;
+  for(int y = 0; y < height; y++) {
+    row_pointers.push_back((png_byte*)malloc(width * 3));
+    for (int x = 0; x < 3 * width; x++) {
+      auto cpu = m->cpus[0];
+      cpu->memory_rw(cpu, cpu->mem, VGA_FB_ADDR + (y * 3 * width) + x, &row_pointers[y][x], 1, 0, PHYSICAL);
+    }
+  }
+  png_write_image(png, &row_pointers[0]);
+  png_write_end(png, nullptr);
+
+  for (int y = 0; y < height; y++) {
+    free(row_pointers[y]);
+  }
+
+  fclose(f);
+
+  png_destroy_write_struct(&png, &info);
+}
+
 /****************************************************************************/
 
 
@@ -1720,6 +1788,8 @@ static struct cmd cmds[] = {
   { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
 
   { "echo", "", 0, debugger_cmd_echo, "Output this string for debugging use" },
+
+  { "ss", "filename", 0, debugger_cmd_screenshot, "Create a screenshot of the framebuffer content" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

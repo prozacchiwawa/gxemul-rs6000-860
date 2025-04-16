@@ -89,7 +89,7 @@ else
 	fi
 fi
 
-OTHERLIBS="$LDFLAGS"
+OTHERLIBS="$LDFLAGS -lpng"
 
 UNITTESTS=YES
 

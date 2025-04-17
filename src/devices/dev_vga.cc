@@ -2097,8 +2097,16 @@ DEVICE_ACCESS(vga_graphics)
   }
   if (relative_addr >= 0x1000000) {
     fprintf(stderr, "[ vga: windowed, pixel transfer? ]\n", relative_addr);
-    bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-    return result;
+    int size = len;
+    while (size > 0) {
+      bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, std::min(2, size), writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
+      if (!result) {
+        return 0;
+      }
+      data += 2;
+      size -= 2;
+    }
+    return 1;
   }
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;

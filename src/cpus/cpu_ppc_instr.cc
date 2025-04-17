@@ -794,6 +794,20 @@ X(mtfsf)
 	cpu->cd.ppc.fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
 }
 
+/*
+ *  mtfsf:  Copy FPR into the FPSCR.
+ *
+ *  arg[0] = ptr to frb
+ *  arg[1] = crf
+ *  arg[2] = imm
+ */
+X(mtfsfi)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+	cpu->cd.ppc.fpscr &= ~(15 << (ic->arg[1] * 4));
+	cpu->cd.ppc.fpscr |= ic->arg[2] << (ic->arg[1] * 4);
+}
+
 
 /*
  *  mffs:  Copy FPSCR into a FPR.
@@ -804,6 +818,19 @@ X(mffs)
 {
 	CHECK_FOR_FPU_EXCEPTION;
 	(*(uint64_t *)ic->arg[0]) = cpu->cd.ppc.fpscr;
+}
+
+/*
+ *  mcrfs:  Copy FPSCR into a FPR.
+ *
+ *  arg[0] crfD
+ *  arg[1] crfS
+ */
+X(mcrfs)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+  cpu->cd.ppc.cr &= ~(15 << (ic->arg[0] * 4));
+  cpu->cd.ppc.cr |= cpu->cd.ppc.fpscr & (15 << (ic->arg[1] * 4));
 }
 
 
@@ -4087,6 +4114,11 @@ X(to_be_translated)
 				ic->f = instr(mffs);
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 				break;
+      case PPC_63_MCRFS:
+        ic->f = instr(mcrfs);
+        ic->arg[0] = (iword >> 24) & 7;
+        ic->arg[1] = (iword >> 18) & 7;
+        break;
 			case PPC_63_MTFSF:
 				ic->f = instr(mtfsf);
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
@@ -4097,6 +4129,12 @@ X(to_be_translated)
 						ic->arg[1] |= 0xf;
 				}
 				break;
+      case PPC_63_MTFSFI:
+        ic->f = instr(mtfsfi);
+				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
+				ic->arg[1] = (iword >> 24) & 7;
+        ic->arg[2] = (iword >> 12) & 15;
+        break;
 			default:{
         fprintf(stderr, "PPC_63: unknown xo %d (%08x)\n", xo, iword);
         goto bad;

@@ -246,7 +246,9 @@
 #define	  PPC_63_FMADD		  29
 #define	  PPC_63_FCMPO		  32
 #define	  PPC_63_FNEG		  40
+#define   PPC_63_MCRFS    64
 #define	  PPC_63_FMR		  72
+#define   PPC_63_MTFSFI   134
 #define	  PPC_63_FNABS		  136
 #define	  PPC_63_FABS		  264
 #define	  PPC_63_MFFS		  583

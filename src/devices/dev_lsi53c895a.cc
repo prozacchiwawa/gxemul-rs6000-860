@@ -659,6 +659,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     case 0x1a:
     case 0x25:
     case 0x28:
+    case 0x42:
     case 0x43:
     case 0x51:
     case 0x52: {
@@ -921,6 +922,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x1a:
     case 0x25:
     case 0x28: 
+    case 0x42:
     case 0x43: {
         fprintf(stderr, "lsi: transferred %d (cmd %02x)\n", req->transferred, req->cmd.buf[0]);
         if (!req->transferred) {

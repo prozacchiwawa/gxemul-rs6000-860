@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 32
+#define COUNT_DIV 64
 
 /*
  *  ppc_cpu_new():

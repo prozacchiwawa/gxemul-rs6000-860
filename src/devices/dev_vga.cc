@@ -2466,19 +2466,19 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
+  write_len = std::min(write_len, d->s3_cur_x + d->s3_draw_width - d->s3_pix_x);
+
   /* Compute write target */
   d->update_x1 = d->s3_pix_x;
-  d->update_x2 = d->s3_pix_x + 1;
+  d->update_x2 = d->s3_pix_x + write_len;
   d->update_y1 = d->s3_pix_y;
-  d->update_y2 = d->s3_pix_y + 1;
+  d->update_y2 = d->s3_pix_y + write_len;
   d->modified = 1;
 
   if (d->s3_rem_height == 0) {
     G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
     return;
   }
-
-  write_len = std::min(write_len, d->s3_cur_x + d->s3_draw_width - d->s3_pix_x);
 
   for (pix = 0; pix < write_len; pix++) {
     target = (d->s3_pix_y * logical_width) + d->s3_pix_x;

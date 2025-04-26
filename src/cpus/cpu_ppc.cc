@@ -117,7 +117,9 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	cpu->is_32bit = (cpu->cd.ppc.bits == 32)? 1 : 0;
 
+
 	if (cpu->is_32bit) {
+    cpu->cd.ppc.vph32.initialize();
 		cpu->run_instr = ppc32_run_instr;
     cpu->update_translation_table = []
       (struct cpu *cpu,

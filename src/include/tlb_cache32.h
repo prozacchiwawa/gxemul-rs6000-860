@@ -12,8 +12,7 @@ extern unsigned char *memory_paddr_to_hostaddr
 
 template <typename TcPhyspage, typename VaddrToTlb, typename VpgTlbEntry, typename Cpu> struct vph32 {
 private:
-  bool initialized;
-  tlb_impl<TcPhyspage, VaddrToTlb, VpgTlbEntry, Cpu> itlb;
+  itlb_impl<tlb_impl<TcPhyspage, VaddrToTlb, VpgTlbEntry, Cpu> > itlb;
   tlb_impl<TcPhyspage, VaddrToTlb, VpgTlbEntry, Cpu> dtlb;
 
   uint32_t *is_userpage;
@@ -21,6 +20,7 @@ private:
 public:
   void initialize() {
     itlb.initialize();
+    itlb.instr_initialize();
     dtlb.initialize();
   }
   void set_physpage_template(TcPhyspage *templ) {

@@ -40,6 +40,7 @@
 #define	INVALIDATE_VADDR		8
 #define	INVALIDATE_VADDR_UPPER4		16	/*  useful for PPC emulation  */
 #define INVALIDATE_IDENTITY 32
+#define INVALIDATE_INSTR    64
 
 #define	N_BASE_TABLE_ENTRIES		65536
 

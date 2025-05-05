@@ -300,4 +300,98 @@ void ppc_trace(struct cpu *cpu, uint64_t pc);
 void ppc_no_end_trace(struct cpu *cpu);
 void ppc_end_trace(struct cpu *cpu);
 
+template <typename T>
+T load_64(unsigned char *data, int swizzle) {
+  return ((uint64_t)data[0^swizzle] << 56) +
+    ((uint64_t)data[1^swizzle] << 48) +
+    ((uint64_t)data[2^swizzle] << 40) +
+    ((uint64_t)data[3^swizzle] << 32) +
+    ((uint64_t)data[4^swizzle] << 24) +
+    ((uint64_t)data[5^swizzle] << 16) +
+    ((uint64_t)data[6^swizzle] << 8) +
+    (uint64_t)data[7^swizzle];
+}
+
+template <typename T>
+T load_32(unsigned char *data, int swizzle) {
+  return ((data[0^swizzle] << 24) + (data[1^swizzle] << 16) +
+   (data[2^swizzle] << 8) + data[3^swizzle]);
+}
+
+template <typename T>
+T load_16(unsigned char *data, int swizzle) {
+  return ((data[0^swizzle] << 8) + data[1^swizzle]);
+}
+
+template <int Size, bool Zero> static void load_reg(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = load_64<int64_t>(data, swizzle);
+}
+
+template <> void load_reg<8, false>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = (uint8_t)data[0];
+}
+
+template <> void load_reg<8, true>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = data[0];
+}
+
+template <> void load_reg<32, true>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = load_32<uint32_t>(data, swizzle);
+}
+
+template <> void load_reg<32, false>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = load_32<int32_t>(data, swizzle);
+}
+
+template <> void load_reg<16, true>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = load_16<uint16_t>(data, swizzle);
+}
+
+template <> void load_reg<16, false>(size_t r, unsigned char *data, int swizzle) {
+  *((int64_t*)r) = load_16<int16_t>(data, swizzle);
+}
+
+template <typename T>
+void store_64(size_t r, unsigned char *data, int swizzle) {
+	uint64_t x = *(uint64_t *)(r);
+  data[0^swizzle] = x >> 56;
+  data[1^swizzle] = x >> 48;
+  data[2^swizzle] = x >> 40;
+  data[3^swizzle] = x >> 32;
+  data[4^swizzle] = x >> 24;
+  data[5^swizzle] = x >> 16;
+  data[6^swizzle] = x >> 8;
+  data[7^swizzle] = x;
+}
+
+template <typename T>
+void store_32(size_t r, unsigned char *data, int swizzle) {
+	data[0^swizzle] = *((int64_t*)r) >> 24;
+	data[1^swizzle] = *((int64_t*)r) >> 16;
+	data[2^swizzle] = *((int64_t*)r) >> 8;
+	data[3^swizzle] = *((int64_t*)r);
+}
+
+template <typename T>
+void store_16(size_t r, unsigned char *data, int swizzle) {
+	data[0^swizzle] = *((int64_t*)r) >> 8;
+	data[1^swizzle] = *((int64_t*)r);
+}
+
+template <int Size> static void store_reg(size_t r, unsigned char *data, int swizzle) {
+  data[0] = *((int64_t*)r);
+}
+
+template <> void store_reg<64>(size_t r, unsigned char *data, int swizzle) {
+  store_64<void>(r, data, swizzle);
+}
+
+template <> void store_reg<32>(size_t r, unsigned char *data, int swizzle) {
+  store_32<void>(r, data, swizzle);
+}
+
+template <> void store_reg<16>(size_t r, unsigned char *data, int swizzle) {
+  store_16<void>(r, data, swizzle);
+}
+
 #endif	/*  CPU_PPC_H  */

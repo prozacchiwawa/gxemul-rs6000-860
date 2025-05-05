@@ -1690,6 +1690,16 @@ X(mfspr) {
 	/*  TODO: Check permission  */
 	reg(ic->arg[0]) = reg(ic->arg[1]);
 }
+X(mfdec) {
+  /*  Synchronize the PC:  */
+  sync_pc(cpu, ic);
+
+  ppc_update_for_icount(cpu);
+	reg(ic->arg[0]) = reg(ic->arg[1]);
+  if ((reg(ic->arg[0]) & 0xff) == 0) {
+    fprintf(stderr, "%08x: mfdec %08x\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]));
+  }
+}
 X(mfspr_pmc1) {
 	/*
 	 *  TODO: This is a temporary hack to make NetBSD/ppc detect
@@ -1727,10 +1737,16 @@ X(mtspr) {
     int sprbank = (spr - SPR_IBAT0U) / 8;
     int regnr = ((spr - SPR_IBAT0U) / 2) & 3;
     int lower = (spr - SPR_IBAT0U) & 1;
-    // fprintf(stderr, "BAT CHANGE\n");
-    cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
+    uint64_t old_upper = cpu->cd.ppc.spr[SPR_IBAT0U + (sprbank * 8) + regnr * 2];
+    uint64_t old_lower = cpu->cd.ppc.spr[SPR_IBAT0U + (sprbank * 8) + regnr * 2 + 1];
+    uint64_t bepi = old_upper & 0xfffc;
+    uint64_t bl = (((old_upper & 0x3ffc) >> 2) + 1) << 17;
+    for (uint64_t addr = bepi; addr < bepi + bl; addr += 1 << 12) {
+      cpu->invalidate_translation_caches(cpu, addr, INVALIDATE_VADDR | (sprbank ? 0 : INVALIDATE_INSTR));
+    }
+    // fprintf(stderr, "%sBAT%d%s CHANGE %08x:%08x <= %08x\n", sprbank ? "D" : "I", regnr, lower ? "L" : "U", (unsigned int)old_upper, (unsigned int)old_lower, (unsigned int)reg(ic->arg[0]));
   } else if (spr == SPR_SDR1) {
-    // fprintf(stderr, "SDR1 CHANGE\n");
+    fprintf(stderr, "SDR1 CHANGE\n");
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
   reg(ic->arg[1]) = reg(ic->arg[0]);
@@ -1746,11 +1762,17 @@ X(mtctr) {
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
+  /*  Synchronize the PC:  */
+  sync_pc(cpu, ic);
   ppc_update_for_icount(cpu);
+
   uint64_t dec = cpu->cd.ppc.spr[SPR_DEC];
   uint64_t reg = reg(ic->arg[0]);
   if (reg & 0x80000000 && !(dec & 0x80000000)) {
     cpu->cd.ppc.dec_intr_pending = 1;
+  }
+  if (reg != 1) {
+    fprintf(stderr, "%08x: mtdec %08x\n", (unsigned int)cpu->pc, (unsigned int)reg);
   }
   cpu->cd.ppc.spr[SPR_DEC] = reg;
 }
@@ -3443,6 +3465,7 @@ X(to_be_translated)
 			// Reuse SPR_TB* for TBR_TB*:
 			case TBR_TBL: ic->f = instr(mftb); break;
 			case TBR_TBU: ic->f = instr(mftbu); break;
+      case SPR_DEC: ic->f = instr(mfdec); break;
 			case SPR_PMC1:	ic->f = instr(mfspr_pmc1); break;
 			default:	ic->f = instr(mfspr);
 			}

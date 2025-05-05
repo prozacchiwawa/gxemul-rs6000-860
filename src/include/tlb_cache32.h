@@ -122,8 +122,12 @@ public:
       is_userpage[index >> 5] &= ~(1 << (index & 31));
     }
 
-    itlb.invalidate_tc(cpu, addr, flags);
-    dtlb.invalidate_tc(cpu, addr, flags);
+    if ((flags & INVALIDATE_ALL) || (flags & INVALIDATE_INSTR)) {
+      itlb.invalidate_tc(cpu, addr, flags);
+    }
+    if ((flags & INVALIDATE_ALL) || !(flags & INVALIDATE_INSTR)) {
+      dtlb.invalidate_tc(cpu, addr, flags);
+    }
   }
 
 

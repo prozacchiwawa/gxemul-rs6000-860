@@ -42,6 +42,13 @@ extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, in
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
+#undef DO_ZERO
+#ifdef LS_ZERO
+#define DO_ZERO true
+#else
+#define DO_ZERO false
+#endif
+
 #ifndef LS_INDEXED
 #ifndef LS_IGNOREOFS
 	int32_t ofs = ic->arg[2];
@@ -82,92 +89,69 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
-		fatal("PPC LOAD/STORE misalignment across page boundary: TODO"
-		    " (addr=0x%08x, LS_SIZE=%i)\n", (int)addr, LS_SIZE);
-		//exit(1);
+		fatal("%08x: PPC LOAD/STORE misalignment across page boundary: TODO"
+		    " (addr=0x%08x, LS_SIZE=%i)\n", (unsigned int)cpu->pc, (int)addr, LS_SIZE);
+		if (swizzle | offset) {
+      fprintf(stderr, "misaligned LE without full translation\n");
+      exit(1);
+    }
+
+    auto end = addr + LS_SIZE;
+    auto second_page = end & ~0xfff;
+    auto second_span = end - second_page;
+    auto first_span = second_page - addr;
+
+#ifdef LS_LOAD
+    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+      // Throw
+      return;
+    }
+
+    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+      // Throw
+      return;
+    }
+
+    load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
+#else
+    store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
+
+    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
+                        MEM_WRITE, CACHE_DATA)) {
+      return;
+    }
+
+    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span,
+                        MEM_WRITE, CACHE_DATA)) {
+      return;
+    }
+#endif
+
+#ifdef LS_UPDATE
+    reg(ic->arg[1]) = addr;
+#endif
+
+    return;
 	}
 #endif
 
 #ifdef LS_LOAD
 	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
-	    MEM_READ, CACHE_DATA)) {
+                      MEM_READ, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
 	}
-#ifdef LS_B
-	reg(ic->arg[0]) =
-#ifndef LS_ZERO
-	    (int8_t)
-#endif
-	    data[0];
-#endif
-#ifdef LS_H
-  auto update =
-#ifdef LS_UPDATE
-    true
-#else
-    false
-#endif
-    ;
-	reg(ic->arg[0]) =
-#ifndef LS_ZERO
-	    (int16_t)
-#endif
-	    ((data[0^swizzle] << 8) + data[1^swizzle]);
-#endif
-#ifdef LS_W
-	reg(ic->arg[0]) =
-#ifndef LS_ZERO
-	    (int32_t)
-#else
-	    (uint32_t)
-#endif
-	    ((data[0^swizzle] << 24) + (data[1^swizzle] << 16) +
-	    (data[2^swizzle] << 8) + data[3^swizzle]);
-#endif
-#ifdef LS_D
-	(*(uint64_t *)(ic->arg[0])) =
-	    ((uint64_t)data[0^swizzle] << 56) +
-      ((uint64_t)data[1^swizzle] << 48) +
-	    ((uint64_t)data[2^swizzle] << 40) +
-      ((uint64_t)data[3^swizzle] << 32) +
-      ((uint64_t)data[4^swizzle] << 24) +
-      ((uint64_t)data[5^swizzle] << 16) +
-      ((uint64_t)data[6^swizzle] << 8) +
-      (uint64_t)data[7^swizzle];
-#endif
+
+  load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
 
   access_log(cpu, 0, addr^offset, data, sizeof(data), swizzle);
 #else	/*  store:  */
+  store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
-#ifdef LS_B
-	data[0] = reg(ic->arg[0]);
-#endif
-#ifdef LS_H
-	data[0^swizzle] = reg(ic->arg[0]) >> 8;
-	data[1^swizzle] = reg(ic->arg[0]);
-#endif
-#ifdef LS_W
-	data[0^swizzle] = reg(ic->arg[0]) >> 24;
-	data[1^swizzle] = reg(ic->arg[0]) >> 16;
-	data[2^swizzle] = reg(ic->arg[0]) >> 8;
-	data[3^swizzle] = reg(ic->arg[0]);
-#endif
-#ifdef LS_D
-	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-    data[0^swizzle] = x >> 56;
-    data[1^swizzle] = x >> 48;
-    data[2^swizzle] = x >> 40;
-    data[3^swizzle] = x >> 32;
-    data[4^swizzle] = x >> 24;
-    data[5^swizzle] = x >> 16;
-    data[6^swizzle] = x >> 8;
-    data[7^swizzle] = x; }
-#endif
   access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
 
 	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
-	    MEM_WRITE, CACHE_DATA)) {
+                      MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
 	}
@@ -266,81 +250,12 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 #ifdef LS_LOAD
   /*  Load:  */
-#ifdef LS_B
-  reg(ic->arg[0]) =
-#ifndef LS_ZERO
-    (int8_t)
-#endif
-    page[addr ^ offset];
-  // if ((cpu->pc & 0xffff0000) == 0x800e0000) {
-  //   fprintf(stderr, "lbz: %p full_addr %08x addr %08x offset %d\n", page, (unsigned int)full_addr, (unsigned int)addr, offset);
-  //   for (int i = 0; i < 4096; i += 16) {
-  //     fprintf(stderr, "%08x:", i);
-  //     for (int j = i; j < i + 16; j++) {
-  //       fprintf(stderr, " %02x", page[j]);
-  //     }
-  //     fprintf(stderr, "\n");
-  //   }
-  // }
-#endif	/*  LS_B  */
-#ifdef LS_H
-  reg(ic->arg[0]) =
-#ifndef LS_ZERO
-    (int16_t)
-#endif
-    ((page[addr^offset^swizzle] << 8) + page[(addr+1)^offset^swizzle]);
-#endif	/*  LS_H  */
-#ifdef LS_W
-    // In the case where an stwbrx was previously written we want to
-    // ensure that we load only in BE as would have been intended.
-  reg(ic->arg[0]) =
-#ifndef LS_ZERO
-    (int32_t)
-#else
-    (uint32_t)
-#endif
-    ((page[addr^offset^swizzle] << 24) + (page[(addr+1)^offset^swizzle] << 16) +
-     (page[(addr+2)^offset^swizzle] << 8) + page[(addr+3)^offset^swizzle]);
-#endif	/*  LS_W  */
-#ifdef LS_D
-  (*(uint64_t *)(ic->arg[0])) =
-    ((uint64_t)page[(addr+0)^offset^swizzle] << 56) +
-    ((uint64_t)page[(addr+1)^offset^swizzle] << 48) +
-    ((uint64_t)page[(addr+2)^offset^swizzle] << 40) +
-    ((uint64_t)page[(addr+3)^offset^swizzle] << 32) +
-    ((uint64_t)page[(addr+4)^offset^swizzle] << 24) +
-    ((uint64_t)page[(addr+5)^offset^swizzle] << 16) +
-    ((uint64_t)page[(addr+6)^offset^swizzle] << 8) +
-    (uint64_t)page[(addr+7)^offset^swizzle];
-#endif	/*  LS_D  */
+  load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], &page[addr ^ offset], swizzle);
 
   access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #else	/*  !LS_LOAD  */
   /*  Store:  */
-#ifdef LS_B
-  page[addr^offset] = reg(ic->arg[0]);
-#endif
-#ifdef LS_H
-  page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 8;
-  page[(addr+1)^offset^swizzle] = reg(ic->arg[0]);
-#endif
-#ifdef LS_W
-  page[addr^offset^swizzle]   = reg(ic->arg[0]) >> 24;
-  page[(addr+1)^offset^swizzle] = reg(ic->arg[0]) >> 16;
-  page[(addr+2)^offset^swizzle] = reg(ic->arg[0]) >> 8;
-  page[(addr+3)^offset^swizzle] = reg(ic->arg[0]);
-#endif
-#ifdef LS_D
-  { uint64_t x = *(uint64_t *)(ic->arg[0]);
-    page[addr^offset^swizzle]   = x >> 56;
-    page[(addr+1)^offset^swizzle] = x >> 48;
-    page[(addr+2)^offset^swizzle] = x >> 40;
-    page[(addr+3)^offset^swizzle] = x >> 32;
-    page[(addr+4)^offset^swizzle] = x >> 24;
-    page[(addr+5)^offset^swizzle] = x >> 16;
-    page[(addr+6)^offset^swizzle] = x >> 8;
-    page[(addr+7)^offset^swizzle] = x; }
-#endif
+  store_reg<LS_SIZE * 8>(ic->arg[0], &page[addr ^ offset], swizzle);
 
   access_log(cpu, 1, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #endif	/*  !LS_LOAD  */

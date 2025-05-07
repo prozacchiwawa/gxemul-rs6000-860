@@ -766,8 +766,10 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	const char *symbol, *mnem = "ERROR";
 	int power = cpu->cd.ppc.mode == MODE_POWER;
 
+  /*
 	if (running)
 		dumpaddr = cpu->pc;
+  */
 
 	symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 	    dumpaddr, &offset);

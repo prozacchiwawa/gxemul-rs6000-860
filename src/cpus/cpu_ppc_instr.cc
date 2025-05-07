@@ -2823,7 +2823,15 @@ X(end_of_page)
 
 
 X(dump_registers) {
-  cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, 0);
+  if (ic->pc == 0) {
+    auto old_readahead = cpu->translation_readahead;
+    cpu->translation_readahead = 1;
+    sync_pc(cpu, ic);
+    ic->f(cpu, ic);
+    cpu->translation_readahead = old_readahead;
+  }
+
+  cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
   if (cpu->machine->register_dump) {
     ppc_cpu_register_dump(cpu, true, false);
   }

@@ -350,6 +350,9 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
+  if (*valuep & 0x80) {
+    fprintf(stderr, "%08x: Weird use of reserved 0x80 in msr %" PRIx64 "\n", (unsigned int)cpu->pc, cpu->ninstrs);
+  }
   cpu->cd.ppc.msr = *valuep;
 
   /*  Switching between temporary and real gpr 0..3?  */

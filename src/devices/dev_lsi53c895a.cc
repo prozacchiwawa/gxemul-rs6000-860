@@ -951,17 +951,18 @@ static void lsi_ram_write(struct lsi53c895a_data *s, hwaddr addr,
 
 static void pci_dma_read(struct cpu *cpu, LSIState *s, dma_addr_t addr, void *buf, dma_addr_t len) {
     if (addr & 0x80000000) {
-        fprintf(stderr, "pci_dma_read(%08x,%d) @ %08x\n", (int)addr, len, cpu->pc);
         addr &= ~0x80000000;
+        fprintf(stderr, "pci_dma_read(%08x,%d) @ %08x =", (int)addr, len, cpu->pc);
         for (auto i = 0; i < len; i++) {
             cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_READ, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
+            if (len <= 4) {
+              fprintf(stderr, " %02x", *(((uint8_t *)buf) + i));
+            }
         }
-        if (len == 1) {
-          fprintf(stderr, "lsi: 1 byte read %02x\n", *((uint8_t *)buf));
-        }
+        fprintf(stderr, "\n");
     } else {
         for (auto i = 0; i < len; i++) {
-            *(((uint8_t *)buf) + i) = lsi_ram_read(s, (addr + i) & 0x1fff, 1);
+            *(((uint8_t *)buf) + i) = lsi_mmio_read(cpu, s, (addr + i) & 0x1fff, 1);
         }
     }
 }
@@ -971,14 +972,18 @@ static void lsi_mmio_write(struct cpu *cpu, LSIState *s, hwaddr addr,
 
 static void pci_dma_write(struct cpu *cpu, LSIState *s, dma_addr_t addr, const void *buf, dma_addr_t len) {
     if (addr & 0x80000000) {
-        fprintf(stderr, "pci_dma_write(%08x,%d)\n", (int)addr, len);
+        fprintf(stderr, "pci_dma_write(%08x,%d) =>", (int)addr, len);
         addr &= ~0x80000000;
         for (auto i = 0; i < len; i++) {
-            cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
+          if (len <= 4) {
+            fprintf(stderr, " %02x", *(((uint8_t *)buf) + i));
+          }
+          cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
         }
+        fprintf(stderr, "\n");
     } else {
         for (auto i = 0; i < len; i++) {
-            lsi_ram_write(s, (addr + i) & 0x1fff, ((uint8_t *)buf)[i], 1);
+          lsi_mmio_write(cpu, s, (addr + i) & 0x1fff, ((uint8_t *)buf)[i], 1);
         }
     }
 }

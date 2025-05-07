@@ -1696,9 +1696,6 @@ X(mfdec) {
 
   ppc_update_for_icount(cpu);
 	reg(ic->arg[0]) = reg(ic->arg[1]);
-  if ((reg(ic->arg[0]) & 0xff) == 0) {
-    fprintf(stderr, "%08x: mfdec %08x\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]));
-  }
 }
 X(mfspr_pmc1) {
 	/*
@@ -1771,8 +1768,8 @@ X(mtdec) {
   if (reg & 0x80000000 && !(dec & 0x80000000)) {
     cpu->cd.ppc.dec_intr_pending = 1;
   }
-  if (reg != 1) {
-    fprintf(stderr, "%08x: mtdec %08x\n", (unsigned int)cpu->pc, (unsigned int)reg);
+  if (reg == 1) {
+    fprintf(stderr, "%08x: wierd low mtdec %08x @ %" PRIx64"\n", (unsigned int)cpu->pc, (unsigned int)reg, cpu->ninstrs);
   }
   cpu->cd.ppc.spr[SPR_DEC] = reg;
 }

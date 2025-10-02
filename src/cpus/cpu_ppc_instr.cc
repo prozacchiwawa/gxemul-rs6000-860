@@ -756,7 +756,7 @@ X(dcbz)
 	size_t cleared = 0;
 
 	/*  Synchronize the PC first:  */
-	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[2];
+  sync_pc(cpu, ic);
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -1783,14 +1783,20 @@ X(rfi)
 {
 	uint64_t tmp;
 
+  sync_pc(cpu, ic);
 	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~0xffff;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
 
-	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
+  auto new_addr = cpu->cd.ppc.spr[SPR_SRR0];
+  if (new_addr == 0x804c0004) {
+    fprintf(stderr, "%08x: new addr 0x804c0004\n", (unsigned int)cpu->pc);
+  }
+  cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
 	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	quick_pc_to_pointers(cpu);
+  cpu->invalidate_code_translation(cpu, cpu->cd.ppc.vph32.get_ic_phys(), INVALIDATE_PADDR);
 }
 X(rfid)
 {
@@ -2833,8 +2839,25 @@ X(tlbia)
 X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
-  fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
-  cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+  sync_pc(cpu, ic);
+  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+
+  auto msr = cpu->cd.ppc.msr;
+  uint64_t increment = 0x10000000;
+  uint64_t addr_page = reg(ic->arg[0]);
+
+  for (int i = 0; i < 2; i++) {
+    cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
+    addr_page &= increment - 1;
+    for (int i = 0; i < 16; i++) {
+      fprintf(stderr, "[ tlb invalidate lowbits %08x %08x ]\n", (unsigned int)cpu->cd.ppc.msr, (unsigned int)addr_page);
+      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
+      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+      addr_page += increment;
+    }
+  }
+
+  cpu->cd.ppc.msr = msr;
 }
 
 

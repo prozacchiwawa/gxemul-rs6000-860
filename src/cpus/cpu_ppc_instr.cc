@@ -1551,29 +1551,26 @@ DOT0(rlwinm)
  */
 X(rlwimi)
 {
-	MODE_uint_t tmp = reg(ic->arg[0]), ra = reg(ic->arg[1]);
 	uint32_t iword = ic->arg[2];
 	int sh = (iword >> 11) & 31;
 	int mb = (iword >> 6) & 31;
 	int me = (iword >> 1) & 31;
 	int rc = iword & 1;
-
-	tmp = (tmp << sh) | (tmp >> (32-sh));
-
-	for (;;) {
-		uint64_t mask;
-		mask = (uint64_t)1 << (31-mb);
-		ra &= ~mask;
-		ra |= (tmp & mask);
-		if (mb == me)
-			break;
-		mb ++;
-		if (mb == 32)
-			mb = 0;
-	}
-	reg(ic->arg[1]) = ra;
-	if (rc)
-		update_cr0(cpu, ra);
+  auto mask = [](int mb, int me) -> MODE_uint_t {
+    return ((1ull << (32 - mb)) - 1) & ~((1ull << (32 - me)) - 1);
+  };
+  auto rotl = [](MODE_uint_t v, int sh) -> MODE_uint_t {
+    return (v << sh) | (v >> (32 - sh));
+  };
+  MODE_uint_t rA = reg(ic->arg[1]);
+  MODE_uint_t rS = reg(ic->arg[0]);
+	MODE_uint_t r = rotl(rS, sh);
+  MODE_uint_t m = (mb <= me) ? mask(mb, me + 1) : (~0ull ^ mask(me + 1, mb));
+  rA = (r & m) | (rA & ~m);
+	reg(ic->arg[1]) = rA;
+	if (rc) {
+		update_cr0(cpu, rA);
+  }
 }
 
 
@@ -1605,6 +1602,17 @@ X(srawi)
 }
 DOT1(srawi)
 
+X(icbi)
+{
+  sync_pc(cpu, ic);
+  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
+  fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
+  auto old_msr = cpu->cd.ppc.msr;
+  auto dr = !!(old_msr & PPC_MSR_DR);
+  cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
+  cpu->invalidate_translation_caches(cpu, ea, INVALIDATE_VADDR);
+  cpu->cd.ppc.msr = old_msr;
+}
 
 /*
  *  mcrf:  Move inside condition register

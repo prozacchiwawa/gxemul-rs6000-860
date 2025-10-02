@@ -228,11 +228,13 @@ X(bclr)
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
+/*
 X(bclr_20)
 {
 	cpu->pc = cpu->cd.ppc.spr[SPR_LR];
 	quick_pc_to_pointers(cpu);
 }
+*/
 X(bclr_l)
 {
 	uint64_t low_pc, old_pc = cpu->pc;
@@ -3358,9 +3360,11 @@ X(to_be_translated)
 					ic->f = instr(bclr_l);
 				else {
 					ic->f = instr(bclr);
+					/*
 					if (!cpu->machine->show_trace_tree &&
 					    (bo & 0x14) == 0x14)
 						ic->f = instr(bclr_20);
+					*/
 				}
 			} else {
 				if (!(bo & 4)) {

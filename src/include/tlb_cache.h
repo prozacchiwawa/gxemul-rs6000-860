@@ -307,7 +307,6 @@ public:
     }
 
     /*  Invalidate a physical page:  */
-
     if (!(flags & INVALIDATE_PADDR)) {
       fprintf(stderr, "HUH? Invalidate: Not vaddr, all, or paddr?\n");
     }

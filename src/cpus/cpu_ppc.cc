@@ -350,10 +350,10 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-  if (*valuep & 0x80) {
-    fprintf(stderr, "%08x: Weird use of reserved 0x80 in msr %" PRIx64 "\n", (unsigned int)cpu->pc, cpu->ninstrs);
+  cpu->cd.ppc.msr = *valuep & ~0x8c;
+  if ((old & PPC_MSR_FP) && !(cpu->cd.ppc.msr & PPC_MSR_FP)) {
+    fprintf(stderr, "%08x: new msr %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr);
   }
-  cpu->cd.ppc.msr = *valuep;
 
   /*  Switching between temporary and real gpr 0..3?  */
   if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
@@ -381,7 +381,6 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   } else if (old_map != new_map) {
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL | INVALIDATE_IDENTITY);
-    cpu->invalidate_code_translation(cpu, cpu->cd.ppc.vph32.get_ic_phys(), INVALIDATE_PADDR);
 	}
 
   if (!check_for_interrupts || !(cpu->cd.ppc.msr & PPC_MSR_EE)) {
@@ -390,6 +389,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 
   if (cpu->cd.ppc.dec_intr_pending &&
       !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+    // fprintf(stderr, "[ %08x: take pending decrementer exception msr %08x (pending since %" PRIx64 ") ]\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr, cpu->cd.ppc.dec_intr_pending);
     cpu->cd.ppc.dec_intr_pending = 0;
     ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
     return 1;
@@ -417,6 +417,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
+  cpu->cd.ppc.spr[SPR_SRR1] &= ~0x3f0000;
   if (exception_nr == 7) {
     cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
   } else {
@@ -561,7 +562,7 @@ void ppc_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 			debug("  hdec = 0x%08" PRIx32,
 			    (uint32_t) cpu->cd.ppc.spr[SPR_HDEC]);
 
-    debug("  dar = 0x%08" PRIx32 " dsisr = 0x%08" PRIx32, x, (uint32_t)cpu->cd.ppc.spr[SPR_DAR], (uint32_t)cpu->cd.ppc.spr[SPR_DSISR]);
+    debug("  dar = 0x%08" PRIx32 " dsisr = 0x%08" PRIx32, (uint32_t)cpu->cd.ppc.spr[SPR_DAR], (uint32_t)cpu->cd.ppc.spr[SPR_DSISR]);
 		debug("\n");
 	}
 
@@ -1568,6 +1569,8 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			break;
 		case PPC_31_LSWI:
 		case PPC_31_STSWI:
+    case PPC_31_LSWX:
+    case PPC_31_STSWX:
 			rs = (iword >> 21) & 31;	/*  lwsi uses rt  */
 			ra = (iword >> 16) & 31;
 			nb = (iword >> 11) & 31;
@@ -1576,8 +1579,33 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 				mnem = power? "lsi" : "lswi"; break;
 			case PPC_31_STSWI:
 				mnem = power? "stsi" : "stswi"; break;
+      case PPC_31_LSWX:
+        mnem = power? "lsx" : "lswx"; break;
+      case PPC_31_STSWX:
+        mnem = power? "stsx" : "stswx"; break;
 			}
-			debug("%s\tr%i,r%i,%i", mnem, rs, ra, nb);
+      addr = (ra==0? 0 : cpu->cd.ppc.gpr[ra]);
+      if ((xo == PPC_31_LSWX) || (xo == PPC_31_STSWX)) {
+        if (running) {
+          debug("%s\tr%i,r%i,r%i ; (tbc = %d)", mnem, rs, ra, nb, cpu->cd.ppc.spr[SPR_XER] & 127);
+          addr += (ssize_t)cpu->cd.ppc.gpr[nb];
+        } else {
+          debug("%s\tr%i,r%i,r%i", mnem, rs, ra, nb);
+        }
+      } else {
+        debug("%s\tr%i,r%i,%i", mnem, rs, ra, nb);
+      }
+      if (!running)
+        break;
+      if (cpu->cd.ppc.bits == 32)
+        addr &= 0xffffffff;
+      symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
+                               addr, &offset);
+      if (symbol != NULL)
+        debug(" \t<%s", symbol);
+      else
+        debug(" \t<0x%" PRIx64, (uint64_t) addr);
+      debug(">");
 			break;
 		case PPC_31_SRAWI:
 			rs = (iword >> 21) & 31;
@@ -1656,6 +1684,8 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	case PPC_HI6_STMW:
 	case PPC_HI6_STFD:
 	case PPC_HI6_STFS:
+  case PPC_HI6_LFDU:
+  case PPC_HI6_STFDU:
 		/*  NOTE: Loads use rt, not rs, but are otherwise similar
 		    to stores  */
 		load = 0; wlen = 0;
@@ -1673,9 +1703,9 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			mnem = "lhz"; break;
 		case PPC_HI6_LHZU: load=1; wlen = 2;
 			mnem = "lhzu"; break;
-		case PPC_HI6_LHA:  load=2; wlen = 2;
+		case PPC_HI6_LHA:  load=1; wlen = 2;
 			mnem = "lha"; break;
-		case PPC_HI6_LHAU: load=2; wlen = 2;
+		case PPC_HI6_LHAU: load=1; wlen = 2;
 			mnem = "lhau"; break;
 		case PPC_HI6_LBZ:  load=1; wlen = 1;
 			mnem = "lbz"; break;
@@ -1694,6 +1724,8 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		case PPC_HI6_STMW: mnem = power? "stm" : "stmw"; break;
 		case PPC_HI6_STFD: fpreg=1; wlen=8; mnem = "stfd"; break;
 		case PPC_HI6_STFS: fpreg=1; wlen=4; mnem = "stfs"; break;
+    case PPC_HI6_LFDU: load=1; fpreg=1; wlen=8; mnem = "lfdu"; break;
+    case PPC_HI6_STFDU: fpreg=1; wlen=8; mnem = "stfdu"; break;
 		}
 		debug("%s\t", mnem);
 		if (fpreg)
@@ -1707,7 +1739,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 		if (cpu->cd.ppc.bits == 32)
 			addr &= 0xffffffff;
 		symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
-		    addr, &offset);
+                             addr, &offset);
 		if (symbol != NULL)
 			debug(" \t<%s", symbol);
 		else
@@ -2336,7 +2368,8 @@ void ppc_update_for_icount(struct cpu *cpu) {
     cpu->cd.ppc.spr[SPR_DEC] -= icount;
   } else {
     if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-      cpu->cd.ppc.dec_intr_pending = 1;
+      cpu->cd.ppc.dec_intr_pending = cpu->ninstrs;
+      // fprintf(stderr, "[ %08x: pending decrementer exception at %" PRIx64 " ]\n", (unsigned int)cpu->pc, cpu->cd.ppc.dec_intr_pending);
     }
     cpu->cd.ppc.spr[SPR_DEC] = 0xffffffff - (icount - dec - 1);
   }
@@ -2350,15 +2383,18 @@ void ppc_update_for_icount(struct cpu *cpu) {
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
 
+  /*
   if (!(cpu->cd.ppc.msr & PPC_MSR_EE)) {
     return;
   }
 
   if (cpu->cd.ppc.dec_intr_pending &&
       !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+    // fprintf(stderr, "[ %08x: take pending decrementer exception (msr = %08x pending since %" PRIx64 ") ]\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr, cpu->cd.ppc.dec_intr_pending);
     cpu->cd.ppc.dec_intr_pending = 0;
     ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
   }
+  */
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {

@@ -1220,6 +1220,7 @@ static void lsi_script_scsi_interrupt(LSIState *s, int stat0, int stat1)
     uint32_t mask0;
     uint32_t mask1;
 
+    fprintf(stderr, "[ lsi: scripts_scsi_interrupt stat0 %02x stat1 %02x (prev %02x %02x) ]\n", stat0, stat1, s->sist0, s->sist1);
     trace_lsi_script_scsi_interrupt(stat1, stat0, s->sist1, s->sist0);
     s->sist0 |= stat0;
     s->sist1 |= stat1;
@@ -1560,6 +1561,7 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
             }
         }
 
+        fprintf(stderr, "[ lsi: do_command: bad selection %d ]\n", id);
         lsi_bad_selection(s, id);
         return;
     }
@@ -1876,6 +1878,7 @@ again:
     switch (insn >> 30) {
     case 0: /* Block move.  */
         if (s->sist1 & LSI_SIST1_STO) {
+            fprintf(stderr, "[ lsi: block move delayed by STO0 ]\n");
             trace_lsi_execute_script_blockmove_delayed();
             lsi_stop_script(s);
             break;
@@ -2003,6 +2006,7 @@ again:
             uint32_t id;
 
             if (insn & (1 << 25)) {
+                fprintf(stderr, "lsi: read table via insn %08x\n", insn);
                 uint32_t id_offset = sextract32(insn, 0, 24);
                 uint32_t id_addr = s->dsa + id_offset;
                 id = read_dword(cpu, s, id_addr);
@@ -2028,6 +2032,7 @@ again:
                 s->sstat0 |= LSI_SSTAT0_WOA;
                 s->scntl1 &= ~LSI_SCNTL1_IARB;
                 if (!scsi_device_find(cpu, s, &s->bus, 0, id, 0)) {
+                    fprintf(stderr, "[ lsi: inline bad selection for select opcode id %d ]\n", id);
                     lsi_bad_selection(s, id);
                     break;
                 }
@@ -2211,6 +2216,7 @@ again:
                 break;
             }
             if (s->sist1 & LSI_SIST1_STO) {
+                fprintf(stderr, "[ lsi: transfer control stopped by STO0 ]\n");
                 trace_lsi_execute_script_tc_delayedselect_timeout();
                 lsi_stop_script(s);
                 break;

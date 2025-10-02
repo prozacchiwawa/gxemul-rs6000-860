@@ -619,7 +619,7 @@ int machine_run(struct machine *machine)
 	struct cpu **cpus = machine->cpus;
 	int ncpus = machine->ncpus, cpu0instrs = 0;
 
-  	for (int i = 0; i < ncpus; i++) {
+  for (int i = 0; i < ncpus; i++) {
 		if (cpus[i]->running) {
 			cpu0instrs += cpus[i]->run_instr(cpus[i]);
 		}

@@ -484,13 +484,12 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
   }
   if (cpu->ninstrs_async + INSTR_BETWEEN_INTERRUPTS <= prev_instrs + n_instrs)
 	{
-    // fprintf(stderr, "recognizing interrupts, timers at %08x\n", (unsigned int)(prev_instrs + n_instrs));
     cpu->ninstrs_async += INSTR_BETWEEN_INTERRUPTS;
     ppc_update_for_icount(cpu);
 	}
 #endif
 
-  cpu->ninstrs = prev_instrs + n_instrs;
+  cpu->ninstrs += n_instrs;
 
 	/*  Return the nr of instructions executed:  */
 	return n_instrs;

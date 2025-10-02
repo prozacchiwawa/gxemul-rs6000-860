@@ -103,7 +103,7 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
  *  Returns 0 if no match was found.
  */
 static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
-	uint32_t *lowp, uint32_t cmp)
+    uint32_t *lowp, uint32_t cmp, bool verbose)
 {
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
@@ -118,10 +118,13 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
   }
 
   for (i=0; i<8; i++) {
-
 		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;
 		upper = BE32_TO_HOST(upper);
+
+    if (verbose) {
+      fprintf(stderr, "[ v2p check %08x: %08x %08x vs %08x ]\n", (unsigned int)pteg_select, upper, ep[1], cmp);
+    }
 
 		/*  Valid PTE, and correct api and vsid?  */
 		if (upper == cmp) {
@@ -161,24 +164,20 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	/*  Primary hash:  */
 	hash1 = (vsid & 0x7ffff) ^ ((vaddr >> 12) & 0xffff);
 	tmp = (hash1 >> 10) & (sdr1 & 0x1ff);
-	pteg_select = htaborg & 0xfe000000;
-	pteg_select |= ((hash1 & 0x3ff) << 6);
-	pteg_select |= (htaborg & 0x01ff0000) | (tmp << 16);
+	pteg_select = (htaborg & 0xffff0000) + ((hash1 & 0x3ff) << 6) | (tmp << 16);
 	cpu->cd.ppc.spr[SPR_HASH1] = pteg_select;
 	cmp = cpu->cd.ppc.spr[instr? SPR_ICMP : SPR_DCMP] =
 	    PTE_VALID | api | (vsid << PTE_VSID_SHFT);
-	match = get_pte_low(cpu, pteg_select, &lower_pte, cmp);
+	match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, vaddr == 0x30003000);
 
 	/*  Secondary hash:  */
 	hash2 = hash1 ^ 0x7ffff;
 	tmp = (hash2 >> 10) & (sdr1 & 0x1ff);
-	pteg_select = htaborg & 0xfe000000;
-	pteg_select |= ((hash2 & 0x3ff) << 6);
-	pteg_select |= (htaborg & 0x01ff0000) | (tmp << 16);
+	pteg_select = (htaborg & 0xffff0000) + ((hash2 & 0x3ff) << 6) | (tmp << 16);
 	cpu->cd.ppc.spr[SPR_HASH2] = pteg_select;
 	if (!match) {
 		cmp |= PTE_HID;
-		match = get_pte_low(cpu, pteg_select, &lower_pte, cmp);
+		match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, vaddr == 0x30003000);
 	}
 
 	*resp = 0;
@@ -245,6 +244,11 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		*return_paddr = vaddr;
 		return 2;
 	}
+
+  if (vaddr == 0x30003000) {
+    int srn = (vaddr >> 28) & 15, api = (vaddr >> 22) & PTE_API;
+    fprintf(stderr, "[ %08x: ppc %ctranslate %08x (sr %x = %08x api %02x) - msr %08x %s ]\n", (unsigned int)cpu->pc, instr ? 'i' : 'd', (unsigned int)vaddr, srn, (unsigned int)cpu->cd.ppc.sr[srn], api, (unsigned int)msr, user ? "user" : "kern");
+  }
 
 	if (cpu->cd.ppc.cpu_type.flags & PPC_601) {
 		fatal("ppc_translate_v2p(): TODO: 601\n");
@@ -337,7 +341,8 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     }
   }
 
-  if (write && (addr >= 0xfe050000) && (addr <= 0xfe080000)) {
+  auto udata = (uint8_t *)data;
+  if (write && (size == 4 && udata[0] == 0x80 && udata[1] == 0x4c && udata[2] == 0 && udata[3] == 4) || addr == 0xd000b000) {
     fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
     for (int i = 0; i < size; i++) {
       fprintf(stderr, " %02x", ((uint8_t *)data)[i]);

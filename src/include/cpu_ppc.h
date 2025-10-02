@@ -115,7 +115,7 @@ struct ppc_cpu {
 	int		bits;		/*  32 or 64  */
 
 	int		irq_asserted;	/*  External Interrupt flag  */
-	int		dec_intr_pending;/* Decrementer interrupt pending  */
+	uint64_t	dec_intr_pending;/* Decrementer interrupt pending  */
 	uint64_t	zero;		/*  A zero register  */
 
 	uint32_t	cr;		/*  Condition Register  */

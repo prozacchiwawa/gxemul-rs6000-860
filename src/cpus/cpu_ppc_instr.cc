@@ -172,11 +172,14 @@ X(addic)
  */
 X(subfic)
 {
-	MODE_uint_t tmp = (int64_t)(int32_t)ic->arg[1];
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (tmp >= reg(ic->arg[0]))
+  uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += (ssize_t)ic->arg[1] + 1;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = tmp - reg(ic->arg[0]);
+  }
+  // fprintf(stderr, "subfic (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+	reg(ic->arg[2]) = tmp;
 }
 
 
@@ -222,6 +225,9 @@ X(bclr)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (ctr_ok && cond_ok) {
+    if (addr == 0x804c0004) {
+      fprintf(stderr, "%08x: branch to 0x804c0004?\n", (unsigned int)cpu->pc);
+    }
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
@@ -229,6 +235,7 @@ X(bclr_20)
 {
 	cpu->pc = cpu->cd.ppc.spr[SPR_LR];
 	quick_pc_to_pointers(cpu);
+  instr(update_pc_for_branch)(cpu, cpu->cd.ppc, cpu->cd.ppc.spr[SPR_LR]);
 }
 X(bclr_l)
 {
@@ -251,6 +258,9 @@ X(bclr_l)
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (ctr_ok && cond_ok) {
+    if (addr == 0x804c0004) {
+      fprintf(stderr, "%08x: branch to 0x804c0004?\n", (unsigned int)cpu->pc);
+    }
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
@@ -271,7 +281,6 @@ X(bcctr)
 	int cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (cond_ok) {
-    
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
@@ -751,7 +760,7 @@ X(dcbz)
 	size_t cleared = 0;
 
 	/*  Synchronize the PC first:  */
-	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[2];
+  sync_pc(cpu, ic);
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -1359,17 +1368,31 @@ X(mtsr)
 {
 	int sr_num = ic->arg[0];
 	uint32_t old = cpu->cd.ppc.sr[sr_num];
+  int user = cpu->cd.ppc.msr & PPC_MSR_PR;
 	cpu->cd.ppc.sr[sr_num] = reg(ic->arg[1]);
 
+  sync_pc(cpu, ic);
+
+  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    fprintf(stderr, "[ %08x mtsr (%s) %x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", sr_num, (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  }
+
 	if (cpu->cd.ppc.sr[sr_num] != old)
-		cpu->invalidate_translation_caches(cpu, ic->arg[0] << 28,
+		cpu->invalidate_translation_caches(cpu, sr_num << 28,
 		    INVALIDATE_ALL | INVALIDATE_VADDR_UPPER4);
 }
 X(mtsrin)
 {
-	int sr_num = reg(ic->arg[0]) >> 28;
+	int sr_num = (reg(ic->arg[0]) >> 28) & 15;
 	uint32_t old = cpu->cd.ppc.sr[sr_num];
+  int user = cpu->cd.ppc.msr & PPC_MSR_PR;
 	cpu->cd.ppc.sr[sr_num] = reg(ic->arg[1]);
+
+  sync_pc(cpu, ic);
+
+  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    fprintf(stderr, "[ %08x mtsrin (%s) %08x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", (unsigned int)reg(ic->arg[0]), (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  }
 
 	if (cpu->cd.ppc.sr[sr_num] != old)
 		cpu->invalidate_translation_caches(cpu, sr_num << 28,
@@ -1391,7 +1414,7 @@ X(mfsr)
 X(mfsrin)
 {
 	/*  TODO: This only works for 32-bit mode  */
-	uint32_t sr_num = reg(ic->arg[0]) >> 28;
+	uint32_t sr_num = (reg(ic->arg[0]) >> 28) & 15;
 	reg(ic->arg[1]) = cpu->cd.ppc.sr[sr_num];
 }
 
@@ -1532,29 +1555,26 @@ DOT0(rlwinm)
  */
 X(rlwimi)
 {
-	MODE_uint_t tmp = reg(ic->arg[0]), ra = reg(ic->arg[1]);
 	uint32_t iword = ic->arg[2];
 	int sh = (iword >> 11) & 31;
 	int mb = (iword >> 6) & 31;
 	int me = (iword >> 1) & 31;
 	int rc = iword & 1;
-
-	tmp = (tmp << sh) | (tmp >> (32-sh));
-
-	for (;;) {
-		uint64_t mask;
-		mask = (uint64_t)1 << (31-mb);
-		ra &= ~mask;
-		ra |= (tmp & mask);
-		if (mb == me)
-			break;
-		mb ++;
-		if (mb == 32)
-			mb = 0;
-	}
-	reg(ic->arg[1]) = ra;
-	if (rc)
-		update_cr0(cpu, ra);
+  auto mask = [](int mb, int me) -> MODE_uint_t {
+    return ((1ull << (32 - mb)) - 1) & ~((1ull << (32 - me)) - 1);
+  };
+  auto rotl = [](MODE_uint_t v, int sh) -> MODE_uint_t {
+    return (v << sh) | (v >> (32 - sh));
+  };
+  MODE_uint_t rA = reg(ic->arg[1]);
+  MODE_uint_t rS = reg(ic->arg[0]);
+	MODE_uint_t r = rotl(rS, sh);
+  MODE_uint_t m = (mb <= me) ? mask(mb, me + 1) : (~0ull ^ mask(me + 1, mb));
+  rA = (r & m) | (rA & ~m);
+	reg(ic->arg[1]) = rA;
+	if (rc) {
+		update_cr0(cpu, rA);
+  }
 }
 
 
@@ -1586,6 +1606,17 @@ X(srawi)
 }
 DOT1(srawi)
 
+X(icbi)
+{
+  sync_pc(cpu, ic);
+  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
+  fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
+  auto old_msr = cpu->cd.ppc.msr;
+  auto dr = !!(old_msr & PPC_MSR_DR);
+  cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
+  cpu->invalidate_translation_caches(cpu, ea, INVALIDATE_VADDR);
+  cpu->cd.ppc.msr = old_msr;
+}
 
 /*
  *  mcrf:  Move inside condition register
@@ -1746,6 +1777,7 @@ X(mtspr) {
     fprintf(stderr, "SDR1 CHANGE\n");
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
   }
+
   reg(ic->arg[1]) = reg(ic->arg[0]);
 }
 X(mtspr_sprg2) {
@@ -1768,9 +1800,6 @@ X(mtdec) {
   if (reg & 0x80000000 && !(dec & 0x80000000)) {
     cpu->cd.ppc.dec_intr_pending = 1;
   }
-  if (reg == 1) {
-    fprintf(stderr, "%08x: wierd low mtdec %08x @ %" PRIx64"\n", (unsigned int)cpu->pc, (unsigned int)reg, cpu->ninstrs);
-  }
   cpu->cd.ppc.spr[SPR_DEC] = reg;
 }
 
@@ -1781,14 +1810,20 @@ X(rfi)
 {
 	uint64_t tmp;
 
+  sync_pc(cpu, ic);
 	reg_access_msr(cpu, &tmp, 0, ic, 0);
 	tmp &= ~0xffff;
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
 
-	cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
+  auto new_addr = cpu->cd.ppc.spr[SPR_SRR0];
+  if (new_addr == 0x804c0004) {
+    fprintf(stderr, "%08x: new addr 0x804c0004\n", (unsigned int)cpu->pc);
+  }
+  cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
 	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
 	quick_pc_to_pointers(cpu);
+  cpu->invalidate_code_translation(cpu, cpu->cd.ppc.vph32.get_ic_phys(), INVALIDATE_PADDR);
 }
 X(rfid)
 {
@@ -1920,9 +1955,12 @@ X(lmw) {
 	int rs = ic->arg[0];
 
   int swizzle = 0, offset = 0;
-  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
   sync_pc(cpu, ic);
+
+  uint32_t candidate_values[32];
+  auto original_rs = rs;
 
 	while (rs <= 31) {
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
@@ -1931,12 +1969,16 @@ X(lmw) {
 			return;
 		}
 
-    cpu->cd.ppc.gpr[rs] = (d[0 ^ swizzle] << 24) + (d[1 ^ swizzle] << 16)
+    candidate_values[rs] = (d[0 ^ swizzle] << 24) + (d[1 ^ swizzle] << 16)
 			    + (d[2 ^ swizzle] << 8) + d[3 ^ swizzle];
 
 		rs ++;
 		addr += sizeof(uint32_t);
 	}
+
+  for (auto i = original_rs; i < rs; i++) {
+    cpu->cd.ppc.gpr[i] = candidate_values[i];
+  }
 }
 X(stmw) {
 	MODE_uint_t addr = reg(ic->arg[1]) + (int32_t)ic->arg[2];
@@ -1944,16 +1986,35 @@ X(stmw) {
 	int rs = ic->arg[0];
 
   int swizzle = 0, offset = 0;
-  cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
   sync_pc(cpu, ic);
+
+  auto test_addr = addr;
+  for (auto test_rs = rs; test_rs <= 31; test_rs++) {
+    if (cpu->memory_rw(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
+                       MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
+			/*  exception  */
+      fprintf(stderr, "%08x STMW read probe failed %08x\n", (unsigned int)cpu->pc, (unsigned int)test_addr);
+			return;
+		}
+    if (cpu->memory_rw(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
+                       MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+			/*  exception  */
+      fprintf(stderr, "%08x STMW write probe failed %08x\n", (unsigned int)cpu->pc, (unsigned int)test_addr);
+			return;
+		}
+
+    test_addr += sizeof(uint32_t);
+  }
 
 	while (rs <= 31) {
 		uint32_t tmp = cpu->cd.ppc.gpr[rs];
     d[3 ^ swizzle] = tmp; d[2 ^ swizzle] = tmp >> 8;
     d[1 ^ swizzle] = tmp >> 16; d[0 ^ swizzle] = tmp >> 24;
+    // fprintf(stderr, "%08x: STMW: %08x = %08x - %" PRIx64 "\n", (unsigned int)cpu->pc, (unsigned int)addr, (unsigned int)tmp, cpu->ninstrs);
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
-		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+                       MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
 		}
@@ -1969,7 +2030,7 @@ X(stmw) {
  *
  *  arg[0] = rs   (well, rt for lswi)
  *  arg[1] = ptr to ra (or ptr to zero)
- * if the low bit of arg[2] is 1,
+ * if the 15th bit of arg[2] is 1,
  *  arg[2] = nb << 1 | 1
  * else
  *  arg[2] = ptr to rb
@@ -1978,77 +2039,107 @@ X(stmw) {
 X(lswi)
 {
 	MODE_uint_t addr = reg(ic->arg[1]);
-	int rt = ic->arg[0], nb;
+	int rt = ic->arg[0], nb, rb = ~0;
 	int sub = 0;
+  char ix = 'x';
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
-  if (ic->arg[2] & 1) {
-    nb = (ic->arg[2] >> 1);
+  sync_pc(cpu, ic);
+
+  if (ic->arg[2] & 0x8000) {
+    nb = ic->arg[2] & 63;
+    ix = 'i';
+    // fprintf(stderr, "lswi: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   } else {
-    addr += reg(ic->arg[2]);
-    nb = cpu->cd.ppc.spr[SPR_XER] & 63;
+    rb = ic->arg[2] & 31;
+    addr += (ssize_t)cpu->cd.ppc.gpr[rb];
+    nb = cpu->cd.ppc.spr[SPR_XER] & 127;
     if (nb == 0) {
+      fprintf(stderr, "lswx: zero bytes\n");
+      cpu->cd.ppc.gpr[rt] = 0;
       return;
     }
+    // fprintf(stderr, "lswx: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
-  sync_pc(cpu, ic);
+  uint64_t register_values[32];
+  uint32_t start_rt = (rt + 31) & 31;
 
 	while (nb > 0) {
 		unsigned char d;
+
+		if ((sub & 3) == 0) {
+			rt = (rt + (sub >> 2)) & 31;
+			register_values[rt] = 0;
+			sub = 0;
+		}
+
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
-		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
+                       MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
+      fprintf(stderr, "%08x LSW%c read failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
 			return;
 		}
 
-		if (cpu->cd.ppc.mode == MODE_POWER && sub == 0)
-			cpu->cd.ppc.gpr[rt] = 0;
-		cpu->cd.ppc.gpr[rt] &= ~(0xff << (24-8*sub));
-		cpu->cd.ppc.gpr[rt] |= (d << (24-8*sub));
+		register_values[rt] |= (d << (24-8*sub));
 		sub ++;
-		if (sub == 4) {
-			rt = (rt + 1) & 31;
-			sub = 0;
-		}
 		addr ++;
 		nb --;
 	}
+
+  while (rt != start_rt) {
+    if ((&cpu->cd.ppc.gpr[rt] == (uint64_t *)ic->arg[1]) || (rt == rb)) {
+      fprintf(stderr, "lsw%c: skip overlap of ra or rb register %02d\n", ix, rt);
+    } else {
+      // fprintf(stderr, "lsw%c: r%02d = %08x\n", ix, rt, (unsigned int)register_values[rt]);
+      cpu->cd.ppc.gpr[rt] = register_values[rt];
+    }
+    rt--;
+  }
 }
 X(stswi)
 {
 	MODE_uint_t addr = reg(ic->arg[1]);
 	int rs = ic->arg[0], nb;
 	uint32_t cur = cpu->cd.ppc.gpr[rs];
+  char ix = 'x';
 	int sub = 0;
 
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
-  if (ic->arg[2] & 1) {
-    nb = (ic->arg[2] >> 1);
+  if (ic->arg[2] & 0x8000) {
+    nb = ic->arg[2] & 63;
+    ix = 'i';
+    // fprintf(stderr, "stswi: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   } else {
-    addr += reg(ic->arg[2]);
-    nb = cpu->cd.ppc.spr[SPR_XER] & 63;
+    int rb = ic->arg[2] & 31;
+    addr += (ssize_t)cpu->cd.ppc.gpr[rb];
+    nb = cpu->cd.ppc.spr[SPR_XER] & 127;
     if (nb == 0) {
+      // fprintf(stderr, "lswx: zero bytes\n");
       return;
     }
+    // fprintf(stderr, "stswx: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
   sync_pc(cpu, ic);
-  // fprintf(stderr, "%08x stswi %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
-
 
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
 
+    if (sub == 0) {
+      // fprintf(stderr, "stsw%c: r%02d %08x = %08x\n", ix, rs, (unsigned int)addr, cur);
+    }
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+      fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
 			/*  exception  */
 			return;
 		}
+
 		cur <<= 8;
 		sub ++;
 		if (sub == 4) {
@@ -2070,19 +2161,28 @@ X(stswi)
  *  arg[2] = pointer to destination register ra
  */
 X(extsb) {
+  uint64_t mask =
+    (reg(ic->arg[0]) & 0x80) ?
 #ifdef MODE32
-	reg(ic->arg[2]) = (int32_t)(int8_t)reg(ic->arg[0]);
+            0xffffff00ull
 #else
-	reg(ic->arg[2]) = (int64_t)(int8_t)reg(ic->arg[0]);
+    0xffffffffffffff00ull
 #endif
+    : 0;
+	reg(ic->arg[2]) = mask | reg(ic->arg[0]) & 0xff;
 }
 DOT2(extsb)
 X(extsh) {
+  uint64_t mask =
+    (reg(ic->arg[0]) & 0x8000) ?
 #ifdef MODE32
-	reg(ic->arg[2]) = (int32_t)(int16_t)reg(ic->arg[0]);
+            0xffff0000ull
 #else
-	reg(ic->arg[2]) = (int64_t)(int16_t)reg(ic->arg[0]);
+    0xffffffffffff0000ull
 #endif
+    : 0;
+  uint64_t tmp = mask | reg(ic->arg[0]) & 0xffff;
+	reg(ic->arg[2]) = tmp;
 }
 DOT2(extsh)
 X(extsw) {
@@ -2240,7 +2340,7 @@ X(addc)
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
 	reg(ic->arg[2]) = (uint32_t)tmp;
 }
-
+DOT2(addc)
 
 /*
  *  adde:  Add extended, etc.
@@ -2304,59 +2404,59 @@ DOT2(addze)
  */
 X(subf)
 {
-	reg(ic->arg[2]) = reg(ic->arg[1]) - reg(ic->arg[0]);
+	reg(ic->arg[2]) = ~reg(ic->arg[0]) + reg(ic->arg[1]) + 1;
 }
 DOT2(subf)
 X(subfc)
 {
+	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (reg(ic->arg[1]) >= reg(ic->arg[0]))
+  uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += reg(ic->arg[1]) + 1;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = reg(ic->arg[1]) - reg(ic->arg[0]);
+  }
+  // fprintf(stderr, "subfc (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+	reg(ic->arg[2]) = tmp;
 }
 DOT2(subfc)
 X(subfe)
 {
 	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (reg(ic->arg[1]) == reg(ic->arg[0])) {
-		if (old_ca)
-			cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	} else if (reg(ic->arg[1]) >= reg(ic->arg[0]))
+  uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += reg(ic->arg[1]) + old_ca;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-
-	/*
-	 *  TODO: The register value calculation should be correct,
-	 *  but the CA bit calculation above is probably not.
-	 */
-
-	reg(ic->arg[2]) = reg(ic->arg[1]) - reg(ic->arg[0]) - (old_ca? 0 : 1);
+  }
+  // fprintf(stderr, "subfe (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+	reg(ic->arg[2]) = tmp;
 }
 DOT2(subfe)
 X(subfme)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
-	uint64_t tmp = (uint32_t)(~reg(ic->arg[0]));
-	tmp += 0xffffffffULL;
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (old_ca)
-		tmp ++;
-	if ((tmp >> 32) != 0)
+	uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += 0xffffffffULL + old_ca;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = (uint32_t)tmp;
+  }
+  fprintf(stderr, "subfme (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', 0xffffffffull, reg(ic->arg[0]), tmp);
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfme)
 X(subfze)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
-	uint64_t tmp = (uint32_t)(~reg(ic->arg[0]));
-	uint64_t tmp2 = tmp;
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (old_ca)
-		tmp ++;
-	if ((tmp >> 32) != (tmp2 >> 32))
+	uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += old_ca;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = (uint32_t)tmp;
+  }
+  fprintf(stderr, "subfze (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', 0ull, reg(ic->arg[0]), tmp);
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfze)
 
@@ -2383,28 +2483,54 @@ X(lfs)
 	/*  Sync. PC in case of an exception, and remember it:  */
 	uint64_t old_pc, low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
-	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);
-		return;
-	}
+                                  PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+	CHECK_FOR_FPU_EXCEPTION;
 
 	/*  Perform a 32-bit load:  */
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [2 + 4 + 8](cpu, ic);
+    [2 + 4 + 8](cpu, ic);
 
 	if (old_pc == cpu->pc) {
 		/*  The load succeeded. Let's convert the value:  */
 		struct ieee_float_value val;
 		(*(uint64_t *)ic->arg[0]) &= 0xffffffff;
 		ieee_interpret_float_value(*(uint64_t *)ic->arg[0],
-		    &val, IEEE_FMT_S);
+                               &val, IEEE_FMT_S);
 		(*(uint64_t *)ic->arg[0]) =
-		    ieee_store_float_value(val.f, IEEE_FMT_D, val.nan);
+      ieee_store_float_value(val.f, IEEE_FMT_D, val.nan);
+	}
+}
+/*
+ *  lfs, stfs: Load/Store Floating-point Single precision
+ */
+X(lfs_update)
+{
+	/*  Sync. PC in case of an exception, and remember it:  */
+	uint64_t old_pc, low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
+	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
+                                  PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+	CHECK_FOR_FPU_EXCEPTION;
+
+	/*  Perform a 32-bit load:  */
+#ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [2 + 4 + 8 + 32](cpu, ic);
+
+	if (old_pc == cpu->pc) {
+		/*  The load succeeded. Let's convert the value:  */
+		struct ieee_float_value val;
+		(*(uint64_t *)ic->arg[0]) &= 0xffffffff;
+		ieee_interpret_float_value(*(uint64_t *)ic->arg[0],
+                               &val, IEEE_FMT_S);
+		(*(uint64_t *)ic->arg[0]) =
+      ieee_store_float_value(val.f, IEEE_FMT_D, val.nan);
 	}
 }
 X(lfsx)
@@ -2413,10 +2539,8 @@ X(lfsx)
 	uint64_t old_pc, low_pc = cpu->cd.ppc.VPH.sync_low_pc(cpu, ic);
 	old_pc = cpu->pc = (cpu->pc & ~((PPC_IC_ENTRIES_PER_PAGE-1) <<
 	    PPC_INSTR_ALIGNMENT_SHIFT)) + (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
-	if (!(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-		ppc_exception(cpu, PPC_EXCEPTION_FPU, 0);
-		return;
-	}
+
+	CHECK_FOR_FPU_EXCEPTION;
 
 	/*  Perform a 32-bit load:  */
 #ifdef MODE32
@@ -2424,7 +2548,7 @@ X(lfsx)
 #else
 	ppc_loadstore_indexed
 #endif
-	    [2 + 4 + 8](cpu, ic);
+	    [2 + 4 + 8 + 16](cpu, ic);
 
 	if (old_pc == cpu->pc) {
 		/*  The load succeeded. Let's convert the value:  */
@@ -2444,21 +2568,33 @@ X(lfd)
 #ifdef MODE32
 	ppc32_loadstore
 #else
-	ppc_loadstore
+    ppc_loadstore
 #endif
-	    [3 + 4 + 8](cpu, ic);
+    [3 + 4 + 8](cpu, ic);
 }
-X(lfdx)
+X(lfd_update)
 {
 	CHECK_FOR_FPU_EXCEPTION;
 
 	/*  Perform a 64-bit load:  */
 #ifdef MODE32
+	ppc32_loadstore
+#else
+    ppc_loadstore
+#endif
+    [3 + 4 + 8 + 32](cpu, ic);
+}
+X(lfdx)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+
+/*  Perform a 64-bit load:  */
+#ifdef MODE32
 	ppc32_loadstore_indexed
 #else
 	ppc_loadstore_indexed
 #endif
-	    [3 + 4 + 8](cpu, ic);
+	    [3 + 4 + 8 + 16](cpu, ic);
 }
 X(stfs)
 {
@@ -2730,8 +2866,25 @@ X(tlbia)
 X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
-  fprintf(stderr, "[ tlbie %08x ]\n", (unsigned int)reg(ic->arg[0]));
-  cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+  sync_pc(cpu, ic);
+  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+
+  auto msr = cpu->cd.ppc.msr;
+  uint64_t increment = 0x10000000;
+  uint64_t addr_page = reg(ic->arg[0]);
+
+  for (int i = 0; i < 2; i++) {
+    cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
+    addr_page &= increment - 1;
+    for (int i = 0; i < 16; i++) {
+      fprintf(stderr, "[ tlb invalidate lowbits %08x %08x ]\n", (unsigned int)cpu->cd.ppc.msr, (unsigned int)addr_page);
+      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
+      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+      addr_page += increment;
+    }
+  }
+
+  cpu->cd.ppc.msr = msr;
 }
 
 
@@ -3111,9 +3264,9 @@ X(to_be_translated)
 		case PPC_HI6_STW:  size=2; break;
 		case PPC_HI6_STWU: size=2; update=1; break;
 		case PPC_HI6_LFS:  load=1; size=2; fp=1;ic->f=instr(lfs);break;
-    case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs);break;
+    case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs_update);break;
 		case PPC_HI6_LFD:  load=1; size=3; fp=1;ic->f=instr(lfd);break;
-    case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd);break;
+    case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd_update);break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
 		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
 		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
@@ -3257,9 +3410,9 @@ X(to_be_translated)
 					ic->f = instr(bclr_l);
 				else {
 					ic->f = instr(bclr);
-					if (!cpu->machine->show_trace_tree &&
-					    (bo & 0x14) == 0x14)
+					if ((bo & 0x14) == 0x14) {
 						ic->f = instr(bclr_20);
+          }
 				}
 			} else {
 				if (!(bo & 4)) {
@@ -3596,10 +3749,21 @@ X(to_be_translated)
 		case PPC_31_DCBTST:
 		case PPC_31_DCBF:
 		case PPC_31_DCBT:
-		case PPC_31_ICBI:
     case PPC_31_DCBI:
 			ic->f = instr(nop);
 			break;
+
+		case PPC_31_ICBI:
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      if (ra == 0) {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->f = instr(icbi);
+      break;
 
 		case PPC_31_DCBZ:
 			ra = (iword >> 16) & 31;
@@ -3693,14 +3857,15 @@ X(to_be_translated)
 			ra = (iword >> 16) & 31;
 			nb = (iword >> 11) & 31;
 			ic->arg[0] = rs;
-			if (ra == 0)
+			if (ra == 0) {
 				ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
-			else
-				ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[ra]);
-      if (xo == PPC_31_LSWX || xo == PPC_31_STSWX) {
-        ic->arg[2] = (size_t)(&cpu->cd.ppc.gpr[nb]);
       } else {
-        ic->arg[2] = ((nb == 0? 32 : nb) << 1) | 1;
+				ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      if (xo == PPC_31_LSWX || xo == PPC_31_STSWX) {
+        ic->arg[2] = nb;
+      } else {
+        ic->arg[2] = (nb ? nb : 32) | 0x8000;
       }
 			switch (xo) {
       case PPC_31_LSWX:
@@ -3925,8 +4090,8 @@ X(to_be_translated)
 				switch (xo) {
 				case PPC_31_ADD:
 					ic->f = instr(add_dot); break;
-				case PPC_31_ADDC: // XXX Check correctness
-					ic->f = instr(add_dot); break;
+				case PPC_31_ADDC:
+					ic->f = instr(addc_dot); break;
 				case PPC_31_ADDE:
 					ic->f = instr(adde_dot); break;
 				case PPC_31_ADDME:

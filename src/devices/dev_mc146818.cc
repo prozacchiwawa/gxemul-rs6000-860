@@ -527,8 +527,8 @@ DEVICE_ACCESS(mc146818)
 			/*  NOTE: Acking is done below, _after_ the
 			    register has been read.  */
 			break;
-		default:/*debug("[ mc146818: read from relative_addr = "
-			    "%04x ]\n", (int)relative_addr)*/;
+		default:debug("[ mc146818: read from relative_addr = "
+			    "%04x ]\n", (int)relative_addr);
 		}
 
 		data[0] = d->reg[relative_addr];

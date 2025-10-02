@@ -1364,17 +1364,31 @@ X(mtsr)
 {
 	int sr_num = ic->arg[0];
 	uint32_t old = cpu->cd.ppc.sr[sr_num];
+  int user = cpu->cd.ppc.msr & PPC_MSR_PR;
 	cpu->cd.ppc.sr[sr_num] = reg(ic->arg[1]);
 
+  sync_pc(cpu, ic);
+
+  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    fprintf(stderr, "[ %08x mtsr (%s) %x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", sr_num, (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  }
+
 	if (cpu->cd.ppc.sr[sr_num] != old)
-		cpu->invalidate_translation_caches(cpu, ic->arg[0] << 28,
+		cpu->invalidate_translation_caches(cpu, sr_num << 28,
 		    INVALIDATE_ALL | INVALIDATE_VADDR_UPPER4);
 }
 X(mtsrin)
 {
-	int sr_num = reg(ic->arg[0]) >> 28;
+	int sr_num = (reg(ic->arg[0]) >> 28) & 15;
 	uint32_t old = cpu->cd.ppc.sr[sr_num];
+  int user = cpu->cd.ppc.msr & PPC_MSR_PR;
 	cpu->cd.ppc.sr[sr_num] = reg(ic->arg[1]);
+
+  sync_pc(cpu, ic);
+
+  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    fprintf(stderr, "[ %08x mtsrin (%s) %08x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", (unsigned int)reg(ic->arg[0]), (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  }
 
 	if (cpu->cd.ppc.sr[sr_num] != old)
 		cpu->invalidate_translation_caches(cpu, sr_num << 28,
@@ -1396,7 +1410,7 @@ X(mfsr)
 X(mfsrin)
 {
 	/*  TODO: This only works for 32-bit mode  */
-	uint32_t sr_num = reg(ic->arg[0]) >> 28;
+	uint32_t sr_num = (reg(ic->arg[0]) >> 28) & 15;
 	reg(ic->arg[1]) = cpu->cd.ppc.sr[sr_num];
 }
 

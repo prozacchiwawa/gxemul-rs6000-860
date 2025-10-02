@@ -172,11 +172,14 @@ X(addic)
  */
 X(subfic)
 {
-	MODE_uint_t tmp = (int64_t)(int32_t)ic->arg[1];
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (tmp >= reg(ic->arg[0]))
+  uint64_t tmp = ~reg(ic->arg[0]);
+  tmp += (ssize_t)ic->arg[1] + 1;
+  if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = tmp - reg(ic->arg[0]);
+  }
+  // fprintf(stderr, "subfic (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+	reg(ic->arg[2]) = tmp;
 }
 
 

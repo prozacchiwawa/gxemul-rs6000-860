@@ -1768,9 +1768,6 @@ X(mtdec) {
   if (reg & 0x80000000 && !(dec & 0x80000000)) {
     cpu->cd.ppc.dec_intr_pending = 1;
   }
-  if (reg == 1) {
-    fprintf(stderr, "%08x: wierd low mtdec %08x @ %" PRIx64"\n", (unsigned int)cpu->pc, (unsigned int)reg, cpu->ninstrs);
-  }
   cpu->cd.ppc.spr[SPR_DEC] = reg;
 }
 

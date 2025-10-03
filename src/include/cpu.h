@@ -103,6 +103,7 @@
 		DYNTRANS_TRANSLATIONS_BITMAP(ARCH);                             \
 		uint32_t	translation_ranges_ofs;                               \
 		addrtype	physaddr;                                             \
+    uint64_t  virtaddr;                                             \
 	};                                                                \
                                                                     \
 	struct arch ## _vpg_tlb_entry {                                   \

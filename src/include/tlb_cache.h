@@ -352,7 +352,20 @@ protected:
     set_tlb_physpage(cpu, addr, nullptr);
   }
 
+  void clear_physpage(typename T::physpage_t *ppp) {
+    for (auto i = 0; i < ic_entries_per_page<typename T::physpage_t>(); i++) {
+      ppp->ics[i].f = physpage_template->ics[0].f;
+    }
+
+    memset(&ppp->translations_bitmap, 0, sizeof(ppp->translations_bitmap));
+    ppp->virtaddr = ~0ull;
+  }
+
   void set_physpage(uint64_t virt, typename T::physpage_t *page) {
+    if (page->virtaddr != virt) {
+      clear_physpage(page);
+    }
+    page->virtaddr = virt;
     this->cur_ic_virt = virt;
     this->cur_physpage = page;
   }
@@ -553,11 +566,7 @@ public:
       ppp = &found->second;
 
       if (ppp != nullptr && !ppp->translations_bitmap.empty()) {
-        for (auto i = 0; i < ic_entries_per_page<typename T::physpage_t>(); i++) {
-          ppp->ics[i].f = physpage_template->ics[0].f;
-        }
-
-        memset(&ppp->translations_bitmap, 0, sizeof(ppp->translations_bitmap));
+        clear_physpage(ppp);
       }
     }
 

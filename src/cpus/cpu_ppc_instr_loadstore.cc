@@ -37,159 +37,128 @@
  *	     (or, for Indexed load/stores: pointer to index register)
  */
 
+extern void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int swizzle);
 
 #ifndef LS_IGNOREOFS
 void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
-  int offset =
-    (cpu->cd.ppc.msr & PPC_MSR_LE) ? 
-#ifdef LS_B
-    7
-#elif defined(LS_H)
-    6
-#elif defined(LS_W)
-    4
+#undef DO_ZERO
+#ifdef LS_ZERO
+#define DO_ZERO true
 #else
-    0
+#define DO_ZERO false
 #endif
-    : 0;
+
+#ifndef LS_INDEXED
+#ifndef LS_IGNOREOFS
+	int32_t ofs = ic->arg[2];
+#endif
+#endif
 
 #ifdef MODE32
 	uint32_t addr =
 #else
 	uint64_t addr =
 #endif
-    offset ^
-    (reg(ic->arg[1]) +
+	    reg(ic->arg[1]) +
 #ifdef LS_INDEXED
-     reg(ic->arg[2])
+	    reg(ic->arg[2]);
 #else
-     (int32_t)ic->arg[2]
+	    ofs;
 #endif
-     );
-	unsigned char data[LS_SIZE];
+  unsigned char data[LS_SIZE] = { };
 
-	/*
-  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-    const char *ls =
-#ifdef LS_LOAD
-      "load"
-#else
-      "store"
+  int swizzle, offset;
+  cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
+
+#ifdef LS_BYTEREVERSE
+#ifdef LS_H
+  swizzle ^= 1;
 #endif
-      ;
-    fprintf(stderr, "LE generic %s %d from %08x\n", ls, 8 - offset, addr);
-  }
-  */
-
+#ifdef LS_W
+  swizzle ^= 3;
+#endif
+#ifdef LS_D
+  swizzle ^= 7;
+#endif
+#endif
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.ppc.cur_ic_page)
-	    / sizeof(struct ppc_instr_call);
-	cpu->pc &= ~((PPC_IC_ENTRIES_PER_PAGE-1) << PPC_INSTR_ALIGNMENT_SHIFT);
-	cpu->pc += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
+  sync_pc(cpu, ic);
+
+  assert(cpu->pc == ic->pc);
 
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
-		fatal("PPC LOAD/STORE misalignment across page boundary: TODO"
-		    " (addr=0x%08x, LS_SIZE=%i)\n", (int)addr, LS_SIZE);
-		//exit(1);
+		fatal("%08x: PPC LOAD/STORE misalignment across page boundary: TODO"
+		    " (addr=0x%08x, LS_SIZE=%i)\n", (unsigned int)cpu->pc, (int)addr, LS_SIZE);
+		if (swizzle | offset) {
+      fprintf(stderr, "misaligned LE without full translation\n");
+      exit(1);
+    }
+
+    auto end = addr + LS_SIZE;
+    auto second_page = end & ~0xfff;
+    auto second_span = end - second_page;
+    auto first_span = second_page - addr;
+
+#ifdef LS_LOAD
+    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+      // Throw
+      return;
+    }
+
+    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+      // Throw
+      return;
+    }
+
+    load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
+#else
+    store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
+
+    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
+                        MEM_WRITE, CACHE_DATA)) {
+      return;
+    }
+
+    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span,
+                        MEM_WRITE, CACHE_DATA)) {
+      return;
+    }
+#endif
+
+#ifdef LS_UPDATE
+    reg(ic->arg[1]) = addr;
+#endif
+
+    return;
 	}
 #endif
 
 #ifdef LS_LOAD
-	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
-	    MEM_READ, CACHE_DATA)) {
+	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
+                      MEM_READ, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
 	}
-#ifdef LS_B
-	reg(ic->arg[0]) =
-#ifndef LS_ZERO
-	    (int8_t)
-#endif
-	    data[0];
-#endif
-#ifdef LS_H
-	reg(ic->arg[0]) =
-#ifdef LS_BYTEREVERSE
-	    ((data[1] << 8) + data[0]);
-#else
-#ifndef LS_ZERO
-	    (int16_t)
-#endif
-	    ((data[0] << 8) + data[1]);
-#endif /*  !BYTEREVERSE  */
-#endif
-#ifdef LS_W
-	reg(ic->arg[0]) =
-#ifdef LS_BYTEREVERSE
-	    ((data[3] << 24) + (data[2] << 16) +
-	    (data[1] << 8) + data[0]);
-#else  /* !LS_BYTEREVERSE  */
-#ifndef LS_ZERO
-	    (int32_t)
-#else
-	    (uint32_t)
-#endif
-	    ((data[0] << 24) + (data[1] << 16) +
-	    (data[2] << 8) + data[3]);
-#endif /* !LS_BYTEREVERSE */
-#endif
-#ifdef LS_D
-	(*(uint64_t *)(ic->arg[0])) =
-	    ((uint64_t)data[0] << 56) + ((uint64_t)data[1] << 48) +
-	    ((uint64_t)data[2] << 40) + ((uint64_t)data[3] << 32) +
-	    ((uint64_t)data[4] << 24) + (data[5] << 16) +
-	    (data[6] << 8) + data[7];
-#endif
 
+  load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
+
+  access_log(cpu, 0, addr^offset, data, sizeof(data), swizzle);
 #else	/*  store:  */
+  store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
-#ifdef LS_B
-	data[0] = reg(ic->arg[0]);
-#endif
-#ifdef LS_H
-#ifdef LS_BYTEREVERSE
-	data[0] = reg(ic->arg[0]);
-	data[1] = reg(ic->arg[0]) >> 8;
-#else
-	data[0] = reg(ic->arg[0]) >> 8;
-	data[1] = reg(ic->arg[0]);
-#endif
-#endif
-#ifdef LS_W
-#ifdef LS_BYTEREVERSE
-	data[0] = reg(ic->arg[0]);
-	data[1] = reg(ic->arg[0]) >> 8;
-	data[2] = reg(ic->arg[0]) >> 16;
-	data[3] = reg(ic->arg[0]) >> 24;
-#else
-	data[0] = reg(ic->arg[0]) >> 24;
-	data[1] = reg(ic->arg[0]) >> 16;
-	data[2] = reg(ic->arg[0]) >> 8;
-	data[3] = reg(ic->arg[0]);
-#endif /* !LS_BYTEREVERSE */
-#endif
-#ifdef LS_D
-	{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-	data[0] = x >> 56;
-	data[1] = x >> 48;
-	data[2] = x >> 40;
-	data[3] = x >> 32;
-	data[4] = x >> 24;
-	data[5] = x >> 16;
-	data[6] = x >> 8;
-	data[7] = x; }
-#endif
-	if (!cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
-	    MEM_WRITE, CACHE_DATA)) {
+  access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
+
+	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
+                      MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
 	}
 #endif
 
 #ifdef LS_UPDATE
-	reg(ic->arg[1]) = addr ^ offset;
+	reg(ic->arg[1]) = addr;
 #endif
 }
 #endif
@@ -197,19 +166,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 {
-  int offset =
-    (cpu->cd.ppc.msr & PPC_MSR_LE) ?
-#ifdef LS_B
-    7
-#elif defined(LS_H)
-    6
-#elif defined(LS_W)
-    4
-#else
-    0
-#endif
-    : 0;
-
 #ifndef MODE32
 	/************************************************************/
 	/* For now, 64-bit access is done using the slow fallback.  */
@@ -220,45 +176,63 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 
+#ifndef LS_INDEXED
+#ifndef LS_IGNOREOFS
+	int32_t ofs = ic->arg[2];
+#endif
+#endif
+
 #ifdef MODE32
 	uint32_t addr =
 #else
 	uint64_t addr =
 #endif
-    offset ^
-    (reg(ic->arg[1])
+	    reg(ic->arg[1])
 #ifdef LS_INDEXED
-     + reg(ic->arg[2])
+	    + reg(ic->arg[2])
 #else
 #ifndef LS_IGNOREOFS
-     + (int32_t)ic->arg[2]
+	    + ofs
 #endif
 #endif
-     );
+	    ;
 
-	/*
-  if (cpu->cd.ppc.msr & PPC_MSR_LE) {
-    const char *ls =
-#ifdef LS_LOAD
-      "load"
-#else
-      "store"
-#endif
-      ;
-    fprintf(stderr, "LE %s %d from %08x\n", ls, 8 - offset, addr);
-  }
-  */
+  uint64_t full_addr = addr;
 
-	unsigned char *page = cpu->cd.ppc.
-#ifdef LS_LOAD
-	    host_load
+  int swizzle, offset;
+  cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
+
+  auto pages =
+#ifdef MODE32
+    ppc32_get_cached_tlb_pages(cpu, addr, false)
 #else
-	    host_store
+    ppc64_get_cached_tlb_pages(cpu, addr, false)
 #endif
-	    [addr >> 12];
+    ;
+
+#ifdef LS_BYTEREVERSE
+#ifdef LS_H
+  swizzle ^= 1;
+#endif
+#ifdef LS_W
+  swizzle ^= 3;
+#endif
+#ifdef LS_D
+  swizzle ^= 7;
+#endif
+#endif
+
 #ifdef LS_UPDATE
-	uint32_t new_addr = addr ^ offset;
+  uint32_t new_addr = addr;
 #endif
+
+  auto page =
+#ifdef LS_LOAD
+    pages.host_load
+#else
+    pages.host_store
+#endif
+    ;
 
 #ifndef LS_B
 	if (addr & (LS_SIZE-1)) {
@@ -270,94 +244,21 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	if (page == NULL) {
 		LS_GENERIC_N(cpu, ic);
 		return;
-	} else {
-		addr &= 4095;
-#ifdef LS_LOAD
-		/*  Load:  */
-#ifdef LS_B
-		reg(ic->arg[0]) =
-#ifndef LS_ZERO
-		    (int8_t)
-#endif
-		    page[addr];
-#endif	/*  LS_B  */
-#ifdef LS_H
-		reg(ic->arg[0]) =
-#ifdef LS_BYTEREVERSE
-		    ((page[addr+1] << 8) + page[addr]);
-#else
-#ifndef LS_ZERO
-		    (int16_t)
-#endif
-		    ((page[addr] << 8) + page[addr+1]);
-#endif /* !BYTEREVERSE */
-#endif	/*  LS_H  */
-#ifdef LS_W
-		reg(ic->arg[0]) =
-#ifdef LS_BYTEREVERSE
-		    ((page[addr+3] << 24) + (page[addr+2] << 16) +
-		    (page[addr+1] << 8) + page[addr]);
-#else  /*  !LS_BYTEREVERSE  */
-#ifndef LS_ZERO
-		    (int32_t)
-#else
-		    (uint32_t)
-#endif
-		    ((page[addr] << 24) + (page[addr+1] << 16) +
-		    (page[addr+2] << 8) + page[addr+3]);
-#endif  /*  !LS_BYTEREVERSE  */
-#endif	/*  LS_W  */
-#ifdef LS_D
-		(*(uint64_t *)(ic->arg[0])) =
-		    ((uint64_t)page[addr+0] << 56) +
-		    ((uint64_t)page[addr+1] << 48) +
-		    ((uint64_t)page[addr+2] << 40) +
-		    ((uint64_t)page[addr+3] << 32) +
-		    ((uint64_t)page[addr+4] << 24) + (page[addr+5] << 16) +
-		    (page[addr+6] << 8) + page[addr+7];
-#endif	/*  LS_D  */
-
-#else	/*  !LS_LOAD  */
-
-		/*  Store:  */
-#ifdef LS_B
-		page[addr] = reg(ic->arg[0]);
-#endif
-#ifdef LS_H
-#ifdef LS_BYTEREVERSE
-		page[addr]   = reg(ic->arg[0]);
-		page[addr+1] = reg(ic->arg[0]) >> 8;
-#else
-		page[addr]   = reg(ic->arg[0]) >> 8;
-		page[addr+1] = reg(ic->arg[0]);
-#endif /* !BYTEREVERSE */
-#endif
-#ifdef LS_W
-#ifdef LS_BYTEREVERSE
-		page[addr]   = reg(ic->arg[0]);
-		page[addr+1] = reg(ic->arg[0]) >> 8;
-		page[addr+2] = reg(ic->arg[0]) >> 16;
-		page[addr+3] = reg(ic->arg[0]) >> 24;
-#else
-		page[addr]   = reg(ic->arg[0]) >> 24;
-		page[addr+1] = reg(ic->arg[0]) >> 16;
-		page[addr+2] = reg(ic->arg[0]) >> 8;
-		page[addr+3] = reg(ic->arg[0]);
-#endif /* !LS_BYTEREVERSE  */
-#endif
-#ifdef LS_D
-		{ uint64_t x = *(uint64_t *)(ic->arg[0]);
-		page[addr]   = x >> 56;
-		page[addr+1] = x >> 48;
-		page[addr+2] = x >> 40;
-		page[addr+3] = x >> 32;
-		page[addr+4] = x >> 24;
-		page[addr+5] = x >> 16;
-		page[addr+6] = x >> 8;
-		page[addr+7] = x; }
-#endif
-#endif	/*  !LS_LOAD  */
 	}
+
+  addr &= 4095;
+
+#ifdef LS_LOAD
+  /*  Load:  */
+  load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], &page[addr ^ offset], swizzle);
+
+  access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
+#else	/*  !LS_LOAD  */
+  /*  Store:  */
+  store_reg<LS_SIZE * 8>(ic->arg[0], &page[addr ^ offset], swizzle);
+
+  access_log(cpu, 1, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
+#endif	/*  !LS_LOAD  */
 
 #ifdef LS_UPDATE
 	reg(ic->arg[1]) = new_addr;

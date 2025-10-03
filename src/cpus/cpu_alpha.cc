@@ -52,7 +52,7 @@
 
 
 /*  Alpha symbolic register names:  */
-static const char *alpha_regname[N_ALPHA_REGS] = ALPHA_REG_NAMES; 
+static const char *alpha_regname[N_ALPHA_REGS] = ALPHA_REG_NAMES;
 
 void alpha_irq_interrupt_assert(struct interrupt *interrupt);
 void alpha_irq_interrupt_deassert(struct interrupt *interrupt);
@@ -86,10 +86,22 @@ int alpha_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->memory_rw = alpha_memory_rw;
 	cpu->run_instr = alpha_run_instr;
 	cpu->translate_v2p = alpha_translate_v2p;
-	cpu->update_translation_table = alpha_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    alpha_invalidate_translation_caches;
-	cpu->invalidate_code_translation = alpha_invalidate_code_translation;
+	cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page,
+     bool instr) {
+    auto writeflag = flags & 1;
+    cpu->cd.alpha.vph64.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
+  };
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.alpha.vph64.invalidate_tc(cpu, paddr, flags);
+  };
+	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.alpha.vph64.invalidate_tc_code(cpu, paddr, flags);
+  };
 
 	cpu->cd.alpha.cpu_type = cpu_type_defs[i];
 
@@ -174,7 +186,7 @@ void alpha_cpu_list_available_types(void)
  */
 void alpha_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 { 
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 

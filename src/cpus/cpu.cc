@@ -95,8 +95,6 @@ struct cpu *cpu_new(struct memory *mem, struct machine *machine,
 	settings_add(cpu->settings, "running", 0, SETTINGS_TYPE_UINT8,
 	    SETTINGS_FORMAT_YESNO, (void *) &cpu->running);
 
-	cpu_create_or_reset_tc(cpu);
-
 	fp = first_cpu_family;
 
 	while (fp != NULL) {
@@ -220,27 +218,13 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 {
 	int show_symbolic_function_name = 1;
 	int i, n_args = -1;
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 
 	/*  Special hack for M88K userspace:  */
 	if (cpu->machine->arch == ARCH_M88K &&
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
 		show_symbolic_function_name = 0;
-
-  // Hack: don't show these.
-  //<timeout (00022bfc)(0,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<get_rtc (00021fec)(0x17da70,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x697c(0x17da70,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<turn_ext_ints_off (00021de0)(1,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x69a0(1,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x68dc(0x1030,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x68fc(0,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x68dc(0xc984013,0xdc8ed1d,0xdc8ed1d,0,..)>
-  //<0x6988(0,0xdc8ed1d,0xdc8ed1d,0,..)>
-  if (f == 0x22bfc || f == 0x21fec || f == 0x697c || f == 0x21de0 || f == 0x69a0 || f == 0x68dc || f == 0x68fc || f == 0x6988 || f == 0x7bd8 || f == 0x2523d0 || f == 0x20de60 || f == 0x210290 || f == 0x20b310 || f == 0x24cc20) {
-    return;
-  }
 
   if (cpu->machine->ncpus > 1)
 		fatal("cpu%i:\t", cpu->cpu_id);
@@ -268,7 +252,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	if (cpu->machine->cpu_family->functioncall_trace != NULL)
 		cpu->machine->cpu_family->functioncall_trace(cpu, n_args);
 
-	fatal(")>\n");
+	fatal(") %" PRIx64" >\n", cpu->ninstrs);
 
 #ifdef PRINT_MEMORY_CHECKSUM
 	/*  Temporary hack for finding bugs:  */
@@ -286,8 +270,14 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
  *  TODO: Print return value? This could be implemented similar to the
  *  cpu->functioncall_trace function call above.
  */
-void cpu_functioncall_trace_return(struct cpu *cpu)
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *return_reg)
 {
+	if (return_reg) {
+		for (int i=0; i<cpu->trace_tree_depth; i++)
+			fatal("  ");
+		fatal("<%08x return %08x>\n", (uint32_t)cpu->pc, (uint32_t)*return_reg);
+	}
+
 	cpu->trace_tree_depth --;
 	if (cpu->trace_tree_depth < 0)
 		cpu->trace_tree_depth = 0;
@@ -304,22 +294,7 @@ void cpu_create_or_reset_tc(struct cpu *cpu)
 {
 	size_t s = dyntrans_cache_size + DYNTRANS_CACHE_MARGIN;
 
-	if (cpu->translation_cache == NULL)
-		cpu->translation_cache = (unsigned char *) zeroed_alloc(s);
-
-	/*  Create an empty table at the beginning of the translation cache:  */
-	memset(cpu->translation_cache, 0, sizeof(uint32_t)
-	    * N_BASE_TABLE_ENTRIES);
-
-	cpu->translation_cache_cur_ofs =
-	    N_BASE_TABLE_ENTRIES * sizeof(uint32_t);
-
-	/*
-	 *  There might be other translation pointers that still point to
-	 *  within the translation_cache region. Let's invalidate those too:
-	 */
-	if (cpu->invalidate_code_translation != NULL)
-		cpu->invalidate_code_translation(cpu, 0, INVALIDATE_ALL);
+  cpu->invalidate_code_translation(cpu, 0, INVALIDATE_ALL);
 }
 
 
@@ -413,7 +388,7 @@ void cpu_run_deinit(struct machine *machine)
 void cpu_show_cycles(struct machine *machine, int forced)
 {
 	uint64_t offset, pc;
-	char *symbol;
+	const char *symbol;
 	int64_t mseconds, ninstrs, is, avg;
 	struct timeval tv;
 	struct cpu *cpu = machine->cpus[machine->bootstrap_cpu];
@@ -582,4 +557,3 @@ void cpu_init(void)
 {
 	ADD_ALL_CPU_FAMILIES;
 }
-

@@ -58,11 +58,21 @@ int main(int argc, char *argv[])
 	    "#include \"misc.h\"\n"
 	    "#define DYNTRANS_PC_TO_POINTERS arm_pc_to_pointers\n"
 	    "#include \"quick_pc_to_pointers.h\"\n"
+      "#define quick_pc_to_pointers(cpu) cpu->cd.arm.vph32.move_to_physpage(cpu)\n"
 	    "#define reg(x) (*((uint32_t *)(x)))\n");
 	printf("extern void arm_instr_nop(struct cpu *, "
 	    "struct arm_instr_call *);\n");
 	printf("extern void arm_instr_invalid(struct cpu *, "
 	    "struct arm_instr_call *);\n");
+  printf("static inline uint64_t arm_sync_low_pc(struct cpu *cpu, struct arm_instr_call *ic) {\n"
+         "\treturn\n"
+         "\t(\n"
+         "\t(size_t)ic -\n"
+         "\t(size_t)cpu->cd.arm.vph32.get_ic_page()\n"
+         "\t) / sizeof(*ic);"
+         "}\n\n");
+
+
 	printf("extern void arm_pc_to_pointers(struct cpu *);\n");
 
     if (!only_array)

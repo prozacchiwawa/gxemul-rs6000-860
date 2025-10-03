@@ -34,12 +34,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 
 #include "symbol.h"
 #include "debugger.h"
-
-
-#define	SYMBOLBUF_MAX	100
 
 
 /*
@@ -49,7 +47,7 @@
  */
 int symbol_nsymbols(struct symbol_context *sc)
 {
-	return sc->n_symbols;
+	return sc->symbols->size();
 }
 
 
@@ -63,26 +61,13 @@ int symbol_nsymbols(struct symbol_context *sc)
  */
 int get_symbol_addr(struct symbol_context *sc, const char *symbol, uint64_t *addr)
 {
-	struct symbol *s;
-
-	if (sc->sorted_array) {
-		int i;
-		for (i=0; i<sc->n_symbols; i++)
-			if (strcmp(symbol, sc->first_symbol[i].name) == 0) {
-				if (addr != NULL)
-					*addr = sc->first_symbol[i].addr;
-				return 1;
-			}
-	} else {
-		s = sc->first_symbol;
-		while (s != NULL) {
-			if (strcmp(symbol, s->name) == 0) {
-				if (addr != NULL)
-					*addr = s->addr;
-				return 1;
-			}
-			s = s->next;
-		}
+  for (auto i = sc->symbols->begin(); i != sc->symbols->end(); i++) {
+    if (strcmp(symbol, i->name.c_str()) == 0) {
+      if (addr != NULL) {
+					*addr = i->addr;
+      }
+      return 1;
+    }
 	}
 
 	return 0;
@@ -107,84 +92,53 @@ int get_symbol_addr(struct symbol_context *sc, const char *symbol, uint64_t *add
  *
  *  If no symbol was found, NULL is returned instead.
  */
-static char symbol_buf[SYMBOLBUF_MAX+1];
-char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc, uint64_t addr,
+static std::string symbol_buf;
+const char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc, uint64_t addr,
 	uint64_t *offset, int *n_argsp)
 {
-	struct symbol *s;
   struct ibm_name namebuf;
 
-	if (sc->n_symbols == 0) {
+	if (sc->symbols->size() == 0) {
     if (debugger_get_name(c, addr, addr + 0x4000, &namebuf)) {
-      strcpy(symbol_buf, namebuf.function_name);
-      return symbol_buf;
+      symbol_buf = namebuf.function_name;
+      return symbol_buf.c_str();
     }
 
 		return NULL;
   }
 
-	if ((addr >> 32) == 0 && (addr & 0x80000000ULL))
-		addr |= 0xffffffff00000000ULL;
-
-	symbol_buf[0] = symbol_buf[SYMBOLBUF_MAX] = '\0';
-	if (offset != NULL)
+  symbol_buf.clear();
+	if (offset != NULL) {
 		*offset = 0;
+  }
 
-	if (!sc->sorted_array) {
-		/*  Slow, linear O(n) search:  */
-		s = sc->first_symbol;
-		while (s != NULL) {
-			/*  Found a match?  */
-			if (addr >= s->addr && addr < s->addr + s->len) {
-				if (addr == s->addr)
-					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s", s->name);
-				else
-					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s+0x%" PRIx64, s->name, (uint64_t)
-					    (addr - s->addr));
-				if (offset != NULL)
-					*offset = addr - s->addr;
-				if (n_argsp != NULL)
-					*n_argsp = s->n_args;
-				return symbol_buf;
-			}
-			s = s->next;
-		}
-	} else {
-		/*  Faster, O(log n) search:  */
-		int lowest = 0, highest = sc->n_symbols - 1;
-		while (lowest <= highest) {
-			int ofs = (lowest + highest) / 2;
-			s = sc->first_symbol + ofs;
+  for (auto s = sc->symbols->begin(); s != sc->symbols->end(); s++) {
+    if (addr >= s->addr) {
+      /*  Found a match?  */
+      if (addr == s->addr) {
+        symbol_buf = s->name;
+        return symbol_buf.c_str();
+      } else {
+        char buf[1024];
+        snprintf(buf, sizeof(buf),
+                 "%s+0x%" PRIx64, s->name.c_str(), (uint64_t)
+                 (addr - s->addr));
+        symbol_buf = buf;
+        if (offset != NULL) {
+          *offset = addr - s->addr;
+        }
+        if (n_argsp != NULL) {
+          *n_argsp = s->n_args;
+        }
+      }
+    }
+  }
 
-			/*  Found a match?  */
-			if (addr >= s->addr && addr <= s->addr + (s->len - 1)) {
-				if (addr == s->addr)
-					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s", s->name);
-				else
-					snprintf(symbol_buf, SYMBOLBUF_MAX,
-					    "%s+0x%" PRIx64, s->name, (uint64_t)
-					    (addr - s->addr));
-
-				if (offset != NULL)
-					*offset = addr - s->addr;
-				if (n_argsp != NULL)
-					*n_argsp = s->n_args;
-
-				return symbol_buf;
-			}
-
-			if (addr < s->addr)
-				highest = ofs - 1;
-			else
-				lowest = ofs + 1;
-		}
-	}
-
-	/*  Not found? Then return NULL.  */
-	return NULL;
+  if (symbol_buf.size() && strncmp(symbol_buf.c_str(), "*", 1) != 0) {
+    return symbol_buf.c_str();
+  } else {
+    return nullptr;
+  }
 }
 
 
@@ -193,7 +147,7 @@ char *get_symbol_name_and_n_args(struct cpu *c, struct symbol_context *sc, uint6
  *
  *  See get_symbol_name_and_n_args().
  */
-char *get_symbol_name(struct cpu *c, struct symbol_context *sc, uint64_t addr, uint64_t *offs)
+const char *get_symbol_name(struct cpu *c, struct symbol_context *sc, uint64_t addr, uint64_t *offs)
 {
 	return get_symbol_name_and_n_args(c, sc, addr, offs, NULL);
 }
@@ -208,12 +162,8 @@ void add_symbol_name(struct symbol_context *sc,
 	uint64_t addr, uint64_t len, const char *name, int type, int n_args)
 {
 	struct symbol *s;
-
-	if (sc->sorted_array) {
-		fprintf(stderr, "add_symbol_name(): Internal error: the "
-		    "symbol array is already sorted\n");
-		exit(1);
-	}
+  int flags = type >> 8;
+  type &= 0xff;
 
 	if (name == NULL) {
 		fprintf(stderr, "add_symbol_name(): name = NULL\n");
@@ -227,8 +177,10 @@ void add_symbol_name(struct symbol_context *sc,
 		return;
 
 	/*  TODO: Maybe this should be optional?  */
-	if (name[0] == '.' || name[0] == '$')
-		return;
+  if (!flags) {
+    if (name[0] == '.' || name[0] == '$')
+      return;
+  }
 
 	/*  Quick test-hack:  */
 	if (n_args < 0) {
@@ -256,27 +208,25 @@ void add_symbol_name(struct symbol_context *sc,
 			n_args = 3;
 	}
 
-	if ((addr >> 32) == 0 && (addr & 0x80000000ULL))
-		addr |= 0xffffffff00000000ULL;
+  if (!flags) {
+    if ((addr >> 32) == 0 && (addr & 0x80000000ULL))
+      addr |= 0xffffffff00000000ULL;
+  }
 
-	CHECK_ALLOCATION(s = (struct symbol *) malloc(sizeof(struct symbol)));
-	memset(s, 0, sizeof(struct symbol));
+  auto sym = symbol();
 
-	s->name = symbol_demangle_cplusplus(name);
+  if (!flags) {
+    sym.name = symbol_demangle_cplusplus(name);
+  } else {
+    sym.name = name;
+  }
 
-	if (s->name == NULL)
-		CHECK_ALLOCATION(s->name = strdup(name));
+	sym.addr   = addr;
+	sym.len    = len;
+	sym.type   = type;
+	sym.n_args = n_args;
 
-	s->addr   = addr;
-	s->len    = len;
-	s->type   = type;
-	s->n_args = n_args;
-
-	sc->n_symbols ++;
-
-	/*  Add first in list:  */
-	s->next = sc->first_symbol;
-	sc->first_symbol = s;
+  sc->symbols->push_back(sym);
 }
 
 
@@ -292,11 +242,11 @@ void add_symbol_name(struct symbol_context *sc,
 void symbol_readfile(struct symbol_context *sc, char *fname)
 {
 	FILE *f;
-	char b1[80]; uint64_t addr;
-	char b2[80]; uint64_t len;
-	char b3[80]; int type;
-	char b4[80];
-	int cur_n_symbols = sc->n_symbols;
+	char b1[1024]; uint64_t addr;
+	char b2[1024]; uint64_t len;
+	char b3[1024]; int type;
+	char b4[1024];
+	int cur_n_symbols = sc->symbols->size();
 
 	f = fopen(fname, "r");
 	if (f == NULL) {
@@ -337,7 +287,7 @@ void symbol_readfile(struct symbol_context *sc, char *fname)
 
 	fclose(f);
 
-	debug("%i symbols\n", sc->n_symbols - cur_n_symbols);
+	debug("%i symbols\n", sc->symbols->size() - cur_n_symbols);
 }
 
 
@@ -351,10 +301,12 @@ int sym_addr_compare(const void *a, const void *b)
 	struct symbol *p1 = (struct symbol *) a;
 	struct symbol *p2 = (struct symbol *) b;
 
-	if (p1->addr < p2->addr)
+	if (p1->addr < p2->addr) {
 		return -1;
-	if (p1->addr > p2->addr)
+  }
+	if (p1->addr > p2->addr) {
 		return 1;
+  }
 
 	return 0;
 }
@@ -369,49 +321,21 @@ int sym_addr_compare(const void *a, const void *b)
  */
 void symbol_recalc_sizes(struct symbol_context *sc)
 {
-	struct symbol *tmp_array;
-	struct symbol *last_ptr;
-	struct symbol *tmp_ptr;
-	int i;
+  std::sort(sc->symbols->begin(), sc->symbols->end(), [](const symbol &a, const symbol &b) -> bool {
+    return a.addr < b.addr;
+  });
 
-	CHECK_ALLOCATION(tmp_array = (struct symbol *) malloc(sizeof (struct symbol) *
-	    sc->n_symbols));
-
-	/*  Copy first_symbol --> tmp_array, and remove the old
-		first_symbol at the same time:  */
-	tmp_ptr = sc->first_symbol;
-	i = 0;
-	while (tmp_ptr != NULL) {
-		tmp_array[i] = *tmp_ptr;
-		last_ptr = tmp_ptr;
-		tmp_ptr = tmp_ptr->next;
-		free(last_ptr);
-		i++;
-	}
-
-	qsort(tmp_array, sc->n_symbols, sizeof(struct symbol),
-	    sym_addr_compare);
-	sc->sorted_array = 1;
-
-	/*  Recreate the first_symbol chain:  */
-	sc->first_symbol = NULL;
-	for (i=0; i<sc->n_symbols; i++) {
-		/*  Recalculate size, if 0:  */
-		if (tmp_array[i].len == 0) {
-			uint64_t len;
-			if (i != sc->n_symbols-1)
-				len = tmp_array[i+1].addr
-				    - tmp_array[i].addr;
-			else
-				len = 1;
-
-			tmp_array[i].len = len;
-		}
-
-		tmp_array[i].next = &tmp_array[i+1];
-	}
-
-	sc->first_symbol = tmp_array;
+  if (sc->symbols->size()) {
+    auto last = sc->symbols->begin();
+    auto s = last;
+    s++;
+    for (; s != sc->symbols->end(); s++) {
+      if (last->len == 0) {
+        last->len = s->addr - last->addr;
+      }
+      last = s;
+    }
+  }
 }
 
 
@@ -422,8 +346,6 @@ void symbol_recalc_sizes(struct symbol_context *sc)
  */
 void symbol_init(struct symbol_context *sc)
 {
-	sc->first_symbol = NULL;
-	sc->sorted_array = 0;
-	sc->n_symbols = 0;
+  sc->symbols = new std::vector<symbol>();
 }
 

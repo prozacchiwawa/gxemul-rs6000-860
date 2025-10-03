@@ -64,15 +64,28 @@ struct pic8259_data {
 	struct interrupt irq;
 
 	int		irq_base;
-	int		current_command;
-
 	int		init_state;
+  int   icw[4];
 
-	int		priority_reg;
+  int   rotate;
+  int   rotation_pri;
+  int   read_ir_is;
+  int   special_mask_mode;
+  int   poll_cmd;
+
 	uint8_t		irr;		/*  interrupt request register  */
 	uint8_t		isr;		/*  interrupt in-service register  */
 	uint8_t		ier;		/*  interrupt enable register  */
+
+  // When chained_from is non-null, there's potentially a waiting interrupt that
+  // was masked before coming from that PIC.  Raise it if it becomes unblocked.
+  struct pic8259_data *chained_to;
+  int chained_int_line;
+  int *last_int;
 };
+
+void dev_8259_assert(struct pic8259_data *d, int line);
+void dev_8259_deassert(struct pic8259_data *d, int line);
 
 /*  dev_dec_ioasic.c:  */
 #define	DEV_DEC_IOASIC_LENGTH		0x80100
@@ -177,6 +190,10 @@ struct eagle_data {
   uint8_t err_reg[2];
 
   int want_error;
+  int l2_cache;
+  int discontiguous;
+  int ide_command;
+  int bg_data_8mb;
 };
 
 struct eagle_glob {
@@ -251,6 +268,9 @@ struct vfb_data {
 #define	VFB_MFB_BT431			0x180000
 #define	VFB_MFB_VRAM			0x200000
 #define	VFB_CFB_BT459			0x200000
+
+#define	VGA_FB_ADDR	0x1c00000000ULL
+
 void set_grayscale_palette(struct vfb_data *d, int ncolors);
 void dev_fb_resize(struct vfb_data *d, int new_xsize, int new_ysize);
 void dev_fb_setcursor(struct vfb_data *d, int cursor_x, int cursor_y, int on, 

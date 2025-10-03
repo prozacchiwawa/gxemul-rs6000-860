@@ -28,6 +28,10 @@
  *  Included from cpu_ppc.c.
  */
 
+#define STWBRX_CACHE_SIZE 100000
+uint32_t **stwbrx_cache[1024];
+
+extern int trace_mapping;
 
 /*
  *  ppc_bat():
@@ -101,11 +105,21 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
 static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
 	uint32_t *lowp, uint32_t cmp)
 {
-	unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
-	int i;
+  int swizzle, offset;
+  cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
 
-	for (i=0; i<8; i++) {
-		uint32_t *ep = (uint32_t *) (d + (i << 3)), upper;
+  unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
+  int i;
+
+  unsigned char pte[64];
+
+  for (int bi = 0; bi < 64; bi++) {
+    pte[bi] = d[bi ^ swizzle];
+  }
+
+  for (i=0; i<8; i++) {
+
+		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;
 		upper = BE32_TO_HOST(upper);
 
@@ -218,8 +232,10 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	int instr = flags & FLAG_INSTR, res = 0, match, user;
 	int writeflag = flags & FLAG_WRITEFLAG? 1 : 0;
 	uint64_t msr;
+  // XX Set srr1 below in checks for bat+write or page table.
+  int srr1_extra = 0;
 
-	reg_access_msr(cpu, &msr, 0, 0);
+	reg_access_msr(cpu, &msr, 0, nullptr, 0);
 	user = msr & PPC_MSR_PR? 1 : 0;
 
 	if (cpu->cd.ppc.bits == 32)
@@ -230,11 +246,6 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		return 2;
 	}
 
-  if (vaddr == 0xbffffff0) {
-    *return_paddr = vaddr;
-    return 1;
-  }
-
 	if (cpu->cd.ppc.cpu_type.flags & PPC_601) {
 		fatal("ppc_translate_v2p(): TODO: 601\n");
 		exit(1);
@@ -243,8 +254,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	/*  Try the BATs first:  */
 	if (cpu->cd.ppc.bits == 32) {
 		res = ppc_bat(cpu, vaddr, return_paddr, flags, user);
-		if (res > 0)
+		if (res > 0) {
 			return res;
+    }
 		if (res == 0) {
 			fatal("[ TODO: BAT exception ]\n");
 			exit(1);
@@ -255,8 +267,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	if (cpu->cd.ppc.bits == 32) {
 		match = ppc_vtp32(cpu, vaddr, return_paddr, &res, msr,
 		    writeflag, instr);
-		if (match && res > 0)
-			return res;
+		if (match && res > 0) {
+      return res;
+    }
 	} else {
 		/*  htaborg = sdr1 & 0xfffffffffffc0000ULL;  */
 		fatal("TODO: ppc 64-bit translation\n");
@@ -283,21 +296,98 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		cpu->cd.ppc.spr[instr? SPR_IMISS : SPR_DMISS] = vaddr;
 
 		msr |= PPC_MSR_TGPR;
-		reg_access_msr(cpu, &msr, 1, 0);
+		reg_access_msr(cpu, &msr, 1, nullptr, 0);
 
-		ppc_exception(cpu, instr? 0x10 : (writeflag? 0x12 : 0x11));
+		ppc_exception(cpu, instr? 0x10 : (writeflag? 0x12 : 0x11), 0);
 	} else {
 		if (!instr) {
 			cpu->cd.ppc.spr[SPR_DAR] = vaddr;
-			cpu->cd.ppc.spr[SPR_DSISR] = match?
-			    DSISR_PROTECT : DSISR_NOTFOUND;
+			cpu->cd.ppc.spr[SPR_DSISR] = match ? DSISR_PROTECT : DSISR_NOTFOUND;
 			if (writeflag)
 				cpu->cd.ppc.spr[SPR_DSISR] |= DSISR_STORE;
-		}
+		} else {
+      // XX Set for failed translation, fix for bats and NX pages.
+      srr1_extra = match ? DSISR_PROTECT : DSISR_NOTFOUND;
+    }
 		ppc_exception(cpu, instr?
-		    PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI);
+                  PPC_EXCEPTION_ISI : PPC_EXCEPTION_DSI, srr1_extra);
 	}
 
 	return 0;
 }
 
+void stwbrx_remember(uint32_t addr) {
+  uint32_t pl1 = (addr >> 22) & 1023;
+  if (!stwbrx_cache[pl1]) {
+    stwbrx_cache[pl1] = (uint32_t **)calloc(1024, sizeof(uint32_t*));
+  }
+  uint32_t pl2 = (addr >> 12) & 1023;
+  if (!stwbrx_cache[pl1][pl2]) {
+    stwbrx_cache[pl1][pl2] = (uint32_t *)calloc(1024, sizeof(uint32_t));
+  }
+  uint32_t word = (addr & 4095) >> 3;
+  uint32_t bit = word % 32;
+  stwbrx_cache[pl1][pl2][word] |= 1 << bit;
+}
+
+void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
+  if (write) {
+    if (!cpu->cd.ppc.bytelane_swap_latch) {
+      stwbrx_remember(addr);
+    }
+  }
+
+  if (write && (addr >= 0xfe050000) && (addr <= 0xfe080000)) {
+    fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
+    for (int i = 0; i < size; i++) {
+      fprintf(stderr, " %02x", ((uint8_t *)data)[i]);
+    }
+    fprintf(stderr, "\n");
+  }
+}
+
+void stwbrx_cache_spill(struct cpu *cpu) {
+  uint8_t data[8];
+  uint8_t swapped[8];
+  fprintf(stderr, "%08" PRIx64" CACHE SPILL FOR ENDIAN SWAP\n", cpu->pc);
+  for (uint32_t pl1 = 0; pl1 < 1024; pl1++) {
+    auto lv1 = stwbrx_cache[pl1];
+    if (lv1) {
+      for (uint32_t pl2 = 0; pl2 < 1024; pl2++) {
+        auto lv2 = lv1[pl2];
+        if (lv2) {
+          for (uint32_t i = 0; i < 4096 / 8; i++) {
+            for (uint32_t j = 1; j; j <<= 1) {
+              if (lv2[i] & j) {
+                // Load the word from memory.
+                uint32_t addr = (pl1 << 22) | (pl2 << 12) | i << 3;
+                if (addr < 0x80000000) {
+                  if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data), MEM_READ, CACHE_DATA)) {
+                    // Swap
+                    for (unsigned long k = 0; k < sizeof(swapped); k++) {
+                      swapped[7 - k] = data[k];
+                    }
+
+                    // Store back.
+                    #if 0
+                    fprintf(stderr, "%08x:", addr);
+                    for (int b = 0; b < sizeof(swapped); b++) {
+                      fprintf(stderr, " %02x", swapped[b]);
+                    }
+                    fprintf(stderr, "\n");
+                    #endif
+                    cpu->memory_rw(cpu, cpu->mem, addr, swapped, sizeof(swapped), MEM_WRITE, CACHE_DATA);
+                  }
+                }
+              }
+            }
+          }
+          free(lv2);
+          lv1[pl2] = nullptr;
+        }
+      }
+      free(lv1);
+      stwbrx_cache[pl1] = nullptr;
+    }
+  }
+}

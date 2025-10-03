@@ -69,6 +69,23 @@ int main(int argc, char *argv[])
 	printf("#define MODE32\n");
 	printf("#endif\n");
 
+  printf("#ifdef MODE32\n"
+         "#define VPH vph32\n"
+         "#elif defined(DYNTRANS_DUALMODE_32)\n"
+         // XXX for now, do this better.
+         "#define VPH vph32\n"
+         "#else\n"
+         "#define VPH vph64\n"
+         "#endif\n\n");
+	printf("\n/*\n *  nothing:  Do nothing.\n *\n"
+         " *  The difference between this function and a \"nop\" "
+         "instruction is that\n *  this function does not increase "
+         "the program counter.  It is used to \"get out\" of running in "
+         "translated\n *  mode.\n */\n");
+	printf("X(nothing)\n{\n");
+	printf("\tcpu->cd.%s.VPH.nothing();\n", a);
+	printf("}\n\n");
+
 	printf("#define DYNTRANS_FUNCTION_TRACE_DEF "
 	    "%s_cpu_functioncall_trace\n", a);
 	printf("#include \"cpu_dyntrans.cc\"\n");
@@ -83,25 +100,6 @@ int main(int argc, char *argv[])
 	    "%s_tc_allocate_default_page\n", a);
 	printf("#include \"cpu_dyntrans.cc\"\n");
 	printf("#undef DYNTRANS_TC_ALLOCATE_DEFAULT_PAGE_DEF\n\n");
-
-	printf("#define DYNTRANS_INVAL_ENTRY\n");
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_INVAL_ENTRY\n\n");
-
-	printf("#define DYNTRANS_INVALIDATE_TC "
-	    "%s_invalidate_translation_caches\n", a);
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_INVALIDATE_TC\n\n");
-
-	printf("#define DYNTRANS_INVALIDATE_TC_CODE "
-	    "%s_invalidate_code_translation\n", a);
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_INVALIDATE_TC_CODE\n\n");
-
-	printf("#define DYNTRANS_UPDATE_TRANSLATION_TABLE "
-	    "%s_update_translation_table\n", a);
-	printf("#include \"cpu_dyntrans.cc\"\n");
-	printf("#undef DYNTRANS_UPDATE_TRANSLATION_TABLE\n\n");
 
 	printf("#define MEMORY_RW %s_memory_rw\n", a);
 	printf("#define MEM_%s\n", uppercase(a));

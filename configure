@@ -89,7 +89,7 @@ else
 	fi
 fi
 
-OTHERLIBS="$LDFLAGS"
+OTHERLIBS="$LDFLAGS -lpng"
 
 UNITTESTS=YES
 
@@ -454,7 +454,7 @@ fi
 printf "checking whether -Wall can be used... "
 $CXX $CXXFLAGS _testprog.cc -o _testprog -Wall 2> /dev/null
 if [ -x _testprog ]; then
-	printf "yes\n"
+	printf "no\n"
 	CWARNINGS="-Wall $CWARNINGS"
 
 	if [ z"$UNSTABLE" = zYES ]; then

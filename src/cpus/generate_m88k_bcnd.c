@@ -84,12 +84,11 @@ void bcnd(int samepage, int n_bit, int m5)
 		printf(") {\n");
 
 		if (samepage)
-			printf("\t\tcpu->cd.m88k.next_ic = (struct m88k_"
-			    "instr_call *) ic->arg[2];\n");
+			printf("\t\tcpu->cd.m88k.vph32.set_next_ic(ic->arg[2]);\n");
 		else
 			printf("\t\tcpu->pc = (cpu->pc & 0xfffff000) + "
 			    "(int32_t)ic->arg[2];\n\t\tquick_pc_to_"
-			    "pointers(cpu);\n");
+			    "pointers32(cpu);\n");
 
 		printf("\t}\n");
 	} else {
@@ -119,10 +118,10 @@ void bcnd(int samepage, int n_bit, int m5)
 		printf("\t\tif (cond) {\n");
 
 		printf("\t\t\tcpu->pc = cpu->cd.m88k.delay_target;\n");
-		printf("\t\t\tquick_pc_to_pointers(cpu);\n");
+		printf("\t\t\tquick_pc_to_pointers32(cpu);\n");
 
 		printf("\t\t} else\n");
-		printf("\t\t\tcpu->cd.m88k.next_ic ++;\n");
+		printf("\t\t\tcpu->cd.m88k.vph32.bump_ic();\n");
 		printf("\t} else\n");
 		printf("\t\tcpu->delay_slot = NOT_DELAYED;\n");
 

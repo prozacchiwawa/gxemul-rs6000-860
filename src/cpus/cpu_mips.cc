@@ -120,18 +120,42 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 
 	if (cpu->is_32bit) {
 		cpu->run_instr = mips32_run_instr;
-		cpu->update_translation_table = mips32_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    mips32_invalidate_translation_caches;
-		cpu->invalidate_code_translation =
-		    mips32_invalidate_code_translation;
+    cpu->update_translation_table = []
+      (struct cpu *cpu,
+       uint64_t vaddr_page,
+       unsigned char *host_page,
+       int flags,
+       uint64_t paddr_page,
+       bool instr
+       ) {
+      auto writeflag = flags & 1;
+      cpu->cd.mips.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, false);
+    };
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph32.invalidate_tc(cpu, paddr, flags);
+    };
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph32.invalidate_tc_code(cpu, paddr, flags);
+    };
 	} else {
 		cpu->run_instr = mips_run_instr;
-		cpu->update_translation_table = mips_update_translation_table;
-		cpu->invalidate_translation_caches =
-		    mips_invalidate_translation_caches;
-		cpu->invalidate_code_translation =
-		    mips_invalidate_code_translation;
+    cpu->update_translation_table = []
+      (struct cpu *cpu,
+       uint64_t vaddr_page,
+       unsigned char *host_page,
+       int flags,
+       uint64_t paddr_page,
+       bool instr
+       ) {
+      auto writeflag = flags & 1;
+      cpu->cd.mips.vph64.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
+    };
+		cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph64.invalidate_tc(cpu, paddr, flags);
+    };
+    cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+      cpu->cd.mips.vph64.invalidate_tc_code(cpu, paddr, flags);
+    };
 	}
 
 	cpu->instruction_has_delayslot = mips_cpu_instruction_has_delayslot;
@@ -701,7 +725,7 @@ int mips_cpu_disassemble_instr(struct cpu *cpu, unsigned char *originstr,
 	uint64_t addr, offset;
 	uint32_t instrword;
 	unsigned char instr[4];
-	char *symbol;
+	const char *symbol;
 
 	if (running)
 		dumpaddr = cpu->pc;
@@ -1498,7 +1522,7 @@ void mips_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
 	int coprocnr, i, bits32;
 	uint64_t offset;
-	char *symbol;
+	const char *symbol;
 	int bits128 = cpu->cd.mips.cpu_type.rev == MIPS_R5900;
 
 	bits32 = cpu->is_32bit;
@@ -1731,7 +1755,7 @@ void mips_cpu_exception(struct cpu *cpu, int exccode, int tlb, uint64_t vaddr,
 	if (!quiet_mode) {
 		uint64_t offset;
 		int x;
-		char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
+		const char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
 
 		debug("[ ");
@@ -1797,7 +1821,7 @@ void mips_cpu_exception(struct cpu *cpu, int exccode, int tlb, uint64_t vaddr,
 
 	if (tlb && vaddr < 0x1000) {
 		uint64_t offset;
-		char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
+		const char *symbol = get_symbol_name(cpu, &cpu->machine->symbol_context,
 		    cpu->pc, &offset);
 		fatal("[ ");
 		if (cpu->machine->ncpus > 1)

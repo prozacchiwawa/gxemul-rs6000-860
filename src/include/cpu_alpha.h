@@ -32,6 +32,7 @@
  */
 
 #include "misc.h"
+#include "cpu_traits.h"
 
 #include "thirdparty/alpha_cpu.h"
 
@@ -176,10 +177,15 @@ struct alpha_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(alpha)
-	VPH_TLBS(alpha,ALPHA)
 	VPH64(alpha,ALPHA)
 };
 
+template <> class cpu_traits<alpha_cpu> {
+ public:
+  static constexpr int instr_alignment_shift() { return ALPHA_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return ALPHA_IC_ENTRIES_PER_PAGE; }
+  typedef struct alpha_instr_call *instr_t;
+};
 
 /*  cpu_alpha.c:  */
 void alpha_update_translation_table(struct cpu *cpu, uint64_t vaddr_page,

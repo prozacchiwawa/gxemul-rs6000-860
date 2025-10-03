@@ -157,6 +157,7 @@
 #define	  PPC_31_CLI		  502
 #define	  PPC_31_SUBFCO		  520
 #define	  PPC_31_ADDCO		  522
+#define   PPC_31_LSWX       533
 #define	  PPC_31_LWBRX		  534
 #define	  PPC_31_LFSX		  535
 #define	  PPC_31_SRW		  536
@@ -171,6 +172,7 @@
 #define	  PPC_31_SUBFEO		  648
 #define	  PPC_31_ADDEO		  650
 #define	  PPC_31_MFSRIN		  659
+#define   PPC_31_STSWX      661
 #define	  PPC_31_STWBRX		  662
 #define	  PPC_31_STFSX		  663
 #define	  PPC_31_SUBFZEO	  712
@@ -215,13 +217,13 @@
 #define	PPC_HI6_LMW		0x2e
 #define	PPC_HI6_STMW		0x2f
 #define	PPC_HI6_LFS		0x30
-
+#define PPC_HI6_LFSU  0x31
 #define	PPC_HI6_LFD		0x32
-
+#define PPC_HI6_LFDU  0x33
 #define	PPC_HI6_STFS		0x34
-
+#define PPC_HI6_STFSU   0x35
 #define	PPC_HI6_STFD		0x36
-
+#define PPC_HI6_STFDU   0x37
 #define	PPC_HI6_LD		0x3a
 #define	PPC_HI6_59		0x3b
 #define	  PPC_59_FDIVS		  18
@@ -234,6 +236,7 @@
 #define	PPC_HI6_63		0x3f
 #define	  PPC_63_FCMPU		  0
 #define	  PPC_63_FRSP		  12
+#define   PPC_63_FCTIW    14
 #define	  PPC_63_FCTIWZ		  15
 #define	  PPC_63_FDIV		  18
 #define	  PPC_63_FSUB		  20
@@ -241,8 +244,11 @@
 #define	  PPC_63_FMUL		  25
 #define	  PPC_63_FMSUB		  28
 #define	  PPC_63_FMADD		  29
+#define	  PPC_63_FCMPO		  32
 #define	  PPC_63_FNEG		  40
+#define   PPC_63_MCRFS    64
 #define	  PPC_63_FMR		  72
+#define   PPC_63_MTFSFI   134
 #define	  PPC_63_FNABS		  136
 #define	  PPC_63_FABS		  264
 #define	  PPC_63_MFFS		  583

@@ -137,7 +137,7 @@ struct pci_device {
 
 #define	BUS_PCI_ADDR	0xcf8
 #define	BUS_PCI_DATA	0xcfc
-
+#define BUS_PCI_IO_NATIVE_SPACE 0x1000000000ull
 
 /*
  *  bus_pci.c:
@@ -161,5 +161,8 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 	struct memory *mem, int bus, int device, int function,
 	const char *name);
 
+/*  Get the target address for a device mapped by IO BAR, allowing it to be matched
+    dynamically. */
+uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool io_space, uint32_t target, int len);
 
 #endif	/*  BUS_PCI_H  */

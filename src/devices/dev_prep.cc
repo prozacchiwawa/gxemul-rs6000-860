@@ -35,6 +35,7 @@
 #include "bus_isa.h"
 #include "cpu.h"
 #include "device.h"
+#include "devices.h"
 #include "machine.h"
 #include "memory.h"
 #include "misc.h"
@@ -44,24 +45,43 @@ struct prep_data {
 	uint32_t		int_status;
 };
 
-
 DEVICE_ACCESS(prep)
 {
 	/*  struct prep_data *d = extra;  */
-	uint64_t idata = 0, odata = 0;
+	uint64_t idata = 0, odata = 0xff;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-
-	if (writeflag == MEM_READ) {
-		odata = cpu->machine->isa_pic_data.last_int;
-    fprintf(stderr, "[ int ack: %d ]\n", odata);
-	} else {
 		fatal("[ prep: write to interrupt register? ]\n");
-	}
+  } else if (writeflag == MEM_READ) {
+    fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
+    if (cpu->machine->isa_pic_data.last_int & 0x10000) {
+      cpu->machine->isa_pic_data.last_int &= 0xffff;
+      if (cpu->machine->isa_pic_data.last_int & 4) {
+        for (int i = 8; i < 16; i++) {
+          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+            odata = i;
+            break;
+          }
+        }
+      } else {
+        for (int i = 0; i < 8; i++) {
+          if (i == 2) {
+            continue;
+          }
 
-	if (writeflag == MEM_READ)
-		memory_writemax64(cpu, data, len, odata);
+          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+            odata = i;
+            break;
+          }
+        }
+      }
+    }
+
+    cpu->cd.ppc.irq_asserted = false;
+    fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    memory_writemax64(cpu, data, len, odata);
+	}
 
 	return 1;
 }
@@ -76,14 +96,14 @@ DEVINIT(prep)
 	memset(d, 0, sizeof(struct prep_data));
 
 	memory_device_register(devinit->machine->memory, devinit->name,
-	    0xbffff000, 0x1000, dev_prep_access, d, DM_DEFAULT, NULL);
+	    0xbffffff0, 0x10, dev_prep_access, d, DM_DEFAULT, NULL);
 
     switch (devinit->machine->machine_subtype) {
     case MACHINE_PREP_IBM860:
         bus_isa_init(devinit->machine, devinit->interrupt_path,
-            BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC, 0x80000000, 0xc0000000);
+            BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC | BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000 | VIRTUAL_ISA_PORTBASE, 0xc0000000);
         snprintf(tmps, sizeof(tmps), "pcic addr="
-                 "0x800003e0"); // , devinit->interrupt_path);
+                 "0x8086800003e0"); // , devinit->interrupt_path);
         device_add(devinit->machine, tmps);
         break;
     default:

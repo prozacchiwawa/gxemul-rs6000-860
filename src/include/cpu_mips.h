@@ -33,6 +33,7 @@
 
 #include "interrupt.h"
 #include "misc.h"
+#include "cpu_traits.h"
 
 struct cpu_family;
 struct emul;
@@ -276,11 +277,15 @@ struct mips_cpu {
 	 *  address translation:
 	 */
 	DYNTRANS_ITC(mips)
-	VPH_TLBS(mips,MIPS)
 	VPH32(mips,MIPS)
 	VPH64(mips,MIPS)
 };
 
+template <> struct cpu_traits<mips_cpu> {
+  static constexpr int instr_alignment_shift() { return MIPS_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return MIPS_IC_ENTRIES_PER_PAGE; }
+  typedef struct mips_instr_call *instr_t;
+};
 
 /*  cpu_mips.c:  */
 void mips_cpu_interrupt_assert(struct interrupt *interrupt);

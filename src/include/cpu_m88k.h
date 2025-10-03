@@ -33,6 +33,7 @@
 
 #include "misc.h"
 #include "interrupt.h"
+#include "cpu_traits.h"
 
 #include "thirdparty/m88k_psl.h"
 
@@ -265,11 +266,15 @@ struct m88k_cpu {
 	 *  supervisor mode).
 	 */
 	DYNTRANS_ITC(m88k)
-	VPH_TLBS(m88k,M88K)
 	VPH32(m88k,M88K)
 	VPH32EXTENDED(m88k,M88K,usr)
 };
 
+template <> struct cpu_traits<m88k_cpu> {
+  static constexpr int instr_alignment_shift() { return M88K_INSTR_ALIGNMENT_SHIFT; }
+  static constexpr int ic_entries_per_page() { return M88K_IC_ENTRIES_PER_PAGE; }
+  typedef struct m88k_instr_call *instr_t;
+};
 
 /*  cpu_m88k.c:  */
 int m88k_cpu_instruction_has_delayslot(struct cpu *cpu, unsigned char *ib);

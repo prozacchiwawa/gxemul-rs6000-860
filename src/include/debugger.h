@@ -32,6 +32,9 @@
  */
 
 #include "misc.h"
+#include <deque>
+#include <map>
+#include <memory>
 
 struct emul;
 struct machine;
@@ -49,6 +52,23 @@ void debugger_reset(void);
 void debugger_init(struct emul *emul);
 int  debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ibm_name *name);
 
+typedef struct _keyboard_event_t {
+  int code;
+} keyboard_event_t;
+
+extern std::deque<keyboard_event_t> keyboard_debug_events;
+
+struct dump_register_state_t {
+  void *f;
+  uint64_t arg0;
+
+  dump_register_state_t(void *f, uint64_t arg0) : f(f), arg0(arg0) { }
+};
+
+extern std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
+extern int ppc_recording_offset;
+extern struct ppc_record_buf *ppc_recording;
+
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0
 #define	ENTER_SINGLE_STEPPING		1
@@ -63,5 +83,16 @@ int  debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct i
 
 int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 	uint64_t *valuep);
+
+extern void GdblibSetup();
+extern int GdblibActive();
+extern void GdblibTakeException(struct cpu *cpu, int n);
+extern int GdblibCheckWaiting(struct cpu *cpu);
+extern bool GdblibSerialInterrupt(struct cpu *cpu);
+
+extern void debugger_step(struct machine *m, int steps);
+extern void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen);
+extern void breakpoint_delete(struct machine *m, uint64_t addr);
+extern void breakpoint_show(struct machine *m);
 
 #endif	/*  DEBUGGER_H  */

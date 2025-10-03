@@ -55,16 +55,16 @@ int main(int argc, char *argv[])
 {
 	char *a, *b;
 
-	if (argc != 3) {
-		fprintf(stderr, "usage: %s arch Arch\n", argv[0]);
-		fprintf(stderr, "Example: %s alpha Alpha\n", argv[0]);
-		fprintf(stderr, "     or: %s arm ARM\n", argv[0]);
+	if (argc != 4) {
+		fprintf(stderr, "usage: %s arch Arch mask\n", argv[0]);
+		fprintf(stderr, "Example: %s alpha Alpha mask\n", argv[0]);
+		fprintf(stderr, "     or: %s arm ARM mask\n", argv[0]);
 		exit(1);
 	}
 
 	a = argv[1];
 	b = argv[2];
-
+  int bits = atoi(argv[3]);
 
 	printf("\n/*  AUTOMATICALLY GENERATED! Do not edit.  */\n\n");
 
@@ -105,8 +105,6 @@ int main(int argc, char *argv[])
 	    uppercase(a));
 	printf("#define DYNTRANS_PC_TO_IC_ENTRY %s_PC_TO_IC_ENTRY\n",
 	    uppercase(a));
-	printf("#define DYNTRANS_TC_ALLOCATE "
-	    "%s_tc_allocate_default_page\n", a);
 	printf("#define DYNTRANS_TC_PHYSPAGE %s_tc_physpage\n", a);
 	printf("#define DYNTRANS_PC_TO_POINTERS %s_pc_to_pointers\n", a);
 	printf("#define DYNTRANS_PC_TO_POINTERS_GENERIC "
@@ -114,7 +112,7 @@ int main(int argc, char *argv[])
 	printf("#define COMBINE_INSTRUCTIONS %s_combine_instructions\n", a);
 	printf("#define DISASSEMBLE %s_cpu_disassemble_instr\n", a);
 
-	printf("\nextern volatile int single_step, single_step_breakpoint;"
+	printf("\nextern volatile uint64_t single_step;\nextern int single_step_breakpoint;"
 	    "\nextern int debugger_n_steps_left_before_interaction;\n"
 	    "extern int old_show_trace_tree;\n"
 	    "extern int old_instruction_trace;\n"
@@ -124,6 +122,17 @@ int main(int argc, char *argv[])
 	printf("\n/* instr uses the same names as in "
 	    "cpu_%s_instr.c */\n#define instr(n) %s_instr_ ## n\n\n", a, a);
 
+  printf("#define VPG_TLB_ENTRY struct %s_vpg_tlb_entry\n", a);
+
+  if (bits & 1) {
+    printf("#define CPU_BITS_32\n");
+    printf("#define CPU32(n) %s32_ ## n\n", a);
+  }
+  if (bits & 2) {
+    printf("#define CPU_BITS_64\n");
+    printf("#define CPU64(n) %s64_ ## n\n", a);
+  }
+
 	printf("#ifdef DYNTRANS_DUALMODE_32\n"
 	    "#define instr32(n) %s32_instr_ ## n\n\n", a);
 	printf("#endif\n\n");
@@ -132,13 +141,11 @@ int main(int argc, char *argv[])
 	    " struct %s_instr_call *ic)\n", a, a);
 
 	printf("\n/*\n *  nothing:  Do nothing.\n *\n"
-	    " *  The difference between this function and a \"nop\" "
-	    "instruction is that\n *  this function does not increase "
-	    "the program counter.  It is used to \"get out\" of running in "
-	    "translated\n *  mode.\n */\n");
-	printf("X(nothing)\n{\n");
-	printf("\tcpu->cd.%s.next_ic --;\n", a);
-	printf("}\n\n");
+         " *  The difference between this function and a \"nop\" "
+         "instruction is that\n *  this function does not increase "
+         "the program counter.  It is used to \"get out\" of running in "
+         "translated\n *  mode.\n */\n");
+	printf("X(nothing);\n\n");
 
 	/*  Ugly special hacks for SH[34]:  */
 	if (strcasecmp(argv[1], "sh") == 0) {

@@ -46,7 +46,7 @@
 #include "timer.h"
 
 
-extern volatile int single_step;
+extern volatile uint64_t single_step;
 
 static const char *cop0_names[] = COP0_NAMES;
 static const char *regnames[] = MIPS_REGISTER_NAMES;
@@ -1779,8 +1779,7 @@ void coproc_tlbwri(struct cpu *cpu, int randomflag)
 		    page, then add a translation for it immediately:  */
 		if (memblock != NULL &&
 		    cp->reg[COP0_ENTRYLO0] & R2K3K_ENTRYLO_V)
-			cpu->update_translation_table(cpu, vaddr, memblock,
-			    wf, paddr);
+			cpu->update_translation_table(cpu, vaddr, memblock, wf, paddr, false);
 	} else {
 		/*  R4000 etc.:  */
 		unsigned char *memblock = NULL;
@@ -1895,12 +1894,10 @@ void coproc_tlbwri(struct cpu *cpu, int randomflag)
 		 */
 		memblock = memory_paddr_to_hostaddr(cpu->mem, paddr0, 0);
 		if (memblock != NULL && cp->reg[COP0_ENTRYLO0] & ENTRYLO_V)
-			cpu->update_translation_table(cpu, vaddr0, memblock,
-			    wf0, paddr0);
+			cpu->update_translation_table(cpu, vaddr0, memblock, wf0, paddr0, false);
 		memblock = memory_paddr_to_hostaddr(cpu->mem, paddr1, 0);
 		if (memblock != NULL && cp->reg[COP0_ENTRYLO1] & ENTRYLO_V)
-			cpu->update_translation_table(cpu, vaddr1, memblock,
-			    wf1, paddr1);
+			cpu->update_translation_table(cpu, vaddr1, memblock, wf1, paddr1, false);
 
 		/*  Set new last_written_tlb_index hint:  */
 		cpu->cd.mips.last_written_tlb_index = index;

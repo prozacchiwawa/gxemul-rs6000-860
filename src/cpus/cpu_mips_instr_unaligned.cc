@@ -52,8 +52,7 @@ void mips_unaligned_loadstore(struct cpu *cpu, struct mips_instr_call *ic,
 	uint64_t aligned_addr = addr & ~(wlen-1);
 	unsigned char aligned_word[8], databyte;
 
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.cur_ic_page)
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.vph32.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)
 	    << MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);

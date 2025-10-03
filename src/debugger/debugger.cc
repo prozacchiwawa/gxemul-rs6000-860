@@ -37,6 +37,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <deque>
+#include <iostream>
+#include <fstream>
 
 #include "console.h"
 #include "cpu.h"
@@ -58,6 +61,13 @@ extern char **extra_argv;
 extern struct settings *global_settings;
 extern int quiet_mode;
 static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
+std::deque<std::string> script_queue;
+static std::map<uint64_t, std::vector<std::string>> break_commands;
+std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
+
+int ppc_recording_fd = -1;
+int ppc_recording_offset = 0;
+struct ppc_record_buf *ppc_recording = nullptr;
 
 /*
  *  Global debugger variables:
@@ -65,7 +75,7 @@ static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
  *  TODO: Some of these should be moved to some other place!
  */
 
-volatile int single_step = NOT_SINGLE_STEPPING;
+volatile uint64_t single_step = NOT_SINGLE_STEPPING;
 volatile int exit_debugger;
 int force_debugger_at_exit = 0;
 
@@ -75,7 +85,7 @@ int debugger_n_steps_left_before_interaction = 0;
 int old_instruction_trace = 0;
 int old_quiet_mode = 0;
 int old_show_trace_tree = 0;
-
+int trace_mapping = 0;
 
 /*
  *  Private (global) debugger variables:
@@ -101,6 +111,68 @@ static char repeat_cmd[MAX_CMD_BUFLEN];
 static uint64_t last_dump_addr = MAGIC_UNTOUCHED;
 static uint64_t last_unasm_addr = MAGIC_UNTOUCHED;
 
+static void show_breakpoint(struct machine *m, int i);
+
+static void breakpoint_delete_number(struct machine *m, int x) {
+  free(m->breakpoints.string[x]);
+
+  for (int i=x; i<m->breakpoints.n-1; i++) {
+    m->breakpoints.addr[i]   = m->breakpoints.addr[i+1];
+    m->breakpoints.string[i] = m->breakpoints.string[i+1];
+  }
+  m->breakpoints.n --;
+
+  // XXX make a way of telling the cpu to clear a breakpoint.
+}
+
+void breakpoint_delete(struct machine *m, uint64_t addr) {
+  int which_bp = -1;
+  for (int i = 0; i < m->breakpoints.n; i++) {
+    if (m->breakpoints.addr[i] == addr) {
+      which_bp = i;
+    }
+  }
+
+  if (which_bp != -1) {
+    breakpoint_delete_number(m, which_bp);
+  }
+}
+
+void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen) {
+  CHECK_ALLOCATION
+    (m->breakpoints.string = (char **) realloc
+     (m->breakpoints.string, sizeof(char *) *(m->breakpoints.n + 1)));
+  CHECK_ALLOCATION
+    (m->breakpoints.addr = (uint64_t *) realloc
+     (m->breakpoints.addr, sizeof(uint64_t) *(m->breakpoints.n + 1)));
+
+  int i = m->breakpoints.n;
+
+  CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)malloc(namelen+1));
+  strlcpy(m->breakpoints.string[i], name, namelen);
+  m->breakpoints.addr[i] = addr;
+
+  m->breakpoints.n ++;
+
+  // XXX make a way of telling the cpu to clear breakpoints.
+}
+
+void breakpoint_show(struct machine *m) {
+  if (m->breakpoints.n == 0) {
+    printf("No breakpoints set.\n");
+  }
+
+  for (int i=0; i<m->breakpoints.n; i++) {
+    show_breakpoint(m, i);
+  }
+}
+
+void debugger_step(struct machine *m, int steps) {
+	debugger_n_steps_left_before_interaction = steps - 1;
+
+	/*  Special hack, see debugger() for more info.  */
+	exit_debugger = -1;
+}
 
 /*
  *  debugger_readchar():
@@ -131,7 +203,9 @@ void debugger_activate(int x)
 {
 	ctrl_c = 1;
 
-	if (single_step != NOT_SINGLE_STEPPING) {
+  script_queue.clear();
+
+	if ((single_step & 0xff) != NOT_SINGLE_STEPPING) {
 		/*  Already in the debugger. Do nothing.  */
 		int i;
 		for (i=0; i<MAX_CMD_BUFLEN; i++)
@@ -682,22 +756,52 @@ void debugger(void)
 	 *  become to complex to keep in sync.
 	 */
 	/*  TODO: In all machines  */
-	for (i=0; i<debugger_machine->ncpus; i++)
-		if (debugger_machine->cpus[i]->translation_cache != NULL) {
-			cpu_create_or_reset_tc(debugger_machine->cpus[i]);
-			debugger_machine->cpus[i]->
-			    invalidate_translation_caches(
-			    debugger_machine->cpus[i], 0, INVALIDATE_ALL);
-		}
+  exit_debugger = 0;
 
 	/*  Stop timers while interacting with the user:  */
 	timer_stop();
 
-	exit_debugger = 0;
+  if (GdblibActive()) {
+    debugger_machine->instruction_trace = 0;
+    debugger_machine->show_trace_tree = 0;
+
+    GdblibTakeException(debugger_machine->cpus[0], 7);
+    if (exit_debugger != -1) {
+      timer_start();
+
+      exit_debugger = 1;
+      fprintf(stderr, "resume from gdb (cont)\n");
+    } else {
+      single_step = 1;
+      debugger_machine->instruction_trace = 1;
+      debugger_n_steps_left_before_interaction = 0;
+      single_step = ENTER_SINGLE_STEPPING;
+      fprintf(stderr, "resume from gdb (step)\n");
+    }
+    return;
+  }
+
+  auto bkpt_commands = break_commands.find(debugger_machine->cpus[0]->pc);
+  if (bkpt_commands != break_commands.end()) {
+    for (auto prefix_cmd = bkpt_commands->second.rbegin(); prefix_cmd != bkpt_commands->second.rend(); prefix_cmd++) {
+      fprintf(stderr, "enqueue command %s\n", prefix_cmd->c_str());
+      script_queue.push_front(*prefix_cmd);
+    }
+  }
 
 	while (!exit_debugger) {
 		/*  Read a line from the terminal:  */
-		cmd = debugger_readline();
+    bool script_cmd = false;
+
+    if (script_queue.size()) {
+      std::string queue_command;
+      queue_command = script_queue.front();
+      script_queue.pop_front();
+      cmd = strdup(queue_command.c_str());
+      script_cmd = true;
+    } else {
+      cmd = debugger_readline();
+    }
 
 		cmd_len = strlen(cmd);
 
@@ -723,10 +827,14 @@ void debugger(void)
 		}
 
 		debugger_execute_cmd(cmd, cmd_len);
+    if (script_cmd) {
+      free(cmd);
+    }
 
 		/*  Special hack for the "step" command:  */
-		if (exit_debugger == -1)
+		if (exit_debugger == -1) {
 			return;
+    }
 	}
 
 	/*  Start up timers again:  */
@@ -739,7 +847,7 @@ void debugger(void)
 		debugger_machine->cpus[i]->ninstrs_since_gettimeofday = 0;
 	}
 
-	single_step = NOT_SINGLE_STEPPING;
+	single_step = (single_step & ~0xff) | NOT_SINGLE_STEPPING;
 	debugger_machine->instruction_trace = old_instruction_trace;
 	debugger_machine->show_trace_tree = old_show_trace_tree;
 	quiet_mode = old_quiet_mode;

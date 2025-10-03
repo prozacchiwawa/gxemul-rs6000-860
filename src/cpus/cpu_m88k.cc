@@ -118,10 +118,23 @@ int m88k_cpu_new(struct cpu *cpu, struct memory *mem,
 
 	cpu->run_instr = m88k_run_instr;
 	cpu->memory_rw = m88k_memory_rw;
-	cpu->update_translation_table = m88k_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    m88k_invalidate_translation_caches;
-	cpu->invalidate_code_translation = m88k_invalidate_code_translation;
+	cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page,
+     bool instr
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.m88k.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
+  };
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.m88k.vph32.invalidate_tc(cpu, paddr, flags);
+  };
+	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.m88k.vph32.invalidate_tc_code(cpu, paddr, flags);
+  };
 	cpu->translate_v2p = m88k_translate_v2p;
 
 	cpu->cd.m88k.cpu_type = cpu_type_defs[found];
@@ -271,7 +284,7 @@ int m88k_cpu_instruction_has_delayslot(struct cpu *cpu, unsigned char *ib)
  */
 void m88k_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 

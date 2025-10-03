@@ -81,6 +81,90 @@ extern char *progname;
 extern int verbose;
 extern struct settings *global_settings;
 
+const char *keynames[] = {
+  "ESC",
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "F9",
+  "F10",
+  "F11",
+  "F12",
+  "PrtSc",
+  "Insert",
+  "Delete",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "0",
+  "-",
+  "=",
+  "Backspace",
+  "Tab",
+  "Q",
+  "W",
+  "E",
+  "R",
+  "T",
+  "Y",
+  "U",
+  "I",
+  "O",
+  "P",
+  "[",
+  "]",
+  "\\",
+  "CapsLock",
+  "A",
+  "S",
+  "D",
+  "F",
+  "G",
+  "H",
+  "J",
+  "K",
+  "L",
+  ";",
+  "'",
+  "Return",
+  "LShift",
+  "Z",
+  "X",
+  "C",
+  "V",
+  "B",
+  "N",
+  "M",
+  ",",
+  ".",
+  "/",
+  "RShift",
+  "Ctrl",
+  "Alt",
+  "Space",
+  "Up",
+  "Down",
+  "Left",
+  "Right",
+  "PgUp",
+  "PgDn",
+  "Home",
+  "End",
+  "Backquote",
+  "F11",
+  "F12"
+};
 
 static struct termios console_oldtermios;
 static struct termios console_curtermios;
@@ -117,7 +201,7 @@ struct console_handle {
 	int		w_descriptor;
 	int		r_descriptor;
 
-	unsigned char	fifo[CONSOLE_FIFO_LEN];
+	unsigned int	fifo[CONSOLE_FIFO_LEN];
 	int		fifo_head;
 	int		fifo_tail;
 };
@@ -283,7 +367,8 @@ static int d_avail(int d)
 	FD_SET(d, &rfds);
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-	return select(d+1, &rfds, NULL, NULL, &tv);
+	int selres = select(d+1, &rfds, NULL, NULL, &tv);
+	return selres > 0;
 }
 
 
@@ -293,7 +378,7 @@ static int d_avail(int d)
  *  Put a character in the queue, so that it will be avaiable,
  *  by inserting it into the char fifo.
  */
-void console_makeavail(int handle, char ch)
+void console_makeavail(int handle, int ch)
 {
 	console_handles[handle].fifo[
 	    console_handles[handle].fifo_head] = ch;

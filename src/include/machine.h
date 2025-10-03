@@ -53,6 +53,12 @@ struct isa_pic_data {
 	int			last_int;
 };
 
+struct single_breakpoint {
+    char *string;
+    uint64_t addr;
+    char *expr;
+};
+
 struct breakpoints {
 	int		n;
 

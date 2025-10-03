@@ -28,6 +28,12 @@
  *  Debugger commands. Included from debugger.c.
  */
 #include "crc.h"
+#include "devices.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <png.h>
+#include <map>
 
 /*
  *  debugger_cmd_allsettings():
@@ -36,7 +42,6 @@ static void debugger_cmd_allsettings(struct machine *m, char *cmd_line)
 {
 	settings_debugdump(global_settings, GLOBAL_SETTINGS_NAME, 1);
 }
-
 
 /*
  *  debugger_cmd_breakpoint():
@@ -47,8 +52,9 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 {
 	int i, res;
 
-	while (cmd_line[0] != '\0' && cmd_line[0] == ' ')
+	while (cmd_line[0] != '\0' && cmd_line[0] == ' ') {
 		cmd_line ++;
+  }
 
 	if (cmd_line[0] == '\0') {
 		printf("syntax: breakpoint subcmd [args...]\n");
@@ -60,10 +66,7 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 	}
 
 	if (strcmp(cmd_line, "show") == 0) {
-		if (m->breakpoints.n == 0)
-			printf("No breakpoints set.\n");
-		for (i=0; i<m->breakpoints.n; i++)
-			show_breakpoint(m, i);
+    breakpoint_show(m);
 		return;
 	}
 
@@ -80,18 +83,7 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 			return;
 		}
 
-		free(m->breakpoints.string[x]);
-
-		for (i=x; i<m->breakpoints.n-1; i++) {
-			m->breakpoints.addr[i]   = m->breakpoints.addr[i+1];
-			m->breakpoints.string[i] = m->breakpoints.string[i+1];
-		}
-		m->breakpoints.n --;
-
-		/*  Clear translations:  */
-		for (i=0; i<m->ncpus; i++)
-			if (m->cpus[i]->translation_cache != NULL)
-				cpu_create_or_reset_tc(m->cpus[i]);
+    breakpoint_delete_number(m, x);
 		return;
 	}
 
@@ -105,31 +97,13 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 		if (!res) {
 			printf("Couldn't parse '%s'\n", cmd_line + 4);
 			return;
-		}
+    }
 
-		CHECK_ALLOCATION(m->breakpoints.string = (char **) realloc(
-		    m->breakpoints.string, sizeof(char *) *
-		    (m->breakpoints.n + 1)));
-		CHECK_ALLOCATION(m->breakpoints.addr = (uint64_t *) realloc(
-		    m->breakpoints.addr, sizeof(uint64_t) *
-		   (m->breakpoints.n + 1)));
+    breakpoint_buf_len = strlen(cmd_line+4) + 1;
 
-		breakpoint_buf_len = strlen(cmd_line+4) + 1;
-
-		CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)
-		    malloc(breakpoint_buf_len));
-		strlcpy(m->breakpoints.string[i], cmd_line+4,
-		    breakpoint_buf_len);
-		m->breakpoints.addr[i] = tmp;
-
-		m->breakpoints.n ++;
-		show_breakpoint(m, i);
-
-		/*  Clear translations:  */
-		for (i=0; i<m->ncpus; i++)
-			if (m->cpus[i]->translation_cache != NULL)
-				cpu_create_or_reset_tc(m->cpus[i]);
-		return;
+    breakpoint_add(m, tmp, cmd_line + 4, breakpoint_buf_len);
+    show_breakpoint(m, i);
+    return;
 	}
 
 	printf("Unknown breakpoint subcommand.\n");
@@ -468,7 +442,7 @@ static void debugger_cmd_lookup(struct machine *m, char *cmd_line)
 {
 	uint64_t addr;
 	int res;
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 
 	if (cmd_line[0] == '\0') {
@@ -914,6 +888,42 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
 	int cpuid = debugger_cur_cpu, coprocnr = -1;
 	int gprs, coprocs;
 	char *p;
+  auto file_length = PPC_RECORDING_LENGTH * sizeof(ppc_record_buf);
+
+  if (!strcmp(cmd_line, "+")) {
+    m->register_dump = true;
+    return;
+  } else if (!strcmp(cmd_line, "-")) {
+    m->register_dump = false;
+    if (ppc_recording) {
+      munmap(ppc_recording, file_length);
+      close(ppc_recording_fd);
+      ppc_recording = nullptr;
+      ppc_recording_fd = -1;
+    }
+    return;
+  } else if (!strcmp(cmd_line, "record")) {
+    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR, 0644);
+    if (ppc_recording_fd == -1) {
+      fprintf(stderr, "failed to open recording file\n");
+      return;
+    }
+    int res = ftruncate(ppc_recording_fd, file_length);
+    if (res == -1) {
+      fprintf(stderr, "failed to set recording size\n");
+      return;
+    }
+    ppc_recording = (struct ppc_record_buf *)mmap(nullptr, file_length, PROT_READ | PROT_WRITE, MAP_SHARED, ppc_recording_fd, 0);
+    if (ppc_recording == MAP_FAILED) {
+      ppc_recording = nullptr;
+      fprintf(stderr, "failed to map recording space\n");
+      close(ppc_recording_fd);
+      ppc_recording_fd = -1;
+      return;
+    }
+
+    ppc_recording_offset = 0;
+  }
 
 	/*  [cpuid][,c]  */
 	if (cmd_line[0] != '\0') {
@@ -1018,10 +1028,7 @@ static void debugger_cmd_step(struct machine *m, char *cmd_line)
 		}
 	}
 
-	debugger_n_steps_left_before_interaction = n - 1;
-
-	/*  Special hack, see debugger() for more info.  */
-	exit_debugger = -1;
+  debugger_step(m, n);
 
 	strlcpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
 }
@@ -1189,6 +1196,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 	ctrl_c = 0;
 
+  int offset = 0;
 	while (addr < addr_end) {
 		unsigned int i, len;
 		int failed = 0;
@@ -1197,7 +1205,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 		memset(buf, 0, sizeof(buf));
 
 		for (i=0; i<sizeof(buf); i++) {
-			if (c->memory_rw(c, mem, addr+i, buf+i, 1, MEM_READ,
+			if (c->memory_rw(c, mem, (addr+i)^offset, buf+i, 1, MEM_READ,
 			    CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED)
 				failed ++;
 		}
@@ -1362,6 +1370,306 @@ static void debugger_cmd_version(struct machine *m, char *cmd_line)
 	printf("%s, %s\n", VERSION, COMPILE_DATE);
 }
 
+static void debugger_cmd_v2p(struct machine *m, char *cmd_line)
+{
+	uint64_t addr, result_addr;
+	struct cpu *c;
+	char *p = NULL;
+	int r;
+
+	if (cmd_line[0] != '\0') {
+		uint64_t tmp;
+		char *tmps;
+
+		CHECK_ALLOCATION(tmps = strdup(cmd_line));
+
+		/*  addr:  */
+		p = strchr(tmps, ' ');
+		if (p != NULL)
+			*p = '\0';
+		r = debugger_parse_expression(m, tmps, 0, &tmp);
+		free(tmps);
+
+		if (r == PARSE_NOMATCH || r == PARSE_MULTIPLE) {
+			printf("Unparsable address: %s\n", cmd_line);
+			return;
+		} else {
+			addr = tmp;
+		}
+
+		p = strchr(cmd_line, ' ');
+	} else {
+    return;
+  }
+
+	if (m->cpus == NULL) {
+		printf("No cpus (?)\n");
+		return;
+	}
+	c = m->cpus[m->bootstrap_cpu];
+	if (c == NULL) {
+		printf("m->cpus[m->bootstrap_cpu] = NULL\n");
+		return;
+	}
+
+  if (ppc_translate_v2p(c, addr, &result_addr, FLAG_INSTR)) {
+    printf("%08x\n", (uint32_t)result_addr);
+  } else {
+    printf("no translation\n");
+  }
+}
+
+static void debugger_cmd_swap_floppy(struct machine *m, char *cmd_line)
+{
+	uint64_t addr, result_addr;
+	struct cpu *c;
+	char *p = NULL;
+	int r;
+
+	if (cmd_line[0] != '\0') {
+		uint64_t tmp;
+		char *tmps;
+
+		CHECK_ALLOCATION(tmps = strdup(cmd_line));
+
+		/* new file  */
+		p = strchr(tmps, ' ');
+    if (p) {
+      *p = 0;
+    }
+
+    int switch_res = diskimage_switch_floppy(m, tmps);
+    free(tmps);
+    if (switch_res == -1) {
+      perror("could not switch floppy");
+      return;
+    }
+  }
+}
+
+static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
+{
+  char *endptr;
+  unsigned long trap = strtoul(cmd_line, &endptr, 10);
+
+  if (!trap) {
+    trap = 7;
+  }
+
+  fprintf(stderr, "gdb exception\n");
+  GdblibTakeException(debugger_machine->cpus[0], trap);
+
+  if (exit_debugger != -1) {
+    exit_debugger = 1;
+    fprintf(stderr, "gdb exception done (cont)\n");
+  } else {
+    fprintf(stderr, "gdb exception done (step)\n");
+  }
+}
+
+static void debugger_cmd_until(struct machine *m, char *cmd_line) {
+  char *endptr;
+  uint64_t when = strtoull(cmd_line, &endptr, 16);
+
+  fprintf(stderr, "until %" PRIx64 "\n", (uint64_t)when);
+
+  if (!when) {
+    return;
+  }
+
+  if (when < 0x100) {
+    debugger_cmd_step(m, "");
+  } else {
+    single_step = (when | 0xffull) - 255ull;
+  }
+}
+
+static void debugger_cmd_kbd(struct machine *m, char *cmd_line) {
+  char *endptr;
+
+  do {
+    unsigned long kbd = strtoul(cmd_line, &endptr, 16);
+    while (*endptr == ' ') {
+      endptr++;
+    }
+
+    cmd_line = endptr;
+
+    keyboard_event_t k = { kbd };
+    keyboard_debug_events.push_back(k);
+  } while (isxdigit(*endptr));
+}
+
+static void debugger_cmd_script(struct machine *m, char *cmd_line) {
+  std::string line;
+  std::ifstream in;
+  in.open(cmd_line);
+  if (!in) {
+    fprintf(stderr, "Couldn't read script file\n");
+    return;
+  }
+
+  while (getline(in, line)) {
+    if (line.size() && line[0] == ';') {
+      continue;
+    }
+    script_queue.push_back(line);
+  }
+}
+
+static void debugger_cmd_symfile(struct machine *m, char *cmd_line) {
+  std::string line;
+  std::ifstream in;
+  in.open(cmd_line);
+  if (!in) {
+    fprintf(stderr, "Couldn't read script file\n");
+    return;
+  }
+
+  std::map<uint64_t, std::string> symbol_map;
+  while (getline(in, line)) {
+    auto cspace = strchr(line.c_str(), ' ');
+    if (!cspace) {
+      continue;
+    }
+    while (*cspace == ' ') {
+      cspace++;
+    }
+    auto name = std::string(cspace);
+    uint64_t addr;
+    char *space;
+    addr = strtoull(line.c_str(), &space, 16);
+    if (*space != ' ') {
+      continue;
+    }
+    add_symbol_name(&m->symbol_context, addr, 0, name.c_str(), 't' | 0x100, -1);
+  }
+
+  symbol_recalc_sizes(&m->symbol_context);
+}
+
+static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
+  bool exclude = false;
+  if (*cmd_line == '!') {
+    exclude = true;
+    cmd_line++;
+  }
+
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  uint64_t end_addr = addr + 4;
+  if (*space == '-') {
+    cmd_line = space + 1;
+    end_addr = strtoull(cmd_line, &space, 16);
+  }
+
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed trace %s\n", cmd_line);
+    return;
+  }
+
+  for (auto i = addr; i < end_addr; i++) {
+    if (exclude) {
+      dump_registers.erase(i);
+    } else {
+      dump_registers.insert(std::pair(i, std::make_unique<dump_register_state_t>(dump_register_state_t(nullptr, 0))));
+    }
+  }
+}
+
+static void debugger_cmd_breakat(struct machine *m, char *cmd_line) {
+  char *space;
+  uint64_t addr = strtoull(cmd_line, &space, 16);
+  if (*space && *space != ' ') {
+    fprintf(stderr, "malformed breakat %s\n", cmd_line);
+    return;
+  }
+
+  if (!*space) {
+    break_commands.erase(addr);
+    return;
+  }
+
+  while (*space == ' ') space++;
+  cmd_line = space;
+
+  std::vector<std::string> cmds;
+  while (space = strtok(cmd_line, "|")) {
+    cmds.push_back(std::string(space));
+    cmd_line = nullptr;
+  }
+  break_commands.insert(std::pair(addr, cmds));
+}
+
+static void debugger_cmd_echo(struct machine *m, char *cmd_line) {
+  fprintf(stderr, "echo: %s\n", cmd_line);
+}
+
+static void debugger_cmd_screenshot(struct machine *m, char *cmd_line) {
+  if (!strlen(cmd_line)) {
+    fprintf(stderr, "usage: ss [file.png]\n");
+    return;
+  }
+
+  FILE *f = fopen(cmd_line, "wb");
+  if (!f) {
+    fprintf(stderr, "Couldn't open screenshot file\n");
+    return;
+  }
+
+  png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  if (!png) {
+    fprintf(stderr, "Couldn't initialize png\n");
+    return;
+  }
+
+  png_infop info = png_create_info_struct(png);
+  if (!info) {
+    fprintf(stderr, "Couldn't create png info\n");
+    return;
+  }
+
+  if (setjmp(png_jmpbuf(png))) {
+    fprintf(stderr, "png writing failed\n");
+    return;
+  }
+
+  png_init_io(png, f);
+
+  int width = 800, height = 600;
+
+  // Output is 8bit depth, RGBA format.
+  png_set_IHDR
+    (png,
+     info,
+     width, height,
+     8,
+     PNG_COLOR_TYPE_RGB,
+     PNG_INTERLACE_NONE,
+     PNG_COMPRESSION_TYPE_DEFAULT,
+     PNG_FILTER_TYPE_DEFAULT
+     );
+  png_write_info(png, info);
+
+  std::vector<png_byte*> row_pointers;
+  for(int y = 0; y < height; y++) {
+    row_pointers.push_back((png_byte*)malloc(width * 3));
+    for (int x = 0; x < 3 * width; x++) {
+      auto cpu = m->cpus[0];
+      cpu->memory_rw(cpu, cpu->mem, VGA_FB_ADDR + (y * 3 * width) + x, &row_pointers[y][x], 1, 0, PHYSICAL);
+    }
+  }
+  png_write_image(png, &row_pointers[0]);
+  png_write_end(png, nullptr);
+
+  for (int y = 0; y < height; y++) {
+    free(row_pointers[y]);
+  }
+
+  fclose(f);
+
+  png_destroy_write_struct(&png, &info);
+}
 
 /****************************************************************************/
 
@@ -1456,8 +1764,32 @@ static struct cmd cmds[] = {
   { "findname", "[addr [endaddr]]", 0, debugger_cmd_findname,
     "if the function has a named tail (PowerPC), display it" },
 
+  { "vp", "", 0, debugger_cmd_v2p,
+    "print vp translation" },
+
+  { "fswap", "new file name", 0, debugger_cmd_swap_floppy,
+    "swap floppy to new filename" },
+
 	{ "version", "", 0, debugger_cmd_version,
 		"print version information" },
+
+  { "gdb", "trap number", 0, debugger_cmd_gdb, "Transfer control to gdb" },
+
+  { "until", "number of instructions", 0, debugger_cmd_until, "Run until roughly the n'th emulated instruction" },
+
+  { "kbd", "hex ...", 0, debugger_cmd_kbd, "Inject these bytes into the keyboard byte stream" },
+
+  { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
+
+  { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
+
+  { "etrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
+
+  { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
+
+  { "echo", "", 0, debugger_cmd_echo, "Output this string for debugging use" },
+
+  { "ss", "filename", 0, debugger_cmd_screenshot, "Create a screenshot of the framebuffer content" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

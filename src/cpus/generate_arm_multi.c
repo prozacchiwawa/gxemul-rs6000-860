@@ -100,9 +100,7 @@ void generate_opcode(uint32_t opcode)
 	printf("\tuint32_t addr = cpu->cd.arm.r[%i];\n", r);
 
 	if (!load && opcode & 0x8000) {
-		printf("\tuint32_t tmp_pc = ((size_t)ic - (size_t)\n\t"
-		    "    cpu->cd.arm.cur_ic_page) / sizeof(struct "
-		    "arm_instr_call);\n"
+		printf("\tuint32_t tmp_pc = cpu->cd.arm.vph32.sync_low_pc(cpu, ic);\n"
 		    "\ttmp_pc = ((cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1)"
 		    "\n\t    << ARM_INSTR_ALIGNMENT_SHIFT)))\n"
 		    "\t    + (tmp_pc << ARM_INSTR_ALIGNMENT_SHIFT) + 12;\n");
@@ -111,7 +109,8 @@ void generate_opcode(uint32_t opcode)
 	if (p)
 		printf("\taddr %s 4;\n", u? "+=" : "-=");
 
-	printf("\tpage = cpu->cd.arm.host_%s[addr >> 12];\n",
+  printf("\tauto host_page = cpu->cd.arm.vph32.get_cached_tlb_pages(cpu, addr, false);\n");
+	printf("\tpage = host_page.host_%s;\n",
 	    load? "load" : "store");
 
 	printf("\taddr &= 0xffc;\n");
@@ -195,7 +194,7 @@ void generate_opcode(uint32_t opcode)
 		    r, u? "+=" : "-=", 4*n_regs);
 
 	if (load && opcode & 0x8000) {
-		printf("\t\tquick_pc_to_pointers(cpu);\n");
+		printf("\t\tcpu->cd.arm.vph32.move_to_physpage(cpu);\n");
 	}
 
 	printf("\t} else\n");

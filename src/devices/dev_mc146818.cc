@@ -55,7 +55,7 @@
 #define	to_bcd(x)	( ((x)/10) * 16 + ((x)%10) )
 #define	from_bcd(x)	( ((x)>>4) * 10 + ((x)&15) )
 
-#define MC146818_DEBUG  1
+// #define MC146818_DEBUG  1
 
 #define	MC146818_TICK_SHIFT	14
 
@@ -83,10 +83,11 @@ struct mc_data {
 	int		n_seconds_elapsed;
 	int		uip_threshold;
 
-	int		ugly_netbsd_prep_hack_done;
-	int		ugly_netbsd_prep_hack_sec;
+  time_t time;
+  int   ticks;
 };
 
+static void mc146818_update_time(struct mc_data *d);
 
 /*
  *  Ugly hack to fool NetBSD/prep to accept the clock.  (See mcclock_isa_match
@@ -124,20 +125,14 @@ DEVICE_TICK(mc146818)
     }
   }
 
-	if ((d->reg[MC_REGB * 4] & MC_REGB_PIE) && pti > 0) {
-#if 0
-		/*  For debugging, to see how much the interrupts are
-		    lagging behind the real clock:  */
-		{
-			static int x = 0;
-			if (++x == 1) {
-				x = 0;
-				printf("%i ", pti);
-				fflush(stdout);
-			}
-		}
-#endif
+  if (d->ticks++ >= 0x1000) {
+    d->ticks = 0;
+    d->time++;
+    // fprintf(stderr, "mc146818: +1sec\n");
+    pti++;
+  }
 
+	if ((d->reg[MC_REGB * 4] & MC_REGB_PIE) && pti > 0) {
 		INTERRUPT_ASSERT(d->irq);
 
 		d->reg[MC_REGC * 4] |= MC_REGC_PF;
@@ -147,6 +142,8 @@ DEVICE_TICK(mc146818)
 	    d->reg[MC_REGC * 4] & MC_REGC_AF ||
 	    d->reg[MC_REGC * 4] & MC_REGC_PF)
 		d->reg[MC_REGC * 4] |= MC_REGC_IRQF;
+
+	mc146818_update_time(d);
 }
 
 
@@ -192,9 +189,8 @@ DEVICE_ACCESS(mc146818_jazz)
 static void mc146818_update_time(struct mc_data *d)
 {
 	struct tm *tmp;
-	time_t timet;
+	time_t timet = d->time;
 
-	timet = time(NULL);
 	tmp = gmtime(&timet);
 
 	d->reg[4 * MC_SEC]   = tmp->tm_sec;
@@ -287,10 +283,11 @@ DEVICE_ACCESS(mc146818)
 	struct tm *tmp;
 	time_t timet;
 	size_t i;
-  uint64_t idata;
 
 	/*  NOTE/TODO: This access function only handles 8-bit accesses!  */
+#ifdef MC146818_DEBUG
   fprintf(stderr, "[ mc146818 access type %s relative_addr %04x ]\n", (writeflag == MEM_WRITE) ? "write" : "read", relative_addr);
+#endif
 	relative_addr /= d->addrdiv;
 
 	/*  Different ways of accessing the registers:  */
@@ -367,7 +364,7 @@ DEVICE_ACCESS(mc146818)
 	 *  in REGA to be updated once a second.
 	 */
 	if (relative_addr == MC_REGA*4 || relative_addr == MC_REGC*4) {
-		timet = time(NULL);
+		timet = d->time;
 		tmp = gmtime(&timet);
 		d->reg[MC_REGC * 4] &= ~MC_REGC_UF;
 		if (tmp->tm_sec != d->previous_second) {
@@ -508,24 +505,6 @@ DEVICE_ACCESS(mc146818)
 		case 0x15:
 			break;
 		case 4 * MC_SEC:
-			if (d->ugly_netbsd_prep_hack_done < NETBSD_HACK_DONE) {
-				d->ugly_netbsd_prep_hack_done ++;
-				switch (d->ugly_netbsd_prep_hack_done) {
-				case NETBSD_HACK_FIRST_1:
-					d->ugly_netbsd_prep_hack_sec =
-					    from_bcd(d->reg[relative_addr]);
-					break;
-				case NETBSD_HACK_FIRST_2:
-					d->reg[relative_addr] = to_bcd(
-					    d->ugly_netbsd_prep_hack_sec);
-					break;
-				case NETBSD_HACK_SECOND_1:
-				case NETBSD_HACK_SECOND_2:
-					d->reg[relative_addr] = to_bcd((1 +
-					    d->ugly_netbsd_prep_hack_sec) % 60);
-					break;
-				}
-			}
 		case 4 * MC_MIN:
 		case 4 * MC_HOUR:
 		case 4 * MC_DOW:
@@ -541,9 +520,6 @@ DEVICE_ACCESS(mc146818)
 			 */
 			if (d->reg[MC_REGB * 4] & MC_REGB_SET)
 				break;
-
-			if (d->ugly_netbsd_prep_hack_done >= NETBSD_HACK_DONE)
-				mc146818_update_time(d);
 			break;
 		case 4 * MC_REGA:
 			break;
@@ -615,12 +591,6 @@ void dev_mc146818_init(struct machine *machine, struct memory *mem,
 		d->use_bcd = 1;
 	}
 
-	if (machine->machine_type != MACHINE_PREP) {
-		/*  NetBSD/prep has a really ugly clock detection code;
-		    no other machines/OSes don't need this.  */
-		d->ugly_netbsd_prep_hack_done = NETBSD_HACK_DONE;
-	}
-
 	if (access_style == MC146818_DEC) {
 		/*  Station Ethernet Address, on DECstation 3100:  */
 		for (i=0; i<6; i++)
@@ -688,6 +658,7 @@ void dev_mc146818_init(struct machine *machine, struct memory *mem,
 	    dev_len * addrdiv, dev_mc146818_access,
 	    d, DM_DEFAULT, NULL);
 
+	d->time = 1733775436;
 	mc146818_update_time(d);
 
 	machine_add_tickfunction(machine, dev_mc146818_tick, d,

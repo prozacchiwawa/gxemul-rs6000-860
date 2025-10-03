@@ -179,7 +179,7 @@ DEVICE_ACCESS(ns16550)
 				/*  Set the high byte of the divisor:  */
 				d->divisor = (d->divisor & 0xff) | (idata << 8);
 				debug("[ ns16550 (%s): speed set to %i bps ]\n",
-				    d->name, (int)(115200 / d->divisor));
+              d->name, d->divisor ? ((int)(115200 / d->divisor)) : 0);
 			} else
 				odata = d->divisor >> 8;
 			break;
@@ -232,9 +232,9 @@ DEVICE_ACCESS(ns16550)
 
 	case com_msr:
 		if (writeflag == MEM_WRITE) {
-			debug("[ ns16550 (%s): write to msr: 0x%02x ]\n",
+			debug("[ ns16550 (%s): write to mcr: 0x%02x ]\n",
 			    d->name, (int)idata);
-			d->reg[com_msr] = idata;
+			d->reg[com_mcr] = idata;
 		} else {
 			odata = d->reg[com_msr];
 			//debug("[ ns16550 (%s): read from msr: 0x%02x ]\n",

@@ -45,7 +45,6 @@
 #include "settings.h"
 #include "symbol.h"
 
-extern int single_step;
 
 /*  This is initialized by machine_init():  */
 struct machine_entry *first_machine_entry = NULL;
@@ -618,15 +617,15 @@ void machine_default_cputype(struct machine *m)
 int machine_run(struct machine *machine)
 {
 	struct cpu **cpus = machine->cpus;
-	int ncpus = machine->ncpus, cpu0instrs = 0, i, te;
+	int ncpus = machine->ncpus, cpu0instrs = 0;
 
-	for (i=0; i<ncpus; i++) {
+  	for (int i = 0; i < ncpus; i++) {
 		if (cpus[i]->running) {
-			int instrs_run = cpus[i]->run_instr(cpus[i]);
-			if (i == 0)
-				cpu0instrs += instrs_run;
+			cpu0instrs += cpus[i]->run_instr(cpus[i]);
 		}
 	}
+
+  	// fprintf(stderr, "%x %08x\n", cpu0instrs, (unsigned int)cpus[0]->pc);
 
 	/*
 	 *  Hardware 'ticks':  (clocks, interrupt sources...)
@@ -636,7 +635,7 @@ int machine_run(struct machine *machine)
 	 *  TODO: This should be redesigned into some "mainbus" stuff instead!
 	 */
 
-	for (te=0; te<machine->tick_functions.n_entries; te++) {
+	for (int te=0; te<machine->tick_functions.n_entries; te++) {
 		machine->tick_functions.ticks_till_next[te] -= cpu0instrs;
 		if (machine->tick_functions.ticks_till_next[te] <= 0) {
 			while (machine->tick_functions.ticks_till_next[te]<=0) {
@@ -651,16 +650,11 @@ int machine_run(struct machine *machine)
 	}
 
 	/*  Is any CPU still alive?  */
-	for (i=0; i<ncpus; i++)
+	for (int i=0; i<ncpus; i++)
 		if (cpus[i]->running)
 			return 1;
 
-	if (machine->exit_without_entering_debugger) {
-		return 0;
-	} else {
-		single_step = 1;
-		return 1; // Don't abrutply abort so we can see what's going on.
-	}
+	return 0;
 }
 
 

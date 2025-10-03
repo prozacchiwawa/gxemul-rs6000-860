@@ -35,11 +35,19 @@
 #include <sys/types.h>
 #include <inttypes.h>
 #include <sys/time.h>
+#include <assert.h>
+#include <functional>
 
 /*  This is needed for undefining 'mips', 'ppc' etc. on weird systems:  */
 #include "../../config.h"
 
 #include "timer.h"
+#include "cpu_traits.h"
+#include "mem_flags.h"
+
+#include "tlb_cache.h"
+#include "tlb_cache32.h"
+#include "tlb_cache64.h"
 
 /*
  *  Dyntrans misc declarations, used throughout the dyntrans code.
@@ -68,27 +76,41 @@
  *  list, and so forth. (Bad, O(n) find/insert complexity. Should be fixed some
  *  day. TODO)  See definition of physpage_ranges below.
  */
-#define DYNTRANS_MISC_DECLARATIONS(arch,ARCH,addrtype)  struct \
-	arch ## _instr_call {					\
-		void	(*f)(struct cpu *, struct arch ## _instr_call *); \
-		size_t	arg[ARCH ## _N_IC_ARGS];			\
-	};								\
-									\
-	/*  Translation cache struct for each physical page:  */	\
-	struct arch ## _tc_physpage {					\
-		struct arch ## _instr_call ics[ARCH ## _IC_ENTRIES_PER_PAGE+2];\
-		uint32_t	next_ofs;	/*  (0 for end of chain)  */ \
-		uint32_t	translations_bitmap;			\
-		uint32_t	translation_ranges_ofs;			\
-		addrtype	physaddr;				\
-	};								\
-									\
-	struct arch ## _vpg_tlb_entry {					\
-		uint8_t		valid;					\
-		uint8_t		writeflag;				\
-		addrtype	vaddr_page;				\
-		addrtype	paddr_page;				\
-		unsigned char	*host_page;				\
+#define DYNTRANS_TRANSLATIONS_BITMAP(ARCH) struct translations_bitmap { \
+    uint32_t data[(ARCH ## _IC_ENTRIES_PER_PAGE + 31) / 32];            \
+    void set(int x) { data[x / 32] |= 1 << (x & 31); }                  \
+    bool check(int x) const { return !!(data[x / 32] & (1 << (x & 31))); } \
+    bool empty() const {                                                \
+      for (size_t i = 0; i < sizeof(data) / sizeof(data[0]); i++) {       \
+        if (data[i]) { return false; }                                  \
+      }                                                                 \
+      return true;                                                      \
+    }                                                                   \
+  } translations_bitmap
+
+#define DYNTRANS_MISC_DECLARATIONS(arch,ARCH,addrtype)  struct      \
+	arch ## _instr_call {                                             \
+		void	(*f)(struct cpu *, struct arch ## _instr_call *);         \
+    uint8_t instr[1 << ARCH ## _INSTR_ALIGNMENT_SHIFT];             \
+    uint64_t pc;                                                    \
+		size_t	arg[ARCH ## _N_IC_ARGS];                                \
+	};                                                                \
+                                                                    \
+	/*  Translation cache struct for each physical page:  */          \
+	struct arch ## _tc_physpage {                                     \
+		struct arch ## _instr_call ics[ARCH ## _IC_ENTRIES_PER_PAGE+2]; \
+		uint32_t	next_ofs;	/*  (0 for end of chain)  */                \
+		DYNTRANS_TRANSLATIONS_BITMAP(ARCH);                             \
+		uint32_t	translation_ranges_ofs;                               \
+		addrtype	physaddr;                                             \
+    uint64_t  virtaddr;                                             \
+	};                                                                \
+                                                                    \
+	struct arch ## _vpg_tlb_entry {                                   \
+		uint8_t		valid;                                                \
+		uint8_t		writeflag;                                            \
+		addrtype	vaddr_page;                                           \
+		addrtype	paddr_page;                                           \
 	};
 
 #define	DYNTRANS_MISC64_DECLARATIONS(arch,ARCH,tlbindextype)		\
@@ -107,21 +129,6 @@
 		int				refcount;		\
 	};
 
-
-/*
- *  This structure contains a list of ranges within an emulated
- *  physical page that contain translatable code.
- */
-#define	PHYSPAGE_RANGES_ENTRIES_PER_LIST		20
-struct physpage_ranges {
-	uint32_t	next_ofs;	/*  0 for end of chain  */
-	uint32_t	n_entries_used;
-	uint16_t	base[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-	uint16_t	length[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-	uint16_t	count[PHYSPAGE_RANGES_ENTRIES_PER_LIST];
-};
-
-
 /*
  *  Dyntrans "Instruction Translation Cache":
  *
@@ -139,12 +146,9 @@ struct physpage_ranges {
  *  instructions; low_addr is the offset of the translated instruction in the
  *  current page, NOT shifted right.)
  */
-#define DYNTRANS_ITC(arch)	struct arch ## _tc_physpage *cur_physpage;  \
-				struct arch ## _instr_call  *cur_ic_page;   \
-				struct arch ## _instr_call  *next_ic;       \
-				struct arch ## _tc_physpage *physpage_template;\
-				void (*combination_check)(struct cpu *,     \
-				    struct arch ## _instr_call *, int low_addr);
+#define DYNTRANS_ITC(arch)	\
+  void (*combination_check)(struct cpu *,                               \
+                            struct arch ## _instr_call *, int low_addr);
 
 /*
  *  Virtual -> physical -> host address translation TLB entries:
@@ -153,50 +157,9 @@ struct physpage_ranges {
  *  Regardless of whether 32-bit or 64-bit address translation is used, the
  *  same TLB entry structure is used.
  */
-#define	VPH_TLBS(arch,ARCH)						\
-	struct arch ## _vpg_tlb_entry					\
-	    vph_tlb_entry[ARCH ## _MAX_VPH_TLB_ENTRIES];
-
-/*
- *  32-bit dyntrans emulated Virtual -> physical -> host address translation:
- *  -------------------------------------------------------------------------
- *
- *  This stuff assumes that 4 KB pages are used. 20 bits to select a page
- *  means just 1 M entries needed. This is small enough that a couple of
- *  full-size tables can fit in virtual memory on modern hosts (both 32-bit
- *  and 64-bit hosts). :-)
- *
- *  Usage: e.g. VPH32(arm,ARM)
- *           or VPH32(sparc,SPARC)
- *
- *  The vph_tlb_entry entries are cpu dependent tlb entries.
- *
- *  The host_load and host_store entries point to host pages; the phys_addr
- *  entries are uint32_t (emulated physical addresses).
- *
- *  phys_page points to translation cache physpages.
- *
- *  vaddr_to_tlbindex is a virtual address to tlb index hint table.
- *  The values in this array are the tlb index plus 1, so a value of, say,
- *  3 means tlb index 2. A value of 0 would mean a tlb index of -1, which
- *  is not a valid index. (I.e. no hit.)
- *
- *  The VPH32EXTENDED variant adds an additional postfix to the array
- *  names. Used so far only for usermode addresses in M88K emulation.
- */
-#define	N_VPH32_ENTRIES		1048576
-#define	VPH32(arch,ARCH)						\
-	unsigned char		*host_load[N_VPH32_ENTRIES];		\
-	unsigned char		*host_store[N_VPH32_ENTRIES];		\
-	uint32_t		phys_addr[N_VPH32_ENTRIES];		\
-	struct arch ## _tc_physpage  *phys_page[N_VPH32_ENTRIES];	\
-	uint8_t			vaddr_to_tlbindex[N_VPH32_ENTRIES];
-#define	VPH32_16BITVPHENTRIES(arch,ARCH)				\
-	unsigned char		*host_load[N_VPH32_ENTRIES];		\
-	unsigned char		*host_store[N_VPH32_ENTRIES];		\
-	uint32_t		phys_addr[N_VPH32_ENTRIES];		\
-	struct arch ## _tc_physpage  *phys_page[N_VPH32_ENTRIES];	\
-	uint16_t		vaddr_to_tlbindex[N_VPH32_ENTRIES];
+#define	VPH32(arch,ARCH) \
+  struct vph32<arch ## _tc_physpage, uint8_t, arch ## _vpg_tlb_entry, struct cpu> vph32;
+#define	VPH32_16BITVPHENTRIES(arch,ARCH) struct vph32<arch ## _tc_physpage, uint16_t, arch ## _vpg_tlb_entry, struct cpu> vph32;
 #define	VPH32EXTENDED(arch,ARCH,ex)					\
 	unsigned char		*host_load_ ## ex[N_VPH32_ENTRIES];	\
 	unsigned char		*host_store_ ## ex[N_VPH32_ENTRIES];	\
@@ -204,28 +167,7 @@ struct physpage_ranges {
 	struct arch ## _tc_physpage  *phys_page_ ## ex[N_VPH32_ENTRIES];\
 	uint8_t			vaddr_to_tlbindex_ ## ex[N_VPH32_ENTRIES];
 
-
-/*
- *  64-bit dyntrans emulated Virtual -> physical -> host address translation:
- *  -------------------------------------------------------------------------
- *
- *  Usage: e.g. VPH64(alpha,ALPHA)
- *           or VPH64(sparc,SPARC)
- *
- *  l1_64 is an array containing poiners to l2 tables.
- *
- *  l2_64_dummy is a pointer to a "dummy l2 table". Instead of having NULL
- *  pointers in l1_64 for unused slots, a pointer to the dummy table can be
- *  used.
- */
-#define	DYNTRANS_L1N		17
-#define	VPH64(arch,ARCH)						\
-	struct arch ## _l3_64_table	*l3_64_dummy;			\
-	struct arch ## _l3_64_table	*next_free_l3;			\
-	struct arch ## _l2_64_table	*l2_64_dummy;			\
-	struct arch ## _l2_64_table	*next_free_l2;			\
-	struct arch ## _l2_64_table	*l1_64[1 << DYNTRANS_L1N];
-
+#define	VPH64(arch,ARCH) struct vph64<struct arch ## _tc_physpage, struct arch ## _l3_64_table, arch ## _l2_64_table, arch ## _vpg_tlb_entry, struct cpu> vph64;
 
 /*  Include all CPUs' header files here:  */
 #include "cpu_alpha.h"
@@ -309,14 +251,13 @@ struct cpu_family {
 #define	N_SAFE_DYNTRANS_LIMIT_SHIFT	14
 #define	N_SAFE_DYNTRANS_LIMIT	((1 << (N_SAFE_DYNTRANS_LIMIT_SHIFT - 1)) - 1)
 
-#define	MAX_DYNTRANS_READAHEAD		128
+#define	MAX_DYNTRANS_READAHEAD		0
 
 #define	DEFAULT_DYNTRANS_CACHE_SIZE	(48*1048576)
 #define	DYNTRANS_CACHE_MARGIN		200000
 
-#define	N_BASE_TABLE_ENTRIES		65536
-#define	PAGENR_TO_TABLE_INDEX(a)	((a) & (N_BASE_TABLE_ENTRIES-1))
-
+#define INSTR_BETWEEN_INTERRUPTS 0x100
+#define SYNCHRONIZE_PC 0x20
 
 /*
  *  The generic CPU struct:
@@ -336,10 +277,12 @@ struct cpu {
 	char		*path;
 
 	/*  Nr of instructions executed, etc.:  */
-	int64_t		ninstrs;
-	int64_t		ninstrs_show;
-	int64_t		ninstrs_flush;
-	int64_t		ninstrs_since_gettimeofday;
+	uint64_t		ninstrs;
+  uint64_t   ninstrs_async;
+  uint64_t   ninstrs_syncpc;
+	uint64_t		ninstrs_show;
+	uint64_t		ninstrs_flush;
+	uint64_t		ninstrs_since_gettimeofday;
 	struct timeval	starttime;
 
 	/*  EMUL_LITTLE_ENDIAN or EMUL_BIG_ENDIAN.  */
@@ -367,16 +310,15 @@ struct cpu {
 			    int writeflag, int cache_flags);
 	int		(*translate_v2p)(struct cpu *, uint64_t vaddr,
 			    uint64_t *return_paddr, int flags);
-	void		(*update_translation_table)(struct cpu *,
-			    uint64_t vaddr_page, unsigned char *host_page,
-			    int writeflag, uint64_t paddr_page);
-	void		(*invalidate_translation_caches)(struct cpu *,
-			    uint64_t paddr, int flags);
-	void		(*invalidate_code_translation)(struct cpu *,
-			    uint64_t paddr, int flags);
+  std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page, bool instr)> update_translation_table;
+	std::function<void(struct cpu *, uint64_t paddr, int flags)> invalidate_translation_caches;
+  std::function<void(struct cpu *, uint64_t paddr, int flags)> invalidate_code_translation;
 	void		(*useremul_syscall)(struct cpu *cpu, uint32_t code);
 	int		(*instruction_has_delayslot)(struct cpu *cpu,
 			    unsigned char *ib);
+
+  void (*functioncall_trace)(struct cpu *cpu, uint64_t pc);
+  void (*functioncall_end_trace)(struct cpu *cpu);
 
 	/*  The program counter. (For 32-bit modes, not all bits are used.)  */
 	uint64_t	pc;
@@ -424,8 +366,6 @@ struct cpu {
 
 	/*  Instruction translation cache:  */
 	int		n_translated_instrs;
-	unsigned char	*translation_cache;
-	size_t		translation_cache_cur_ofs;
 
 
 	/*
@@ -443,8 +383,8 @@ struct cpu {
 		struct ppc_cpu        ppc;
 		struct sh_cpu         sh;
 	} cd;
-};
 
+};
 
 /*  cpu.c:  */
 struct cpu *cpu_new(struct memory *mem, struct machine *machine,
@@ -458,7 +398,7 @@ int cpu_disassemble_instr(struct machine *m, struct cpu *cpu,
 	unsigned char *instr, int running, uint64_t addr);
 
 void cpu_functioncall_trace(struct cpu *cpu, uint64_t f);
-void cpu_functioncall_trace_return(struct cpu *cpu);
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *reg);
 
 void cpu_create_or_reset_tc(struct cpu *cpu);
 
@@ -471,13 +411,6 @@ void cpu_show_cycles(struct machine *machine, int forced);
 
 struct cpu_family *cpu_family_ptr_by_number(int arch);
 void cpu_init(void);
-
-
-#define	JUST_MARK_AS_NON_WRITABLE	1
-#define	INVALIDATE_ALL			2
-#define	INVALIDATE_PADDR		4
-#define	INVALIDATE_VADDR		8
-#define	INVALIDATE_VADDR_UPPER4		16	/*  useful for PPC emulation  */
 
 
 /*  Note: 64-bit processors running in 32-bit mode use a 32-bit
@@ -512,5 +445,8 @@ void cpu_init(void);
 	return 1;							\
 	}
 
+#ifndef MIN
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#endif
 
 #endif	/*  CPU_H  */

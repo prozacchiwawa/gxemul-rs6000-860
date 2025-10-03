@@ -2,7 +2,10 @@
 #  Makefile for GXemul src/cpus
 #
 
-CXXFLAGS=$(CWARNINGS) $(COPTIM) $(DINCLUDE)
+SOFTFLOATDIR=src/thirdparty/softfloat/build/Linux-x86_64-GCC
+CXXFLAGS=$(CWARNINGS) $(COPTIM) $(DINCLUDE) -I../../src/thirdparty/softfloat/source/include -DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 \
+  -DSOFTFLOAT_FAST_DIV64TO32
+
 
 OBJS=cpu.o $(CPU_ARCHS) $(CPU_BACKENDS)
 TOOLS=generate_head generate_tail $(CPU_TOOLS)
@@ -30,7 +33,7 @@ tmp_alpha_misc.cc: cpu_alpha_instr_loadstore.cc generate_alpha_misc
 	./generate_alpha_misc > tmp_alpha_misc.cc
 
 tmp_alpha_head.cc: generate_head
-	./generate_head alpha Alpha > tmp_alpha_head.cc
+	./generate_head alpha Alpha 2 > tmp_alpha_head.cc
 
 tmp_alpha_tail.cc: generate_tail
 	./generate_tail alpha Alpha > tmp_alpha_tail.cc
@@ -105,7 +108,7 @@ tmp_arm_r.cc: generate_arm_r
 	./generate_arm_r 0 0 > tmp_arm_r.cc
 
 tmp_arm_head.cc: generate_head
-	./generate_head arm ARM > tmp_arm_head.cc
+	./generate_head arm ARM 1 > tmp_arm_head.cc
 
 tmp_arm_tail.cc: generate_tail
 	./generate_tail arm ARM > tmp_arm_tail.cc
@@ -123,7 +126,7 @@ tmp_m88k_loadstore.cc: cpu_m88k_instr_loadstore.cc generate_m88k_loadstore
 	./generate_m88k_loadstore > tmp_m88k_loadstore.cc
 
 tmp_m88k_head.cc: generate_head
-	./generate_head m88k M88K > tmp_m88k_head.cc
+	./generate_head m88k M88K 1 > tmp_m88k_head.cc
 
 tmp_m88k_tail.cc: generate_tail
 	./generate_tail m88k M88K > tmp_m88k_tail.cc
@@ -144,7 +147,7 @@ tmp_mips_loadstore_multi.cc: generate_mips_loadstore_multi
 	./generate_mips_loadstore_multi > tmp_mips_loadstore_multi.cc
 
 tmp_mips_head.cc: generate_head
-	./generate_head mips MIPS > tmp_mips_head.cc
+	./generate_head mips MIPS 1 > tmp_mips_head.cc
 
 tmp_mips_tail.cc: generate_tail
 	./generate_tail mips MIPS > tmp_mips_tail.cc
@@ -159,7 +162,7 @@ tmp_ppc_loadstore.cc: cpu_ppc_instr_loadstore.cc generate_ppc_loadstore
 	./generate_ppc_loadstore > tmp_ppc_loadstore.cc
 
 tmp_ppc_head.cc: generate_head
-	./generate_head ppc PPC > tmp_ppc_head.cc
+	./generate_head ppc PPC 3 > tmp_ppc_head.cc
 
 tmp_ppc_tail.cc: generate_tail
 	./generate_tail ppc PPC > tmp_ppc_tail.cc
@@ -171,7 +174,7 @@ cpu_sh.o: cpu_sh.cc cpu_sh_instr.cc cpu_dyntrans.cc memory_rw.cc \
 	tmp_sh_head.cc tmp_sh_tail.cc
 
 tmp_sh_head.cc: generate_head
-	./generate_head sh SH > tmp_sh_head.cc
+	./generate_head sh SH 1 > tmp_sh_head.cc
 
 tmp_sh_tail.cc: generate_tail
 	./generate_tail sh SH > tmp_sh_tail.cc

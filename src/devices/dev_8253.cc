@@ -55,7 +55,8 @@
 
 #define	DEV_8253_LENGTH		4
 #define	TICK_SHIFT		14
-
+#define INTERRUPT_TICK_COUNT 20000
+// #define PIT_8259_DEBUG
 
 struct pit8253_data {
 	int		in_use;
@@ -68,16 +69,18 @@ struct pit8253_data {
 
 	int		hz[3];
 
-	struct timer	*timer0;
 	struct interrupt irq;
+	int		asserted;
 	int		pending_interrupts_timer0;
+
+  int tick_count;
 };
 
 
 static void timer0_tick(struct timer *t, void *extra)
 {
 	struct pit8253_data *d = (struct pit8253_data *) extra;
-	d->pending_interrupts_timer0 ++;
+	// d->pending_interrupts_timer0 ++;
 
 	/*  printf("%i ", d->pending_interrupts_timer0); fflush(stdout);  */
 }
@@ -87,13 +90,26 @@ DEVICE_TICK(8253)
 {
 	struct pit8253_data *d = (struct pit8253_data *) extra;
 
-	if (!d->in_use)
-		return;
-
-	// Generate interrupts regardless of (d->mode[0] & 0x0e)?
-	// (It seems like Linux/MALTA kernels like this.)
-	if (d->pending_interrupts_timer0 > 0)
-		INTERRUPT_ASSERT(d->irq);
+  if (d->hz[0] != 0) {
+    d->tick_count++;
+    auto count_limit = INTERRUPT_TICK_COUNT / d->hz[0];
+    if (d->tick_count >= count_limit / 2) {
+      if (d->asserted) {
+#ifdef PIT_8259_DEBUG
+        fprintf(stderr, "[ 8253: off phase at %d hz ]\n", d->hz[0]);
+#endif
+        d->asserted = false;
+      	INTERRUPT_DEASSERT(d->irq);
+      } else {
+#ifdef PIT_8259_DEBUG
+        fprintf(stderr, "[ 8253: interrupt at %d hz ]\n", d->hz[0]);
+#endif
+        d->asserted = true;
+      	INTERRUPT_ASSERT(d->irq);
+      }
+      d->tick_count -= count_limit;
+    }
+  }
 }
 
 
@@ -122,6 +138,7 @@ DEVICE_ACCESS(8253)
 			case I8253_TIMER_MSB:
 				d->counter[relative_addr] &= 0x00ff;
 				d->counter[relative_addr] |= ((idata&0xff)<<8);
+        d->tick_count = 0;
 				if (d->counter[relative_addr] != 0)
 					d->hz[relative_addr] = (int) (
 					    I8253_TIMER_FREQ / (float)
@@ -131,20 +148,6 @@ DEVICE_ACCESS(8253)
 				debug("[ 8253: counter %i set to %i (%i Hz) "
 				    "]\n", relative_addr, d->counter[
 				    relative_addr], d->hz[relative_addr]);
-				switch (relative_addr) {
-				case 0:	if (d->timer0 == NULL)
-						d->timer0 = timer_add(
-						    d->hz[0], timer0_tick, d);
-					else
-						timer_update_frequency(
-						    d->timer0, d->hz[0]);
-					break;
-				case 1:	debug("TODO: DMA refresh?\n");
-					//exit(1);
-                    break;
-				case 2:	fatal("TODO: 8253 tone generation?\n");
-					break;
-				}
 				break;
 			default:fatal("[ 8253: huh? writing to counter"
 				    " %i but neither from msb nor lsb? ]\n",
@@ -175,6 +178,7 @@ DEVICE_ACCESS(8253)
 
 	case I8253_TIMER_MODE:
 		if (writeflag == MEM_WRITE) {
+			fprintf(stderr, "[ 8253: timer mode %x ]\n", idata & 0xff);
 			d->mode_byte = idata;
 
 			d->counter_select = idata >> 6;
@@ -243,6 +247,7 @@ DEVINIT(8253)
 	d->mode[0] = I8253_TIMER_RATEGEN;
 	d->mode[1] = I8253_TIMER_RATEGEN;
 	d->mode[2] = I8253_TIMER_RATEGEN;
+  d->asserted = false;
 
 	devinit->machine->isa_pic_data.pending_timer_interrupts =
 	    &d->pending_interrupts_timer0;

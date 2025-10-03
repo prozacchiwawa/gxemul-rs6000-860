@@ -2,12 +2,19 @@
 #  Makefile for GXemul
 #
 
+SOFTFLOATDIR=src/thirdparty/softfloat/build/Linux-x86_64-GCC
 BIN=gxemul
-LIBS=$(XLIB) $(OTHERLIBS) -lboost_thread -lboost_system
+LIBS=$(XLIB) $(OTHERLIBS) -lboost_thread -lboost_system $(SOFTFLOATDIR)/softfloat.a -lstdc++
+INCLUDE += $(SOFTFLOATDIR)/source/include
 
 all: build
 
-build: do_src
+softfloat: $(SOFTFLOATDIR)/softfloat.a
+
+$(SOFTFLOATDIR)/softfloat.a:
+	$(MAKE) -C $(SOFTFLOATDIR)
+
+build: softfloat do_src
 	$(CXX) $(COPTIM) src/components/*/*.o src/console/*.o src/cpus/*.o src/debugger/*.o src/devices/*.o src/disk/*.o src/file/*.o src/machines/*.o src/main/*.o src/main/*/*.o src/net/*.o src/old_main/*.o src/promemul/*.o src/symbol/*.o src/ui/*/*.o $(LIBS) -o $(BIN)
 
 do_src:

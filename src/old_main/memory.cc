@@ -188,26 +188,36 @@ struct memory *memory_new(uint64_t physical_max, int arch)
  *  addr, otherwise 0.
  */
 int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
-	int min_string_length)
+                            int min_string_length)
 {
-	int cur_length = 0;
 	unsigned char c;
 
-	for (;;) {
-		c = '\0';
-		cpu->memory_rw(cpu, mem, addr+cur_length,
-		    &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-		if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
-			cur_length ++;
-			if (cur_length >= min_string_length)
-				return 1;
-		} else {
-			if (cur_length >= min_string_length)
-				return 1;
-			else
-				return 0;
-		}
+  for (int stride = 1; stride <= 2; stride++) {
+    int mz = 0;
+    int cur_length = 0;
+    bool good_char = true;
+    for (cur_length = 0; good_char;) {
+      c = '\0';
+      cpu->memory_rw(cpu, mem, addr+cur_length,
+                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+      if (c == 'M' && mz == 0) {
+        mz++;
+      }
+      if (c == 'Z' && mz == 1) {
+        return 0;
+      }
+      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+        cur_length += stride;
+      } else {
+        good_char = false;
+      }
+    }
+    if (cur_length / stride >= min_string_length) {
+      return 1;
+    }
 	}
+
+  return 0;
 }
 
 
@@ -221,37 +231,41 @@ char *memory_conv_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
 	char *buf, int bufsize)
 {
 	int len = 0;
-	int output_index = 0;
 	unsigned char c, p='\0';
 
-	while (output_index < bufsize-1) {
-		c = '\0';
-		cpu->memory_rw(cpu, mem, addr+len, &c, sizeof(c), MEM_READ,
-		    CACHE_NONE | NO_EXCEPTIONS);
-		buf[output_index] = c;
-		if (c>=' ' && c<127) {
-			len ++;
-			output_index ++;
-		} else if (c=='\n' || c=='\r' || c=='\t') {
-			len ++;
-			buf[output_index] = '\\';
-			output_index ++;
-			switch (c) {
-			case '\n':	p = 'n'; break;
-			case '\r':	p = 'r'; break;
-			case '\t':	p = 't'; break;
-			}
-			if (output_index < bufsize-1) {
-				buf[output_index] = p;
-				output_index ++;
-			}
-		} else {
-			buf[output_index] = '\0';
-			return buf;
-		}
+  for (int stride = 1; stride <= 2; stride++) {
+    int mz = 0;
+    int cur_length = 0;
+    bool good_char = true;
+
+    len = 0;
+    for (cur_length = 0; good_char;) {
+      c = '\0';
+      cpu->memory_rw(cpu, mem, addr+cur_length,
+                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+      if (c == 'M' && mz == 0) {
+        mz++;
+      }
+      if (c == 'Z' && mz == 1) {
+        return 0;
+      }
+      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+        cur_length += stride;
+        buf[len++] = c;
+        if (len >= bufsize) {
+          buf[bufsize - 1] = '\0';
+          return buf;
+        }
+      } else {
+        good_char = false;
+      }
+    }
+    if (cur_length / stride >= 3) {
+      break;
+    }
 	}
 
-	buf[bufsize-1] = '\0';
+	buf[len] = '\0';
 	return buf;
 }
 
@@ -595,7 +609,7 @@ void memory_warn_about_unimplemented_addr(struct cpu *cpu, struct memory *mem,
 	int writeflag, uint64_t paddr, uint8_t *data, size_t len)
 {
 	uint64_t offset, old_pc = cpu->pc;
-	char *symbol;
+	const char *symbol;
 
     if (paddr >= mem->physical_max && cpu->machine->hole) {
         if (cpu->machine->hole) {
@@ -798,7 +812,7 @@ int store_64bit_word(struct cpu *cpu, uint64_t addr, uint64_t data64)
 		tmp = data[3]; data[3] = data[4]; data[4] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -822,7 +836,7 @@ int store_32bit_word(struct cpu *cpu, uint64_t addr, uint64_t data32)
 		tmp = data[1]; data[1] = data[2]; data[2] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -843,7 +857,7 @@ int store_16bit_word(struct cpu *cpu, uint64_t addr, uint64_t data16)
 		int tmp = data[0]; data[0] = data[1]; data[1] = tmp;
 	}
 	return cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -861,7 +875,7 @@ void store_buf(struct cpu *cpu, uint64_t addr, const char *s, size_t len)
 			while (len >= psize) {
 				cpu->memory_rw(cpu, cpu->mem, addr,
 				    (unsigned char *)s, psize, MEM_WRITE,
-				    CACHE_DATA);
+            CACHE_NONE | NO_EXCEPTIONS);
 				addr += psize;
 				s += psize;
 				len -= psize;
@@ -906,7 +920,7 @@ uint64_t load_64bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[8];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[7]; data[7] = tmp;
@@ -933,7 +947,7 @@ uint32_t load_32bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[4];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[3]; data[3] = tmp;
@@ -954,7 +968,7 @@ uint16_t load_16bit_word(struct cpu *cpu, uint64_t addr)
 	unsigned char data[2];
 
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, data, sizeof(data), MEM_READ, CACHE_DATA);
+	    addr, data, sizeof(data), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 
 	if (cpu->byte_order == EMUL_LITTLE_ENDIAN) {
 		int tmp = data[0]; data[0] = data[1]; data[1] = tmp;

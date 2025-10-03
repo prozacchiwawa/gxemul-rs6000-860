@@ -75,6 +75,7 @@ static int timer_is_running;
 struct timer *timer_add(double freq, void (*timer_tick)(struct timer *timer,
 	void *extra), void *extra)
 {
+#if 0
 	struct timer *newtimer;
 
 	CHECK_ALLOCATION(newtimer = (struct timer *) malloc(sizeof(struct timer)));
@@ -93,6 +94,9 @@ struct timer *timer_add(double freq, void (*timer_tick)(struct timer *timer,
 	first_timer = newtimer;
 
 	return newtimer;
+#else
+	return nullptr;
+#endif
 }
 
 
@@ -103,6 +107,7 @@ struct timer *timer_add(double freq, void (*timer_tick)(struct timer *timer,
  */
 void timer_remove(struct timer *t)
 {
+#if 0
 	struct timer *prev = NULL, *cur = first_timer;
 
 	while (cur != NULL && cur != t) {
@@ -121,6 +126,7 @@ void timer_remove(struct timer *t)
 		    "doesn't exist. aborting\n", t);
 		exit(1);
 	}
+#endif
 }
 
 
@@ -131,6 +137,7 @@ void timer_remove(struct timer *t)
  */
 void timer_update_frequency(struct timer *t, double new_freq)
 {
+#if 0
 	if (t->freq == new_freq)
 		return;
 
@@ -141,6 +148,7 @@ void timer_update_frequency(struct timer *t, double new_freq)
 
 	t->interval = 1.0 / new_freq;
 	t->next_tick_at = timer_current_time + t->interval;
+#endif
 }
 
 
@@ -151,6 +159,7 @@ void timer_update_frequency(struct timer *t, double new_freq)
  */
 static void timer_tick(int signal_nr)
 {
+#if 0
 	struct timer *timer = first_timer;
 	struct timeval tv;
 
@@ -195,6 +204,7 @@ static void timer_tick(int signal_nr)
 #ifdef TEST
 	printf("T"); fflush(stdout);
 #endif
+#endif
 }
 
 
@@ -205,6 +215,7 @@ static void timer_tick(int signal_nr)
  */
 void timer_start(void)
 {
+#if 0
 	struct timer *timer = first_timer;
 	struct itimerval val;
 	struct sigaction saction;
@@ -233,6 +244,7 @@ void timer_start(void)
 	sigaction(SIGALRM, &saction, NULL);
 
 	setitimer(ITIMER_REAL, &val, NULL);
+#endif
 }
 
 
@@ -243,6 +255,7 @@ void timer_start(void)
  */
 void timer_stop(void)
 {
+#if 0
 	struct itimerval val;
 	struct sigaction saction;
 
@@ -262,6 +275,7 @@ void timer_stop(void)
 	saction.sa_handler = NULL;
 
 	sigaction(SIGALRM, &saction, NULL);
+#endif
 }
 
 
@@ -280,6 +294,7 @@ static void timer_tick_test(struct timer *t, void *extra)
  */
 void timer_init(void)
 {
+#if 0
 	first_timer = NULL;
 	timer_current_time = 0.0;
 	timer_is_running = 0;
@@ -295,6 +310,7 @@ void timer_init(void)
 	timer_start();
 	while (1)
 		sleep(999999);
+#endif
 #endif
 }
 

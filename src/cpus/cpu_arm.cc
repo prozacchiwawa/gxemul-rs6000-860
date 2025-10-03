@@ -51,7 +51,6 @@
 #define DYNTRANS_32
 #include "tmp_arm_head.cc"
 
-
 /*  ARM symbolic register names and condition strings:  */
 static const char *arm_regname[N_ARM_REGS] = ARM_REG_NAMES;
 static const char *arm_condition_string[16] = ARM_CONDITION_STRINGS;
@@ -97,10 +96,23 @@ int arm_cpu_new(struct cpu *cpu, struct memory *mem,
 
 	cpu->run_instr = arm_run_instr;
 	cpu->memory_rw = arm_memory_rw;
-	cpu->update_translation_table = arm_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    arm_invalidate_translation_caches;
-	cpu->invalidate_code_translation = arm_invalidate_code_translation;
+	cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page,
+     bool instr
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.arm.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
+  };
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.arm.vph32.invalidate_tc(cpu, paddr, flags);
+  };
+	cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.arm.vph32.invalidate_tc_code(cpu, paddr, flags);
+  };
 	cpu->translate_v2p = arm_translate_v2p;
 
 	cpu->cd.arm.cpu_type = cpu_type_defs[found];
@@ -334,7 +346,7 @@ void arm_cpu_list_available_types(void)
  */
 void arm_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int mode = cpu->cd.arm.cpsr & ARM_FLAG_MODE;
 	int i, x = cpu->cpu_id;
@@ -703,7 +715,7 @@ void arm_exception(struct cpu *cpu, int exception_nr)
 	cpu->cd.arm.r[ARM_LR] = retaddr;
 	cpu->pc = cpu->cd.arm.r[ARM_PC] = exception_nr * 4 +
 	    ((cpu->cd.arm.control & ARM_CONTROL_V)? 0xffff0000 : 0);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 
 

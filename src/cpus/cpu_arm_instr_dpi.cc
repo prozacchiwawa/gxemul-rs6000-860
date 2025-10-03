@@ -58,6 +58,7 @@
  *  See src/tools/generate_arm_dpi.c for more details.
  */
 
+#define quick_pc_to_pointers(cpu) cpu->cd.arm.vph32.move_to_physpage(cpu)
 
 /*
  *  arg[0] = pointer to rn
@@ -134,8 +135,7 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 #if !defined(A__MOV) && !defined(A__MVN)
 #ifdef A__PC
 	if (ic->arg[0] == (size_t)&cpu->cd.arm.r[ARM_PC]) {
-		uint32_t low_pc = ((size_t)ic - (size_t)
-		    cpu->cd.arm.cur_ic_page) / sizeof(struct arm_instr_call);
+		uint32_t low_pc = cpu->cd.arm.vph32.sync_low_pc(cpu, ic);
 		VAR_A = cpu->pc & ~((ARM_IC_ENTRIES_PER_PAGE-1)
 		    << ARM_INSTR_ALIGNMENT_SHIFT);
 		VAR_A += (low_pc << ARM_INSTR_ALIGNMENT_SHIFT) + 8;
@@ -211,9 +211,7 @@ void A__NAME(struct cpu *cpu, struct arm_instr_call *ic)
 #else
 		if ((old_pc & ~mask_within_page) ==
 		    ((uint32_t)cpu->pc & ~mask_within_page)) {
-			cpu->cd.arm.next_ic = cpu->cd.arm.cur_ic_page +
-			    ((cpu->pc & mask_within_page) >>
-			    ARM_INSTR_ALIGNMENT_SHIFT);
+			cpu->cd.arm.vph32.set_next_ic(cpu->pc);
 		} else
 #endif
 			quick_pc_to_pointers(cpu);

@@ -33,18 +33,16 @@
  *  be increased by 3.)
  */
 
-
 #define SYNCH_PC                {                                       \
-                int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page) \
-                    / sizeof(struct m88k_instr_call);                   \
-                cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)               \
-                    << M88K_INSTR_ALIGNMENT_SHIFT);                     \
-                cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);      \
-        }
+    int low_pc = cpu->cd.m88k.vph32.sync_low_pc(cpu, cpu->cd.m88k.vph32.get_next_ic());    \
+    cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)                           \
+                 << M88K_INSTR_ALIGNMENT_SHIFT);                        \
+    cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);                  \
+  }
 
 #define	ABORT_EXECUTION	  {	SYNCH_PC;				\
 				fatal("Execution aborted at: pc = 0x%08x\n", (int)cpu->pc); \
-				cpu->cd.m88k.next_ic = &nothing_call;	\
+				cpu->cd.m88k.vph32.do_nothing(&nothing_call);                     \
 				cpu->running = 0;			\
 				debugger_n_steps_left_before_interaction = 0; }
 
@@ -66,14 +64,14 @@ X(nop)
  */
 X(br_samepage)
 {
-	cpu->cd.m88k.next_ic = (struct m88k_instr_call *) ic->arg[0];
+	cpu->cd.m88k.vph32.set_next_ic(ic->arg[0]);
 }
 X(bsr_samepage)
 {
 	cpu->cd.m88k.r[M88K_RETURN_REG] = (cpu->pc &
 	    ~((M88K_IC_ENTRIES_PER_PAGE-1) << M88K_INSTR_ALIGNMENT_SHIFT))
 	    + ic->arg[2];
-	cpu->cd.m88k.next_ic = (struct m88k_instr_call *) ic->arg[0];
+	cpu->cd.m88k.vph32.set_next_ic(ic->arg[0]);
 }
 
 
@@ -89,7 +87,7 @@ X(bsr_samepage)
 X(br)
 {
 	cpu->pc = (uint32_t)((cpu->pc & 0xfffff000) + (int32_t)ic->arg[1]);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(br_n)
 {
@@ -102,7 +100,7 @@ X(br_n)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -112,7 +110,7 @@ X(bsr)
 	    M88K_INSTR_ALIGNMENT_SHIFT);
 	cpu->cd.m88k.r[M88K_RETURN_REG] = cpu->pc + ic->arg[2];
 	cpu->pc = (uint32_t) (cpu->pc + ic->arg[1]);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(bsr_n)
 {
@@ -127,7 +125,7 @@ X(bsr_n)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -138,7 +136,7 @@ X(bsr_trace)
 	cpu->cd.m88k.r[M88K_RETURN_REG] = cpu->pc + ic->arg[2];
 	cpu->pc = (uint32_t) (cpu->pc + ic->arg[1]);
 	cpu_functioncall_trace(cpu, cpu->pc);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(bsr_n_trace)
 {
@@ -154,7 +152,7 @@ X(bsr_n_trace)
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
 		cpu_functioncall_trace(cpu, cpu->pc);
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -173,13 +171,13 @@ X(bb0)
 {
 	if (!(reg(ic->arg[0]) & ic->arg[1])) {
 		cpu->pc = (cpu->pc & 0xfffff000) + (int32_t)ic->arg[2];
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	}
 }
 X(bb0_samepage)
 {
 	if (!(reg(ic->arg[0]) & ic->arg[1]))
-		cpu->cd.m88k.next_ic = (struct m88k_instr_call *) ic->arg[2];
+		cpu->cd.m88k.vph32.set_next_ic(ic->arg[2]);
 }
 X(bb0_n)
 {
@@ -202,9 +200,9 @@ X(bb0_n)
 		cpu->delay_slot = NOT_DELAYED;
 		if (cond) {
 			cpu->pc = cpu->cd.m88k.delay_target;
-			quick_pc_to_pointers(cpu);
+			quick_pc_to_pointers32(cpu);
 		} else
-			cpu->cd.m88k.next_ic ++;
+			cpu->cd.m88k.vph32.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -212,13 +210,13 @@ X(bb1)
 {
 	if (reg(ic->arg[0]) & ic->arg[1]) {
 		cpu->pc = (cpu->pc & 0xfffff000) + (int32_t)ic->arg[2];
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	}
 }
 X(bb1_samepage)
 {
 	if (reg(ic->arg[0]) & ic->arg[1])
-		cpu->cd.m88k.next_ic = (struct m88k_instr_call *) ic->arg[2];
+		cpu->cd.m88k.vph32.set_next_ic(ic->arg[2]);
 }
 X(bb1_n)
 {
@@ -241,9 +239,9 @@ X(bb1_n)
 		cpu->delay_slot = NOT_DELAYED;
 		if (cond) {
 			cpu->pc = cpu->cd.m88k.delay_target;
-			quick_pc_to_pointers(cpu);
+			quick_pc_to_pointers32(cpu);
 		} else
-			cpu->cd.m88k.next_ic ++;
+			cpu->cd.m88k.vph32.bump_ic();
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -317,7 +315,7 @@ X(ff1)
 X(jmp)
 {
 	cpu->pc = reg(ic->arg[2]) & ~3;
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(jmp_n)
 {
@@ -329,15 +327,15 @@ X(jmp_n)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
 X(jmp_trace)
 {
 	cpu->pc = reg(ic->arg[2]) & ~3;
-	cpu_functioncall_trace_return(cpu);
-	quick_pc_to_pointers(cpu);
+	cpu_functioncall_trace_return(cpu, nullptr);
+	quick_pc_to_pointers32(cpu);
 }
 X(jmp_n_trace)
 {
@@ -349,8 +347,8 @@ X(jmp_n_trace)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		cpu_functioncall_trace_return(cpu);
-		quick_pc_to_pointers(cpu);
+		cpu_functioncall_trace_return(cpu, nullptr);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -358,7 +356,7 @@ X(jsr)
 {
 	cpu->cd.m88k.r[M88K_RETURN_REG] = (cpu->pc & 0xfffff000) + ic->arg[1];
 	cpu->pc = reg(ic->arg[2]) & ~3;
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(jsr_n)
 {
@@ -371,7 +369,7 @@ X(jsr_n)
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -380,7 +378,7 @@ X(jsr_trace)
 	cpu->cd.m88k.r[M88K_RETURN_REG] = (cpu->pc & 0xfffff000) + ic->arg[1];
 	cpu->pc = reg(ic->arg[2]) & ~3;
 	cpu_functioncall_trace(cpu, cpu->pc);
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 X(jsr_n_trace)
 {
@@ -394,7 +392,7 @@ X(jsr_n_trace)
 		cpu->delay_slot = NOT_DELAYED;
 		cpu->pc = cpu->cd.m88k.delay_target;
 		cpu_functioncall_trace(cpu, cpu->pc);
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 	} else
 		cpu->delay_slot = NOT_DELAYED;
 }
@@ -1493,14 +1491,14 @@ X(rte)
 
 		cpu->pc = nip;
 		cpu->delay_slot = NOT_DELAYED;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 
 		if (cpu->pc != nip) {
 			fatal("NIP execution caused exception?! TODO\n");
 			goto abort_dump;
 		}
 
-		instr(to_be_translated)(cpu, cpu->cd.m88k.next_ic);
+		instr(to_be_translated)(cpu, cpu->cd.m88k.vph32.get_next_ic());
 
 		if ((cpu->pc & 0xfffff000) != (nip & 0xfffff000)) {
 			fatal("instruction in delay slot when returning via"
@@ -1511,14 +1509,14 @@ X(rte)
 
 		cpu->pc = fip;
 		cpu->delay_slot = NOT_DELAYED;
-		quick_pc_to_pointers(cpu);
+		quick_pc_to_pointers32(cpu);
 		return;
 	}
 
 	/*  fatal("RTE: NIP=0x%08" PRIx32", FIP=0x%08" PRIx32"\n",
 	    cpu->cd.m88k.cr[M88K_CR_SNIP], cpu->cd.m88k.cr[M88K_CR_SFIP]);  */
 
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 	return;
 
 abort_dump:
@@ -1646,7 +1644,7 @@ X(prom_call)
 
 	if (!cpu->running) {
 		cpu->n_translated_instrs --;
-		cpu->cd.m88k.next_ic = &nothing_call;
+		cpu->cd.m88k.vph32.do_nothing(&nothing_call);
 	}
 }
 
@@ -1696,7 +1694,8 @@ X(idle)
 {
 	uint32_t rY = reg(ic[0].arg[1]) + ic[0].arg[2];
 	uint32_t index = rY >> 12;
-	unsigned char *p = cpu->cd.m88k.host_load[index];
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, rY, false);
+  unsigned char *p = host_page.host_load;
 	uint32_t *p32 = (uint32_t *) p;
 	uint32_t v;
 
@@ -1719,10 +1718,12 @@ X(idle)
 		usleep(50);
 		cpu->has_been_idling = 1;
 		cpu->n_translated_instrs += N_SAFE_DYNTRANS_LIMIT / 2;
-		cpu->cd.m88k.next_ic = &nothing_call;
+		cpu->cd.m88k.vph32.do_nothing(&nothing_call);
 	} else {
 		cpu->n_translated_instrs ++;
-		cpu->cd.m88k.next_ic = &ic[2];
+    // XXX
+    abort();
+		// cpu->cd.m88k.next_ic = &ic[2];
 	}
 }
 
@@ -1738,7 +1739,8 @@ X(idle_with_tb1)
 {
 	uint32_t rY = reg(ic[1].arg[1]) + ic[1].arg[2];
 	uint32_t index = rY >> 12;
-	unsigned char *p = cpu->cd.m88k.host_load[index];
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, rY, false);
+	unsigned char *p = host_page.host_load;
 	uint32_t *p32 = (uint32_t *) p;
 	uint32_t v;
 
@@ -1761,10 +1763,12 @@ X(idle_with_tb1)
 		usleep(50);
 		cpu->has_been_idling = 1;
 		cpu->n_translated_instrs += N_SAFE_DYNTRANS_LIMIT / 2;
-		cpu->cd.m88k.next_ic = &nothing_call;
+		cpu->cd.m88k.vph32.do_nothing(&nothing_call);
 	} else {
 		cpu->n_translated_instrs += 2;
-		cpu->cd.m88k.next_ic = &ic[3];
+    // XXX
+    abort();
+		// cpu->cd.m88k.next_ic = &ic[3];
 	}
 }
 
@@ -1788,7 +1792,7 @@ X(end_of_page)
 	 *  Note: This may cause an exception, if e.g. the new page is
 	 *  not accessible.
 	 */
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 
 	/*  Simple jump to the next page (if we are lucky):  */
 	if (cpu->delay_slot == NOT_DELAYED)
@@ -1809,7 +1813,7 @@ X(end_of_page)
 	 */
 	/*  fatal("[ end_of_page: delay slot across page boundary! ]\n");  */
 
-	instr(to_be_translated)(cpu, cpu->cd.m88k.next_ic);
+	instr(to_be_translated)(cpu, cpu->cd.m88k.vph32.get_next_ic());
 
 	/*  The instruction in the delay slot has now executed.  */
 	/*  fatal("[ end_of_page: back from executing the delay slot, %i ]\n",
@@ -1817,15 +1821,14 @@ X(end_of_page)
 
 	/*  Find the physpage etc of the instruction in the delay slot
 	    (or, if there was an exception, the exception handler):  */
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 }
 
 
 X(end_of_page2)
 {
 	/*  Synchronize PC on the _second_ instruction on the next page:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
-	    / sizeof(struct m88k_instr_call);
+	int low_pc = cpu->cd.m88k.vph32.sync_low_pc(cpu, cpu->cd.m88k.vph32.get_next_ic());
 	cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)
 	    << M88K_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);
@@ -1839,7 +1842,7 @@ X(end_of_page2)
 	/*  This doesn't count as an executed instruction.  */
 	cpu->n_translated_instrs --;
 
-	quick_pc_to_pointers(cpu);
+	quick_pc_to_pointers32(cpu);
 
 	if (cpu->delay_slot == NOT_DELAYED)
 		return;
@@ -1916,7 +1919,7 @@ X(to_be_translated)
 	void (*samepage_function)(struct cpu *, struct m88k_instr_call *)=NULL;
 
 	/*  Figure out the (virtual) address of the instruction:  */
-	low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
+	low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.vph32.get_ic_page())
 	    / sizeof(struct m88k_instr_call);
 
 	/*  Special case for branch with delayslot on the next page:  */
@@ -1933,7 +1936,8 @@ X(to_be_translated)
 	addr &= ~((1 << M88K_INSTR_ALIGNMENT_SHIFT) - 1);
 
 	/*  Read the instruction word from memory:  */
-	page = cpu->cd.m88k.host_load[(uint32_t)addr >> 12];
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, addr, false);
+  page = host_page.host_load;
 
 	if (page != NULL) {
 		/*  fatal("TRANSLATION HIT!\n");  */
@@ -2324,7 +2328,7 @@ X(to_be_translated)
 
 		/*  Prepare both samepage and offset style args.
 		    (Only one will be used in the actual instruction.)  */
-		ic->arg[0] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+		ic->arg[0] = (size_t) ( cpu->cd.m88k.vph32.get_ic_page() +
 		    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		ic->arg[1] = offset;
 		ic->arg[2] = (addr & 0xffc) + 4;    /*  Return offset
@@ -2373,7 +2377,7 @@ X(to_be_translated)
 		if (offset >= 0 && offset <= 0xffc &&
 		    samepage_function != NULL) {
 			ic->f = samepage_function;
-			ic->arg[2] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+			ic->arg[2] = (size_t) ( cpu->cd.m88k.vph32.get_ic_page() +
 			    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		}
 		break;
@@ -2394,7 +2398,7 @@ X(to_be_translated)
 		if (offset >= 0 && offset <= 0xffc &&
 		    samepage_function != NULL) {
 			ic->f = samepage_function;
-			ic->arg[2] = (size_t) ( cpu->cd.m88k.cur_ic_page +
+			ic->arg[2] = (size_t) ( cpu->cd.m88k.vph32.get_ic_page() +
 			    (offset >> M88K_INSTR_ALIGNMENT_SHIFT) );
 		}
 

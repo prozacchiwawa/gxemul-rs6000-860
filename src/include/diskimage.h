@@ -42,8 +42,9 @@
 #define	DISKIMAGE_FLOPPY	3
 #define DISKIMAGE_NVRAM     4
 #define DISKIMAGE_ROM       5
+#define DISKIMAGE_VGA_ROM   6
 
-#define	DISKIMAGE_TYPES		{ "(NONE)", "SCSI", "IDE", "FLOPPY", "NVRAM", "ROM" }
+#define	DISKIMAGE_TYPES		{ "(NONE)", "SCSI", "IDE", "FLOPPY", "NVRAM", "ROM", "VGA-ROM" }
 
 
 /*  512 bytes per overlay block. Don't change this.  */
@@ -80,6 +81,7 @@ struct diskimage {
 	int		writable;
 	int		is_a_cdrom;
 	int		is_boot_device;
+  int   change;
 
 	int		is_a_tape;
 	uint64_t	tape_offset;
@@ -149,7 +151,8 @@ int diskimage_getname(struct machine *machine, int id, int type,
 int diskimage_is_a_cdrom(struct machine *machine, int id, int type);
 int diskimage_is_a_tape(struct machine *machine, int id, int type);
 void diskimage_dump_info(struct machine *machine);
-
+int diskimage_switch_floppy(struct machine *m, const char *file);
+int diskimage_detect_floppy_change(struct machine *m);
 
 /*
  *  SCSI commands: 

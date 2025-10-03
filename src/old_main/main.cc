@@ -48,9 +48,9 @@
 #include "settings.h"
 #include "timer.h"
 #include "UnitTest.h"
+#include "debugger.h"
 
-
-extern int single_step;
+extern uint64_t single_step;
 extern int force_debugger_at_exit;
 
 extern int optind;
@@ -79,6 +79,7 @@ int quiet_mode = 0;
 
 static int debug_indent = 0;
 static int debug_currently_at_start_of_line = 1;
+extern std::deque<std::string> script_queue;
 
 
 /*
@@ -363,7 +364,7 @@ static void usage(int longusage)
 	printf("  -q        quiet mode (don't print startup messages)\n");
 	printf("  -V        start up in the single-step debugger, paused\n");
 	printf("  -v        increase debug message verbosity\n");
-    printf("  -@        memory hole passthrough\n");
+  printf("  -@        memory hole passthrough\n");
 	printf("\n");
 	printf("If you are selecting a machine type to emulate directly "
 	    "on the command line,\nthen you must specify one or more names"
@@ -416,12 +417,7 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 			msopts = 1;
 			break;
 		case 'c':
-			emul->n_debugger_cmds ++;
-			CHECK_ALLOCATION(emul->debugger_cmds = (char **)
-			    realloc(emul->debugger_cmds,
-			    emul->n_debugger_cmds * sizeof(char *)));
-			CHECK_ALLOCATION(emul->debugger_cmds[emul->
-			    n_debugger_cmds-1] = strdup(optarg));
+      script_queue.push_back(std::string(optarg));
 			break;
 		case 'D':
 			skip_srandom_call = 1;
@@ -829,6 +825,8 @@ int main(int argc, char *argv[])
 	device_init();
 	machine_init();
 	timer_init();
+
+  GdblibSetup();
 
 	/*  Create a simple emulation setup:  */
 	emul = emul_new(NULL);

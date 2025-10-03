@@ -74,7 +74,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct m88k_instr_call *ic)
 	uint64_t x;
 
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.cur_ic_page)
+	int low_pc = ((size_t)ic - (size_t)cpu->cd.m88k.vph32.get_ic_page())
 	    / sizeof(struct m88k_instr_call);
 	cpu->pc &= ~((M88K_IC_ENTRIES_PER_PAGE-1)<<M88K_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << M88K_INSTR_ALIGNMENT_SHIFT);
@@ -167,7 +167,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct m88k_instr_call *ic)
 		/*  TODO: Generalize this into a abort_call, or similar:  */
 		cpu->running = 0;
 		debugger_n_steps_left_before_interaction = 0;
-		cpu->cd.m88k.next_ic = &nothing_call;
+		cpu->cd.m88k.vph32.do_nothing(&nothing_call);
 
 		if (cpu->delay_slot)
 			cpu->delay_slot |= EXCEPTION_IN_DELAY_SLOT;
@@ -249,10 +249,11 @@ void LS_N(struct cpu *cpu, struct m88k_instr_call *ic)
 	uint8_t *p = cpu->cd.m88k.host_store_usr[addr >> 12];
 #endif
 #else
+  auto host_page = cpu->cd.m88k.vph32.get_cached_tlb_pages(cpu, addr, false);
 #ifdef LS_LOAD
-	uint8_t *p = cpu->cd.m88k.host_load[addr >> 12];
+	uint8_t *p = host_page.host_load;
 #else
-	uint8_t *p = cpu->cd.m88k.host_store[addr >> 12];
+	uint8_t *p = host_page.host_store;
 #endif
 #endif
 

@@ -63,11 +63,19 @@
 
 extern int verbose;
 
-
 #ifdef UNSTABLE_DEVEL
 #define debug fatal
 #endif
 
+struct pci_space_association {
+  bool io_space;
+  uint32_t id;
+  uint32_t size;
+  uint64_t allocated_space;
+};
+
+int pci_io_target = 0;
+struct pci_space_association pci_io_allocation[0x100];
 
 /*
  *  bus_pci_decompose_1():
@@ -79,14 +87,11 @@ void bus_pci_decompose_1(uint32_t t, int *bus, int *dev, int *func, int *reg)
 	*bus  = (t >> 16) & 0xff;
 	*dev  = (t >> 11) & 0x1f;
 	*func = (t >>  8) &  0x7;
-	*reg  =  t        & 0xff;
+	*reg  =  t        & 0xfc;
 
-	/*  Warn about unaligned register access:  */
-	if (t & 3)
-		fatal("[ bus_pci_decompose_1: WARNING: reg = 0x%02x ]\n",
-		    t & 0xff);
+  // The low bits are masked.
+  // fprintf(stderr, "[ pci: select bus %d dev %d func %d reg %d ]\n", *bus, *dev, *func, *reg);
 }
-
 
 /*
  *  bus_pci_data_access():
@@ -120,18 +125,13 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 				*data = 0;
 		} else {
 			fatal("[ bus_pci_data_access(): write to non-existant"
-			    " device? ]\n");
+            " device? %08x ]\n", cpu->pc);
 		}
 		return;
 	}
 
 	/*  Return normal config data, or length data?  */
-	if (pci_data->last_was_write_ffffffff &&
-	    pci_data->cur_reg >= PCI_MAPREG_START &&
-	    pci_data->cur_reg <= PCI_MAPREG_END - 4)
-		cfg_base = dev->cfg_mem_size;
-	else
-		cfg_base = dev->cfg_mem;
+  cfg_base = dev->cfg_mem;
 
 	/*  Read data as little-endian:  */
 	x = 0;
@@ -143,13 +143,12 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
 
 	/*  Register write:  */
 	if (writeflag == MEM_WRITE) {
-		debug("[ bus_pci: write to PCI DATA: data = 0x%08llx ]\n",
-		    (long long)idata);
+		debug("[ bus_pci: write to PCI DATA: cur_reg %08x data = 0x%08llx ]\n", (unsigned int)pci_data->cur_reg, (long long)idata);
 		if (idata == 0xffffffffULL &&
 		    pci_data->cur_reg >= PCI_MAPREG_START &&
 		    pci_data->cur_reg <= PCI_MAPREG_END - 4) {
 			pci_data->last_was_write_ffffffff = 1;
-			return;
+			// return;
 		}
 
 		if (dev->cfg_reg_write == NULL ||
@@ -186,6 +185,55 @@ void bus_pci_data_access(struct cpu *cpu, struct pci_data *pci_data,
         dev->name, pci_data->cur_reg, len, (long)*data);
 }
 
+static uint32_t bus_pci_read_cfg(struct pci_device *dev, int offset) {
+  return dev->cfg_mem[offset] | (dev->cfg_mem[offset + 1] << 8) | (dev->cfg_mem[offset + 2] << 16) | (dev->cfg_mem[offset + 3] << 24);
+}
+
+uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool io, uint32_t target, int len) {
+	struct pci_device *dev;
+	int i;
+
+	/*  Scan through the list of pci_device entries.  */
+	dev = pci_data->first_device;
+	while (dev != NULL) {
+    // Check bars for a match to target addr.
+    uint32_t id = bus_pci_read_cfg(dev, 0);
+    for (i = PCI_MAPREG_START; i < PCI_MAPREG_END; i += 4) {
+      uint32_t bar = bus_pci_read_cfg(dev, i);
+      if (!bar) {
+        continue;
+      }
+
+      uint32_t bar_addr = (io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar)) & 0x7fffffff;
+      uint32_t bar_len = io ? PCI_MAPREG_IO_SIZE(bar) : PCI_MAPREG_MEM_SIZE(bar);
+
+#if 0
+      fprintf
+        (stderr, "[ pci: search for %s %s target %08x? bar %02x = %08x:%08x ]\n",
+         io ? "io" : "mem",
+         dev->name,
+         (unsigned int)target,
+         i,
+         (unsigned int)bar_addr,
+         (unsigned int)bar_len
+         );
+#endif
+
+      if (target >= bar_addr && target < bar_addr + bar_len) {
+        for (auto j = 0; j < pci_io_target; j++) {
+          if (id == pci_io_allocation[j].id && pci_io_allocation[j].io_space == io && target < bar_addr + pci_io_allocation[j].size) {
+            return pci_io_allocation[j].allocated_space + (target - bar_addr);
+          }
+        }
+      }
+    }
+		dev = dev->next;
+	}
+
+  fprintf(stderr, "bus_pci_get_io_target: pci addr %08x failed\n", target);
+
+  return 0;
+}
 
 /*
  *  bus_pci_setaddr():
@@ -435,6 +483,33 @@ PCIINIT(igsfb)
 #define PCI_PRODUCT_S3_VIRGE		0x5631
 #define	PCI_PRODUCT_S3_VIRGE_DX		0x8a01
 #define PCI_PRODUCT_S3_AURORA           0x8812
+#define PCI_PRODUCT_S3_928              0x88b0
+
+int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  switch (reg) {
+  case 0x04:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0x10:
+    fprintf(stderr, "vga: set BAR0 to %08x\n", value);
+    if (value & 0xffff == 0x55aa) {
+      PCI_SET_DATA(reg, value & ~0xffff);
+    } else {
+      PCI_SET_DATA(reg, value & ~0x1ffffff);
+    }
+    return 1;
+
+  case 0x30:
+    fprintf(stderr, "vga: set option rom address to %08x\n", value);
+    // PCI_SET_DATA(reg, value & 0xffff8000);
+    PCI_SET_DATA(reg, 0);
+    return 1;
+
+  default:
+    return 0;
+  }
+}
 
 PCIINIT(s3_virge)
 {
@@ -445,26 +520,46 @@ PCIINIT(s3_virge)
 	    PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
 	    PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
-	dev_vga_init(machine, mem, 0xc0000000 /* pd->pcibus->isa_membase + 0xa0000 */,
+  PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0000010f);	/*  interrupt pin D  */
+
+	pd->cfg_reg_write = s3_virge_cfg_reg_write;
+
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 0;
+  assoc->size = 32 * 1024 * 1024;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+
+	dev_vga_init(machine, mem, assoc->allocated_space,
 	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
 #define PCI_VENDOR_NCR 0x1000
 #define PCI_PRODUCT_NCR_53C810 0x0001
 
-size_t lsi53c895a_dma_controller(void *dma_controller_data, unsigned char *data, size_t len, int writeflag) {
-  return 0;
-}
-
 int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  uint32_t bar_loc;
   switch (reg) {
   case 0x04: // Status, command
+    PCI_SET_DATA(reg, value);
+    return 1;
   case 0x0c: // Header type, Latency Timer, Cache Line Size
+    PCI_SET_DATA(reg, value);
+    return 1;
   case 0x10:
-    PCI_SET_DATA(reg, (value & ~0x3ff) | 1);
+    bar_loc = value & ~0xff;
+    fprintf(stderr, "lsi: set BAR0 %08x\n", bar_loc);
+    PCI_SET_DATA(reg, bar_loc | 1);
+    return 1;
+  case 0x14:
+    bar_loc = value & ~0x1fff;
+    fprintf(stderr, "lsi: set BAR1 %08x (raw %08x)\n", bar_loc, value);
+    PCI_SET_DATA(reg, bar_loc);
     return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
-    PCI_SET_DATA(reg, value);
+    fprintf(stderr, "lsi: set INT# %08x\n", value);
+    // PCI_SET_DATA(reg, (value);
     return 1;
   default:
     return 0;
@@ -473,6 +568,7 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
 PCIINIT(lsi53c895a)
 {
+  uint64_t port, memaddr;
   char tmpstr[1000];
   char irqstr[100];
   int irq = 13;
@@ -485,7 +581,12 @@ PCIINIT(lsi53c895a)
      PCI_CLASS_CODE
      (PCI_CLASS_MASS_STORAGE,
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
-      0));
+      0) | 0x26);
+
+  PCI_SET_DATA(4, 7);
+
+  PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
+  PCI_SET_DATA(PCI_MAPREG_START + 4, 0x8000);
 
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
 
@@ -494,8 +595,22 @@ PCIINIT(lsi53c895a)
   snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
            pd->pcibus->irq_path_isa, irq);
 
-  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%x irq=%s",
-           0xa0000000, irqstr);
+  auto first_alloc = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 1;
+  assoc->size = 0x80;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
+  assoc->allocated_space = first_alloc;
+  assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 0;
+  assoc->size = 0x2000;
+  assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
+  assoc->allocated_space = first_alloc + 0x10000;
+
+  snprintf(tmpstr, sizeof(tmpstr), "lsi53c895a addr=0x%llx irq=%s",
+           first_alloc, irqstr);
+  fprintf(stderr, "lsi53c895a: add with string %s\n", tmpstr);
+
   device_add(machine, tmpstr);
 }
 
@@ -764,8 +879,8 @@ PCIINIT(i31244)
 	    diskimage_exist(machine, 1, DISKIMAGE_IDE)) {
 		char tmpstr[150];
 		snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x%llx irq=%s.%i",
-		    (long long)(pd->pcibus->pci_actual_io_offset + 0),
-		    pd->pcibus->irq_path_pci, irq & 255);
+             (long long)(pd->pcibus->pci_actual_io_offset + 0),
+             pd->pcibus->irq_path_pci, irq & 255);
 		device_add(machine, tmpstr);
 	}
 }
@@ -812,6 +927,22 @@ PCIINIT(piix4_isa)
 	pd->cfg_reg_write = piix_isa_cfg_reg_write;
 }
 
+int i82378zb_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  switch (reg) {
+  case 0x10:
+    fprintf(stderr, "isa: set BAR0 %08x\n", (unsigned int)value);
+    PCI_SET_DATA(0x10, value & ~0xffff);
+    return 1;
+
+  case 0x14:
+    fprintf(stderr, "isa: set BAR1 %08x\n", (unsigned int)value);
+    PCI_SET_DATA(0x14, value & ~0xffffff);
+    return 1;
+  }
+
+  return 0;
+}
+
 PCIINIT(i82378zb)
 {
 	PCI_SET_DATA(PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_INTEL,
@@ -823,10 +954,15 @@ PCIINIT(i82378zb)
 	PCI_SET_DATA(PCI_BHLC_REG,
 	    PCI_BHLC_CODE(0,0, 1 /* multi-function */, 0x40,0));
 
+  PCI_SET_DATA(0x10, 0x80000000);
+  PCI_SET_DATA(0x14, 0xc0000000);
+
 	PCI_SET_DATA(0x40, 0x20);
 
 	/*  PIRQ[0]=10 PIRQ[1]=11 PIRQ[2]=14 PIRQ[3]=15  */
 	PCI_SET_DATA(0x60, 0x0f0e0b0a);
+
+	pd->cfg_reg_write = i82378zb_cfg_reg_write;
 }
 
 struct piix_ide_extra {
@@ -1442,12 +1578,16 @@ PCIINIT(eagle)
 
   // Cache line size
   PCI_SET_DATA(0x0c, 8);
-  // Memory ending address 1 0x90
-  PCI_SET_DATA(0x90, 0x201);
-  // Memory ending address 2 0x94
+  // Memory Starting address 1 (MB)
+  PCI_SET_DATA(0x80, 0x1000);
+  // Memory Starting address 2 (MB)
+  PCI_SET_DATA(0x84, 0);
+  // Memory ending address 1 0x90 (MB)
+  PCI_SET_DATA(0x90, 0x2010);
+  // Memory ending address 2 0x94 (MB)
   PCI_SET_DATA(0x94, 0);
   // Memory bank enable.
-  PCI_SET_DATA(0xa0, 0);
+  PCI_SET_DATA(0xa0, 3);
   // Error reporting/enabling
   PCI_SET_DATA(0xc0, 1);
 

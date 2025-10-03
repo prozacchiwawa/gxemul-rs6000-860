@@ -49,8 +49,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct mips_instr_call *ic)
 #endif
 
 	/*  Synchronize the PC:  */
-	int low_pc = ((size_t)ic - (size_t)cpu->cd.mips.cur_ic_page)
-	    / sizeof(struct mips_instr_call);
+	int low_pc = cpu->cd.mips.VPH.sync_low_pc(cpu, ic);
 	cpu->pc &= ~((MIPS_IC_ENTRIES_PER_PAGE-1)<<MIPS_INSTR_ALIGNMENT_SHIFT);
 	cpu->pc += (low_pc << MIPS_INSTR_ALIGNMENT_SHIFT);
 
@@ -115,35 +114,13 @@ void LS_N(struct cpu *cpu, struct mips_instr_call *ic)
 {
 	MODE_uint_t addr = reg(ic->arg[1]) + (int32_t)ic->arg[2];
 	unsigned char *p;
-#ifdef MODE32
-#ifdef LS_LOAD
-	p = cpu->cd.mips.host_load[addr >> 12];
-#else
-	p = cpu->cd.mips.host_store[addr >> 12];
-#endif
-#else	/*  !MODE32  */
-	const uint32_t mask1 = (1 << DYNTRANS_L1N) - 1;
-	const uint32_t mask2 = (1 << DYNTRANS_L2N) - 1;
-	const uint32_t mask3 = (1 << DYNTRANS_L3N) - 1;
-	uint32_t x1, x2, x3;
-	struct DYNTRANS_L2_64_TABLE *l2;
-	struct DYNTRANS_L3_64_TABLE *l3;
 
-	x1 = (addr >> (64-DYNTRANS_L1N)) & mask1;
-	x2 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N)) & mask2;
-	x3 = (addr >> (64-DYNTRANS_L1N-DYNTRANS_L2N-DYNTRANS_L3N)) & mask3;
-	/*  fatal("X3: addr=%016"PRIx64" x1=%x x2=%x x3=%x\n",
-	    (uint64_t) addr, (int) x1, (int) x2, (int) x3);  */
-	l2 = cpu->cd.DYNTRANS_ARCH.l1_64[x1];
-	/*  fatal("  l2 = %p\n", l2);  */
-	l3 = l2->l3[x2];
-	/*  fatal("  l3 = %p\n", l3);  */
+  auto host_page = cpu->cd.mips.VPH.get_cached_tlb_pages(cpu, addr, false);
+
 #ifdef LS_LOAD
-	p = l3->host_load[x3];
+	p = host_page.host_load;
 #else
-	p = l3->host_store[x3];
-#endif
-	/*  fatal("  p = %p\n", p);  */
+	p = host_page.host_store;
 #endif
 
 	if (p == NULL

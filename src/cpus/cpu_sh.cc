@@ -106,11 +106,23 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	cpu->translate_v2p = sh_translate_v2p;
 
 	cpu->run_instr = sh_run_instr;
-	cpu->update_translation_table = sh_update_translation_table;
-	cpu->invalidate_translation_caches =
-	    sh_invalidate_translation_caches;
-	cpu->invalidate_code_translation =
-	    sh_invalidate_code_translation;
+  cpu->update_translation_table = []
+    (struct cpu *cpu,
+     uint64_t vaddr_page,
+     unsigned char *host_page,
+     int flags,
+     uint64_t paddr_page,
+     bool instr
+     ) {
+    auto writeflag = flags & 1;
+    cpu->cd.sh.vph32.update_make_valid_translation(cpu, vaddr_page, paddr_page, host_page, writeflag, instr);
+  };
+	cpu->invalidate_translation_caches = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.sh.vph32.invalidate_tc(cpu, paddr, flags);
+  };
+  cpu->invalidate_code_translation = [](struct cpu *cpu, uint64_t paddr, int flags) {
+    cpu->cd.sh.vph32.invalidate_tc_code(cpu, paddr, flags);
+  };
 
 	/*  Only show name and caches etc for CPU nr 0 (in SMP machines):  */
 	if (cpu_id == 0) {
@@ -453,7 +465,7 @@ int sh_cpu_instruction_has_delayslot(struct cpu *cpu, unsigned char *ib)
  */
 void sh_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset;
 	int i, x = cpu->cpu_id;
 
@@ -775,7 +787,7 @@ void sh_exception(struct cpu *cpu, int expevt, int intevt, uint32_t vaddr)
 int sh_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 	int running, uint64_t dumpaddr)
 {
-	char *symbol;
+	const char *symbol;
 	uint64_t offset, addr;
 	uint16_t iword;
 

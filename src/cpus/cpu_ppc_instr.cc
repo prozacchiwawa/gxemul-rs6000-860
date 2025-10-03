@@ -3746,10 +3746,21 @@ X(to_be_translated)
 		case PPC_31_DCBTST:
 		case PPC_31_DCBF:
 		case PPC_31_DCBT:
-		case PPC_31_ICBI:
     case PPC_31_DCBI:
 			ic->f = instr(nop);
 			break;
+
+		case PPC_31_ICBI:
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      if (ra == 0) {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->f = instr(icbi);
+      break;
 
 		case PPC_31_DCBZ:
 			ra = (iword >> 16) & 31;

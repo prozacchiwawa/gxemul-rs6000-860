@@ -1370,7 +1370,7 @@ struct register_name_table_t r_name_table[] = {
   }
 };
 
-#define VGA_DEBUG 1
+#define VGA_DEBUG 0
 
 #if VGA_DEBUG
 #define L(x) do { x; } while (0)
@@ -2922,13 +2922,13 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
 
     if (d->s3_cmd_mx) {
       // Transfer across the plane, 1bpp
-      fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width);
+      L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width));
       for (int i = 0; i < pxcount; i++) {
         bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
-        fprintf(stderr, "%c", cpu ? '#' : '.');
+        L(fprintf(stderr, "%c", cpu ? '#' : '.'));
         pixels[i] = cpu ? 0xff : 0;
       }
-      fprintf(stderr, " ]\n");
+      L(fprintf(stderr, " ]\n"));
       // d->s3_fg_color_mix = 0x67;
       pixel_transfer(cpu, d, true, pixels, pxcount);
       d->s3_fg_color_mix = old_fg_color_mix;

@@ -92,7 +92,6 @@ DEVICE_ACCESS(rtc)
 		idata = memory_readmax64(cpu, data, len);
 
 	switch (relative_addr) {
-
 	case DEV_RTC_TRIGGER_READ:
 		// gettimeofday(&d->cur_time, NULL);
 		break;

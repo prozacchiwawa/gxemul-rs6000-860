@@ -421,7 +421,9 @@ DEVICE_ACCESS(eagle_dma_2)
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    d->dma_page[relative_addr] = idata;
+    if (relative_addr < 4) {
+      d->dma_page[relative_addr] = idata;
+    }
     if (relative_addr == 1) {
         eagle_comm.eagle_comm_area[2] = idata;
     }

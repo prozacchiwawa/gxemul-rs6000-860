@@ -1480,7 +1480,7 @@ static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   if (when < 0x100) {
     debugger_cmd_step(m, "");
   } else {
-    single_step = (when | 0xffull) - 255ull;
+    single_step = (when | (INSTRUCTION_STRIDE - 1)) ^ (INSTRUCTION_STRIDE - 1);
   }
 }
 

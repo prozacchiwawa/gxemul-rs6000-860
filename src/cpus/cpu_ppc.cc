@@ -333,7 +333,7 @@ void ppc_cpu_dumpinfo(struct cpu *cpu)
  *  reg_access_msr():
  */
 int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
-                    ppc_instr_call *ic, int check_for_interrupts)
+                   ppc_instr_call *ic, int check_for_interrupts)
 {
 	if (valuep == NULL) {
 		fatal("reg_access_msr(): NULL\n");
@@ -350,10 +350,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-  cpu->cd.ppc.msr = *valuep & ~0x8c;
-  if ((old & PPC_MSR_FP) && !(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-    fprintf(stderr, "%08x: new msr %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr);
-  }
+  cpu->cd.ppc.msr = *valuep;
 
   /*  Switching between temporary and real gpr 0..3?  */
   if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
@@ -391,11 +388,17 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
       !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
     // fprintf(stderr, "[ %08x: take pending decrementer exception msr %08x (pending since %" PRIx64 ") ]\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr, cpu->cd.ppc.dec_intr_pending);
     cpu->cd.ppc.dec_intr_pending = 0;
+    if (writeflag & 2) {
+      cpu->pc += 4;
+    }
     ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
     return 1;
   }
 
   if (cpu->cd.ppc.irq_asserted) {
+    if (writeflag & 2) {
+      cpu->pc += 4;
+    }
     ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
     return 1;
   }
@@ -427,7 +430,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
-  } else if (!quiet_mode && exception_nr != 5) {
+  } else if (!quiet_mode && exception_nr != 5 && exception_nr != 8) {
     fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %" PRIx64 " ]\n",
           exception_nr, cpu->pc, cpu->ninstrs);
   }
@@ -2368,6 +2371,7 @@ void ppc_update_for_icount(struct cpu *cpu) {
     cpu->cd.ppc.spr[SPR_DEC] -= icount;
   } else {
     if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      // fprintf(stderr, "[ %08x: dec rollover ]\n", (unsigned int)cpu->pc);
       cpu->cd.ppc.dec_intr_pending = 1;
     }
     cpu->cd.ppc.spr[SPR_DEC] = 0xffffffff - (icount - dec - 1);
@@ -2381,16 +2385,6 @@ void ppc_update_for_icount(struct cpu *cpu) {
   }
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
-
-  if (!(cpu->cd.ppc.msr & PPC_MSR_EE)) {
-    return;
-  }
-
-  if (cpu->cd.ppc.dec_intr_pending &&
-      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-    cpu->cd.ppc.dec_intr_pending = 0;
-    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-  }
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {

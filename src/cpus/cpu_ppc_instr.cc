@@ -173,7 +173,7 @@ X(addic)
 X(subfic)
 {
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += (ssize_t)ic->arg[1] + 1;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -276,7 +276,6 @@ X(bcctr)
 	int cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (cond_ok) {
-    
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
 	}
 }
@@ -1780,12 +1779,14 @@ X(mtctr) {
 X(mtdec) {
   /*  Synchronize the PC:  */
   sync_pc(cpu, ic);
-  ppc_update_for_icount(cpu);
 
   uint64_t dec = cpu->cd.ppc.spr[SPR_DEC];
   uint64_t reg = reg(ic->arg[0]);
   if (reg & 0x80000000 && !(dec & 0x80000000)) {
+    // fprintf(stderr, "[ %08x: dec load rollover %08x ]\n", (unsigned int)cpu->pc, (unsigned int)reg);
     cpu->cd.ppc.dec_intr_pending = 1;
+  } else {
+    // fprintf(stderr, "[ %08x: dec load %08x ]\n", (unsigned int)cpu->pc, (unsigned int)reg);
   }
   cpu->cd.ppc.spr[SPR_DEC] = reg;
 }
@@ -1869,9 +1870,7 @@ X(mtmsr)
 	uint64_t x = reg(ic->arg[0]);
 
 	/*  TODO: check permission!  */
-
-	/*  Synchronize the PC (pointing to _after_ this instruction)  */
-	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[1];
+  sync_pc(cpu, ic);
 
 	if (!ic->arg[2]) {
 		uint64_t y;
@@ -1879,9 +1878,9 @@ X(mtmsr)
 		x = (y & 0xffffffff00000000ULL) | (x & 0xffffffffULL);
 	}
 
-	if (!reg_access_msr(cpu, &x, 1, ic, 1)) {
-		cpu->pc -= 4;
-  }
+  /* When writeflag & 2, reg_access_msr will throw with the next instruction as the
+     target, which means that we'll still progress if we do dec or ee here */
+	reg_access_msr(cpu, &x, 3, ic, 1);
 }
 
 
@@ -2396,9 +2395,9 @@ X(subf)
 DOT2(subf)
 X(subfc)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+	// int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += reg(ic->arg[1]) + 1;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -2411,7 +2410,7 @@ X(subfe)
 {
 	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += reg(ic->arg[1]) + old_ca;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -2424,7 +2423,7 @@ X(subfme)
 {
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	uint64_t tmp = ~reg(ic->arg[0]);
+	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += 0xffffffffULL + old_ca;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -3663,7 +3662,7 @@ X(to_be_translated)
 				goto bad;
 			}
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[rs]);
-			ic->arg[1] = (addr & 0xfff) + 4;
+			ic->arg[1] = 4;
 			ic->arg[2] = xo == PPC_31_MTMSRD;
 			ic->f = instr(mtmsr);
 			break;

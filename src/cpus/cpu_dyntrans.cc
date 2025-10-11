@@ -231,6 +231,31 @@ static inline int sync_pc(struct cpu *cpu, struct DYNTRANS_IC *ic) {
     (low_pc << cpu_traits<decltype(cpu->cd.DYNTRANS_ARCH)>::instr_alignment_shift());
   return low_pc;
 }
+
+template <class T> class RunInstruction {
+  struct cpu *cpu;
+  T *&ic;
+
+public:
+  RunInstruction(struct cpu *cpu, T *&ic) : cpu(cpu), ic(ic) { }
+
+  void run() const {
+    I;
+  }
+};
+
+template <class T> class RunStatsInstruction {
+  struct cpu *cpu;
+  T *&ic;
+
+public:
+  RunStatsInstruction(struct cpu *cpu, T *&ic) : cpu(cpu), ic(ic) { }
+
+  void run() const {
+    S; I;
+  }
+};
+
 #endif	/*  STATIC STUFF  */
 
 
@@ -244,6 +269,7 @@ static inline int sync_pc(struct cpu *cpu, struct DYNTRANS_IC *ic) {
  *  Return value is the number of instructions executed during this call,
  *  0 if no instructions were executed.
  */
+
 int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 {
 	MODE_uint_t cached_pc;
@@ -365,83 +391,83 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 #else
   struct DYNTRANS_IC *ic = cpu->cd.DYNTRANS_ARCH.vph64.get_next_ic();
 #endif
-	if (single_step & 0xff) {
-		/*
-		 *  Single-step:
-		 */
+  if (single_step & (INSTRUCTION_STRIDE - 1)) {
+    /*
+     *  Single-step:
+     */
     instr_trace(ic);
 
-		if (cpu->machine->statistics.enabled) {
-			S;
-		}
+    if (cpu->machine->statistics.enabled) {
+      S;
+    }
 
-		n_instrs = 1;
-	} else if (cpu->machine->statistics.enabled) {
-		/*  Gather statistics while executing multiple instructions:  */
-		n_instrs = 0;
-		while (n_instrs + 24 < next_limit) {
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-			S; I; S; I; S; I; S; I; S; I; S; I;
-
-			n_instrs += 24;
-		}
-		while (n_instrs < next_limit) {
-			S; I;
-			n_instrs ++;
-		}
-	} else if (cpu->machine->instruction_trace) {
+    n_instrs = 1;
+  } else if (cpu->machine->statistics.enabled) {
+    /*  Gather statistics while executing multiple instructions:  */
+    n_instrs = 0;
+    const RunStatsInstruction runner(cpu, ic);
+    const ThisMany<RunStatsInstruction<struct DYNTRANS_IC>, INSTRUCTION_STRIDE> multiplier;
+    
+    while (n_instrs + INSTRUCTION_STRIDE < next_limit) {
+      multiplier.run(runner);
+      n_instrs += INSTRUCTION_STRIDE;
+    }
+    while (n_instrs < next_limit) {
+      S; I;
+      n_instrs ++;
+    }
+  } else if (cpu->machine->instruction_trace) {
     instr_trace(ic);
     n_instrs = 1;
-	} else {
-		/*
-		 *  Execute multiple instructions:
-		 *
-		 *  (This is the core dyntrans loop.)
-		 */
-		n_instrs = 0;
-		while (n_instrs + 24 < next_limit) {
-			I; I; I; I; I; I; I; I;
-			I; I; I; I; I; I; I; I;
-			I; I; I; I; I; I; I; I;
+  } else {
+    /*
+     *  Execute multiple instructions:
+     *
+     *  (This is the core dyntrans loop.)
+     */
+    n_instrs = 0;
+    const RunInstruction runner(cpu, ic);
+    const ThisMany<RunInstruction<struct DYNTRANS_IC>, INSTRUCTION_STRIDE> multiplier;
 
-      n_instrs += 24;
-		}
+    while (n_instrs + INSTRUCTION_STRIDE < next_limit) {
+      multiplier.run(runner);
+      
+      n_instrs += INSTRUCTION_STRIDE;
+    }
     while (n_instrs < next_limit) {
       I;
-
+      
       n_instrs ++;
-		}
-	}
-
+    }
+  }
+  
   cpu->n_translated_instrs += n_instrs;
 
-	/*  Synchronize the program counter:  */
+  /*  Synchronize the program counter:  */
 #ifdef MODE32
   low_pc = cpu->cd.DYNTRANS_ARCH.vph32.get_low_pc();
 #else
   low_pc = cpu->cd.DYNTRANS_ARCH.vph64.get_low_pc();
 #endif
-	if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
-		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
-		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-		cpu->pc += (low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-	} else if (low_pc == DYNTRANS_IC_ENTRIES_PER_PAGE) {
-		/*  Switch to next page:  */
-		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
-		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-		cpu->pc += (DYNTRANS_IC_ENTRIES_PER_PAGE <<
-		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-	} else if (low_pc == DYNTRANS_IC_ENTRIES_PER_PAGE + 1) {
-		/*  Switch to next page and skip an instruction which was
-		    already executed (in a delay slot):  */
-		cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
-		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-		cpu->pc += ((DYNTRANS_IC_ENTRIES_PER_PAGE + 1) <<
-		    DYNTRANS_INSTR_ALIGNMENT_SHIFT);
-	}
-
+  if (low_pc >= 0 && low_pc < DYNTRANS_IC_ENTRIES_PER_PAGE) {
+    cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
+		 DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+    cpu->pc += (low_pc << DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+  } else if (low_pc == DYNTRANS_IC_ENTRIES_PER_PAGE) {
+    /*  Switch to next page:  */
+    cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
+		 DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+    cpu->pc += (DYNTRANS_IC_ENTRIES_PER_PAGE <<
+		DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+  } else if (low_pc == DYNTRANS_IC_ENTRIES_PER_PAGE + 1) {
+    /*  Switch to next page and skip an instruction which was
+	already executed (in a delay slot):  */
+    cpu->pc &= ~((DYNTRANS_IC_ENTRIES_PER_PAGE-1) <<
+		 DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+    cpu->pc += ((DYNTRANS_IC_ENTRIES_PER_PAGE + 1) <<
+		DYNTRANS_INSTR_ALIGNMENT_SHIFT);
+  }
+  
 #ifdef DYNTRANS_MIPS
 	/*  Update the count register (on everything except EXC3K):  */
 	if (cpu->cd.mips.cpu_type.exc_model != EXC3K) {
@@ -745,7 +771,7 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	/*
 	 *  Check for breakpoints.
 	 */
-	if (!single_step_breakpoint && !cpu->translation_readahead) {
+  if (!single_step_breakpoint) {
 		MODE_uint_t curpc = cpu->pc;
 		int i;
 		for (i=0; i<cpu->machine->breakpoints.n; i++)
@@ -842,6 +868,15 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	/*
 	 *  ... and finally execute the translated instruction:
 	 */
+
+  if (!single_step) {
+    for (int i=0; i<cpu->machine->breakpoints.n; i++) {
+      if (addr == cpu->machine->breakpoints.addr[i]) {
+        fprintf(stderr, "translated breakpoint %08x\n", (unsigned int)addr);
+        goto stop_running_translated;
+      }
+    }
+  }
 
 	/*  (Except when doing read-ahead!)  */
 	if (cpu->translation_readahead)

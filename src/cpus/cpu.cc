@@ -42,6 +42,7 @@
 
 
 extern size_t dyntrans_cache_size;
+extern uint64_t trace_low, trace_high;
 
 static struct cpu_family *first_cpu_family = NULL;
 
@@ -226,11 +227,12 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
 		show_symbolic_function_name = 0;
 
-  if (cpu->machine->ncpus > 1)
+  	if (cpu->machine->ncpus > 1)
 		fatal("cpu%i:\t", cpu->cpu_id);
 
 	if (cpu->trace_tree_depth > 100)
 		cpu->trace_tree_depth = 100;
+
 	for (i=0; i<cpu->trace_tree_depth; i++)
 		fatal("  ");
 

@@ -256,8 +256,28 @@ struct cpu_family {
 #define	DEFAULT_DYNTRANS_CACHE_SIZE	(48*1048576)
 #define	DYNTRANS_CACHE_MARGIN		200000
 
-#define INSTR_BETWEEN_INTERRUPTS 0x100
-#define SYNCHRONIZE_PC 0x20
+template <typename T, int V> class ThisMany {
+ public:
+  void run(const T &t) const {
+    const ThisMany<T, V/2> less;
+    less.run(t);
+  }
+};
+
+template <typename T> class ThisMany<T,1> {
+ public:
+  void run(const T &t) const {
+    t.run();
+  }
+};
+
+template <typename T> class ThisMany<T,0> {
+ public:
+  void run(const T &t) const { }
+};
+
+#define INSTRUCTION_STRIDE 0x20
+#define INSTR_BETWEEN_INTERRUPTS INSTRUCTION_STRIDE
 
 /*
  *  The generic CPU struct:

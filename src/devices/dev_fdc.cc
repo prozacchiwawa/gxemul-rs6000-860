@@ -67,6 +67,7 @@
 #define SENSE_INTERRUPT 0x08
 #define STATE_SEEK 0x0f
 #define STATE_VERSION 0x10
+#define STATE_PERPMODE 0x12
 #define STATE_CONFIGURE 0x13
 #define STATE_READ_ID 0x0a
 #define STATE_READ_NORMAL_DATA 0x06
@@ -152,6 +153,7 @@ DEVICE_ACCESS(fdc)
   case 0x03:
     if (writeflag == MEM_READ) {
       idata = 0x80;
+      fprintf(stderr, "[ fdc: read %02x from TDR ]\n", (unsigned int)idata);
       memory_writemax64(cpu, data, len, idata);
     }
     break;
@@ -226,8 +228,14 @@ DEVICE_ACCESS(fdc)
 
 					case STATE_CONFIGURE:
             d->command_result = 0;
-						d->state = STATE_EMPTY;
+            d->state = STATE_EMPTY;
 						break;
+
+          case STATE_PERPMODE:
+            d->command_result = 0;
+            d->state = STATE_EMPTY;
+            maybe_interrupt(d);
+            break;
 
 					case STATE_READ_ID:
             fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
@@ -373,6 +381,12 @@ DEVICE_ACCESS(fdc)
 					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_READ_ID;
 					break;
 
+        case STATE_PERPMODE:
+          fprintf(stderr, "[ fdc: perpendicular mode ]\n");
+          d->command_size = 1;
+          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_PERPMODE;
+          break;
+
 				case STATE_READ_NORMAL_DATA:
 					fprintf(stderr, "[ fdc: read normal data ]\n");
 					d->command_size = 8;
@@ -426,12 +440,14 @@ DEVICE_ACCESS(fdc)
       }
 		} else {
 			d->state = oldstate;
+      fprintf(stderr, "[ fdc: read DOR ]\n");
+      memory_writemax64(cpu, data, len, 0);
 		}
 		break;
 
   case 0:
     if (writeflag == MEM_READ) {
-      int result = d->reg[0] | (was_interrupt ? 0x80 : 0);
+      int result = d->reg[0] | 0x80; // (was_interrupt ? 0x80 : 0);
       d->reg[0] &= 0x7f;
       d->state = oldstate;
       fatal("[ fdc: read from reg STA: %02x ]\n", result);
@@ -474,7 +490,7 @@ DEVICE_ACCESS(fdc_3f7)
       fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
       d->assumed_spt = (idata & 3) == 3 ? 36 : 18;
 	} else {
-	    idata = 2;
+	    idata = 0;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);
 	    memory_writemax64(cpu, data, len, idata);
 	}

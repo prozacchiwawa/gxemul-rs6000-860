@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 64
+#define COUNT_DIV 2
 
 /*
  *  ppc_cpu_new():
@@ -1985,6 +1985,10 @@ static void debug_spr_usage(uint64_t pc, int spr)
 	case SPR_ICMP:
 	case SPR_DBSR:
 	case SPR_PIR:
+  case SPR_TBU:
+  case SPR_TBL:
+  case TBR_TBU:
+  case TBR_TBL:
 		break;
 	default:if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
 			break;
@@ -2383,6 +2387,8 @@ void ppc_update_for_icount(struct cpu *cpu) {
   if ((tbl >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0) {
     cpu->cd.ppc.spr[SPR_TBU] ++;
   }
+  cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU];
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
 }

@@ -1597,7 +1597,7 @@ X(icbi)
 {
   sync_pc(cpu, ic);
   auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
+  // fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
   auto old_msr = cpu->cd.ppc.msr;
   auto dr = !!(old_msr & PPC_MSR_DR);
   cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
@@ -1709,10 +1709,6 @@ X(mfspr) {
 	reg(ic->arg[0]) = reg(ic->arg[1]);
 }
 X(mfdec) {
-  /*  Synchronize the PC:  */
-  sync_pc(cpu, ic);
-
-  ppc_update_for_icount(cpu);
 	reg(ic->arg[0]) = reg(ic->arg[1]);
 }
 X(mfspr_pmc1) {
@@ -1720,16 +1716,15 @@ X(mfspr_pmc1) {
 	 *  TODO: This is a temporary hack to make NetBSD/ppc detect
 	 *  a CPU of the correct (emulated) speed.
 	 */
+  fprintf(stderr, "mfspr pmc1\n");
 	reg(ic->arg[0]) = cpu->machine->emulated_hz / 10;
 }
 X(mftb) {
-	/*  NOTE/TODO: This increments the time base (slowly) if it
-	    is being polled.  */
-  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 80000) & 0xffffffff;
-	if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
-		cpu->cd.ppc.spr[SPR_TBU] ++;
-  }
+	static int count = 0;
+	if ((count++ % 100000) == 0) {
+  		sync_pc(cpu, ic);
+		fprintf(stderr, "%08x: mftb %d @%" PRIx64"\n", (unsigned int)cpu->pc, count, cpu->ninstrs);
+	}
 	reg(ic->arg[0]) = cpu->cd.ppc.spr[SPR_TBL];
 }
 X(mftbu) {
@@ -1756,9 +1751,6 @@ X(mtspr) {
     uint64_t old_lower = cpu->cd.ppc.spr[SPR_IBAT0U + (sprbank * 8) + regnr * 2 + 1];
     uint64_t bepi = old_upper & 0xfffc;
     uint64_t bl = (((old_upper & 0x3ffc) >> 2) + 1) << 17;
-    for (uint64_t addr = bepi; addr < bepi + bl; addr += 1 << 12) {
-      cpu->invalidate_translation_caches(cpu, addr, INVALIDATE_VADDR | (sprbank ? 0 : INVALIDATE_INSTR));
-    }
     // fprintf(stderr, "%sBAT%d%s CHANGE %08x:%08x <= %08x\n", sprbank ? "D" : "I", regnr, lower ? "L" : "U", (unsigned int)old_upper, (unsigned int)old_lower, (unsigned int)reg(ic->arg[0]));
   } else if (spr == SPR_SDR1) {
     fprintf(stderr, "SDR1 CHANGE\n");
@@ -1774,6 +1766,12 @@ X(mtlr) {
 }
 X(mtctr) {
   cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
+}
+X(mttbu) {
+  cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU] = reg(ic->arg[0]);
+}
+X(mttbl) {
+  cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL] = reg(ic->arg[0]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
@@ -2962,7 +2960,7 @@ X(end_of_page)
 
 
 X(dump_registers) {
-  if (ic->pc == 0) {
+  if (ic->f == instr(to_be_translated)) {
     auto old_readahead = cpu->translation_readahead;
     cpu->translation_readahead = 1;
     sync_pc(cpu, ic);
@@ -3609,6 +3607,8 @@ X(to_be_translated)
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.spr[spr]);
 			switch (spr) {
 			// Reuse SPR_TB* for TBR_TB*:
+      case SPR_TBL: ic->f = instr(mftb); break;
+      case SPR_TBU: ic->f = instr(mftbu); break;
 			case TBR_TBL: ic->f = instr(mftb); break;
 			case TBR_TBU: ic->f = instr(mftbu); break;
       case SPR_DEC: ic->f = instr(mfdec); break;
@@ -3635,6 +3635,18 @@ X(to_be_translated)
 				break;
       case SPR_DEC:
         ic->f = instr(mtdec);
+        break;
+      case SPR_TBU:
+        ic->f = instr(mttbu);
+        break;
+      case SPR_TBL:
+        ic->f = instr(mttbl);
+        break;
+      case TBR_TBU:
+        ic->f = instr(mttbu);
+        break;
+      case TBR_TBL:
+        ic->f = instr(mttbl);
         break;
 			default:ic->f = instr(mtspr);
 			}

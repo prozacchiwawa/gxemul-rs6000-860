@@ -192,8 +192,12 @@ struct eagle_data {
   int want_error;
   int l2_cache;
   int discontiguous;
-  int ide_command;
   int bg_data_8mb;
+
+  // cs4231
+  uint8_t cs4231_index;
+  uint8_t cs4231_status;
+  uint8_t cs4231_registers[0x20];
 };
 
 struct eagle_glob {

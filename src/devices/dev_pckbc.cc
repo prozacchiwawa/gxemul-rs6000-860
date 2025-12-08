@@ -139,6 +139,18 @@ struct KeynameToPCKeyboard {
 };
 
 KeynameToPCKeyboard pc_type_1[] = {
+  { KeyNames::F1, 0, NONE, F0, 0x3b },
+  { KeyNames::F2, 0, NONE, F0, 0x3c },
+  { KeyNames::F3, 0, NONE, F0, 0x3d },
+  { KeyNames::F4, 0, NONE, F0, 0x3e },
+  { KeyNames::F5, 0, NONE, F0, 0x3f },
+  { KeyNames::F6, 0, NONE, F0, 0x40 },
+  { KeyNames::F7, 0, NONE, F0, 0x41 },
+  { KeyNames::F8, 0, NONE, F0, 0x42 },
+  { KeyNames::F9, 0, NONE, F0, 0x43 },
+  { KeyNames::F10, 0, NONE, F0, 0x44 },
+  { KeyNames::F11, 0, NONE, F0, 0x57 },
+  { KeyNames::F12, 0, NONE, F0, 0x58 },
   { KeyNames::ESC, 1, NONE, NONE, 0x01 },
   { KeyNames::N1, 1, NONE, NONE, 0x02 },
   { KeyNames::N2, 1, NONE, NONE, 0x03 },
@@ -216,23 +228,37 @@ KeynameToPCKeyboard pc_type_1[] = {
   { }
 };
 
+// https://www.scs.stanford.edu/10wi-cs140/pintos/specs/kbd/scancodes-9.html
+// 9.6 Table, Set 2
 KeynameToPCKeyboard pc_type_2[] = {
+  { KeyNames::F1, 0, NONE, F0, 0x05 },
+  { KeyNames::F2, 0, NONE, F0, 0x06 },
+  { KeyNames::F3, 0, NONE, F0, 0x04 },
+  { KeyNames::F4, 0, NONE, F0, 0x0c },
+  { KeyNames::F5, 0, NONE, F0, 0x03 },
+  { KeyNames::F6, 0, NONE, F0, 0x0b },
+  { KeyNames::F7, 0, NONE, F0, 0x83 },
+  { KeyNames::F8, 0, NONE, F0, 0x0a },
+  { KeyNames::F9, 0, NONE, F0, 0x01 },
+  { KeyNames::F10, 0, NONE, F0, 0x09 },
+  { KeyNames::F11, 0, NONE, F0, 0x78 },
+  { KeyNames::F12, 0, NONE, F0, 0x07 },
   { KeyNames::ESC, 0, NONE, F0, 0x76 },
-  // { KeyNames::N1, 0, NONE, F0, 0x02 },
-  // { KeyNames::N2, 0, NONE, F0, 0x03 },
-  // { KeyNames::N3, 0, NONE, F0, 0x04 },
-  // { KeyNames::N4, 0, NONE, F0, 0x05 },
-  // { KeyNames::N5, 0, NONE, F0, 0x06 },
-  // { KeyNames::N6, 0, NONE, F0, 0x07 },
-  // { KeyNames::N7, 0, NONE, F0, 0x08 },
-  // { KeyNames::N8, 0, NONE, F0, 0x09 },
-  // { KeyNames::N9, 0, NONE, F0, 0x0a },
-  // { KeyNames::N0, 0, NONE, F0, 0x0b },
-  // { KeyNames::Minus, 0, NONE, F0, 0x0c },
-  // { KeyNames::Equals, 0, NONE, F0, 0x0d },
+  { KeyNames::N1, 0, NONE, F0, 0x16 },
+  { KeyNames::N2, 0, NONE, F0, 0x1e },
+  { KeyNames::N3, 0, NONE, F0, 0x26 },
+  { KeyNames::N4, 0, NONE, F0, 0x25 },
+  { KeyNames::N5, 0, NONE, F0, 0x2e },
+  { KeyNames::N6, 0, NONE, F0, 0x36 },
+  { KeyNames::N7, 0, NONE, F0, 0x3d },
+  { KeyNames::N8, 0, NONE, F0, 0x4e },
+  { KeyNames::N9, 0, NONE, F0, 0x46 },
+  { KeyNames::N0, 0, NONE, F0, 0x45 },
+  { KeyNames::Minus, 0, NONE, F0, 0x4e },
+  { KeyNames::Equals, 0, NONE, F0, 0x55 },
   { KeyNames::Backspace, 0, NONE, F0, 0x66 },
   { KeyNames::Tab, 0, NONE, F0, 0x0d },
-  { KeyNames::Q, 0, NONE, F0, 0x16 },
+  { KeyNames::Q, 0, NONE, F0, 0x15 },
   { KeyNames::W, 0, NONE, F0, 0x1d },
   { KeyNames::E, 0, NONE, F0, 0x24 },
   { KeyNames::R, 0, NONE, F0, 0x2d },
@@ -246,31 +272,31 @@ KeynameToPCKeyboard pc_type_2[] = {
   { KeyNames::RBrace, 0, NONE, F0, 0x5b },
   { KeyNames::Return, 0, NONE, F0, 0x5a },
   { KeyNames::Ctrl, 0, NONE, F0, 0x14 },
-  // { KeyNames::A, 0, NONE, F0, 0x1e },
-  // { KeyNames::S, 0, NONE, F0, 0x1f },
-  // { KeyNames::D, 0, NONE, F0, 0x20 },
-  // { KeyNames::F, 0, NONE, F0, 0x21 },
-  // { KeyNames::G, 0, NONE, F0, 0x22 },
-  // { KeyNames::H, 0, NONE, F0, 0x23 },
-  // { KeyNames::J, 0, NONE, F0, 0x24 },
-  // { KeyNames::K, 0, NONE, F0, 0x25 },
-  // { KeyNames::L, 0, NONE, F0, 0x26 },
-  // { KeyNames::Semicolon, 0, NONE, F0, 0x27 },
-  // { KeyNames::Quote, 0, NONE, F0, 0x28 },
-  // { KeyNames::Backquote, 0, NONE, F0, 0x29 },
-  // { KeyNames::LShift, 0, NONE, F0, 0x2a },
-  // { KeyNames::Backslash, 0, NONE, F0, 0x2b },
-  // { KeyNames::Z, 0, NONE, F0, 0x2c },
-  // { KeyNames::X, 0, NONE, F0, 0x2d },
-  // { KeyNames::C, 0, NONE, F0, 0x2e },
-  // { KeyNames::V, 0, NONE, F0, 0x2f },
-  // { KeyNames::B, 0, NONE, F0, 0x30 },
-  // { KeyNames::N, 0, NONE, F0, 0x31 },
-  // { KeyNames::M, 0, NONE, F0, 0x32 },
-  // { KeyNames::Comma, 0, NONE, F0, 0x33 },
-  // { KeyNames::Dot, 0, NONE, F0, 0x34 },
-  // { KeyNames::Slash, 0, NONE, F0, 0x35 },
-  // { KeyNames::RShift, 0, NONE, F0, 0x36 },
+  { KeyNames::A, 0, NONE, F0, 0x1c },
+  { KeyNames::S, 0, NONE, F0, 0x1b },
+  { KeyNames::D, 0, NONE, F0, 0x23 },
+  { KeyNames::F, 0, NONE, F0, 0x2b },
+  { KeyNames::G, 0, NONE, F0, 0x34 },
+  { KeyNames::H, 0, NONE, F0, 0x33 },
+  { KeyNames::J, 0, NONE, F0, 0x3b },
+  { KeyNames::K, 0, NONE, F0, 0x42 },
+  { KeyNames::L, 0, NONE, F0, 0x4b },
+  { KeyNames::Semicolon, 0, NONE, F0, 0x4c },
+  { KeyNames::Quote, 0, NONE, F0, 0x52 },
+  { KeyNames::Backquote, 0, NONE, F0, 0x0e },
+  { KeyNames::LShift, 0, NONE, F0, 0x12 },
+  { KeyNames::Backslash, 0, NONE, F0, 0x5d },
+  { KeyNames::Z, 0, NONE, F0, 0x1a },
+  { KeyNames::X, 0, NONE, F0, 0x22 },
+  { KeyNames::C, 0, NONE, F0, 0x21 },
+  { KeyNames::V, 0, NONE, F0, 0x2a },
+  { KeyNames::B, 0, NONE, F0, 0x32 },
+  { KeyNames::N, 0, NONE, F0, 0x31 },
+  { KeyNames::M, 0, NONE, F0, 0x3a },
+  { KeyNames::Comma, 0, NONE, F0, 0x41 },
+  { KeyNames::Dot, 0, NONE, F0, 0x49 },
+  { KeyNames::Slash, 0, NONE, F0, 0x4a },
+  { KeyNames::RShift, 0, NONE, F0, 0x59 },
   { KeyNames::Space, 0, NONE, F0, 0x29 },
   { KeyNames::CapsLock, 0, NONE, F0, 0x58 },
   { KeyNames::F1, 0, NONE, F0, 0x05 },
@@ -297,74 +323,74 @@ KeynameToPCKeyboard pc_type_2[] = {
 };
 
 KeynameToPCKeyboard pc_type_3[] = {
+  { KeyNames::F1, 0, NONE, F0, 0x07 },
+  { KeyNames::F2, 0, NONE, F0, 0x0f },
+  { KeyNames::F3, 0, NONE, F0, 0x17 },
+  { KeyNames::F4, 0, NONE, F0, 0x1f },
+  { KeyNames::F5, 0, NONE, F0, 0x27 },
+  { KeyNames::F6, 0, NONE, F0, 0x2f },
+  { KeyNames::F7, 0, NONE, F0, 0x37 },
+  { KeyNames::F8, 0, NONE, F0, 0x3f },
+  { KeyNames::F9, 0, NONE, F0, 0x47 },
+  { KeyNames::F10, 0, NONE, F0, 0x4f },
+  { KeyNames::F11, 0, NONE, F0, 0x56 },
+  { KeyNames::F12, 0, NONE, F0, 0x5e },
   { KeyNames::ESC, 0, NONE, F0, 0x08 },
-  // { KeyNames::N1, 0, NONE, F0, 0x02 },
-  // { KeyNames::N2, 0, NONE, F0, 0x03 },
-  // { KeyNames::N3, 0, NONE, F0, 0x04 },
-  // { KeyNames::N4, 0, NONE, F0, 0x05 },
-  // { KeyNames::N5, 0, NONE, F0, 0x06 },
-  // { KeyNames::N6, 0, NONE, F0, 0x07 },
-  // { KeyNames::N7, 0, NONE, F0, 0x08 },
-  // { KeyNames::N8, 0, NONE, F0, 0x09 },
-  // { KeyNames::N9, 0, NONE, F0, 0x0a },
-  // { KeyNames::N0, 0, NONE, F0, 0x0b },
-  // { KeyNames::Minus, 0, NONE, F0, 0x0c },
-  // { KeyNames::Equals, 0, NONE, F0, 0x0d },
-  // { KeyNames::Backspace, 0, NONE, F0, 0x0e },
-  // { KeyNames::Tab, 0, NONE, F0, 0x0f },
-  // { KeyNames::Q, 0, NONE, F0, 0x10 },
-  // { KeyNames::W, 0, NONE, F0, 0x11 },
-  // { KeyNames::E, 0, NONE, F0, 0x12 },
-  // { KeyNames::R, 0, NONE, F0, 0x13 },
-  // { KeyNames::T, 0, NONE, F0, 0x14 },
-  // { KeyNames::Y, 0, NONE, F0, 0x15 },
-  // { KeyNames::U, 0, NONE, F0, 0x16 },
-  // { KeyNames::I, 0, NONE, F0, 0x17 },
-  // { KeyNames::O, 0, NONE, F0, 0x18 },
-  // { KeyNames::P, 0, NONE, F0, 0x19 },
-  // { KeyNames::LBrace, 0, NONE, F0, 0x1a },
-  // { KeyNames::RBrace, 0, NONE, F0, 0x1b },
-  // { KeyNames::Return, 0, NONE, F0, 0x1c },
-  // { KeyNames::Ctrl, 0, NONE, F0, 0x1d },
-  // { KeyNames::A, 0, NONE, F0, 0x1e },
-  // { KeyNames::S, 0, NONE, F0, 0x1f },
-  // { KeyNames::D, 0, NONE, F0, 0x20 },
-  // { KeyNames::F, 0, NONE, F0, 0x21 },
-  // { KeyNames::G, 0, NONE, F0, 0x22 },
-  // { KeyNames::H, 0, NONE, F0, 0x23 },
-  // { KeyNames::J, 0, NONE, F0, 0x24 },
-  // { KeyNames::K, 0, NONE, F0, 0x25 },
-  // { KeyNames::L, 0, NONE, F0, 0x26 },
-  // { KeyNames::Semicolon, 0, NONE, F0, 0x27 },
-  // { KeyNames::Quote, 0, NONE, F0, 0x28 },
-  // { KeyNames::Backquote, 0, NONE, F0, 0x29 },
-  // { KeyNames::LShift, 0, NONE, F0, 0x2a },
-  // { KeyNames::Backslash, 0, NONE, F0, 0x2b },
-  // { KeyNames::Z, 0, NONE, F0, 0x2c },
-  // { KeyNames::X, 0, NONE, F0, 0x2d },
-  // { KeyNames::C, 0, NONE, F0, 0x2e },
-  // { KeyNames::V, 0, NONE, F0, 0x2f },
-  // { KeyNames::B, 0, NONE, F0, 0x30 },
-  // { KeyNames::N, 0, NONE, F0, 0x31 },
-  // { KeyNames::M, 0, NONE, F0, 0x32 },
-  // { KeyNames::Comma, 0, NONE, F0, 0x33 },
-  // { KeyNames::Dot, 0, NONE, F0, 0x34 },
-  // { KeyNames::Slash, 0, NONE, F0, 0x35 },
-  // { KeyNames::RShift, 0, NONE, F0, 0x36 },
-  // { KeyNames::Space, 0, NONE, F0, 0x39 },
-  // { KeyNames::CapsLock, 0, NONE, F0, 0x3a },
-  { KeyNames::F1, 0, NONE, F0, 0x05 },
-  { KeyNames::F2, 0, NONE, F0, 0x06 },
-  { KeyNames::F3, 0, NONE, F0, 0x04 },
-  { KeyNames::F4, 0, NONE, F0, 0x0c },
-  { KeyNames::F5, 0, NONE, F0, 0x03 },
-  { KeyNames::F6, 0, NONE, F0, 0x0b },
-  { KeyNames::F7, 0, NONE, F0, 0x83 },
-  { KeyNames::F8, 0, NONE, F0, 0x0a },
-  { KeyNames::F9, 0, NONE, F0, 0x01 },
-  { KeyNames::F10, 0, NONE, F0, 0x09 },
-  { KeyNames::F11, 0, NONE, F0, 0x78 },
-  { KeyNames::F12, 0, NONE, F0, 0x07 },
+  { KeyNames::N1, 0, NONE, F0, 0x02 },
+  { KeyNames::N2, 0, NONE, F0, 0x03 },
+  { KeyNames::N3, 0, NONE, F0, 0x04 },
+  { KeyNames::N4, 0, NONE, F0, 0x05 },
+  { KeyNames::N5, 0, NONE, F0, 0x06 },
+  { KeyNames::N6, 0, NONE, F0, 0x07 },
+  { KeyNames::N7, 0, NONE, F0, 0x08 },
+  { KeyNames::N8, 0, NONE, F0, 0x09 },
+  { KeyNames::N9, 0, NONE, F0, 0x0a },
+  { KeyNames::N0, 0, NONE, F0, 0x0b },
+  { KeyNames::Minus, 0, NONE, F0, 0x0c },
+  { KeyNames::Equals, 0, NONE, F0, 0x0d },
+  { KeyNames::Backspace, 0, NONE, F0, 0x0e },
+  { KeyNames::Tab, 0, NONE, F0, 0x0f },
+  { KeyNames::Q, 0, NONE, F0, 0x15 },
+  { KeyNames::W, 0, NONE, F0, 0x1d },
+  { KeyNames::E, 0, NONE, F0, 0x24 },
+  { KeyNames::R, 0, NONE, F0, 0x2d },
+  { KeyNames::T, 0, NONE, F0, 0x2c },
+  { KeyNames::Y, 0, NONE, F0, 0x35 },
+  { KeyNames::U, 0, NONE, F0, 0x3c },
+  { KeyNames::I, 0, NONE, F0, 0x43 },
+  { KeyNames::O, 0, NONE, F0, 0x44 },
+  { KeyNames::P, 0, NONE, F0, 0x4d },
+  { KeyNames::LBrace, 0, NONE, F0, 0x54 },
+  { KeyNames::RBrace, 0, NONE, F0, 0x5b },
+  { KeyNames::Backslash, 0, NONE, F0, 0x5c },
+  { KeyNames::Return, 0, NONE, F0, 0x1c },
+  { KeyNames::Ctrl, 0, NONE, F0, 0x11 },
+  { KeyNames::A, 0, NONE, F0, 0x1c },
+  { KeyNames::S, 0, NONE, F0, 0x1b },
+  { KeyNames::D, 0, NONE, F0, 0x23 },
+  { KeyNames::F, 0, NONE, F0, 0x2b },
+  { KeyNames::G, 0, NONE, F0, 0x34 },
+  { KeyNames::H, 0, NONE, F0, 0x33 },
+  { KeyNames::J, 0, NONE, F0, 0x3b },
+  { KeyNames::K, 0, NONE, F0, 0x42 },
+  { KeyNames::L, 0, NONE, F0, 0x4b },
+  { KeyNames::Semicolon, 0, NONE, F0, 0x4c },
+  { KeyNames::Quote, 0, NONE, F0, 0x52 },
+  { KeyNames::Backquote, 0, NONE, F0, 0x0e },
+  { KeyNames::LShift, 0, NONE, F0, 0x12 },
+  { KeyNames::Z, 0, NONE, F0, 0x1a },
+  { KeyNames::X, 0, NONE, F0, 0x22 },
+  { KeyNames::C, 0, NONE, F0, 0x21 },
+  { KeyNames::V, 0, NONE, F0, 0x2a },
+  { KeyNames::B, 0, NONE, F0, 0x32 },
+  { KeyNames::N, 0, NONE, F0, 0x31 },
+  { KeyNames::M, 0, NONE, F0, 0x41 },
+  { KeyNames::Comma, 0, NONE, F0, 0x41 },
+  { KeyNames::Dot, 0, NONE, F0, 0x49 },
+  { KeyNames::Slash, 0, NONE, F0, 0x4a },
+  { KeyNames::RShift, 0, NONE, F0, 0x59 },
+  { KeyNames::Space, 0, NONE, F0, 0x29 },
+  { KeyNames::CapsLock, 0, NONE, F0, 0x14 },
   { KeyNames::Home, 0, NONE, F0, 0x6c },
   { KeyNames::Up, 0, NONE, F0, 0x75 },
   { KeyNames::PgUp, 0, NONE, F0, 0x7d },
@@ -373,6 +399,18 @@ KeynameToPCKeyboard pc_type_3[] = {
   { KeyNames::End, 0, NONE, F0, 0x69 },
   { KeyNames::Down, 0, NONE, F0, 0x72 },
   { KeyNames::PgDn, 0, NONE, F0, 0x7a },
+  { }
+};
+
+typedef struct {
+  int type;
+  KeynameToPCKeyboard *table;
+} KeynameToPCKeyboardTable;
+
+KeynameToPCKeyboardTable translation_tables[] = {
+  { 1, pc_type_1 },
+  { 2, pc_type_2 },
+  { 3, pc_type_3 },
   { }
 };
 
@@ -401,26 +439,6 @@ void pckbc_add_code(struct pckbc_data *d, int code, int port)
   }
 }
 
-void send_pc_key(struct KeynameToPCKeyboard *table, int key, struct pckbc_data *d) {
-  for (int i = 0; table[i].native_code; i++) {
-    if (table[i].keyname_idx != key) {
-      continue;
-    }
-
-    fprintf(stderr, "sending key %d -> %s\n", key, keynames[key]);
-    for (int j = 0; table[i].make_prefix[j]; j++) {
-      pckbc_add_code(d, table[i].make_prefix[j], 0);
-    }
-    pckbc_add_code(d, table[i].native_code, 0);
-    for (int j = 0; table[i].break_prefix[j]; j++) {
-      pckbc_add_code(d, table[i].break_prefix[j], 0);
-    }
-    int or_break_code = (table[i].high_bit_break) ? 0x80 : 0;
-    pckbc_add_code(d, table[i].native_code | or_break_code, 0);
-    break;
-  }
-}
-
 /*
  *  pckbc_get_code():
  *
@@ -445,470 +463,14 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 	return d->key_queue[port][d->tail[port]];
 }
 
-/*
- *  ascii_to_scancodes_type3():
- *
- *  Conversion from ASCII codes to default (US) keyboard scancodes.
- *  (See http://www.computer-engineering.org/ps2keyboard/scancodes3.html)
- */
-static void ascii_to_pc_scancodes_type3(int a, struct pckbc_data *d)
-{
-	int old_head;
-	int p = 0;	/*  port  */
-	int shift = 0, ctrl = 0;
-
-  if (a >= 0x100) {
-    int unshifted = a >> 8;
-    send_pc_key(pc_type_3, unshifted, d);
-    return;
-  }
-
-	if (a >= 'A' && a <= 'Z') { a += 32; shift = 1; }
-	if ((a >= 1 && a <= 26) && (a!='\n' && a!='\t' && a!='\b' && a!='\r'))
-		{ a += 96; ctrl = 1; }
-	if (a=='!')  {	a = '1'; shift = 1; }
-	if (a=='@')  {	a = '2'; shift = 1; }
-	if (a=='#')  {	a = '3'; shift = 1; }
-	if (a=='$')  {	a = '4'; shift = 1; }
-	if (a=='%')  {	a = '5'; shift = 1; }
-	if (a=='^')  {	a = '6'; shift = 1; }
-	if (a=='&')  {	a = '7'; shift = 1; }
-	if (a=='*')  {	a = '8'; shift = 1; }
-	if (a=='(')  {	a = '9'; shift = 1; }
-	if (a==')')  {	a = '0'; shift = 1; }
-	if (a=='_')  {	a = '-'; shift = 1; }
-	if (a=='+')  {	a = '='; shift = 1; }
-	if (a=='{')  {	a = '['; shift = 1; }
-	if (a=='}')  {	a = ']'; shift = 1; }
-	if (a==':')  {	a = ';'; shift = 1; }
-	if (a=='"')  {	a = '\''; shift = 1; }
-	if (a=='|')  {	a = '\\'; shift = 1; }
-	if (a=='<')  {	a = ','; shift = 1; }
-	if (a=='>')  {	a = '.'; shift = 1; }
-	if (a=='?')  {	a = '/'; shift = 1; }
-
-	if (shift)
-		pckbc_add_code(d, 0x12, p);
-	if (ctrl)
-		pckbc_add_code(d, 0x11, p);
-
-	/*
-	 *  Note: The ugly hack used to add release codes for all of these
-	 *  keys is as follows:  we remember how much of the kbd buf that
-	 *  is in use here, before we add any scancode. After we've added
-	 *  one or more scancodes (ie an optional shift + another key)
-	 *  then we add 0xf0 + the last scancode _if_ the kbd buf was altered.
-	 */
-
-	old_head = d->head[p];
-
-  if (a=='\x1b') {
-    pckbc_add_code(d, 0xf0, p);
-    pckbc_add_code(d, 0x76, p);
-    pckbc_add_code(d, 0xf0, p);
-    pckbc_add_code(d, 0xe0, p);
-    pckbc_add_code(d, 0x76, p);
-  }
-	if (a=='1')	pckbc_add_code(d, 0x16, p);
-	if (a=='2')	pckbc_add_code(d, 0x1e, p);
-	if (a=='3')	pckbc_add_code(d, 0x26, p);
-	if (a=='4')	pckbc_add_code(d, 0x25, p);
-	if (a=='5')	pckbc_add_code(d, 0x2e, p);
-	if (a=='6')	pckbc_add_code(d, 0x36, p);
-	if (a=='7')	pckbc_add_code(d, 0x3d, p);
-	if (a=='8')	pckbc_add_code(d, 0x3e, p);
-	if (a=='9')	pckbc_add_code(d, 0x46, p);
-	if (a=='0')	pckbc_add_code(d, 0x45, p);
-	if (a=='-')	pckbc_add_code(d, 0x4e, p);
-	if (a=='=')	pckbc_add_code(d, 0x55, p);
-
-	if (a=='\b')	pckbc_add_code(d, 0x29, p);
-
-	if (a=='\t')	pckbc_add_code(d, 0x0d, p);
-	if (a=='q')	pckbc_add_code(d, 0x15, p);
-	if (a=='w')	pckbc_add_code(d, 0x1d, p);
-	if (a=='e')	pckbc_add_code(d, 0x24, p);
-	if (a=='r')	pckbc_add_code(d, 0x2d, p);
-	if (a=='t')	pckbc_add_code(d, 0x2c, p);
-	if (a=='y')	pckbc_add_code(d, 0x35, p);
-	if (a=='u')	pckbc_add_code(d, 0x3c, p);
-	if (a=='i')	pckbc_add_code(d, 0x43, p);
-	if (a=='o')	pckbc_add_code(d, 0x44, p);
-	if (a=='p')	pckbc_add_code(d, 0x4d, p);
-
-	if (a=='[')	pckbc_add_code(d, 0x54, p);
-	if (a==']')	pckbc_add_code(d, 0x5b, p);
-
-	if (a=='\n' || a=='\r')	pckbc_add_code(d, 0x5a, p);
-
-	if (a=='a')	pckbc_add_code(d, 0x1c, p);
-	if (a=='s')	pckbc_add_code(d, 0x1b, p);
-	if (a=='d')	pckbc_add_code(d, 0x23, p);
-	if (a=='f')	pckbc_add_code(d, 0x2b, p);
-	if (a=='g')	pckbc_add_code(d, 0x34, p);
-	if (a=='h')	pckbc_add_code(d, 0x33, p);
-	if (a=='j')	pckbc_add_code(d, 0x3b, p);
-	if (a=='k')	pckbc_add_code(d, 0x42, p);
-	if (a=='l')	pckbc_add_code(d, 0x4b, p);
-
-	if (a==';')	pckbc_add_code(d, 0x4c, p);
-	if (a=='\'')	pckbc_add_code(d, 0x52, p);
-	if (a=='~')	pckbc_add_code(d, 0x29, p);
-	if (a=='\\')	pckbc_add_code(d, 0x5d, p);
-
-	if (a=='z')	pckbc_add_code(d, 0x1a, p);
-	if (a=='x')	pckbc_add_code(d, 0x22, p);
-	if (a=='c')	pckbc_add_code(d, 0x21, p);
-	if (a=='v')	pckbc_add_code(d, 0x2a, p);
-	if (a=='b')	pckbc_add_code(d, 0x32, p);
-	if (a=='n')	pckbc_add_code(d, 0x31, p);
-	if (a=='m')	pckbc_add_code(d, 0x3a, p);
-
-	if (a==',')	pckbc_add_code(d, 0x41, p);
-	if (a=='.')	pckbc_add_code(d, 0x49, p);
-	if (a=='/')	pckbc_add_code(d, 0x4a, p);
-
-	if (a==' ')	pckbc_add_code(d, 0x29, p);
-
-	/*  Add release code, if a key was pressed:  */
-	if (d->head[p] != old_head) {
-		int code = d->key_queue[p][d->head[p]];
-		pckbc_add_code(d, 0xf0, p);
-		pckbc_add_code(d, code, p);
-	}
-
-	/*  Release shift and ctrl:  */
-	if (shift) {
-		pckbc_add_code(d, 0xf0, p);
-		pckbc_add_code(d, 0x12, p);
-	}
-	if (ctrl) {
-		pckbc_add_code(d, 0xf0, p);
-		pckbc_add_code(d, 0x11, p);
-	}
-}
-
-/*
- *  ascii_to_scancodes_type1():
- *
- *  Conversion from ASCII codes to default (US) XT keyboard scancodes.
- *  (See http://www.techhelpmanual.com/57-keyboard_scan_codes.html)
- *
- * Hex Dec Key │Hex Dec Key  │Hex Dec Key    │Hex Dec Key    │Hex Dec Key
- * ────────────┼─────────────┼───────────────┼───────────────┼─────────────────
- * 01   1  Esc │12  18  E    │23  35  H      │34  52  . >    │45  69  NumLock
- * 02   2  1 ! │13  19  R    │24  36  J      │35  53  / ?    │46  70  ScrollLck
- * 03   3  2 @ │14  20  T    │25  37  K      │36  54  Shft(R)│47  71  Home [7]
- * 04   4  3 # │15  21  Y    │26  38  L      │37  55  * PrtSc│48  72  ↑    [8]
- * 05   5  4 $ │16  22  U    │27  39  ; :    │38  56  Alt    │49  73  PgUp [9]
- * 06   6  5 % │17  23  I    │28  40  " '    │39  57  space  │4a  74  K -
- * 07   7  6 ^ │18  24  O    │29  41  ` ~    │3a  58  CapsLck│4b  75  ←    [4]
- * 08   8  7 & │19  25  P    │2a  42  Shft(L)│3b  59  F1     │4c  76       [5]
- * 09   9  8 * │1a  26  [ {  │2b  43  \ |    │3c  60  F2     │4d  77  →    [6]
- * 0a  10  9 ( │1b  27  ] }  │2c  44  Z      │3d  61  F3     │4e  78  K +
- * 0b  11  0 ) │1c  28  Enter│2d  45  X      │3e  62  F4     │4f  79  End  [1]
- * 0c  12  - _ │1d  29  Ctrl │2e  46  C      │3f  63  F5     │50  80  ↓    [2]
- * 0d  13  + = │1e  30  A    │2f  47  V      │40  64  F6     │51  81  PgDn [3]
- * 0e  14  bksp│1f  31  S    │30  48  B      │41  65  F7     │52  82  Ins  [0]
- * 0f  15  Tab │20  32  D    │31  49  N      │42  66  F8     │53  83  Del  [.]
- * 10  16  Q   │21  33  F    │32  50  M      │43  67  F9     │
- * 11  17  W   │22  34  G    │33  51  , <    │44  68  F10    │
- */
-static void ascii_to_pc_scancodes_type1(int a, struct pckbc_data *d)
-{
-	int old_head;
-	int p = 0;	/*  port  */
-	int shift = 0, ctrl = 0;
-
-  if (a >= 0x100) {
-    int unshifted = a >> 8;
-    send_pc_key(pc_type_1, unshifted, d);
-    return;
-  }
-
-	if (a >= 'A' && a <= 'Z') { a += 32; shift = 1; }
-	if ((a >= 1 && a <= 26) && (a!='\n' && a!='\t' && a!='\b' && a!='\r'))
-		{ a += 96; ctrl = 1; }
-	if (a=='!')  {	a = '1'; shift = 1; }
-	if (a=='@')  {	a = '2'; shift = 1; }
-	if (a=='#')  {	a = '3'; shift = 1; }
-	if (a=='$')  {	a = '4'; shift = 1; }
-	if (a=='%')  {	a = '5'; shift = 1; }
-	if (a=='^')  {	a = '6'; shift = 1; }
-	if (a=='&')  {	a = '7'; shift = 1; }
-	if (a=='*')  {	a = '8'; shift = 1; }
-	if (a=='(')  {	a = '9'; shift = 1; }
-	if (a==')')  {	a = '0'; shift = 1; }
-	if (a=='_')  {	a = '-'; shift = 1; }
-	if (a=='+')  {	a = '='; shift = 1; }
-	if (a=='{')  {	a = '['; shift = 1; }
-	if (a=='}')  {	a = ']'; shift = 1; }
-	if (a==':')  {	a = ';'; shift = 1; }
-	if (a=='"')  {	a = '\''; shift = 1; }
-	if (a=='|')  {	a = '\\'; shift = 1; }
-	if (a=='<')  {	a = ','; shift = 1; }
-	if (a=='>')  {	a = '.'; shift = 1; }
-	if (a=='?')  {	a = '/'; shift = 1; }
-
-	if (shift)
-		pckbc_add_code(d, 0x2a, p);
-	if (ctrl)
-		pckbc_add_code(d, 0x1d, p);
-
-	/*
-	 *  Note: The ugly hack used to add release codes for all of these
-	 *  keys is as follows:  we remember how much of the kbd buf that
-	 *  is in use here, before we add any scancode. After we've added
-	 *  one or more scancodes (ie an optional shift + another key)
-	 *  then we add 0xf0 + the last scancode _if_ the kbd buf was altered.
-	 */
-
-	old_head = d->head[p];
-
-  if (a=='\x1b') pckbc_add_code(d, 0x01, p);
-  if (a=='1')	pckbc_add_code(d, 0x02, p);
-	if (a=='2')	pckbc_add_code(d, 0x03, p);
-	if (a=='3')	pckbc_add_code(d, 0x04, p);
-	if (a=='4')	pckbc_add_code(d, 0x05, p);
-	if (a=='5')	pckbc_add_code(d, 0x06, p);
-	if (a=='6')	pckbc_add_code(d, 0x07, p);
-	if (a=='7')	pckbc_add_code(d, 0x08, p);
-	if (a=='8')	pckbc_add_code(d, 0x09, p);
-	if (a=='9')	pckbc_add_code(d, 0x0a, p);
-	if (a=='0')	pckbc_add_code(d, 0x0b, p);
-	if (a=='-')	pckbc_add_code(d, 0x0c, p);
-	if (a=='=')	pckbc_add_code(d, 0x0d, p);
-
-	if (a=='\b')	pckbc_add_code(d, 0x0e, p);
-
-	if (a=='\t')	pckbc_add_code(d, 0x0f, p);
-	if (a=='q')	pckbc_add_code(d, 0x10, p);
-	if (a=='w')	pckbc_add_code(d, 0x11, p);
-	if (a=='e')	pckbc_add_code(d, 0x12, p);
-	if (a=='r')	pckbc_add_code(d, 0x13, p);
-	if (a=='t')	pckbc_add_code(d, 0x14, p);
-	if (a=='y')	pckbc_add_code(d, 0x15, p);
-	if (a=='u')	pckbc_add_code(d, 0x16, p);
-	if (a=='i')	pckbc_add_code(d, 0x17, p);
-	if (a=='o')	pckbc_add_code(d, 0x18, p);
-	if (a=='p')	pckbc_add_code(d, 0x19, p);
-
-	if (a=='[')	pckbc_add_code(d, 0x1a, p);
-	if (a==']')	pckbc_add_code(d, 0x1b, p);
-
-	if (a=='\n' || a=='\r')	pckbc_add_code(d, 0x1c, p);
-
-	if (a=='a')	pckbc_add_code(d, 0x1e, p);
-	if (a=='s')	pckbc_add_code(d, 0x1f, p);
-	if (a=='d')	pckbc_add_code(d, 0x20, p);
-	if (a=='f')	pckbc_add_code(d, 0x21, p);
-	if (a=='g')	pckbc_add_code(d, 0x22, p);
-	if (a=='h')	pckbc_add_code(d, 0x23, p);
-	if (a=='j')	pckbc_add_code(d, 0x24, p);
-	if (a=='k')	pckbc_add_code(d, 0x25, p);
-	if (a=='l')	pckbc_add_code(d, 0x26, p);
-
-	if (a==';')	pckbc_add_code(d, 0x27, p);
-	if (a=='\'')	pckbc_add_code(d, 0x28, p);
-	if (a=='~')	pckbc_add_code(d, 0x29, p);
-	if (a=='\\')	pckbc_add_code(d, 0x2b, p);
-
-	if (a=='z')	pckbc_add_code(d, 0x2c, p);
-	if (a=='x')	pckbc_add_code(d, 0x2d, p);
-	if (a=='c')	pckbc_add_code(d, 0x2e, p);
-	if (a=='v')	pckbc_add_code(d, 0x2f, p);
-	if (a=='b')	pckbc_add_code(d, 0x30, p);
-	if (a=='n')	pckbc_add_code(d, 0x31, p);
-	if (a=='m')	pckbc_add_code(d, 0x32, p);
-
-	if (a==',')	pckbc_add_code(d, 0x33, p);
-	if (a=='.')	pckbc_add_code(d, 0x34, p);
-	if (a=='/')	pckbc_add_code(d, 0x35, p);
-
-	if (a==' ')	pckbc_add_code(d, 0x39, p);
-
-	/*  Add release code, if a key was pressed:  */
-	if (d->head[p] != old_head) {
-		int code = d->key_queue[p][d->head[p]];
-		pckbc_add_code(d, code | 0x80, p);
-	}
-
-	/*  Release shift and ctrl:  */
-	if (shift) {
-		pckbc_add_code(d, 0xaa, p);
-	}
-	if (ctrl) {
-		pckbc_add_code(d, 0x9d, p);
-	}
-}
-
-
-/*
- *  ascii_to_scancodes_type2():
- *
- *  Conversion from ASCII codes to default (US) keyboard scancodes.
- *  (See http://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html)
- *
- *  NOTE/TODO: This seems to be type 2, not type 1.
- */
-static void ascii_to_pc_scancodes_type2(int a, struct pckbc_data *d)
-{
-	int old_head;
-	int p = 0;	/*  port  */
-	int shift = 0, ctrl = 0;
-
-  static int kpmode = 0;
-
-  if (a >= 0x100) {
-    int unshifted = a >> 8;
-    send_pc_key(pc_type_2, unshifted, d);
-    return;
-  }
-
-	if (a >= 'A' && a <= 'Z') { a += 32; shift = 1; }
-	if ((a >= 1 && a <= 26) && (a!='\n' && a!='\t' && a!='\b' && a!='\r'))
-		{ a += 96; ctrl = 1; }
-
-	if (a=='!')  {	a = '1'; shift = 1; }
-	if (a=='@')  {	a = '2'; shift = 1; }
-	if (a=='#')  {	a = '3'; shift = 1; }
-	if (a=='$')  {	a = '4'; shift = 1; }
-	if (a=='%')  {	a = '5'; shift = 1; }
-	if (a=='^')  {	a = '6'; shift = 1; }
-	if (a=='&')  {	a = '7'; shift = 1; }
-	if (a=='*')  {	a = '8'; shift = 1; }
-	if (a=='(')  {	a = '9'; shift = 1; }
-	if (a==')')  {	a = '0'; shift = 1; }
-	if (a=='_')  {	a = '-'; shift = 1; }
-	if (a=='+')  {	a = '='; shift = 1; }
-	if (a=='{')  {	a = '['; shift = 1; }
-	if (a=='}')  {	a = ']'; shift = 1; }
-	if (a==':')  {	a = ';'; shift = 1; }
-	if (a=='"')  {	a = '\''; shift = 1; }
-	if (a=='|')  {	a = '\\'; shift = 1; }
-	if (a=='<')  {	a = ','; shift = 1; }
-	if (a=='>')  {	a = '.'; shift = 1; }
-	if (a=='?')  {	a = '/'; shift = 1; }
-	if (a=='~')  {	a = '`'; shift = 1; }
-
-	if (shift)
-    pckbc_add_code(d, 0x2a, p);
-	else
-    pckbc_add_code(d, 0x2a + 0x80, p);
-
-	if (ctrl)
-		pckbc_add_code(d, 0x1d, p);
-
-	/*
-	 *  Note: The ugly hack used to add release codes for all of these
-	 *  keys is as follows:  we remember how much of the kbd buf that
-	 *  is in use here, before we add any scancode. After we've added
-	 *  one or more scancodes (ie an optional shift + another key)
-	 *  then we duplicate the last scancode | 0x80 _if_ the kbd buf
-	 *  was altered.
-	 */
-
-	old_head = d->head[p];
-
-	if (a==27)	pckbc_add_code(d, 0x76, p);
-
-	if (a=='1')	pckbc_add_code(d, 0x16, p);
-	if (a=='2')	pckbc_add_code(d, 0x1e, p);
-	if (a=='3')	pckbc_add_code(d, 0x26, p);
-	if (a=='4')	pckbc_add_code(d, 0x25, p);
-	if (a=='5')	pckbc_add_code(d, 0x2e, p);
-	if (a=='6')	pckbc_add_code(d, 0x36, p);
-	if (a=='7')	pckbc_add_code(d, 0x3d, p);
-	if (a=='8')	pckbc_add_code(d, 0x3e, p);
-	if (a=='9')	pckbc_add_code(d, 0x46, p);
-	if (a=='0')	pckbc_add_code(d, 0x45, p);
-	if (a=='-')	pckbc_add_code(d, 0x4e, p);
-	if (a=='=')	pckbc_add_code(d, 0x55, p);
-
-	if (a=='!')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x02, p); }
-	if (a=='@')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x03, p); }
-	if (a=='#')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x04, p); }
-	if (a=='$')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x05, p); }
-	if (a=='%')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x06, p); }
-	if (a=='^')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x07, p); }
-	if (a=='&')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x08, p); }
-	if (a=='*')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x09, p); }
-	if (a=='(')  {	pckbc_add_code(d, 0x2a, p);
-			pckbc_add_code(d, 0x0a, p); }
-
-	if (a=='\b')	pckbc_add_code(d, 0x0e, p);
-
-	if (a=='\t')	pckbc_add_code(d, 0x0f, p);
-	if (a=='q')	pckbc_add_code(d, 0x10, p);
-	if (a=='w')	pckbc_add_code(d, 0x11, p);
-	if (a=='e')	pckbc_add_code(d, 0x12, p);
-	if (a=='r')	pckbc_add_code(d, 0x13, p);
-	if (a=='t')	pckbc_add_code(d, 0x14, p);
-	if (a=='y')	pckbc_add_code(d, 0x15, p);
-	if (a=='u')	pckbc_add_code(d, 0x16, p);
-	if (a=='i')	pckbc_add_code(d, 0x17, p);
-	if (a=='o')	pckbc_add_code(d, 0x18, p);
-	if (a=='p')	pckbc_add_code(d, 0x19, p);
-
-	if (a=='[')	pckbc_add_code(d, 0x1a, p);
-	if (a==']')	pckbc_add_code(d, 0x1b, p);
-
-	if (a=='\n' || a=='\r')	pckbc_add_code(d, 0x1c, p);
-
-	if (a=='a')	pckbc_add_code(d, 0x1e, p);
-	if (a=='s')	pckbc_add_code(d, 0x1f, p);
-	if (a=='d')	pckbc_add_code(d, 0x20, p);
-	if (a=='f')	pckbc_add_code(d, 0x21, p);
-	if (a=='g')	pckbc_add_code(d, 0x22, p);
-	if (a=='h')	pckbc_add_code(d, 0x23, p);
-	if (a=='j')	pckbc_add_code(d, 0x24, p);
-	if (a=='k')	pckbc_add_code(d, 0x25, p);
-	if (a=='l')	pckbc_add_code(d, 0x26, p);
-
-	if (a==';')	pckbc_add_code(d, 0x27, p);
-	if (a=='\'')	pckbc_add_code(d, 0x28, p);
-	if (a=='`')	pckbc_add_code(d, 0x29, p);
-	if (a=='\\')	pckbc_add_code(d, 0x2b, p);
-
-	if (a=='z')	pckbc_add_code(d, 0x2c, p);
-	if (a=='x')	pckbc_add_code(d, 0x2d, p);
-	if (a=='c')	pckbc_add_code(d, 0x2e, p);
-	if (a=='v')	pckbc_add_code(d, 0x2f, p);
-	if (a=='b')	pckbc_add_code(d, 0x30, p);
-	if (a=='n')	pckbc_add_code(d, 0x31, p);
-	if (a=='m')	pckbc_add_code(d, 0x32, p);
-
-	if (a==',')	pckbc_add_code(d, 0x33, p);
-	if (a=='.')	pckbc_add_code(d, 0x34, p);
-	if (a=='/')	pckbc_add_code(d, 0x35, p);
-
-	if (a==' ')	pckbc_add_code(d, 0x39, p);
-
-	/*  Add release code, if a key was pressed:  */
-	if (d->head[p] != old_head) {
-		int code = d->key_queue[p][d->head[p]] | 0x80;
-		pckbc_add_code(d, code, p);
-	}
-
-	/*  Release ctrl:  */
-	if (ctrl)
-		pckbc_add_code(d, 0x1d + 0x80, p);
-}
-
 
 DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
-	int ch, ints_enabled;
+	int key, release, ints_enabled;
   int mouse_x, mouse_y, mouse_but, fb_nr;
+  KeynameToPCKeyboard *table = nullptr;
+  KeynameToPCKeyboard *found = nullptr;
 
 	ints_enabled = d->rx_int_enable;
 
@@ -919,14 +481,42 @@ DEVICE_TICK(pckbc)
   }
 
   if ((d->in_use & 1) && console_charavail(d->console_handle)) {
-    ch = console_readchar(d->console_handle);
-    if (d->translation_table == 1) {
-      ascii_to_pc_scancodes_type1(ch, d);
-    } else if (d->translation_table == 2) {
-      ascii_to_pc_scancodes_type2(ch, d);
-    } else {
-      ascii_to_pc_scancodes_type3(ch, d);
+    auto ch = console_readchar(d->console_handle);
+    if (ch >= 0x100) {
+      key = (ch >> 8) & 0xff;
+      release = ch & KEY_RELEASE;
+
+      for (int t = 0; translation_tables[t].table; t++) {
+        if (translation_tables[t].type == d->translation_table) {
+          fprintf(stderr, "[ pckbc: using table %d (%d) ]\n", t, d->translation_table);
+          table = translation_tables[t].table;
+          for (int i = 0; table[i].make_prefix; i++) {
+            if (table[i].keyname_idx == key) {
+              fprintf(stderr, "[ pckbc: using table entry %d ]\n", i);
+              found = &table[i];
+              break;
+            }
+          }
+          break;
+        }
+      }
     }
+  }
+
+  if (found) {
+    fprintf(stderr, "sending key %c%d -> %s\n", release ? '^' : '.', key, keynames[key]);
+    int or_break_code = 0;
+    if (release) {
+      for (int j = 0; found->break_prefix[j]; j++) {
+        pckbc_add_code(d, found->break_prefix[j], 0);
+      }
+      or_break_code = found->high_bit_break ? 0x80 : 0;
+    } else {
+      for (int j = 0; found->make_prefix[j]; j++) {
+        pckbc_add_code(d, found->make_prefix[j], 0);
+      }
+    }
+    pckbc_add_code(d, found->native_code | or_break_code, 0);
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
@@ -1554,7 +1144,7 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	d->type              = type;
 	d->in_use            = in_use;
 	d->pc_style_flag     = pc_style_flag;
-	d->translation_table = 3;
+	d->translation_table = 2;
 	d->rx_int_enable     = 1;
 	d->output_byte       = 0x02;	/*  A20 enable on PCs  */
 

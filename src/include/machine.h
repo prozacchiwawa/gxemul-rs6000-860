@@ -196,8 +196,8 @@ struct machine {
 	/*  TODO: Remove!  */
 	struct isa_pic_data isa_pic_data;
 
-    /* memory hole passthrough */
-    IMemoryHolePassthrough *hole;
+  /* memory hole passthrough */
+  IMemoryHolePassthrough *hole;
 };
 
 

@@ -17,50 +17,20 @@
 /*  Combine the color into an X11 long and display it:  */	\
 /*  TODO:  construct color in a more portable way:  */		\
 
-#ifdef FB_24
-#ifdef FB_BO
-#define macro_put_pixel1 color = (b << 16) + (g << 8) + r
-#else
-#define macro_put_pixel1 color = (r << 16) + (g << 8) + b
-#endif
-
-#else	/*  !24  */
-#ifdef FB_16
-#ifdef FB_BO
-#define macro_put_pixel1 color = ((b >> 3) << 11) + ((g >> 2) << 5) + (r >> 3)
-#else
-#define macro_put_pixel1 color = ((r >> 3) << 11) + ((g >> 2) << 5) + (b >> 3)
-#endif
-
-#else	/*  !16  */
-#ifdef FB_15
-#ifdef FB_BO
-#define macro_put_pixel1 color = ((b >> 3) << 10) + ((g >> 3) << 5) + (r >> 3)
-#else
-#define macro_put_pixel1 color = ((r >> 3) << 10) + ((g >> 3) << 5) + (b >> 3)
-#endif
-
-#else	/*  !15  */
-#define	macro_put_pixel1 color = d->fb_window->x11_graycolor[15 * 	\
-		(r + g + b) / (255 * 3)].pixel
-
-#endif	/*  !15  */
-
-#endif	/*  !16  */
-
-#endif	/*  !24  */
-
+#define macro_put_pixel1 color = 0xff000000 | (b << 16) | (g << 8) | r
 
 #ifdef macro_put_pixel
 #undef macro_put_pixel
 #endif
 
-#define macro_put_pixel		macro_put_pixel1;			\
-	if (x>=0 && x<d->x11_xsize && y>=0 && y<d->x11_ysize)		\
-		XPutPixel(d->fb_window->fb_ximage, x, y, color);	\
+#define macro_put_pixel	\
+	if (x>=0 && x<d->x11_xsize && y>=0 && y<d->x11_ysize)	{	\
+    macro_put_pixel1;	\
+    *(((uint32_t *)pixels) + (pitch / sizeof(uint32_t)) * y + x) = color; \
+  }
 
 
-void REDRAW(struct vfb_data *d, int addr, int len)
+void REDRAW(struct vfb_data *d, int addr, int len, void *pixels, int pitch)
 {
 	int x, y, pixel, npixels;
 	long color_r, color_g, color_b;

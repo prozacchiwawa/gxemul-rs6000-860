@@ -258,7 +258,7 @@ struct vfb_data {
 	char		*name;
 	char		title[100];
 
-	void (*redraw_func)(struct vfb_data *, int, int);
+	void (*redraw_func)(struct vfb_data *, int, int, void *, int);
 
 	/*  These should always be in sync:  */
 	unsigned char	*framebuffer;

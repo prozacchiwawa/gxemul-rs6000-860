@@ -60,7 +60,7 @@
 #endif
 
 
-#define	FB_TICK_SHIFT		19
+#define	FB_TICK_SHIFT		17
 
 
 /*  #define FB_DEBUG  */
@@ -389,7 +389,7 @@ void framebuffer_blockcopyfill(struct vfb_data *d, int fillflag, int fill_r,
 #undef FB_15
 #undef FB_BO
 
-void (*redraw[2 * 4 * 2])(struct vfb_data *, int, int) = {
+void (*redraw[2 * 4 * 2])(struct vfb_data *, int, int, void *, int) = {
 	redraw_fallback, redraw_fallback,
 	redraw_15, redraw_15_bo,
 	redraw_16, redraw_16_bo,
@@ -405,6 +405,13 @@ void (*redraw[2 * 4 * 2])(struct vfb_data *, int, int) = {
 DEVICE_TICK(fb)
 {
 	struct vfb_data *d = (struct vfb_data *) extra;
+	void *pixels;
+	int pitch;
+
+#ifdef WITH_X11
+	SDL_LockTexture(d->fb_window->fb_data, nullptr, &pixels, &pitch);
+#endif
+
 #ifdef WITH_X11
 	int need_to_flush_x11 = 0;
 	int need_to_redraw_cursor = 0;
@@ -510,19 +517,25 @@ DEVICE_TICK(fb)
 			need_to_redraw_cursor = 1;
 	}
 
-	if (need_to_redraw_cursor) {
+	if (0 && need_to_redraw_cursor) {
+		fprintf(stderr, "[ SDL: redraw cursor ]\n");
+    struct fb_window *fbwin = d->fb_window;
+
+    SDL_Rect cursor_rect;
+    cursor_rect.x = 0;
+    cursor_rect.y = 0;
+    cursor_rect.w = fbwin->OLD_cursor_xsize/fbwin->scaledown + 1;
+    cursor_rect.h = fbwin->OLD_cursor_ysize/fbwin->scaledown + 1;
+    SDL_Rect target_cursor_rect = cursor_rect;
+    target_cursor_rect.x = fbwin->OLD_cursor_x/fbwin->scaledown;
+    target_cursor_rect.y = fbwin->OLD_cursor_y/fbwin->scaledown;
+
 		/*  Remove old cursor, if any:  */
-		if (d->fb_window->OLD_cursor_on) {
-			XPutImage(d->fb_window->x11_display,
-			    d->fb_window->x11_fb_window,
-			    d->fb_window->x11_fb_gc, d->fb_window->fb_ximage,
-			    d->fb_window->OLD_cursor_x/d->vfb_scaledown,
-			    d->fb_window->OLD_cursor_y/d->vfb_scaledown,
-			    d->fb_window->OLD_cursor_x/d->vfb_scaledown,
-			    d->fb_window->OLD_cursor_y/d->vfb_scaledown,
-			    d->fb_window->OLD_cursor_xsize/d->vfb_scaledown + 1,
-			    d->fb_window->OLD_cursor_ysize/d->vfb_scaledown +1);
-		}
+    if (fbwin->x11_fb_window != nullptr && fbwin->OLD_cursor_on) {
+      // Make a cursor sized texture.
+      SDL_SetRenderTarget(fbwin->x11_fb_render, fbwin->cursor_reserve);
+      SDL_RenderCopy(fbwin->x11_fb_render, fbwin->fb_data, &cursor_rect, &target_cursor_rect);
+    }
 	}
 #endif
 
@@ -557,18 +570,16 @@ DEVICE_TICK(fb)
 
 #ifdef WITH_X11
 		for (y=d->update_y1; y<=d->update_y2; y+=q) {
-			d->redraw_func(d, addr, addr2 - addr);
+			d->redraw_func(d, addr, addr2 - addr, pixels, pitch);
 			addr  += d->bytes_per_line * q;
 			addr2 += d->bytes_per_line * q;
 		}
 
-		XPutImage(d->fb_window->x11_display, d->fb_window->
-		    x11_fb_window, d->fb_window->x11_fb_gc, d->fb_window->
-		    fb_ximage, d->update_x1/d->vfb_scaledown, d->update_y1/
-		    d->vfb_scaledown, d->update_x1/d->vfb_scaledown,
-		    d->update_y1/d->vfb_scaledown,
-		    (d->update_x2 - d->update_x1)/d->vfb_scaledown + 1,
-		    (d->update_y2 - d->update_y1)/d->vfb_scaledown + 1);
+    for (int y = d->update_y1; y < d->update_y2; y++) {
+      int start_addr = (y * d->xsize + d->update_x1) / (d->bit_depth * 8);
+      int end_addr = (y * d->xsize + d->update_x2 + std::min(1, d->bit_depth / 8)) / (d->bit_depth * 8);
+      d->redraw_func(d, start_addr, end_addr - start_addr, pixels, pitch);
+    }
 
 		need_to_flush_x11 = 1;
 #endif
@@ -578,7 +589,8 @@ DEVICE_TICK(fb)
 	}
 
 #ifdef WITH_X11
-	if (need_to_redraw_cursor) {
+	if (0 && need_to_redraw_cursor) {
+		fprintf(stderr, "[ SDL: redraw cursor ]\n");
 		/*  Paint new cursor:  */
 		if (d->fb_window->cursor_on) {
 			x11_redraw_cursor(cpu->machine,
@@ -596,8 +608,15 @@ DEVICE_TICK(fb)
 #endif
 
 #ifdef WITH_X11
-	if (need_to_flush_x11)
-		XFlush(d->fb_window->x11_display);
+  // Flush if needed
+  SDL_Rect cursor_rect;
+  cursor_rect.x = 0;
+  cursor_rect.y = 0;
+  cursor_rect.w = d->fb_window->x11_fb_winxsize;
+  cursor_rect.h = d->fb_window->x11_fb_winysize;
+  SDL_RenderCopy(d->fb_window->x11_fb_render, d->fb_window->fb_data, &cursor_rect, &cursor_rect);
+  SDL_RenderPresent(d->fb_window->x11_fb_render);
+  SDL_UnlockTexture(d->fb_window->fb_data);
 #endif
 
 #if 0
@@ -938,8 +957,10 @@ struct vfb_data *dev_fb_init(struct machine *machine, struct memory *mem,
 		case 16: i = 4; break;
 		case 24: i = 6; break;
 		}
+    /*
 		if (d->fb_window->fb_ximage->byte_order)
 			i ++;
+    */
 		if (d->vfb_scaledown > 1)
 			i += 8;
 		d->redraw_func = redraw[i];

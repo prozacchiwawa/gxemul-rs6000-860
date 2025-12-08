@@ -167,7 +167,9 @@ DEVICE_ACCESS(ns16550)
 			d->reg[com_iir] |= IIR_TXRDY;
 		} else {
 			int x = console_readchar(d->console_handle);
-			odata = x < 0? 0 : x;
+      if (x < 0x100) {
+        odata = x & 0xff;
+      }
 		}
 		dev_ns16550_tick(cpu, d);
 		break;

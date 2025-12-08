@@ -36,6 +36,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "x11.h"
 #include "arcbios.h"
 #include "cpu.h"
 #include "emul.h"
@@ -50,7 +51,6 @@
 #include "net.h"
 #include "settings.h"
 #include "timer.h"
-#include "x11.h"
 
 #include "thirdparty/exec_elf.h"
 

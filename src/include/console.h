@@ -40,6 +40,7 @@
 
 namespace KeyNames {
 enum KeyNames {
+  UNUSED,
   ESC,
   F1,
   F2,
@@ -123,6 +124,7 @@ enum KeyNames {
 };
 }
 
+extern const int KEY_RELEASE;
 extern const char *keynames[];
 
 void console_deinit_main(void);

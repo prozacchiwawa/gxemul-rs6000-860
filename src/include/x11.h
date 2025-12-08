@@ -36,7 +36,7 @@
 struct emul;
 
 #ifdef WITH_X11
-#include <X11/Xlib.h>
+#include <SDL.h>
 #endif
 
 
@@ -54,18 +54,19 @@ struct fb_window {
 	/*  x11_fb_winxsize > 0 for a valid fb_window  */
 	int		x11_fb_winxsize, x11_fb_winysize;
 	int		scaledown;
-	Display		*x11_display;
+  // SDL_Window *x11_display;
 
 	int		x11_screen;
 	int		x11_screen_depth;
 	unsigned long	fg_color;
 	unsigned long	bg_color;
-	XColor		x11_graycolor[N_GRAYCOLORS];
-	Window		x11_fb_window;
-	GC		x11_fb_gc;
+	uint32_t		x11_graycolor[N_GRAYCOLORS];
+	SDL_Window		*x11_fb_window;
+  SDL_Renderer  *x11_fb_render;
 
-	XImage		*fb_ximage;
-	unsigned char	*ximage_data;
+	//XImage		*fb_ximage;
+  SDL_Texture *fb_data;
+	// unsigned char	*ximage_data;
 
 	/*  -1 means transparent, 0 and up are grayscales  */
 	int		cursor_pixels[CURSOR_MAXY][CURSOR_MAXX];
@@ -81,13 +82,15 @@ struct fb_window {
 	int		OLD_cursor_on;
 
 	/*  Host's X11 cursor:  */
-	Cursor		host_cursor;
-	Pixmap		host_cursor_pixmap;
+  SDL_Texture *pixel;
+  SDL_Texture *cursor_reserve;
+  SDL_Texture *host_cursor_pixmap;
+  uint32_t window_id;
+  SDL_PixelFormat *argb32;
 #endif
 };
 void x11_redraw_cursor(struct machine *, int);
 void x11_redraw(struct machine *, int);
-void x11_putpixel_fb(struct machine *, int, int x, int y, int color);
 #ifdef WITH_X11
 void x11_putimage_fb(struct machine *, int);
 #endif

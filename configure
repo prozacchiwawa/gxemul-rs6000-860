@@ -348,11 +348,11 @@ if [ z$NOX11 = z ]; then
 	printf "checking for X11 headers and libs\n"
 
 	#  Try to compile a small X11 test program:
-	printf "#include <X11/Xlib.h>
+	printf "#include <SDL.h>
 	#include <stdio.h>
-	Display *dis;
+	SDL_Window *dis;
 	void f(void) {
-		dis = XOpenDisplay(NULL);
+    if(SDL_Init(SDL_INIT_VIDEO) < 0) { exit(1); }
 	}
 	int main(int argc, char *argv[])
 	{ return 0; }
@@ -360,10 +360,10 @@ if [ z$NOX11 = z ]; then
 
 	XOK=0
 
-	XINCLUDE=-I/usr/X11R6/include
+	XINCLUDE=-I/usr/include/SDL2
 	$CXX $CXXFLAGS _test_x11.cc -c -o _test_x11.o $XINCLUDE 2> /dev/null
 
-	XLIB="-L/usr/X11R6/lib -lX11"
+	XLIB="-LSDL2"
 	$CXX $CXXFLAGS _test_x11.o -o _test_x11 $XLIB 2> /dev/null
 
 	if [ -x _test_x11 ]; then
@@ -373,10 +373,9 @@ if [ z$NOX11 = z ]; then
 	rm -f _test_x11 _test_x11.o
 
 	if [ z$XOK = z0 ]; then
-		XINCLUDE=-I/usr/local/include
 		$CXX $CXXFLAGS _test_x11.cc -c -o _test_x11.o $XINCLUDE 2> /dev/null
 
-		XLIB="-L/usr/local/lib -lX11"
+		XLIB="-lSDL2"
 		$CXX $CXXFLAGS _test_x11.o -o _test_x11 $XLIB 2> /dev/null
 
 		if [ -x _test_x11 ]; then
@@ -389,7 +388,7 @@ if [ z$NOX11 = z ]; then
 	if [ z$XOK = z0 ]; then
 		$CXX $CXXFLAGS _test_x11.cc -c -o _test_x11.o $XINCLUDE 2> /dev/null
 
-		XLIB="-L/usr/X11R6/lib64 -lX11"
+		XLIB="-lSDL2"
 		$CXX $CXXFLAGS _test_x11.o -o _test_x11 $XLIB 2> /dev/null
 
 		if [ -x _test_x11 ]; then
@@ -399,29 +398,16 @@ if [ z$NOX11 = z ]; then
 	rm -f _test_x11 _test_x11.o
 
 	if [ z$XOK = z0 ]; then
-		XINCLUDE=""
 		$CXX $CXXFLAGS _test_x11.cc -c -o _test_x11.o $XINCLUDE 2> /dev/null
 
 		#  -lsocket for Solaris
-		XLIB="-lX11 -lsocket"
+		XLIB="-lSDL2 -lX11 -lsocket"
 		$CXX $CXXFLAGS _test_x11.o -o _test_x11 $XLIB 2> /dev/null
 
 		if [ -x _test_x11 ]; then
 			XOK=1
 		fi
 		rm -f _test_x11 _test_x11.o
-	fi
-
-	if [ z`uname` = zNetBSD ]; then
-		echo "Using NetBSD hack for X11 libs..."
-		XLIB="$XLIB -Wl,-rpath,/usr/X11R6/lib"
-	fi
-
-	if [ z`uname` = zOpenBSD ]; then
-		if [ z`uname -m` = zarc ]; then
-			echo "Using old OpenBSD/arc hack for X11 libs..."
-			XLIB="$XLIB -Wl,-rpath,/usr/X11R6/lib"
-		fi
 	fi
 
 	if [ z$XOK = z0 ]; then

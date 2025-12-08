@@ -70,6 +70,7 @@
 #include <sys/select.h>
 #include <sys/types.h>
 #include <time.h>
+#include <assert.h>
 
 #include "console.h"
 #include "emul.h"
@@ -81,7 +82,9 @@ extern char *progname;
 extern int verbose;
 extern struct settings *global_settings;
 
+const int KEY_RELEASE = 1 << 17;
 const char *keynames[] = {
+  "unused",
   "ESC",
   "F1",
   "F2",
@@ -164,6 +167,123 @@ const char *keynames[] = {
   "Backquote",
   "F11",
   "F12"
+};
+
+#define ESCAPE 1
+#define SHIFTED 2
+#define CTRL 4
+#define ASCII_CASE 8
+#define NUL 16
+
+typedef struct {
+  int keyname_idx;
+  int flags;
+  const char *sequence;
+} ConsoleToKeyboard;
+
+ConsoleToKeyboard ansi_to_keyboard[] = {
+  // Control
+  { KeyNames::C, CTRL, "\x02" }, // translate ^B to ^C
+  { KeyNames::Backspace, 0, "\x08" },
+  { KeyNames::Tab, 0, "\x09" },
+  { KeyNames::Return, 0, "\x0d" },
+  { KeyNames::Delete, 0, "\x7f" },
+
+  // Escape
+  { KeyNames::Up, ESCAPE, "A" },
+  { KeyNames::Down, ESCAPE, "B" },
+  { KeyNames::Right, ESCAPE, "C" },
+  { KeyNames::Left, ESCAPE, "D" },
+  { KeyNames::PgUp, ESCAPE, "S" },
+  { KeyNames::PgDn, ESCAPE, "T" },
+  { KeyNames::F1, ESCAPE, "OP" },
+  { KeyNames::F2, ESCAPE, "OQ" },
+  { KeyNames::F3, ESCAPE, "OR" },
+  { KeyNames::F4, ESCAPE, "OS" },
+  { KeyNames::F5, ESCAPE, "Ot" },
+  { KeyNames::F6, ESCAPE, "Ou" },
+  { KeyNames::F7, ESCAPE, "Ov" },
+  { KeyNames::F8, ESCAPE, "Ol" },
+  { KeyNames::F9, ESCAPE, "Ow" },
+  { KeyNames::F10, ESCAPE, "Ox" },
+
+  // Printable
+  { KeyNames::Space, 0, " " },
+  { KeyNames::Backquote, 0, "`" },
+  { KeyNames::N1, 0, "1" },
+  { KeyNames::N2, 0, "2" },
+  { KeyNames::N3, 0, "3" },
+  { KeyNames::N4, 0, "4" },
+  { KeyNames::N5, 0, "5" },
+  { KeyNames::N6, 0, "6" },
+  { KeyNames::N7, 0, "7" },
+  { KeyNames::N8, 0, "8" },
+  { KeyNames::N9, 0, "9" },
+  { KeyNames::N0, 0, "0" },
+  { KeyNames::Minus, 0, "-" },
+  { KeyNames::Equals, 0, "=" },
+  { KeyNames::Q, ASCII_CASE, "q" },
+  { KeyNames::W, ASCII_CASE, "w" },
+  { KeyNames::E, ASCII_CASE, "e" },
+  { KeyNames::R, ASCII_CASE, "r" },
+  { KeyNames::T, ASCII_CASE, "t" },
+  { KeyNames::Y, ASCII_CASE, "y" },
+  { KeyNames::U, ASCII_CASE, "u" },
+  { KeyNames::I, ASCII_CASE, "i" },
+  { KeyNames::O, ASCII_CASE, "o" },
+  { KeyNames::P, ASCII_CASE, "p" },
+  { KeyNames::LBrace, 0, "[" },
+  { KeyNames::RBrace, 0, "]" },
+  { KeyNames::Backslash, 0, "\\" },
+  { KeyNames::A, ASCII_CASE, "a" },
+  { KeyNames::S, ASCII_CASE, "s" },
+  { KeyNames::D, ASCII_CASE, "d" },
+  { KeyNames::F, ASCII_CASE, "f" },
+  { KeyNames::G, ASCII_CASE, "g" },
+  { KeyNames::H, ASCII_CASE, "h" },
+  { KeyNames::J, ASCII_CASE, "j" },
+  { KeyNames::K, ASCII_CASE, "k" },
+  { KeyNames::L, ASCII_CASE, "l" },
+  { KeyNames::Semicolon, 0, ";" },
+  { KeyNames::Quote, 0, "'" },
+  { KeyNames::Z, ASCII_CASE, "z" },
+  { KeyNames::X, ASCII_CASE, "x" },
+  { KeyNames::C, ASCII_CASE, "c" },
+  { KeyNames::V, ASCII_CASE, "v" },
+  { KeyNames::B, ASCII_CASE, "b" },
+  { KeyNames::N, ASCII_CASE, "n" },
+  { KeyNames::M, ASCII_CASE, "m" },
+  { KeyNames::Comma, 0, "," },
+  { KeyNames::Dot, 0, "." },
+  { KeyNames::Slash, 0, "/" },
+
+  // Shifted
+  { KeyNames::Backquote, SHIFTED, "~" },
+  { KeyNames::N1, SHIFTED, "!" },
+  { KeyNames::N2, SHIFTED, "@" },
+  { KeyNames::N3, SHIFTED, "#" },
+  { KeyNames::N4, SHIFTED, "$" },
+  { KeyNames::N5, SHIFTED, "%" },
+  { KeyNames::N6, SHIFTED, "^" },
+  { KeyNames::N7, SHIFTED, "&" },
+  { KeyNames::N8, SHIFTED, "*" },
+  { KeyNames::N9, SHIFTED, "(" },
+  { KeyNames::N0, SHIFTED, ")" },
+  { KeyNames::Minus, SHIFTED, "_" },
+  { KeyNames::Equals, SHIFTED, "=" },
+  { KeyNames::LBrace, SHIFTED, "{" },
+  { KeyNames::RBrace, SHIFTED, "}" },
+  { KeyNames::Backslash, SHIFTED, "|" },
+  { KeyNames::Semicolon, SHIFTED, ":" },
+  { KeyNames::Quote, SHIFTED, "\"" },
+  { KeyNames::Comma, SHIFTED, "<" },
+  { KeyNames::Dot, SHIFTED, ">" },
+  { KeyNames::Slash, SHIFTED, "?" },
+
+  // Last
+  { KeyNames::ESC, 0, "\x1b" },
+  { KeyNames::N2, CTRL | SHIFTED | NUL, "\xff" },
+  { }
 };
 
 static struct termios console_oldtermios;
@@ -413,6 +533,96 @@ static int console_stdin_avail(int handle)
 }
 
 
+int make_available(int handle, const unsigned char *ch, int len, int *i) {
+  const unsigned char *escape = nullptr;
+  const unsigned char *escape_start = nullptr;
+  const unsigned char *here = ch + *i;
+  const unsigned char *end = ch + len;
+
+  if (*i >= len) {
+    return 0;
+  }
+
+  // Try to match an escape sequence.
+  if (*here == '\033') {
+    escape_start = here;
+    here++;
+    while (here < end) {
+      if (isalpha(*here)) {
+        escape = here;
+        break;
+      }
+      here++;
+    }
+  }
+
+  for (int c = 0; ansi_to_keyboard[c].sequence; c++) {
+    auto atc = ansi_to_keyboard[c];
+    auto seqlen = std::min(strlen(atc.sequence), (size_t)(end - here));
+
+    if (atc.flags & ESCAPE) {
+      if (!escape) {
+        continue;
+      }
+
+      if (!memcmp(atc.sequence, escape, seqlen)) {
+        console_makeavail(handle, atc.keyname_idx << 8);
+        console_makeavail(handle, KEY_RELEASE | (atc.keyname_idx << 8));
+        *i = escape + seqlen - here;
+        return 0;
+      }
+    }
+
+    if (atc.flags & ASCII_CASE) {
+      int shift_keys[] = { 0, KeyNames::LShift, KeyNames::Ctrl, -1 };
+      unsigned char upcase[2] = { atc.sequence[0], 0 };
+      for (int x = 0; shift_keys[x] != -1; x++) {
+        if (!memcmp(here, upcase, 1)) {
+          if (shift_keys[x]) {
+            console_makeavail(handle, shift_keys[x] << 8);
+          }
+          console_makeavail(handle, atc.keyname_idx << 8);
+          console_makeavail(handle, KEY_RELEASE | (atc.keyname_idx << 8));
+          if (shift_keys[x]) {
+            console_makeavail(handle, KEY_RELEASE | (shift_keys[x] << 8));
+          }
+          (*i) += 1;
+          return 0;
+        }
+        upcase[0] -= 32;
+      }
+    }
+
+    // Special case of nul byte
+    if (((*here == 0) && (atc.flags & NUL)) || !memcmp(here, atc.sequence, seqlen)) {
+      int flags[][2] = {
+        { CTRL, KeyNames::Ctrl },
+        { SHIFTED, KeyNames::LShift },
+        { }
+      };
+
+      for (int s = 0; flags[s][0]; s++) {
+        if (atc.flags & flags[s][0]) {
+          console_makeavail(handle, flags[s][1] << 8);
+        }
+      }
+      console_makeavail(handle, atc.keyname_idx << 8);
+      console_makeavail(handle, KEY_RELEASE | (atc.keyname_idx << 8));
+      for (int s = 0; flags[s][0]; s++) {
+        if (atc.flags & flags[s][0]) {
+          console_makeavail(handle, KEY_RELEASE | (flags[s][1] << 8));
+        }
+      }
+      (*i) += seqlen;
+      return 0;
+    }
+  }
+
+  // Skip this byte since we don't have a keyboard equivalent.
+  (*i) += 1;
+  return 0;
+}
+
 /*
  *  console_charavail():
  *
@@ -423,7 +633,7 @@ int console_charavail(int handle)
 	while (console_stdin_avail(handle)) {
 		unsigned char ch[100];		/* = getchar(); */
 		ssize_t len;
-		int i, d;
+		int i = 0, d;
 
 		// If adding more would lead to a full FIFO, then let's
 		// wait.
@@ -440,18 +650,11 @@ int console_charavail(int handle)
 
 		len = read(d, ch, sizeof(ch));
 
-		for (i=0; i<len; i++) {
-			/*  printf("[ %i: %i ]\n", i, ch[i]);  */
+    while (i < len && (make_available(handle, ch, len, &i) != -1));
 
-			if (!allow_slaves) {
-				/*  Ugly hack: convert ctrl-b into ctrl-c.
-				    (TODO: fix)  */
-				if (ch[i] == 2)
-					ch[i] = 3;
-			}
-
-			console_makeavail(handle, ch[i]);
-		}
+    for (auto c = 0; c < len; c++) {
+      console_makeavail(handle, ch[c]);
+    }
 	}
 
 	if (console_handles[handle].fifo_head ==
@@ -568,7 +771,7 @@ void console_mouse_coordinates(int x, int y, int fb_nr)
  */
 void console_mouse_button(int button, int pressed)
 {
-	int mask = 1 << (3-button);
+	int mask = 1 << button;
 
 	if (pressed)
 		console_mouse_buttons |= mask;

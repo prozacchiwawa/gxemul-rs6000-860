@@ -68,22 +68,13 @@ struct ns_data {
 	int		databits;
 	char		parity;
 	const char	*stopbits;
+
+	unsigned char   available;
+  bool  sent_recently;
 };
 
 
-DEVICE_TICK(ns16550)
-{
-	/*
-	 *  This function is called at regular intervals. An interrupt is
-	 *  asserted if there is a character available for reading, or if the
-	 *  transmitter slot is empty (i.e. the ns16550 is ready to transmit).
-	 */
-	struct ns_data *d = (struct ns_data *) extra;
-
-	d->reg[com_iir] &= ~IIR_RXRDY;
-	if (console_charavail(d->console_handle))
-		d->reg[com_iir] |= IIR_RXRDY;
-
+static void eval_interrupt(struct ns_data *d) {
 	/*
 	 *  If interrupts are enabled, and interrupts are pending, then
 	 *  cause a CPU interrupt.
@@ -102,6 +93,35 @@ DEVICE_TICK(ns16550)
 			INTERRUPT_DEASSERT(d->irq);
 		d->int_asserted = 0;
 	}
+}
+
+
+DEVICE_TICK(ns16550)
+{
+	/*
+	 *  This function is called at regular intervals. An interrupt is
+	 *  asserted if there is a character available for reading, or if the
+	 *  transmitter slot is empty (i.e. the ns16550 is ready to transmit).
+	 */
+	struct ns_data *d = (struct ns_data *) extra;
+
+	while (console_charavail(d->console_handle)) {
+		auto ch = console_readchar(d->console_handle);
+		if (ch >= 0x100) {
+			continue;
+		}
+		d->available = ch;
+    d->reg[com_lsr] |= LSR_RXRDY;
+		d->reg[com_iir] |= IIR_RXRDY;
+		break;
+	}
+
+  if (d->sent_recently) {
+    d->sent_recently = false;
+    d->reg[com_iir] |= IIR_TXRDY;
+  }
+
+  eval_interrupt(d);
 }
 
 
@@ -131,10 +151,6 @@ DEVICE_ACCESS(ns16550)
 	if (d->enable_fifo)
 		d->reg[com_iir] |= ((d->fcr << 5) & 0xc0);
 
-	d->reg[com_lsr] &= ~LSR_RXRDY;
-	if (console_charavail(d->console_handle))
-		d->reg[com_lsr] |= LSR_RXRDY;
-
 	relative_addr /= d->addrmult;
 
 	if (relative_addr >= DEV_NS16550_LENGTH) {
@@ -152,8 +168,9 @@ DEVICE_ACCESS(ns16550)
 			/*  Write or read the low byte of the divisor:  */
 			if (writeflag == MEM_WRITE)
 				d->divisor = (d->divisor & 0xff00) | idata;
-			else
+			else {
 				odata = d->divisor & 0xff;
+      }
 			break;
 		}
 
@@ -164,14 +181,14 @@ DEVICE_ACCESS(ns16550)
 				console_makeavail(d->console_handle, idata);
 			else
 				console_putchar(d->console_handle, idata);
-			d->reg[com_iir] |= IIR_TXRDY;
+      d->sent_recently = true;
 		} else {
-			int x = console_readchar(d->console_handle);
-      if (x < 0x100) {
-        odata = x & 0xff;
-      }
+      fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
+			odata = d->available;
+      d->reg[com_iir] &= ~IIR_RXRDY;
+      d->reg[com_lsr] &= ~LSR_RXRDY;
+      eval_interrupt(d);
 		}
-		dev_ns16550_tick(cpu, d);
 		break;
 
 	case com_ier:	/*  interrupt enable AND high byte of the divisor  */
@@ -200,7 +217,7 @@ DEVICE_ACCESS(ns16550)
 				d->reg[com_iir] |= IIR_TXRDY;
 
 			d->reg[com_ier] = idata;
-			dev_ns16550_tick(cpu, d);
+      eval_interrupt(d);
 		} else
 			odata = d->reg[com_ier];
 		break;
@@ -216,7 +233,6 @@ DEVICE_ACCESS(ns16550)
 				d->reg[com_iir] &= ~IIR_TXRDY;
 			debug("[ ns16550 (%s): read from iir: 0x%02x ]\n",
 			    d->name, (int)odata);
-			dev_ns16550_tick(cpu, d);
 		}
 		break;
 
@@ -290,7 +306,6 @@ DEVICE_ACCESS(ns16550)
 			if (!(d->reg[com_iir] & IIR_TXRDY)
 			    && (idata & MCR_IENABLE))
 				d->reg[com_iir] |= IIR_TXRDY;
-			dev_ns16550_tick(cpu, d);
 		} else {
 			odata = d->reg[com_mcr];
 			debug("[ ns16550 (%s): read from mcr: 0x%02x ]\n",

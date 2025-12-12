@@ -546,13 +546,13 @@ int make_available(int handle, const unsigned char *ch, int len, int *i) {
   // Try to match an escape sequence.
   if (*here == '\033') {
     escape_start = here;
-    here++;
-    while (here < end) {
+    auto check_escape = here + 1;
+    while (check_escape < end) {
       if (isalpha(*here)) {
-        escape = here;
+        escape = check_escape;
         break;
       }
-      here++;
+      check_escape++;
     }
   }
 

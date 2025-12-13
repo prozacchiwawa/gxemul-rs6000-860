@@ -421,7 +421,9 @@ DEVICE_ACCESS(eagle_dma_2)
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    d->dma_page[relative_addr] = idata;
+    if (relative_addr < 4) {
+      d->dma_page[relative_addr] = idata;
+    }
     if (relative_addr == 1) {
         eagle_comm.eagle_comm_area[2] = idata;
     }
@@ -486,6 +488,51 @@ DEVICE_ACCESS(eagle_480)
     return 1;
 }
 
+struct register_name_t {
+  int regnum;
+  const char *name;
+};
+struct register_name_t register_830_names[] = {
+  { 0x00, "Left ADC Input Control" },
+  { 0x01, "Right ADC Input Control" },
+  { 0x02, "Left Aux #1 Input Control" },
+  { 0x03, "Right Aux #1 Input Control" },
+  { 0x04, "Left Aux #2 Input Control" },
+  { 0x05, "Right Aux #2 Input Control" },
+  { 0x06, "Left DAC Output Control" },
+  { 0x07, "Right DAC Output Control" },
+  { 0x08, "Fs & Playback Data Format" },
+  { 0x09, "Interface Configuration" },
+  { 0x0a, "Pin Control" },
+  { 0x0b, "Error Status and Initialization" },
+  { 0x0c, "MODE and ID (MODE2 bit)" },
+  { 0x0d, "Loopback Control" },
+  { 0x0e, "Playback Upper Base Count" },
+  { 0x0f, "Playback Lower Base Count" },
+  { 0x10, "Alternate Feature Enable I" },
+  { 0x11, "Alternate Feature Enable II" },
+  { 0x12, "Left Line Input Control" },
+  { 0x13, "Right Line Input Control" },
+  { 0x14, "Timer Low Byte" },
+  { 0x15, "Timer High Byte" },
+  { 0x16, "Alternate Sample Frequency" },
+  { 0x17, "Alternate Feature Enable III" },
+  { 0x18, "Alternate Feature Status" },
+  { 0x19, "Version/Chip ID" },
+  { 0x1a, "Mono Input & Output Control" },
+  { 0x1b, "Left Output Attenuation Control" },
+  { 0x1c, "Capture Data Format" },
+  { 0x1d, "Right Output Attenuation Control" },
+  { 0x1e, "Capture Update Base Count" },
+  { 0x1f, "Capture Lower Base Count" },
+  { 0x8000, "Index Address Register" },
+  { 0x8001, "Indexed Data Register" },
+  { 0x8002, "Status Register" },
+  { 0x8003, "PIO Data Register" },
+  { 0x800e, "Status Register (e?)" },
+  { 0 }
+};
+
 DEVICE_ACCESS(eagle_830)
 {
   struct eagle_data *d = (struct eagle_data *) extra;
@@ -493,12 +540,62 @@ DEVICE_ACCESS(eagle_830)
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-  } else {
-    idata = d->ide_command++;
+  }
+
+  switch (relative_addr) {
+  case 0:
+    if (writeflag == MEM_WRITE) {
+      d->cs4231_index = idata & 0x1f;
+    } else {
+      idata = d->cs4231_index;
+    }
+    break;
+
+  case 1:
+    if (writeflag == MEM_WRITE) {
+      d->cs4231_registers[d->cs4231_index] = idata;
+    } else {
+      idata = d->cs4231_registers[d->cs4231_index];
+    }
+    break;
+
+  case 2:
+    idata = d->cs4231_status;
+    break;
+
+  case 3:
+    idata = 0;
+    break;
+
+  case 14:
+    idata = d->cs4231_status;
+    break;
+
+  default:
+    idata = 0;
+    break;
+  }
+
+  if (writeflag != MEM_WRITE) {
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
   }
 
-  fprintf(stderr, "[ unknown-830: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
+  const char *register_name = nullptr;
+  for (auto i = 0; register_830_names[i].name; i++) {
+    if (relative_addr == 1 && d->cs4231_index == register_830_names[i].regnum) {
+      register_name = register_830_names[i].name;
+      break;
+    } else if ((relative_addr | 0x8000) == register_830_names[i].regnum) {
+      register_name = register_830_names[i].name;
+      break;
+    }
+  }
+
+  if (register_name) {
+    fprintf(stderr, "[ cs4231: %s %x %s -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, register_name, idata, (unsigned int)cpu->pc);
+  } else {
+    fprintf(stderr, "[ unknown-830: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
+  }
 
   return 1;
 }
@@ -837,6 +934,18 @@ DEVINIT(eagle)
 	}
 
 	devinit->return_ptr = d->pci_data;
+  d->cs4231_registers[2] = 0x88;
+  d->cs4231_registers[3] = 0x88;
+  d->cs4231_registers[4] = 0x88;
+  d->cs4231_registers[5] = 0x88;
+  d->cs4231_registers[6] = 0x80;
+  d->cs4231_registers[7] = 0x80;
+  d->cs4231_registers[9] = 0x08;
+  d->cs4231_registers[12] = 0x8a;
+  d->cs4231_registers[18] = 0x88;
+  d->cs4231_registers[19] = 0x88;
+  d->cs4231_registers[25] = 0xa2;
+  d->cs4231_registers[26] = 0xa0;
 
 	return 1;
 }

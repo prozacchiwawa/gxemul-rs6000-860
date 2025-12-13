@@ -1877,9 +1877,7 @@ X(mtmsr)
 	uint64_t x = reg(ic->arg[0]);
 
 	/*  TODO: check permission!  */
-
-	/*  Synchronize the PC (pointing to _after_ this instruction)  */
-	cpu->pc = (cpu->pc & ~0xfff) + ic->arg[1];
+  sync_pc(cpu, ic);
 
 	if (!ic->arg[2]) {
 		uint64_t y;
@@ -1887,9 +1885,9 @@ X(mtmsr)
 		x = (y & 0xffffffff00000000ULL) | (x & 0xffffffffULL);
 	}
 
-	if (!reg_access_msr(cpu, &x, 1, ic, 1)) {
-		cpu->pc -= 4;
-  }
+  /* When writeflag & 2, reg_access_msr will throw with the next instruction as the
+     target, which means that we'll still progress if we do dec or ee here */
+	reg_access_msr(cpu, &x, 3, ic, 1);
 }
 
 

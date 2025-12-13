@@ -391,11 +391,17 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
       !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
     // fprintf(stderr, "[ %08x: take pending decrementer exception msr %08x (pending since %" PRIx64 ") ]\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr, cpu->cd.ppc.dec_intr_pending);
     cpu->cd.ppc.dec_intr_pending = 0;
+    if (writeflag & 2) {
+      cpu->pc += 4;
+    }
     ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
     return 1;
   }
 
   if (cpu->cd.ppc.irq_asserted) {
+    if (writeflag & 2) {
+      cpu->pc += 4;
+    }
     ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
     return 1;
   }
@@ -1982,6 +1988,10 @@ static void debug_spr_usage(uint64_t pc, int spr)
 	case SPR_ICMP:
 	case SPR_DBSR:
 	case SPR_PIR:
+  case SPR_TBU:
+  case SPR_TBL:
+  case TBR_TBU:
+  case TBR_TBL:
 		break;
 	default:if (spr >= SPR_IBAT0U && spr <= SPR_DBAT3L) {
 			break;
@@ -2368,6 +2378,7 @@ void ppc_update_for_icount(struct cpu *cpu) {
     cpu->cd.ppc.spr[SPR_DEC] -= icount;
   } else {
     if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      // fprintf(stderr, "[ %08x: dec rollover ]\n", (unsigned int)cpu->pc);
       cpu->cd.ppc.dec_intr_pending = 1;
     }
     cpu->cd.ppc.spr[SPR_DEC] = 0xffffffff - (icount - dec - 1);
@@ -2379,18 +2390,10 @@ void ppc_update_for_icount(struct cpu *cpu) {
   if ((tbl >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0) {
     cpu->cd.ppc.spr[SPR_TBU] ++;
   }
+  cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL];
+  cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU];
 
   cpu->cd.ppc.icount &= (COUNT_DIV - 1);
-
-  if (!(cpu->cd.ppc.msr & PPC_MSR_EE)) {
-    return;
-  }
-
-  if (cpu->cd.ppc.dec_intr_pending &&
-      !(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-    cpu->cd.ppc.dec_intr_pending = 0;
-    ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-  }
 }
 
 int lha_does_update(int ra, int rs, bool update_form) {

@@ -1480,7 +1480,7 @@ static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   if (when < 0x100) {
     debugger_cmd_step(m, "");
   } else {
-    single_step = (when | 0xffull) - 255ull;
+    single_step = (when | (INSTRUCTION_STRIDE - 1)) ^ (INSTRUCTION_STRIDE - 1);
   }
 }
 
@@ -1671,6 +1671,10 @@ static void debugger_cmd_screenshot(struct machine *m, char *cmd_line) {
   png_destroy_write_struct(&png, &info);
 }
 
+static void debugger_cmd_e7(struct machine *m, char *cmd_line) {
+  ppc_exception(m->cpus[0], PPC_EXCEPTION_PRG, 1 << 17);
+}
+
 /****************************************************************************/
 
 
@@ -1790,6 +1794,8 @@ static struct cmd cmds[] = {
   { "echo", "", 0, debugger_cmd_echo, "Output this string for debugging use" },
 
   { "ss", "filename", 0, debugger_cmd_screenshot, "Create a screenshot of the framebuffer content" },
+
+  { "trap", "", 0, debugger_cmd_e7, "Execute an exception 7" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

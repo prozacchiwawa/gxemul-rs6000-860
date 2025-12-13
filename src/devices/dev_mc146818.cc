@@ -79,6 +79,8 @@ struct mc_data {
 	struct timer	*timer;
 	volatile int	pending_timer_interrupts;
 
+  int   updating;
+
 	int		previous_second;
 	int		n_seconds_elapsed;
 	int		uip_threshold;
@@ -86,8 +88,6 @@ struct mc_data {
   time_t time;
   int   ticks;
 };
-
-static void mc146818_update_time(struct mc_data *d);
 
 /*
  *  Ugly hack to fool NetBSD/prep to accept the clock.  (See mcclock_isa_match
@@ -99,6 +99,8 @@ static void mc146818_update_time(struct mc_data *d);
 #define	NETBSD_HACK_SECOND_1		3
 #define	NETBSD_HACK_SECOND_2		4
 #define	NETBSD_HACK_DONE		5
+
+const int month_days[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 
 /*
@@ -112,6 +114,44 @@ static void timer_tick(struct timer *timer, void *extra)
 	d->pending_timer_interrupts ++;
 }
 
+static bool mc146818_increment_carry(int *field, int bound) {
+  *field += 1;
+  if (*field >= bound) {
+    *field = 0;
+    return true;
+  }
+
+  return false;
+}
+
+static void mc146818_cascade_time(struct mc_data *d) {
+  // Advance the clock chip by 1 second the hard way
+  d->updating = false;
+  auto next_min = mc146818_increment_carry(&d->reg[4 * MC_SEC], 60);
+  auto next_hour = next_min ? mc146818_increment_carry(&d->reg[4 * MC_MIN], 60) : false;
+  auto next_day = next_hour && mc146818_increment_carry(&d->reg[4 * MC_HOUR], 24);
+  if (!next_day) {
+    return;
+  }
+
+  int use_month = d->reg[4 * MC_MONTH] - 1;
+  if (use_month >= 12) {
+    use_month = 0;
+  }
+  int use_month_days = month_days[use_month];
+  auto next_month = mc146818_increment_carry(&d->reg[4 * MC_DOM], use_month_days);
+  d->reg[MC_DOW] = (((d->reg[MC_DOW] - 1) + 1) % 7) + 1;
+  if (next_month && mc146818_increment_carry(&d->reg[4 * MC_MONTH], 12)) {
+    ++d->reg[MC_YEAR];
+  }
+
+  // Alarm?
+  if ((d->reg[MC_REGB * 4] & MC_REGB_AIE) && d->reg[MC_ASEC * 4] == d->reg[MC_SEC * 4] && d->reg[MC_AMIN * 4] == d->reg[MC_MIN * 4] && d->reg[MC_AHOUR * 4] == d->reg[MC_HOUR * 4]) {
+    d->reg[MC_REGB * 4] |= MC_REGC_AF;
+    d->reg[MC_REGC * 4] |= MC_REGC_IRQF;
+		INTERRUPT_ASSERT(d->irq);
+  }
+}
 
 DEVICE_TICK(mc146818)
 {
@@ -130,6 +170,7 @@ DEVICE_TICK(mc146818)
     d->time++;
     // fprintf(stderr, "mc146818: +1sec\n");
     pti++;
+    mc146818_cascade_time(d);
   }
 
 	if ((d->reg[MC_REGB * 4] & MC_REGB_PIE) && pti > 0) {
@@ -142,8 +183,6 @@ DEVICE_TICK(mc146818)
 	    d->reg[MC_REGC * 4] & MC_REGC_AF ||
 	    d->reg[MC_REGC * 4] & MC_REGC_PF)
 		d->reg[MC_REGC * 4] |= MC_REGC_IRQF;
-
-	mc146818_update_time(d);
 }
 
 
@@ -181,12 +220,16 @@ DEVICE_ACCESS(mc146818_jazz)
 
 
 /*
- *  mc146818_update_time():
+ *  mc146818_initial_update_time():
  *
- *  This function updates the MC146818 registers by reading
- *  the host's clock.
+ *  This function updates the MC146818 registers by using a host
+ *  clock reading and setting the date and time based on it.
+ *
+ *  this isn't possible to use for every second because the guest
+ *  code might be doing wacky stuff.
+ *
  */
-static void mc146818_update_time(struct mc_data *d)
+static void mc146818_initial_update_time(struct mc_data *d)
 {
 	struct tm *tmp;
 	time_t timet = d->time;
@@ -485,16 +528,67 @@ DEVICE_ACCESS(mc146818)
 				    exit_without_entering_debugger = 1;
 			}
 			break;
-		default:
-			d->reg[relative_addr] = data[0];
+    case MC_SEC * 4:
+    case MC_MIN * 4:
+      d->reg[relative_addr] = data[0] % 60;
+      d->updating = true;
+      break;
 
-			debug("[ mc146818: unimplemented write to "
-			    "relative_addr = %08lx: ", (long)relative_addr);
-			for (i=0; i<len; i++)
-				debug("%02x ", data[i]);
-			debug("]\n");
+    case MC_HOUR * 4:
+      d->reg[relative_addr] = data[0] % 24;
+      d->updating = true;
+      break;
+
+    case MC_MONTH * 4:
+      d->reg[relative_addr] = 1 + ((data[0] - 1) % 12);
+      d->updating = true;
+      break;
+
+    case MC_DOW * 4:
+      d->reg[relative_addr] = 1 + ((data[0] - 1) % 7);
+      d->updating = true;
+      break;
+
+    case MC_DOM * 4:
+      {
+        auto month = (d->reg[MC_MONTH * 4] - 1) % 12;
+        d->reg[relative_addr] = data[0] % month_days[month];
+        d->updating = true;
+      }
+      break;
+
+    case MC_YEAR * 4:
+      d->updating = true;
+      break;
+
+    case MC_ASEC * 4:
+      d->reg[relative_addr] = data[0];
+      fprintf(stderr, "[ mc146818: alarm secs %d ]\n", d->reg[relative_addr]);
+      break;
+
+    case MC_AMIN * 4:
+      d->reg[relative_addr] = data[0];
+      fprintf(stderr, "[ mc146818: alarm min %d ]\n", d->reg[relative_addr]);
+      break;
+
+    case MC_AHOUR * 4:
+      d->reg[relative_addr] = data[0];
+      fprintf(stderr, "[ mc146818: alarm hour: %d ]\n", d->reg[relative_addr]);
+      break;
+
+    default:
+      d->reg[relative_addr] = data[0];
+      debug("[ mc146818: unimplemented write to "
+            "relative_addr = %08lx: ", (long)relative_addr);
+      for (i=0; i<len; i++) {
+        debug("%02x ", data[i]);
+      }
+      debug("]\n");
+      break;
 		}
 	} else {
+    data[0] = 0;
+
 		/*  READ:  */
 		switch (relative_addr) {
 		case 0x01:	/*  Station's ethernet address (6 bytes)  */
@@ -522,6 +616,8 @@ DEVICE_ACCESS(mc146818)
 				break;
 			break;
 		case 4 * MC_REGA:
+      data[0] |= d->updating ? 0x80 : 0;
+      d->updating = false;
 			break;
 		case 4 * MC_REGC:	/*  Interrupt ack.  */
 			/*  NOTE: Acking is done below, _after_ the
@@ -531,7 +627,7 @@ DEVICE_ACCESS(mc146818)
 			    "%04x ]\n", (int)relative_addr)*/;
 		}
 
-		data[0] = d->reg[relative_addr];
+		data[0] |= d->reg[relative_addr];
 
 		if (relative_addr == MC_REGC*4) {
 			INTERRUPT_DEASSERT(d->irq);
@@ -659,7 +755,7 @@ void dev_mc146818_init(struct machine *machine, struct memory *mem,
 	    d, DM_DEFAULT, NULL);
 
 	d->time = 1733775436;
-	mc146818_update_time(d);
+	mc146818_initial_update_time(d);
 
 	machine_add_tickfunction(machine, dev_mc146818_tick, d,
 	    MC146818_TICK_SHIFT);

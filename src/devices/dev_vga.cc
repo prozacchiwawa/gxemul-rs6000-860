@@ -1497,6 +1497,7 @@ struct vga_data {
   /* Mapping */
   bool window_mapped;
   int window_address;
+  int fifo_in_progress;
 
   uint32_t plane_read_mask, plane_write_mask;
   uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
@@ -2632,17 +2633,14 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
   REG_WRITE( 0x9ae8);
 
   if (writeflag != MEM_WRITE) {
-    uint16_t outval = 1 << 10; // tell them all entries are clear?
+    uint16_t outval = d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
+    d->fifo_in_progress = false;
     if (len == 1) {
-      outval >>= relative_addr * 16;
-    }
-    if (d->window_mapped) {
-      // XXX There's almost certainly an endian switch that's wanted.
-      outval = outval >> 8 | (outval << 8);
+      outval >>= relative_addr * 8;
     }
     memory_writemax64(cpu, data, len, outval);
   } else {
-		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+    written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
     L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
     d->s3_cmd_mx = !!(written & 2);
     d->s3_cmd_pxtrans = !!(written & 0x100);
@@ -2659,6 +2657,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_no_draw = !(written & (1 << 4));
     d->s3_current_command = written >> 13;
 
+    d->fifo_in_progress = true;
     if (d->s3_no_draw) {
       fprintf(stderr, "[ s3: just move not implemented ]\n");
       d->s3_cur_x = d->s3_destx;

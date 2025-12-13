@@ -56,7 +56,7 @@ extern "C" {
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
-#define COUNT_DIV 64
+#define COUNT_DIV 2
 
 /*
  *  ppc_cpu_new():
@@ -350,10 +350,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-  cpu->cd.ppc.msr = *valuep & ~0x8c;
-  if ((old & PPC_MSR_FP) && !(cpu->cd.ppc.msr & PPC_MSR_FP)) {
-    fprintf(stderr, "%08x: new msr %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.msr);
-  }
+  cpu->cd.ppc.msr = *valuep;
 
   /*  Switching between temporary and real gpr 0..3?  */
   if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {

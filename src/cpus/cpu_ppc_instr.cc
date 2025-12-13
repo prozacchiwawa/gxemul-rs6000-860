@@ -173,7 +173,7 @@ X(addic)
 X(subfic)
 {
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += (ssize_t)ic->arg[1] + 1;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -1784,6 +1784,12 @@ X(mtlr) {
 X(mtctr) {
   cpu->cd.ppc.spr[SPR_CTR] = reg(ic->arg[0]);
 }
+X(mttbu) {
+  cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU] = reg(ic->arg[0]);
+}
+X(mttbl) {
+  cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL] = reg(ic->arg[0]);
+}
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
   /*  Synchronize the PC:  */
@@ -2402,9 +2408,9 @@ X(subf)
 DOT2(subf)
 X(subfc)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+	// int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += reg(ic->arg[1]) + 1;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -2417,7 +2423,7 @@ X(subfe)
 {
 	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += reg(ic->arg[1]) + old_ca;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -2430,7 +2436,7 @@ X(subfme)
 {
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
 	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	uint64_t tmp = ~reg(ic->arg[0]);
+	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += 0xffffffffULL + old_ca;
   if (tmp >> 32) {
 		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
@@ -3616,6 +3622,8 @@ X(to_be_translated)
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.spr[spr]);
 			switch (spr) {
 			// Reuse SPR_TB* for TBR_TB*:
+      case SPR_TBL: ic->f = instr(mftb); break;
+      case SPR_TBU: ic->f = instr(mftbu); break;
 			case TBR_TBL: ic->f = instr(mftb); break;
 			case TBR_TBU: ic->f = instr(mftbu); break;
       case SPR_DEC: ic->f = instr(mfdec); break;
@@ -3643,6 +3651,18 @@ X(to_be_translated)
       case SPR_DEC:
         ic->f = instr(mtdec);
         break;
+      case SPR_TBU:
+        ic->f = instr(mttbu);
+        break;
+      case SPR_TBL:
+        ic->f = instr(mttbl);
+        break;
+      case TBR_TBU:
+        ic->f = instr(mttbu);
+        break;
+      case TBR_TBL:
+        ic->f = instr(mttbl);
+        break;
 			default:ic->f = instr(mtspr);
 			}
 			break;
@@ -3669,7 +3689,7 @@ X(to_be_translated)
 				goto bad;
 			}
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[rs]);
-			ic->arg[1] = (addr & 0xfff) + 4;
+			ic->arg[1] = 4;
 			ic->arg[2] = xo == PPC_31_MTMSRD;
 			ic->f = instr(mtmsr);
 			break;

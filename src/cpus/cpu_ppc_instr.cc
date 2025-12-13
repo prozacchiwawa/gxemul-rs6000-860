@@ -1732,14 +1732,7 @@ X(mfspr_pmc1) {
 	reg(ic->arg[0]) = cpu->machine->emulated_hz / 10;
 }
 X(mftb) {
-	/*  NOTE/TODO: This increments the time base (slowly) if it
-	    is being polled.  */
-  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] = (cpu->cd.ppc.spr[SPR_TBL] + 80000) & 0xffffffff;
-	if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
-		cpu->cd.ppc.spr[SPR_TBU] ++;
-  }
-	reg(ic->arg[0]) = cpu->cd.ppc.spr[SPR_TBL];
+  reg(ic->arg[0]) = cpu->cd.ppc.spr[SPR_TBL];
 }
 X(mftbu) {
 	reg(ic->arg[0]) = cpu->cd.ppc.spr[SPR_TBU];

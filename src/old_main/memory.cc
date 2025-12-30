@@ -191,31 +191,30 @@ int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
                             int min_string_length)
 {
 	unsigned char c;
+  auto stride = 1;
 
-  for (int stride = 1; stride <= 2; stride++) {
-    int mz = 0;
-    int cur_length = 0;
-    bool good_char = true;
-    for (cur_length = 0; good_char;) {
-      c = '\0';
-      cpu->memory_rw(cpu, mem, addr+cur_length,
-                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-      if (c == 'M' && mz == 0) {
-        mz++;
-      }
-      if (c == 'Z' && mz == 1) {
-        return 0;
-      }
-      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
-        cur_length += stride;
-      } else {
-        good_char = false;
-      }
+  int mz = 0;
+  int cur_length = 0;
+  bool good_char = true;
+  for (cur_length = 0; good_char;) {
+    c = '\0';
+    cpu->memory_rw(cpu, mem, addr+cur_length,
+                   &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (c == 'M' && mz == 0) {
+      mz++;
     }
-    if (cur_length / stride >= min_string_length) {
-      return 1;
+    if (c == 'Z' && mz == 1) {
+      return 0;
     }
-	}
+    if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+      cur_length += stride;
+    } else {
+      good_char = false;
+    }
+  }
+  if (cur_length / stride >= min_string_length) {
+    return 1;
+  }
 
   return 0;
 }

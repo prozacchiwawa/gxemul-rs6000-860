@@ -67,9 +67,11 @@ static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, uint64_
     ((entries_per_page-1) << alignment_shift)
     | ((1 << alignment_shift) - 1);
 
-  cpu->pc = addr & ~((1 << alignment_shift) - 1);
+  auto target = addr & ~((1 << alignment_shift) - 1);
+
   /*  TODO: trace in separate (duplicate) function?  */
-  cpu->functioncall_end_trace(cpu);
+  cpu->functioncall_end_trace(cpu, target);
+  cpu->pc = target;
   if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
     cpu->cd.DYNTRANS_ARCH.VPH.set_next_ic(cpu->pc);
   } else {
@@ -2909,7 +2911,7 @@ X(openfirmware)
 
 	cpu->pc = cpu->cd.ppc.spr[SPR_LR];
 	if (cpu->machine->show_trace_tree)
-		cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+		cpu_functioncall_trace_return(cpu, cpu->pc, &cpu->cd.ppc.gpr[3]);
 
 	quick_pc_to_pointers(cpu);
 }
@@ -3401,7 +3403,7 @@ X(to_be_translated)
 				if (lk_bit)
 					ic->f = instr(bclr_l);
 				else {
-					ic->f = instr(bclr);
+          ic->f = instr(bclr);
 					/*
 					if (!cpu->machine->show_trace_tree &&
 					    (bo & 0x14) == 0x14)

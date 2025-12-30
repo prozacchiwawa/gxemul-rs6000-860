@@ -2404,11 +2404,11 @@ void ppc_trace(struct cpu *cpu, uint64_t pc) {
   cpu_functioncall_trace(cpu, pc);
 }
 
-void ppc_no_end_trace(struct cpu *cpu) {
+void ppc_no_end_trace(struct cpu *cpu, uint64_t pc) {
 }
 
-void ppc_end_trace(struct cpu *cpu) {
-  cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+void ppc_end_trace(struct cpu *cpu, uint64_t pc) {
+  cpu_functioncall_trace_return(cpu, pc, &cpu->cd.ppc.gpr[3]);
 }
 
 template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr) {

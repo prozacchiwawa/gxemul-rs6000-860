@@ -338,7 +338,7 @@ struct cpu {
 			    unsigned char *ib);
 
   void (*functioncall_trace)(struct cpu *cpu, uint64_t pc);
-  void (*functioncall_end_trace)(struct cpu *cpu);
+  void (*functioncall_end_trace)(struct cpu *cpu, uint64_t target);
 
 	/*  The program counter. (For 32-bit modes, not all bits are used.)  */
 	uint64_t	pc;
@@ -418,7 +418,7 @@ int cpu_disassemble_instr(struct machine *m, struct cpu *cpu,
 	unsigned char *instr, int running, uint64_t addr);
 
 void cpu_functioncall_trace(struct cpu *cpu, uint64_t f);
-void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *reg);
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *reg);
 
 void cpu_create_or_reset_tc(struct cpu *cpu);
 
@@ -468,5 +468,7 @@ void cpu_init(void);
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #endif
+
+extern void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, uint64_t addr_end);
 
 #endif	/*  CPU_H  */

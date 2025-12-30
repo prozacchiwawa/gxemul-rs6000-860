@@ -42,9 +42,31 @@
 
 
 extern size_t dyntrans_cache_size;
+extern uint64_t trace_low, trace_high;
 
 static struct cpu_family *first_cpu_family = NULL;
+int stored_syscall;
+constexpr int STORED_REGS = 5;
+constexpr int STORED_SYSCALL_IOCTL = 1;
+constexpr int STORED_SYSCALL_READ = 2;
 
+struct match_functions_t {
+  const char *name;
+  uint32_t dump_regs;
+  uint64_t return_addr1;
+  uint64_t return_addr2;
+  uint64_t stored[STORED_REGS];
+};
+
+struct match_functions_t trace_functions[] = {
+  { "not used" },
+  { "__ioctl", 1 << 5, 0xd0007300 },
+  { "read_sc", 0, 0xd0008b80, 0xd0008cc0 },
+  { "odm_get_obj", 1 << 5, 0xd00f75f4 },
+    { }
+};
+
+struct match_functions_t *trace_match;
 
 /*
  *  cpu_new():
@@ -207,6 +229,22 @@ void cpu_register_dump(struct machine *m, struct cpu *cpu,
 		m->cpu_family->register_dump(cpu, gprs, coprocs);
 }
 
+struct match_functions_t *try_match_function(struct cpu *cpu, uint64_t f, const char *symbol) {
+  if (!symbol) {
+    return nullptr;
+  }
+
+  for (auto i = 0; trace_functions[i].name; i++) {
+    if (!strcmp(symbol, trace_functions[i].name)) {
+      for (int g = 0; g < STORED_REGS; g++) {
+        trace_functions[i].stored[g] = cpu->cd.ppc.gpr[g+3];
+      }
+      return &trace_functions[i];
+    }
+  }
+
+  return nullptr;
+}
 
 /*
  *  cpu_functioncall_trace():
@@ -220,6 +258,11 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	int i, n_args = -1;
 	const char *symbol;
 	uint64_t offset;
+
+  auto pc = cpu->pc;
+  if (trace_low != trace_high && pc < trace_low || pc >= trace_high) {
+    return;
+  }
 
 	/*  Special hack for M88K userspace:  */
 	if (cpu->machine->arch == ARCH_M88K &&
@@ -239,9 +282,15 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	fatal("<");
 	symbol = get_symbol_name_and_n_args(cpu, &cpu->machine->symbol_context,
 	    f, &offset, &n_args);
-	if (symbol != NULL && show_symbolic_function_name)
+
+  auto matched = try_match_function(cpu, f, symbol);
+  if (matched) {
+    trace_match = matched;
+  }
+
+	if (symbol && show_symbolic_function_name) {
 		fatal("%s", symbol);
-	else {
+  } else {
 		if (cpu->is_32bit)
 			fatal("0x%" PRIx32, (uint32_t) f);
 		else
@@ -253,6 +302,10 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 		cpu->machine->cpu_family->functioncall_trace(cpu, n_args);
 
 	fatal(") %" PRIx64" >\n", cpu->ninstrs);
+
+  if (matched) {
+    cpu_register_dump(cpu->machine, cpu, 1, 0);
+  }
 
 #ifdef PRINT_MEMORY_CHECKSUM
 	/*  Temporary hack for finding bugs:  */
@@ -270,12 +323,82 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
  *  TODO: Print return value? This could be implemented similar to the
  *  cpu->functioncall_trace function call above.
  */
-void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *return_reg)
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *return_reg)
 {
+  if (trace_low != trace_high && cpu->pc < trace_low || cpu->pc >= trace_high) {
+    return;
+  }
+
+  if (trace_match && ((trace_match->return_addr1 == cpu->pc) || (trace_match->return_addr2 == cpu->pc))) {
+    auto ioctl = trace_match->stored[4 - 3];
+    uint8_t buf[sizeof(uint32_t)] = { };
+
+    fprintf(stderr, "return from %s\n", trace_match->name);
+    cpu_register_dump(cpu->machine, cpu, 1, 0);
+    switch (trace_match - trace_functions) {
+    case STORED_SYSCALL_READ: {
+      uint32_t read_addr = 0, len = 0;
+      uint32_t *ptrs[] = { &read_addr, &len };
+      for (auto i = 0; i < 2; i++) {
+        auto r = cpu->memory_rw(cpu, cpu->mem, trace_match->stored[4 - 3] + 4 * i, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+        if (r == MEMORY_ACCESS_FAILED) {
+          break;
+        }
+        *(ptrs[i]) = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+      }
+      if (read_addr && len) {
+        debug_mem_hexdump(cpu, cpu->mem, read_addr, read_addr + len);
+      }
+      break;
+    }
+
+    case STORED_SYSCALL_IOCTL:
+      fprintf(stderr, "ioctl %d %08x\n", (int)trace_match->stored[4 - 3], (unsigned int)trace_match->stored[4 - 3]);
+      if (ioctl == 5 || ioctl == 14 || ioctl == 12 || ioctl == 16 || ioctl == 20 || ioctl == 21 || ioctl == 25 || ioctl == 26 || ioctl == 27 || ioctl == 32 || ioctl == 39 || ioctl == 42 || ioctl == 44 || ioctl == 46 || ioctl == 49) { // IOCTL 14 MIPLCB
+        uint32_t md_read[6] = { };
+
+        debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[5 - 3], trace_match->stored[5 - 3] + 24);
+
+        for (int i = 0; i < sizeof(md_read) / sizeof(md_read[0]); i++) {
+          auto r = cpu->memory_rw(cpu, cpu->mem, trace_match->stored[5 - 3] + 4 * i, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+          if (r == MEMORY_ACCESS_FAILED) {
+            fprintf(stderr, "read failed for entry %d of md_ioctl\n", i);
+            break;
+          }
+
+          md_read[i] = buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+        }
+
+        if (md_read[3]) {
+          fprintf(stderr, "md_data\n");
+          debug_mem_hexdump(cpu, cpu->mem, md_read[3], md_read[3] + 0x100);
+        }
+        if (md_read[5]) {
+          fprintf(stderr, "md_length\n");
+          debug_mem_hexdump(cpu, cpu->mem, md_read[5], md_read[5] + 0x100);
+        }
+      } else {
+        fprintf(stderr, "don't know ioctl type\n");
+      }
+      break;
+
+    default:
+      for (auto i = 0; i < 32; i++) {
+        if (trace_match->dump_regs & (1 << i)) {
+          fprintf(stderr, "dump r%d\n", i);
+          debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[i - 3], trace_match->stored[i - 3] + 0x200);
+        }
+      }
+      break;
+    }
+    fprintf(stderr, "%s return end\n", trace_match->name);
+    trace_match = nullptr;
+  }
+
 	if (return_reg) {
 		for (int i=0; i<cpu->trace_tree_depth; i++)
 			fatal("  ");
-		fatal("<%08x return %08x>\n", (uint32_t)cpu->pc, (uint32_t)*return_reg);
+		fatal("<%08x return %08x from %08x>\n", (uint32_t)pc, (uint32_t)*return_reg, (uint32_t)cpu->pc);
 	}
 
 	cpu->trace_tree_depth --;
@@ -556,4 +679,52 @@ struct cpu_family *cpu_family_ptr_by_number(int arch)
 void cpu_init(void)
 {
 	ADD_ALL_CPU_FAMILIES;
+}
+
+void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, uint64_t addr_end) {
+  int r, x;
+  auto addr = addr_start & ~0xf;
+  extern volatile int ctrl_c;
+
+  ctrl_c = 0;
+
+	while (addr < addr_end) {
+		unsigned char buf[16];
+		memset(buf, 0, sizeof(buf));
+		r = c->memory_rw(c, mem, addr, &buf[0], sizeof(buf),
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+
+		if (c->is_32bit)
+			printf("0x%08" PRIx32"  ", (uint32_t) addr);
+		else
+			printf("0x%016" PRIx64"  ", (uint64_t) addr);
+
+		if (r == MEMORY_ACCESS_FAILED)
+			printf("(memory access failed)\n");
+		else {
+			for (x=0; x<16; x++) {
+				if (addr + x >= addr_start &&
+				    addr + x < addr_end)
+					printf("%02x%s", buf[x],
+                 (x&3)==3? " " : "");
+				else
+					printf("  %s", (x&3)==3? " " : "");
+			}
+			printf(" ");
+			for (x=0; x<16; x++) {
+				if (addr + x >= addr_start &&
+				    addr + x < addr_end)
+					printf("%c", (buf[x]>=' ' &&
+                        buf[x]<127)? buf[x] : '.');
+				else
+					printf(" ");
+			}
+			printf("\n");
+		}
+
+		if (ctrl_c)
+			return;
+
+		addr += sizeof(buf);
+	}
 }

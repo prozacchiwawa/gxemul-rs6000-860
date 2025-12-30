@@ -59,7 +59,7 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 	if (cmd_line[0] == '\0') {
 		printf("syntax: breakpoint subcmd [args...]\n");
 		printf("Available subcmds (and args) are:\n");
-		printf("  add addr      add a breakpoint for address addr\n");
+		printf("  add addr exp  add a breakpoint for address addr\n");
 		printf("  delete x      delete breakpoint nr x\n");
 		printf("  show          show current breakpoints\n");
 		return;
@@ -99,9 +99,16 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
 			return;
     }
 
+    auto space = strchr(cmd_line + 4, ' ');
+    unsigned long long insn = 0;
+    if (space) {
+      space++;
+      insn = strtoull(space, nullptr, 16);
+    }
+
     breakpoint_buf_len = strlen(cmd_line+4) + 1;
 
-    breakpoint_add(m, tmp, cmd_line + 4, breakpoint_buf_len);
+    breakpoint_add(m, tmp, insn, cmd_line + 4, breakpoint_buf_len);
     show_breakpoint(m, i);
     return;
 	}
@@ -115,9 +122,16 @@ static void debugger_cmd_breakpoint(struct machine *m, char *cmd_line)
  */
 static void debugger_cmd_continue(struct machine *m, char *cmd_line)
 {
-	if (*cmd_line) {
-		printf("syntax: continue\n");
-		return;
+	while (cmd_line && *cmd_line) {
+    char *cmd_delim = strchr(cmd_line, '|');
+    char *this_cmd = cmd_line;
+    if (cmd_delim) {
+      *cmd_delim = 0;
+      cmd_line = cmd_delim + 1;
+    } else {
+      cmd_line = cmd_delim;
+    }
+    script_queue.push_back(this_cmd);
 	}
 
 	exit_debugger = 1;
@@ -276,49 +290,9 @@ static void debugger_cmd_dump(struct machine *m, char *cmd_line)
 		}
 	}
 
-	addr = addr_start & ~0xf;
-
 	ctrl_c = 0;
 
-	while (addr < addr_end) {
-		unsigned char buf[16];
-		memset(buf, 0, sizeof(buf));
-		r = c->memory_rw(c, mem, addr, &buf[0], sizeof(buf),
-		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-
-		if (c->is_32bit)
-			printf("0x%08" PRIx32"  ", (uint32_t) addr);
-		else
-			printf("0x%016" PRIx64"  ", (uint64_t) addr);
-
-		if (r == MEMORY_ACCESS_FAILED)
-			printf("(memory access failed)\n");
-		else {
-			for (x=0; x<16; x++) {
-				if (addr + x >= addr_start &&
-				    addr + x < addr_end)
-					printf("%02x%s", buf[x],
-					    (x&3)==3? " " : "");
-				else
-					printf("  %s", (x&3)==3? " " : "");
-			}
-			printf(" ");
-			for (x=0; x<16; x++) {
-				if (addr + x >= addr_start &&
-				    addr + x < addr_end)
-					printf("%c", (buf[x]>=' ' &&
-					    buf[x]<127)? buf[x] : '.');
-				else
-					printf(" ");
-			}
-			printf("\n");
-		}
-
-		if (ctrl_c)
-			return;
-
-		addr += sizeof(buf);
-	}
+  debug_mem_hexdump(c, mem, addr_start, addr_end);
 
 	last_dump_addr = addr_end;
 
@@ -592,6 +566,7 @@ static void debugger_cmd_print(struct machine *m, char *cmd_line)
 {
 	int res;
 	uint64_t tmp;
+  bool match_eq = true;
 
 	while (cmd_line[0] != '\0' && cmd_line[0] == ' ')
 		cmd_line ++;
@@ -600,6 +575,17 @@ static void debugger_cmd_print(struct machine *m, char *cmd_line)
 		printf("syntax: print expr\n");
 		return;
 	}
+
+  char *found_commands = strchr(cmd_line, ';');
+  if (found_commands) {
+    *found_commands = 0;
+    found_commands++;
+    if (*found_commands == '!') {
+      match_eq = false;
+      found_commands++;
+    }
+  }
+  std::string commands = found_commands ? std::string(found_commands) : std::string();
 
 	res = debugger_parse_expression(m, cmd_line, 0, &tmp);
 	switch (res) {
@@ -620,6 +606,24 @@ static void debugger_cmd_print(struct machine *m, char *cmd_line)
 		break;
 	case PARSE_NUMBER:
 		printf("0x%" PRIx64"\n", (uint64_t) tmp);
+    if ((tmp == 0) == match_eq && found_commands) {
+      std::deque<std::string> new_commands;
+      while (commands.size()) {
+        const char *begin = commands.c_str();
+        const char *end = strchr(commands.c_str(), '|');
+        if (end) {
+          std::string found_command = std::string(commands.c_str(), end-begin);
+          new_commands.push_front(found_command);
+          commands = std::string(end + 1);
+        } else {
+          new_commands.push_front(commands);
+          commands.clear();
+        }
+      }
+      for (auto i = new_commands.begin(); i != new_commands.end(); ++i) {
+        script_queue.push_front(*i);
+      }
+    }
 		break;
 	}
 }
@@ -1577,28 +1581,23 @@ static void debugger_cmd_rtrace(struct machine *m, char *cmd_line) {
   }
 }
 
-static void debugger_cmd_breakat(struct machine *m, char *cmd_line) {
+static void debugger_cmd_btrace(struct machine *m, char *cmd_line) {
+  bool exclude = false;
+  if (*cmd_line == '!') {
+    exclude = true;
+    cmd_line++;
+  }
+
   char *space;
   uint64_t addr = strtoull(cmd_line, &space, 16);
-  if (*space && *space != ' ') {
-    fprintf(stderr, "malformed breakat %s\n", cmd_line);
-    return;
+  uint64_t end_addr = ~0ull;
+  if (*space == '-') {
+    cmd_line = space + 1;
+    end_addr = strtoull(cmd_line, &space, 16);
   }
 
-  if (!*space) {
-    break_commands.erase(addr);
-    return;
-  }
-
-  while (*space == ' ') space++;
-  cmd_line = space;
-
-  std::vector<std::string> cmds;
-  while (space = strtok(cmd_line, "|")) {
-    cmds.push_back(std::string(space));
-    cmd_line = nullptr;
-  }
-  break_commands.insert(std::pair(addr, cmds));
+  trace_low = addr;
+  trace_high = end_addr;
 }
 
 static void debugger_cmd_echo(struct machine *m, char *cmd_line) {
@@ -1788,8 +1787,7 @@ static struct cmd cmds[] = {
   { "symfile", "file", 0, debugger_cmd_symfile, "Add a text symbol file (nm format)" },
 
   { "etrace", "", 0, debugger_cmd_rtrace, "Specify address range to register trace in" },
-
-  { "bcommands", "", 0, debugger_cmd_breakat, "Specify commands to run when debugger breaks at specified address" },
+  { "btrace", "[addr [endaddr]]", 0, debugger_cmd_btrace, "Specify trace listing range" },
 
   { "echo", "", 0, debugger_cmd_echo, "Output this string for debugging use" },
 

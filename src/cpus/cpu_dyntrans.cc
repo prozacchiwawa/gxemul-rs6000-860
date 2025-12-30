@@ -872,8 +872,14 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
   if (!single_step) {
     for (int i=0; i<cpu->machine->breakpoints.n; i++) {
       if (addr == cpu->machine->breakpoints.addr[i]) {
-        fprintf(stderr, "translated breakpoint %08x\n", (unsigned int)addr);
-        goto stop_running_translated;
+#ifdef DYNTRANS_PPC
+        if (!cpu->machine->breakpoints.expect_insn[i] || iword == cpu->machine->breakpoints.expect_insn[i]) {
+#endif
+          fprintf(stderr, "translated breakpoint %08x\n", (unsigned int)addr);
+          goto stop_running_translated;
+#ifdef DYNTRANS_PPC
+        }
+#endif
       }
     }
   }

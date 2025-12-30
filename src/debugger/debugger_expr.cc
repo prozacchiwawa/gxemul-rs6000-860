@@ -218,7 +218,7 @@ int debugger_parse_name(struct machine *m, char *name, int writeflag,
  *
  *  Parentheses always have precedence.
  *  * / and % have second highest precedence.
- *  + - & | ^ have lowest precedence.
+ *  + - & | ^ @ have lowest precedence.
  *
  *  Return value on failure is:
  *
@@ -245,6 +245,9 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 	uint64_t *valuep)
 {
 	int prec, res, i, nest;
+  uint8_t buf[4];
+  auto cpu = m->cpus[0];
+  auto mem = cpu->mem;
 	char *copy;
 
 	if (writeflag)
@@ -268,6 +271,7 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 		case ')':
 			nest --;
 			break;
+    case '@':
 		case '+':
 		case '-':
 		case '^':
@@ -316,6 +320,7 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 			if (prec == 0)
 				break;
 			/*  Fallthrough.  */
+    case '@':
 		case '+':
 		case '-':
 		case '^':
@@ -351,6 +356,14 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
 				}
 
 				switch (op) {
+        case '@':
+          (*valuep) = left + right;
+          if (cpu->memory_rw(cpu, mem, *valuep, buf, sizeof(buf), MEM_READ,
+                           CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+            goto return_failure;
+          }
+          *valuep = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+          break;
 				case '+':
 					(*valuep) = left + right;
 					break;

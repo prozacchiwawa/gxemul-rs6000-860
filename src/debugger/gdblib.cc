@@ -517,7 +517,7 @@ void GotPacket(struct cpu *cpu)
         DataInAddr++;
         memaddr = PacketReadHexNumber(8);
         sprintf(namebuf, "%08x", memaddr);
-        breakpoint_add(cpu->machine, memaddr, namebuf, strlen(namebuf));
+        breakpoint_add(cpu->machine, memaddr, 0, namebuf, strlen(namebuf));
         PacketOk(cpu);
         breakpoint_show(cpu->machine);
         break;

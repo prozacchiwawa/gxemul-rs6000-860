@@ -297,8 +297,8 @@ int lha_does_update(int ra, int rs, bool update_form);
 void ppc_no_trace(struct cpu *cpu, uint64_t pc);
 void ppc_trace(struct cpu *cpu, uint64_t pc);
 
-void ppc_no_end_trace(struct cpu *cpu);
-void ppc_end_trace(struct cpu *cpu);
+void ppc_no_end_trace(struct cpu *cpu, uint64_t pc);
+void ppc_end_trace(struct cpu *cpu, uint64_t pc);
 
 template <typename T>
 T load_64(unsigned char *data, int swizzle) {

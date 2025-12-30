@@ -273,6 +273,8 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 		abort();
 	}
 
+  fprintf(stderr, "PCI: bus%d device%d = %s\n", bus, device, name);
+
 	/*  Find the PCI device:  */
 	init = pci_lookup_initf(name);
 
@@ -929,6 +931,35 @@ PCIINIT(piix4_isa)
 
 int i82378zb_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
+  // XXX These accesses are early ram bank detection.  I hadn't previously understood them.
+  case 0x04:
+    eagle_comm.pci_status &= ~(value >> 16);
+    eagle_comm.pci_command = value;
+    PCI_SET_DATA(reg, ((uint32_t)eagle_comm.pci_status) << 16 | eagle_comm.pci_command);
+    return 1;
+
+  case 0xc0:
+    eagle_comm.error_detection_1 &= ~(value >> 8);
+    eagle_comm.error_enabling_1 = value;
+    eagle_comm.bus_status_60x = value >> 24;
+    PCI_SET_DATA(reg, (eagle_comm.bus_status_60x << 24) | (eagle_comm.error_detection_1 << 8) | eagle_comm.error_enabling_1);
+    return 1;
+
+  case 0x70:
+  case 0x90:
+  case 0x94:
+  case 0xa0:
+  case 0xa4:
+  case 0xa8:
+  case 0xac:
+  case 0xb8:
+  case 0xf0:
+  case 0xf4:
+  case 0xf8:
+  case 0xfc:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
   case 0x10:
     fprintf(stderr, "isa: set BAR0 %08x\n", (unsigned int)value);
     PCI_SET_DATA(0x10, value & ~0xffff);

@@ -816,7 +816,7 @@ DEVINIT(eagle)
 
 	/*  Add the PCI glue for the controller itself:  */
 	bus_pci_add(devinit->machine, d->pci_data,
-	    devinit->machine->memory, 0, 15, 0, "eagle");
+	    devinit->machine->memory, 0, 0, 0, "eagle");
 
   // Address space areas designated by the eagle
   memory_device_register(devinit->machine->memory, "isa 8mb window",
@@ -911,7 +911,7 @@ DEVINIT(eagle)
 
 	case MACHINE_PREP:
         bus_pci_add(devinit->machine, d->pci_data,
-            devinit->machine->memory, 0, 0, 0, "i82378zb");
+            devinit->machine->memory, 0, 13, 0, "i82378zb");
         break;
 
 	case MACHINE_MVMEPPC:

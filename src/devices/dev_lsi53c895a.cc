@@ -39,7 +39,7 @@
 // #include "trace.h"
 // #include "qom/object.h"
 
-#define DEV_LSI53C895A_LENGTH 0x60
+#define DEV_LSI53C895A_LENGTH 0x100
 #define	LSI_TICK_SHIFT	17
 
 #define MEMTXATTRS_UNSPECIFIED 1
@@ -1122,10 +1122,11 @@ static inline void lsi_mem_read(struct cpu *cpu, LSIState *s, dma_addr_t addr,
                                void *buf, dma_addr_t len)
 {
     if (s->dmode & LSI_DMODE_SIOM) {
-        address_space_read(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
-                           buf, len);
+      pci_dma_read(cpu, PCI_DEVICE(s), addr, buf, len);
+      // address_space_read(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
+      // buf, len);
     } else {
-        pci_dma_read(cpu, PCI_DEVICE(s), addr, buf, len);
+      pci_dma_read(cpu, PCI_DEVICE(s), addr, buf, len);
     }
 }
 
@@ -1133,10 +1134,11 @@ static inline void lsi_mem_write(struct cpu *cpu, LSIState *s, dma_addr_t addr,
                                 const void *buf, dma_addr_t len)
 {
     if (s->dmode & LSI_DMODE_DIOM) {
-        address_space_write(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
-                            buf, len);
+      pci_dma_write(cpu, PCI_DEVICE(s), addr, buf, len);
+      // address_space_write(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
+      // buf, len);
     } else {
-        pci_dma_write(cpu, PCI_DEVICE(s), addr, buf, len);
+      pci_dma_write(cpu, PCI_DEVICE(s), addr, buf, len);
     }
 }
 
@@ -3157,6 +3159,8 @@ DEVICE_ACCESS(lsi53c895a_io)
 {
   assert(cpu);
   struct lsi53c895a_data *d = (lsi53c895a_data *)extra;
+
+  relative_addr &= 0x7f;
 
   if (writeflag == MEM_WRITE) {
     uint64_t idata = memory_readmax64(cpu, data, len);

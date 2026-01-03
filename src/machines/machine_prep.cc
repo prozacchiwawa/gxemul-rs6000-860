@@ -88,7 +88,7 @@ MACHINE_SETUP(prep)
 
 		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
-		bus_pci_add(machine, pci_data, machine->memory, 0, 13, 0, "lsi53c895a");
+		bus_pci_add(machine, pci_data, machine->memory, 0, 12, 0, "lsi53c895a");
 
 		if (machine->x11_md.in_use) {
 			bus_pci_add(machine, pci_data, machine->memory,

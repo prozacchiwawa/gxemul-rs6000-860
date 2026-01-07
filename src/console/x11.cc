@@ -32,12 +32,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cpu.h"
 #include "x11.h"
 #include "console.h"
 #include "emul.h"
 #include "machine.h"
 #include "misc.h"
-#include "cpu.h"
 
 #ifndef	WITH_X11
 
@@ -273,34 +273,37 @@ void x11_init(struct machine *m)
  */
 void x11_fb_resize(struct fb_window *win, int new_xsize, int new_ysize)
 {
-	int alloc_depth;
-
-	if (win == NULL) {
-		fatal("x11_fb_resize(): win == NULL\n");
-		return;
-	}
-
-	win->x11_fb_winxsize = new_xsize;
-	win->x11_fb_winysize = new_ysize;
-
-	alloc_depth = win->x11_screen_depth;
-	if (alloc_depth == 24)
-		alloc_depth = 32;
-	if (alloc_depth == 15)
-		alloc_depth = 16;
-
-	if (win->fb_data != nullptr) {
-      SDL_DestroyTexture(win->fb_data);
+  int alloc_depth;
+  
+  if (win == NULL) {
+    fatal("x11_fb_resize(): win == NULL\n");
+    return;
+  }
+  
+  win->x11_fb_winxsize = new_xsize;
+  win->x11_fb_winysize = new_ysize;
+  
+  alloc_depth = win->x11_screen_depth;
+  if (alloc_depth == 24)
+    alloc_depth = 32;
+  if (alloc_depth == 15)
+    alloc_depth = 16;
+  
+  if (win->fb_data != nullptr) {
+    SDL_DestroyTexture(win->fb_data);
   }
   win->fb_data = SDL_CreateTexture(
-      win->x11_fb_render,
-      SDL_PIXELFORMAT_RGBA32,
-      SDL_TEXTUREACCESS_STREAMING,
-      new_xsize,
-      new_ysize
+    win->x11_fb_render,
+    SDL_PIXELFORMAT_RGBA32,
+    SDL_TEXTUREACCESS_STREAMING,
+    new_xsize,
+    new_ysize
   );
+  if (!win->fb_data) {
+    fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+  }
   SDL_SetWindowSize(win->x11_fb_window, new_xsize/win->scaledown, new_ysize/win->scaledown);
-	/*  TODO: clear for non-truecolor modes  */
+  /*  TODO: clear for non-truecolor modes  */
   SDL_SetRenderTarget(win->x11_fb_render, win->fb_data);
   SDL_SetRenderDrawColor(win->x11_fb_render, 0, 0, 0, 0xff);
   SDL_RenderClear(win->x11_fb_render);
@@ -327,49 +330,48 @@ void x11_set_standard_properties(struct fb_window *fb_window, char *name)
 struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
 	int scaledown, struct machine *m)
 {
-	int x, y, fb_number = 0;
-	size_t alloclen, alloc_depth;
-	struct fb_window *fbwin;
-	int i;
-	char fg[80], bg[80];
-	char *display_name;
+  int x, y, fb_number = 0;
+  size_t alloclen, alloc_depth;
+  struct fb_window *fbwin;
+  int i;
+  char fg[80], bg[80];
+  char *display_name;
 
-	fb_number = m->x11_md.n_fb_windows;
+  fb_number = m->x11_md.n_fb_windows;
 
-	CHECK_ALLOCATION(m->x11_md.fb_windows = 
+  CHECK_ALLOCATION(m->x11_md.fb_windows = 
 	    (struct fb_window **) realloc(m->x11_md.fb_windows,
 	    sizeof(struct fb_window *) * (m->x11_md.n_fb_windows + 1)));
-	CHECK_ALLOCATION(fbwin = m->x11_md.fb_windows[fb_number] =
+  CHECK_ALLOCATION(fbwin = m->x11_md.fb_windows[fb_number] =
 	    (struct fb_window *) malloc(sizeof(struct fb_window)));
 
-	m->x11_md.n_fb_windows ++;
+  m->x11_md.n_fb_windows ++;
 
-	memset(fbwin, 0, sizeof(struct fb_window));
+  memset(fbwin, 0, sizeof(struct fb_window));
 
-	fbwin->x11_fb_winxsize = xsize;
-	fbwin->x11_fb_winysize = ysize;
+  fbwin->x11_fb_winxsize = xsize;
+  fbwin->x11_fb_winysize = ysize;
 
-	/*  Which display name?  */
-	display_name = NULL;
-	if (m->x11_md.n_display_names > 0) {
-		display_name = m->x11_md.display_names[
-		    m->x11_md.current_display_name_nr];
-		m->x11_md.current_display_name_nr ++;
-		m->x11_md.current_display_name_nr %= m->x11_md.n_display_names;
-	}
+  /*  Which display name?  */
+  display_name = NULL;
+  if (m->x11_md.n_display_names > 0) {
+    display_name = m->x11_md.display_names[m->x11_md.current_display_name_nr];
+    m->x11_md.current_display_name_nr ++;
+    m->x11_md.current_display_name_nr %= m->x11_md.n_display_names;
+  }
 
-	if (display_name != NULL)
-		debug("[ x11_fb_init(): framebuffer window %i, %ix%i, DISPLAY"
-		    "=%s ]\n", fb_number, xsize, ysize, display_name);
+  if (display_name != NULL)
+    debug("[ x11_fb_init(): framebuffer window %i, %ix%i, DISPLAY"
+	  "=%s ]\n", fb_number, xsize, ysize, display_name);
 
-	fbwin->bg_color = 0xff << 24;
+  fbwin->bg_color = 0xff << 24;
 
-	alloc_depth = fbwin->x11_screen_depth;
+  alloc_depth = fbwin->x11_screen_depth;
 
-	if (alloc_depth == 24)
-		alloc_depth = 32;
-	if (alloc_depth == 15)
-		alloc_depth = 16;
+  if (alloc_depth == 24)
+    alloc_depth = 32;
+  if (alloc_depth == 15)
+    alloc_depth = 16;
 
   fbwin->argb32 = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
 
@@ -383,35 +385,41 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
   );
   fbwin->window_id = SDL_GetWindowID(fbwin->x11_fb_window);
   fbwin->x11_fb_render = SDL_CreateRenderer(fbwin->x11_fb_window, -1, SDL_RENDERER_ACCELERATED);
-
-	/*  Make sure the window is mapped:  */
-	/*  Fill the ximage with black pixels:  */
+  if (!fbwin->x11_fb_render) {
+    fprintf(stderr, "SDL: failed to create renderer: %s\n", SDL_GetError());
+  }
+  
+  /*  Make sure the window is mapped:  */
+  /*  Fill the ximage with black pixels:  */
   SDL_SetRenderDrawColor(fbwin->x11_fb_render, 0, 0, 0, 0xff);
   SDL_RenderClear(fbwin->x11_fb_render);
 
-	fbwin->scaledown   = scaledown;
+  fbwin->scaledown   = scaledown;
 
-	fbwin->fb_number = fb_number;
+  fbwin->fb_number = fb_number;
 
   fbwin->fb_data = SDL_CreateTexture(
-      fbwin->x11_fb_render,
-      SDL_PIXELFORMAT_RGBA32,
-      SDL_TEXTUREACCESS_STREAMING,
-      fbwin->x11_fb_winxsize/fbwin->scaledown,
-      fbwin->x11_fb_winysize/fbwin->scaledown
+    fbwin->x11_fb_render,
+    SDL_PIXELFORMAT_RGBA32,
+    SDL_TEXTUREACCESS_STREAMING,
+    fbwin->x11_fb_winxsize/fbwin->scaledown,
+    fbwin->x11_fb_winysize/fbwin->scaledown
   );
 
-	x11_putimage_fb(m, fb_number);
+  if (!fbwin->fb_data) {
+    fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+  }
 
-	/*  Fill the 64x64 "hardware" cursor with white pixels:  */
-	xsize = ysize = 64;
+  x11_putimage_fb(m, fb_number);
+  /*  Fill the 64x64 "hardware" cursor with white pixels:  */
+  xsize = ysize = 64;
 
-	/*  Fill the cursor ximage with white pixels:  */
-	for (y=0; y<ysize; y++)
-		for (x=0; x<xsize; x++)
-			fbwin->cursor_pixels[y][x] = N_GRAYCOLORS-1;
+  /*  Fill the cursor ximage with white pixels:  */
+  for (y=0; y<ysize; y++)
+    for (x=0; x<xsize; x++)
+      fbwin->cursor_pixels[y][x] = N_GRAYCOLORS-1;
 
-	return fbwin;
+  return fbwin;
 }
 
 

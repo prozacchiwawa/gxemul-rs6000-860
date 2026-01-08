@@ -411,6 +411,8 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
 		for (x=0; x<xsize; x++)
 			fbwin->cursor_pixels[y][x] = N_GRAYCOLORS-1;
 
+  SDL_EnableScreenSaver();
+
 	return fbwin;
 }
 

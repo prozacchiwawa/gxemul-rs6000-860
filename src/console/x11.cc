@@ -383,6 +383,9 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
   );
   fbwin->window_id = SDL_GetWindowID(fbwin->x11_fb_window);
   fbwin->x11_fb_render = SDL_CreateRenderer(fbwin->x11_fb_window, -1, SDL_RENDERER_ACCELERATED);
+  if (!fbwin->x11_fb_render) {
+  	fbwin->x11_fb_render = SDL_CreateRenderer(fbwin->x11_fb_window, -1, 0);
+  }
 
 	/*  Make sure the window is mapped:  */
 	/*  Fill the ximage with black pixels:  */

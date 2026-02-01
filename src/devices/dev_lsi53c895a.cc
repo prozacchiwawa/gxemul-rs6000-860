@@ -40,7 +40,8 @@
 // #include "qom/object.h"
 
 #define DEV_LSI53C895A_LENGTH 0x100
-#define	LSI_TICK_SHIFT	17
+#define	LSI_TICK_SHIFT	14
+#define SCSI_TIMER_SPEED_FACTOR 32768
 
 #define MEMTXATTRS_UNSPECIFIED 1
 #define ARRAY_SIZE(a) ((sizeof(a))/sizeof(a[0]))
@@ -188,6 +189,8 @@ static const char *names[] = {
 #define LSI_SBCL_BSY         0x20
 #define LSI_SBCL_ACK         0x40
 #define LSI_SBCL_REQ         0x80
+
+#define LSI_STEST3_CSF       0x02
 
 /* Enable Response to Reselection */
 #define LSI_SCID_RRE      0x60
@@ -373,6 +376,9 @@ struct lsi53c895a_data {
     /*< public >*/
     int asserted;
 
+    int pending_bad;
+    int pending_gen;
+
     MemoryRegion mmio_io;
     MemoryRegion ram_io;
     MemoryRegion io_io;
@@ -440,6 +446,7 @@ struct lsi53c895a_data {
     uint8_t sidl;
     uint8_t macntl;
     uint8_t stime0;
+    uint8_t stime1;
     uint8_t respid0;
     uint8_t respid1;
     uint32_t mmrs;
@@ -467,6 +474,7 @@ struct lsi53c895a_data {
 
 static void bus_cold_reset(struct lsi53c895a_data *s, SCSIBus *bus) {
     fprintf(stderr, "lsi: bus_cold_reset\n");
+    s->pending_bad = -1;
     if (s->asserted) {
         INTERRUPT_DEASSERT(s->ext_irq);
         s->asserted = false;
@@ -591,8 +599,8 @@ static SCSIRequest *scsi_req_new(struct lsi53c895a_data *d, SCSIDevice *dev, uin
     req->status = 0;
     req->tag = tag;
     req->refct = 1;
-    fprintf(stderr, "lsi: create command %02x with %d bytes to ID%d\n", req->cmd.buf[0], dbc, dev->id);
     memcpy(req->cmd.buf, buf, MIN(16, dbc));
+    fprintf(stderr, "lsi: create command %02x with %d bytes to ID%d\n", req->cmd.buf[0], dbc, dev->id);
     req->cmd.len = dbc;
     return req;
 }
@@ -606,16 +614,27 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
 
     fprintf(stderr, "lsi: DNAD is %08x at ENQUEUE, DBC %08x DSA %08x\n", s->dnad, s->dbc, s->dsa);
 
-    if (s->current_lun != 0) {
+    if (s->current_lun != 0 && req->cmd.buf[0] != 3) {
+      if (req->cmd.buf[0] != 0x12) {
         fprintf(stderr, "LSI: request lun %d, give error\n", s->current_lun);
         req->status = 2; // CHECK_CONDITION;
         req->dev->sense_data_len = 18;
         memset(req->dev->sense_data, 0, 18);
         req->dev->sense_data[0] = 0xf0; // VALID + 0x70h
         req->dev->sense_data[2] = 5; // ILLEGAL_REQUEST;
-        req->dev->sense_data[7] = 12;
-        req->dev->sense_data[12] = 25; // LOGICAL_UNIT_NOT_SUPPORTED;
+        req->dev->sense_data[7] = 10;
+        req->dev->sense_data[12] = 0x25; // LOGICAL_UNIT_NOT_SUPPORTED;
         return 1;
+      } else {
+        req->xfer.data_in = (uint8_t *)calloc(req->cmd.buf[4], 1);
+        req->xfer.data_in_len = req->cmd.buf[4];
+        req->xfer.data_in[0] = 0x7f;
+        req->status = 0;
+        req->result_buf = req->xfer.data_in;
+        req->result_len = req->xfer.data_in_len;
+        fprintf(stderr, "LSI: INQ bad lun %d returned %d bytes\n", s->current_lun, req->xfer.data_in_len);
+        return 1;
+      }
     }
 
     assert(!req->enqueued);
@@ -636,10 +655,14 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         }
         req->xfer.data_in = (uint8_t *)calloc(req->dev->sense_data_len, 1);
         req->xfer.data_in_len = req->dev->sense_data_len;
-        req->dev->sense_data_len = 0;
         memcpy(req->xfer.data_in, req->dev->sense_data, req->dev->sense_data_len);
+        req->status = 0;
+        QTAILQ_INSERT_TAIL(&req->bus->queue, req, next);
+        req->result_buf = req->xfer.data_in;
+        req->result_len = req->xfer.data_in_len;
         fprintf(stderr, "LSI: Request sense returning %d bytes\n", req->dev->sense_data_len);
-        return req->xfer.data_in_len;
+        req->dev->sense_data_len = 0;
+        return 1;
     }
 
     case 0x15:
@@ -670,6 +693,11 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         auto cmd_res = diskimage_scsicommand(cpu, req->dev->id, DISKIMAGE_SCSI, &req->xfer);
+
+        if (cmd_res < 0) {
+          req->status = -cmd_res;
+          return 1;
+        }
 
         fprintf(
             stderr,
@@ -735,7 +763,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
       memset(req->dev->sense_data, 0, 18);
       req->dev->sense_data[0] = 0xf0; // VALID + 0x70h
       req->dev->sense_data[2] = 5; // ILLEGAL_REQUEST;
-      req->dev->sense_data[7] = 12;
+      req->dev->sense_data[7] = 10;
       req->dev->sense_data[12] = 20; // INVALID COMMAND
       return 1;
 
@@ -827,39 +855,6 @@ static uint32_t ldn_le_p(uint8_t *addr, unsigned size) {
 struct Error {
 };
 
-static void address_space_init
-(AddressSpace *addrspace,
- uint32_t addr_space_id,
- const char *name
- )
-{
-    ABORT();
-}
-
-static void address_space_read
-(AddressSpace *addrspace,
- dma_addr_t address,
- int flags,
- void *buf,
- dma_addr_t len
- )
-{
-    fprintf(stderr, "lsi: address_space_read(%08x, flags=%08x, len=%08x)\n", address, flags, len);
-    ABORT();
-}
-
-static void address_space_write
-(AddressSpace *addrspace,
- dma_addr_t address,
- int flags,
- const void *buf,
- dma_addr_t len
- )
-{
-    fprintf(stderr, "lsi: address_space_write(%08x, flags=%08x, len=%08x)\n", address, flags, len);
-    ABORT();
-}
-
 static uint8_t *scsi_req_get_buf(SCSIRequest *req) {
     return req->result_buf;
 }
@@ -875,7 +870,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     size_t result_size = req->xfer.data_in_len;
 
     if (req->status != 0) {
-        fprintf(stderr, "LSI: scsi_req_continue stop with error %d\n", req->status);
+        fprintf(stderr, "LSI: scsi_req_continue stop with error %d, cmd was %x, id %d\n", req->status, req->cmd.buf[0], req->dev->id);
         lsi_command_complete(cpu, req, 0);
         return;
     }
@@ -950,7 +945,7 @@ static void lsi_ram_write(struct lsi53c895a_data *s, hwaddr addr,
                           uint64_t val, unsigned size);
 
 static void pci_dma_read(struct cpu *cpu, LSIState *s, dma_addr_t addr, void *buf, dma_addr_t len) {
-    if (addr & 0x80000000) {
+  // if (addr & 0x80000000) {
         addr &= ~0x80000000;
         fprintf(stderr, "pci_dma_read(%08x,%d) @ %08x =", (int)addr, len, cpu->pc);
         for (auto i = 0; i < len; i++) {
@@ -960,32 +955,32 @@ static void pci_dma_read(struct cpu *cpu, LSIState *s, dma_addr_t addr, void *bu
             }
         }
         fprintf(stderr, "\n");
-    } else {
-        for (auto i = 0; i < len; i++) {
-            *(((uint8_t *)buf) + i) = lsi_mmio_read(cpu, s, (addr + i) & 0x1fff, 1);
-        }
-    }
+        // } else {
+        // for (auto i = 0; i < len; i++) {
+        // *(((uint8_t *)buf) + i) = lsi_mmio_read(cpu, s, (addr + i) & 0x1fff, 1);
+        // }
+        //}
 }
 
 static void lsi_mmio_write(struct cpu *cpu, LSIState *s, hwaddr addr,
                            uint64_t val, unsigned size);
 
 static void pci_dma_write(struct cpu *cpu, LSIState *s, dma_addr_t addr, const void *buf, dma_addr_t len) {
-    if (addr & 0x80000000) {
-        fprintf(stderr, "pci_dma_write(%08x,%d) =>", (int)addr, len);
-        addr &= ~0x80000000;
-        for (auto i = 0; i < len; i++) {
-          if (len <= 4) {
-            fprintf(stderr, " %02x", *(((uint8_t *)buf) + i));
-          }
-          cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
-        }
-        fprintf(stderr, "\n");
-    } else {
-        for (auto i = 0; i < len; i++) {
-          lsi_mmio_write(cpu, s, (addr + i) & 0x1fff, ((uint8_t *)buf)[i], 1);
-        }
+  // if (addr & 0x80000000) {
+  fprintf(stderr, "pci_dma_write(%08x,%d) =>", (int)addr, len);
+  addr &= ~0x80000000;
+  for (auto i = 0; i < len; i++) {
+    if (len <= 4) {
+      fprintf(stderr, " %02x", *(((uint8_t *)buf) + i));
     }
+    cpu->memory_rw(cpu, cpu->mem, addr + i, ((uint8_t*)buf) + i, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
+  }
+  fprintf(stderr, "\n");
+  // } else {
+  // for (auto i = 0; i < len; i++) {
+  // lsi_mmio_write(cpu, s, (addr + i) & 0x1fff, ((uint8_t *)buf)[i], 1);
+  // }
+  // }
 }
 
 static const char *scsi_phase_name(int phase)
@@ -1022,6 +1017,8 @@ static void lsi_soft_reset(LSIState *s)
     }
 
     s->bus.qbus.parent = s;
+    s->pending_bad = -1;
+    s->pending_gen = -1;
 
     s->msg_action = LSI_MSG_ACTION_COMMAND;
     s->msg_len = 0;
@@ -1070,6 +1067,7 @@ static void lsi_soft_reset(LSIState *s)
     s->stest3 = 0;
     s->sidl = 0;
     s->stime0 = 0;
+    s->stime1 = 0;
     s->respid0 = 0x80;
     s->respid1 = 0;
     s->mmrs = 0;
@@ -1122,9 +1120,9 @@ static inline void lsi_mem_read(struct cpu *cpu, LSIState *s, dma_addr_t addr,
                                void *buf, dma_addr_t len)
 {
     if (s->dmode & LSI_DMODE_SIOM) {
-      pci_dma_read(cpu, PCI_DEVICE(s), addr, buf, len);
-      // address_space_read(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
-      // buf, len);
+      for (hwaddr i = 0; i < len; i++) {
+        ((uint8_t *)buf)[i] = lsi_reg_readb(cpu, s, (addr + i) & 0x7f);
+      }
     } else {
       pci_dma_read(cpu, PCI_DEVICE(s), addr, buf, len);
     }
@@ -1134,9 +1132,9 @@ static inline void lsi_mem_write(struct cpu *cpu, LSIState *s, dma_addr_t addr,
                                 const void *buf, dma_addr_t len)
 {
     if (s->dmode & LSI_DMODE_DIOM) {
-      pci_dma_write(cpu, PCI_DEVICE(s), addr, buf, len);
-      // address_space_write(&s->pci_io_as, addr, MEMTXATTRS_UNSPECIFIED,
-      // buf, len);
+      for (hwaddr i = 0; i < len; i++) {
+        lsi_reg_writeb(cpu, s, (addr + i) & 0x7f, ((uint8_t *)buf)[i]);
+      }
     } else {
       pci_dma_write(cpu, PCI_DEVICE(s), addr, buf, len);
     }
@@ -1225,12 +1223,9 @@ static void lsi_script_scsi_interrupt(LSIState *s, int stat0, int stat1)
     trace_lsi_script_scsi_interrupt(stat1, stat0, s->sist1, s->sist0);
     s->sist0 |= stat0;
     s->sist1 |= stat1;
-    /* Stop processor on fatal or unmasked interrupt.  As a special hack
-       we don't stop processing when raising STO.  Instead continue
-       execution and stop at the next insn that accesses the SCSI bus.  */
+    /* Stop processor on fatal or unmasked interrupt.  */
     mask0 = s->sien0 | ~(LSI_SIST0_CMP | LSI_SIST0_SEL | LSI_SIST0_RSL);
-    mask1 = s->sien1 | ~(LSI_SIST1_GEN | LSI_SIST1_HTH);
-    mask1 &= ~LSI_SIST1_STO;
+    mask1 = s->sien1 | ~(LSI_SIST1_GEN | LSI_SIST1_HTH | LSI_SIST1_STO);
     if (s->sist0 & mask0 || s->sist1 & mask1) {
         lsi_stop_script(s);
     }
@@ -1293,8 +1288,8 @@ static void lsi_disconnect(LSIState *s)
 static void lsi_bad_selection(LSIState *s, uint32_t id)
 {
     trace_lsi_bad_selection(id);
-    lsi_script_scsi_interrupt(s, 0, LSI_SIST1_STO);
-    lsi_disconnect(s);
+    s->pending_bad = id | (((1 << s->stime0) / SCSI_TIMER_SPEED_FACTOR) << 3);
+    lsi_stop_script(s);
 }
 
 /* Initiate a SCSI layer data transfer.  */
@@ -1488,10 +1483,13 @@ static void lsi_command_complete(struct cpu *cpu, SCSIRequest *req, size_t resid
     s->status = req->status;
     s->command_complete = 2;
     if (s->waiting && s->dbc != 0) {
-        /* Raise phase mismatch for short transfers.  */
-        lsi_bad_phase(s, out, PHASE_ST);
+      fprintf(stderr, "lsi: bad phase raised from command complete: s->waiting = %d, s->dbc = %x\n", s->waiting, (unsigned int)s->dbc);
+      /* Raise phase mismatch for short transfers.  */
+      /* No untransferred bytes */
+      lsi_bad_phase(s, out, PHASE_ST);
+      s->dfifo = 0;
     } else {
-        lsi_set_phase(s, PHASE_ST);
+      lsi_set_phase(s, PHASE_ST);
     }
 
     if (req->hba_private == s->current) {
@@ -1557,12 +1555,10 @@ static void lsi_do_command(struct cpu *cpu, LSIState *s)
                 memset(dev->sense_data, 0, 18);
                 dev->sense_data[0] = 0xf0;
                 dev->sense_data[2] = 5; // illegal request
-                dev->sense_data[7] = 12;
-                dev->sense_data[12] = 25; // logical unit not supported
+                dev->sense_data[7] = 10;
+                dev->sense_data[12] = 0x25; // logical unit not supported
             }
         }
-
-        lsi_bad_selection(s, id);
         return;
     }
 
@@ -1706,6 +1702,7 @@ static void lsi_do_msgout(struct cpu *cpu, LSIState *s)
             case 1:
                 trace_lsi_do_msgout_ignored("SDTR");
                 lsi_skip_msgbytes(s, 2);
+                lsi_add_msg_byte(s, 7); // reject
                 break;
             case 3:
                 trace_lsi_do_msgout_ignored("WDTR");
@@ -1877,11 +1874,6 @@ again:
     s->dsp += 8;
     switch (insn >> 30) {
     case 0: /* Block move.  */
-        if (s->sist1 & LSI_SIST1_STO) {
-            trace_lsi_execute_script_blockmove_delayed();
-            lsi_stop_script(s);
-            break;
-        }
         s->dbc = insn & 0xffffff;
         fprintf(stderr, "lsi: set dbc to %08x\n", (unsigned int)s->dbc);
         s->rbc = s->dbc;
@@ -1891,7 +1883,7 @@ again:
             /* Indirect addressing.  */
             addr = read_dword(cpu, s, addr);
         } else if (insn & (1 << 28)) {
-            uint32_t buf[2];
+            uint32_t buf[2] = { 0xffffffff, 0xffffffff };
             int32_t offset;
             /* Table indirect addressing.  */
 
@@ -1942,6 +1934,7 @@ again:
                 }
             }
         } else if (lsi_dma_64bit(s)) {
+            fprintf(stderr, "lsi: extra word: 64 bit dma\n");
             /* fetch a 3rd dword if 64-bit direct move is enabled and
                only if we're not doing table indirect or indirect addressing */
             s->dbms = read_dword(cpu, s, s->dsp);
@@ -1992,7 +1985,8 @@ again:
             qemu_log_mask(LOG_UNIMP, "lsi_scsi: Unimplemented phase %s\n",
                           scsi_phase_name(s->sstat1));
         }
-        s->dfifo = s->dbc & 0xff;
+        // Why is this needed?
+        // s->dfifo = s->dbc & 0xff;
         s->ctest5 = (s->ctest5 & 0xfc) | ((s->dbc >> 8) & 3);
         s->sbc = s->dbc;
         s->rbc -= s->dbc;
@@ -2031,6 +2025,7 @@ again:
                 s->scntl1 &= ~LSI_SCNTL1_IARB;
                 if (!scsi_device_find(cpu, s, &s->bus, 0, id, 0)) {
                     lsi_bad_selection(s, id);
+                    s->dsp = s->dsps;
                     break;
                 }
                 trace_lsi_execute_script_io_selected(id,
@@ -2212,11 +2207,7 @@ again:
                 trace_lsi_execute_script_tc_nop();
                 break;
             }
-            if (s->sist1 & LSI_SIST1_STO) {
-                trace_lsi_execute_script_tc_delayedselect_timeout();
-                lsi_stop_script(s);
-                break;
-            }
+
             jmp = (insn & (1 << 19)) != 0;
             cond = true;
 
@@ -2240,7 +2231,7 @@ again:
             if (cond) {
                 if (insn & (1 << 23)) {
                     uint32_t want_offset = sextract32(addr, 0, 24);
-                    fprintf(stderr, "lsi: jump to relative address insn %08x addr %08x offset %0x\n", insn, addr, want_offset);
+                    fprintf(stderr, "lsi: jump to relative address insn %08x addr %08x offset %0x\n", (unsigned int)insn, (unsigned int)addr, (unsigned int)want_offset);
                     /* Relative address.  */
                     addr = s->dsp + want_offset;
                 }
@@ -2394,7 +2385,7 @@ static uint8_t lsi_reg_readb(struct cpu *cpu, LSIState *s, int offset)
         break;
     CASE_GET_REG32(dsa, 0x10)
     case 0x14: /* ISTAT0 */
-        ret = s->istat0;
+      ret = s->istat0;
         break;
     case 0x15: /* ISTAT1 */
         ret = s->istat1;
@@ -2672,6 +2663,7 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
         break;
     case 0x1b: /* CTEST3 */
       s->ctest3 = (6 << 4) | (val & 0x0f); // Matches 0x26 for RID
+      s->pending_bad = -1;
         break;
     CASE_SET_REG32(temp, 0x1c)
     case 0x21: /* CTEST4 */
@@ -2751,12 +2743,9 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
         s->stime0 = val;
         break;
     case 0x49: /* STIME1 */
+        s->stime1 = val;
         if (val & 0xf) {
-            qemu_log_mask(LOG_UNIMP,
-                          "lsi_scsi: General purpose timer not implemented\n");
-            /* ??? Raising the interrupt immediately seems to be sufficient
-               to keep the FreeBSD driver happy.  */
-            lsi_script_scsi_interrupt(s, 0, LSI_SIST1_GEN);
+            s->pending_gen = 1 + (1 << val) / SCSI_TIMER_SPEED_FACTOR;
         }
         break;
     case 0x4a: /* RESPID0 */
@@ -2781,6 +2770,11 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
                           "lsi_scsi: SCSI FIFO test mode not implemented\n");
         }
         s->stest3 = val;
+        if (s->stest3 & LSI_STEST3_CSF) {
+          s->sidl = 0;
+          s->sstat0 = 0;
+          s->pending_bad = -1;
+        }
         break;
     case 0x56: /* CCNTL0 */
         s->ccntl0 = val;
@@ -2823,9 +2817,9 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
 static void lsi_mmio_write(struct cpu *cpu, LSIState *s, hwaddr addr,
                            uint64_t val, unsigned size)
 {
-    for (hwaddr i = 0; i < size; i++) {
-        lsi_reg_writeb(cpu, s, (addr + i) & 0xff, val >> ((size - i - 1) * 8));
-    }
+  for (hwaddr i = 0; i < size; i++) {
+    lsi_reg_writeb(cpu, s, (addr + i) & 0xff, val >> ((size - i - 1) * 8));
+  }
 }
 
 static uint64_t lsi_mmio_read(struct cpu *cpu, LSIState *s, hwaddr addr,
@@ -3199,6 +3193,29 @@ DEVICE_ACCESS(lsi53c895a_mem)
   return 1;
 }
 
+DEVICE_TICK(lsi53c895a)
+{
+  struct lsi53c895a_data *d = (struct lsi53c895a_data *) extra;
+
+  if (d->pending_bad != -1) {
+    if (d->pending_bad < 8) {
+      fprintf(stderr, "lsi: pending bad selection fired %d\n", d->pending_bad & 7);
+      d->pending_bad = -1;
+      lsi_disconnect(d);
+      lsi_script_scsi_interrupt(d, 0, LSI_SIST1_STO);
+    } else {
+      d->pending_bad -= 8;
+      fprintf(stderr, "lsi: pending bad selection count %d id %d\n", d->pending_bad >> 3, d->pending_bad & 7);
+    }
+  } else if (d->pending_gen != -1) {
+    d->pending_gen--;
+    if (!d->pending_gen) {
+      d->pending_gen = -1;
+      lsi_script_scsi_interrupt(d, 0, LSI_SIST1_GEN);
+    }
+  }
+}
+
 DEVINIT(lsi53c895a)
 {
     struct lsi53c895a_data *d;
@@ -3230,5 +3247,8 @@ DEVINIT(lsi53c895a)
                            VIRTUAL_ISA_PORTBASE | 0x80008000, DEV_LSI53C895A_LENGTH,
                            dev_lsi53c895a_io_access, d, DM_DEFAULT, NULL);
 
-    return 1;
+    machine_add_tickfunction(devinit->machine, dev_lsi53c895a_tick,
+                             d, LSI_TICK_SHIFT);
+
+   return 1;
 }

@@ -45,6 +45,8 @@ struct prep_data {
 	uint32_t		int_status;
 };
 
+void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr);
+
 DEVICE_ACCESS(prep)
 {
 	/*  struct prep_data *d = extra;  */
@@ -60,6 +62,12 @@ DEVICE_ACCESS(prep)
       if (cpu->machine->isa_pic_data.last_int & 4) {
         for (int i = 8; i < 16; i++) {
           if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+            if ((i == 13 || i == 12) && cpu->machine->isa_pic_data.pic2) {
+              fprintf(stderr, "deassert int %d on pci ack\n", i);
+              dev_8259_deassert(cpu->machine->isa_pic_data.pic2, i - 8);
+              dev_8259_deassert(cpu->machine->isa_pic_data.pic1, 2);
+            }
+
             odata = i;
             break;
           }
@@ -68,6 +76,11 @@ DEVICE_ACCESS(prep)
         for (int i = 0; i < 8; i++) {
           if (i == 2) {
             continue;
+          }
+
+          if ((i == 4 || i == 1) && cpu->machine->isa_pic_data.pic1) {
+            fprintf(stderr, "deassert int %d on pci ack\n", i);
+            dev_8259_deassert(cpu->machine->isa_pic_data.pic1, i);
           }
 
           if (cpu->machine->isa_pic_data.last_int & (1 << i)) {

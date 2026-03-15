@@ -451,7 +451,7 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 	else
 		d->tail[port] = (d->tail[port]+1) % MAX_8042_QUEUELEN;
 
-  if (d->currently_asserted[port] && (d->head[port] == d->tail[port])) {
+  if (d->currently_asserted[port]) {
     if (port) {
       INTERRUPT_DEASSERT(d->irq_mouse);
     } else {

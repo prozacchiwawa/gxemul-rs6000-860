@@ -50,19 +50,11 @@
 
 /*  #define debug fatal  */
 
-#define	DEV_PCIC_LENGTH		4
-
-struct pcic_socket {
-  uint64_t writable;
-  uint8_t reg[0x40];
-};
+#define	DEV_PCIC_LENGTH		2
 
 struct pcic_data {
-	struct interrupt	irq[10];
-
+	struct interrupt	irq;
 	int			regnr;
-
-  pcic_socket sockets[2];
 };
 
 
@@ -149,15 +141,17 @@ DEVICE_ACCESS(pcic_cis)
 DEVICE_ACCESS(pcic)
 {
 	struct pcic_data *d = (struct pcic_data *) extra;
-  struct pcic_socket *s = &d->sockets[relative_addr > 0x40 ? 1 : 0];
-  auto device_reg = d->regnr & 0x3f;
-
 	uint64_t idata = 0, odata = 0;
+	int controller_nr, socket_nr;
 
 	if (writeflag == MEM_WRITE)
 		idata = memory_readmax64(cpu, data, len);
 
+	controller_nr = d->regnr & 0x80? 1 : 0;
+	socket_nr = d->regnr & 0x40? 1 : 0;
+
 	switch (relative_addr) {
+
 	case 0:	/*  Register select:  */
 		if (writeflag == MEM_WRITE)
 			d->regnr = idata;
@@ -166,31 +160,52 @@ DEVICE_ACCESS(pcic)
 		break;
 
 	case 1:	/*  Register access:  */
-    if (writeflag == MEM_WRITE) {
-      debug("[ pcic: controller %i socket %c, regnr %i: "
-				    "data=0x%02x ]\n", 0,
-				    s == &d->sockets[0] ? 'A' : 'B',
-				    device_reg, (int)idata);
-      if ((s->writable >> device_reg) & 1) {
-        s->reg[device_reg] = idata;
-      }
-    } else {
-      odata = s->reg[device_reg];
-      debug("[ pcic: unimplemented read from "
-				    "controller %i socket %c, regnr %i -> %x ]\n",
-				    0, s == &d->sockets[0] ? 'A' : 'B',
-				    d->regnr & 0x3f, (unsigned int)odata);
-    }
-    break;
+		switch (d->regnr & 0x3f) {
 
-  default:
-    odata = 0;
-    break;
-  }
+		case PCIC_IDENT:
+			/*  This causes sockets A and B to be present on
+			    controller 0, and only socket A on controller 1.  */
+			if (controller_nr == 1 && socket_nr == 1)
+				odata = 0;
+			else
+				odata = PCIC_IDENT_IFTYPE_MEM_AND_IO
+				    | PCIC_IDENT_REV_I82365SLR1;
+			break;
+#if 1
+		case PCIC_INTR:
+			odata = PCIC_INTR_IRQ3;
+			break;
+#endif
 
-	if (writeflag == MEM_READ) {
+		case PCIC_CSC:
+			odata = PCIC_CSC_GPI;
+			break;
+
+		case PCIC_IF_STATUS:
+			odata = PCIC_IF_STATUS_READY
+			    | PCIC_IF_STATUS_POWERACTIVE;
+			if (controller_nr == 0 && socket_nr == 0)
+				odata |= PCIC_IF_STATUS_CARDDETECT_PRESENT;
+			break;
+
+		default:
+			if (writeflag == MEM_WRITE) {
+				debug("[ pcic: unimplemented write to "
+				    "controller %i socket %c, regnr %i: "
+				    "data=0x%02x ]\n", controller_nr,
+				    socket_nr? 'B' : 'A',
+				    d->regnr & 0x3f, (int)idata);
+			} else {
+				debug("[ pcic: unimplemented read from "
+				    "controller %i socket %c, regnr %i ]\n",
+				    controller_nr, socket_nr? 'B' : 'A',
+				    d->regnr & 0x3f);
+			}
+		}
+	}
+
+	if (writeflag == MEM_READ)
 		memory_writemax64(cpu, data, len, odata);
-  }
 
 	return 1;
 }
@@ -204,18 +219,7 @@ DEVINIT(pcic)
 	CHECK_ALLOCATION(d = (struct pcic_data *) malloc(sizeof(struct pcic_data)));
 	memset(d, 0, sizeof(struct pcic_data));
 
-  for (int i = 0; i < 2; i++) {
-    auto s = &d->sockets[0];
-    s->writable = ~3ull;
-    s->reg[0] = 0x82;
-    s->reg[1] = 3;
-  }
-
-  int interrupts[] = { 3,4,5,7,9,10,11,12,14,15 };
-  for (int i = 0; i < sizeof(interrupts) / sizeof(interrupts[0]); i++) {
-    sprintf(tmpstr, "%s.isa.%i", devinit->interrupt_path, interrupts[i]);
-    INTERRUPT_CONNECT(devinit->interrupt_path, d->irq[i]);
-  }
+	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 
 	memory_device_register(devinit->machine->memory, devinit->name,
 	    devinit->addr, DEV_PCIC_LENGTH,
@@ -232,7 +236,7 @@ DEVINIT(pcic)
         snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x14000180 irq=%s.giu.9",
                  devinit->interrupt_path);
         device_add(devinit->machine, tmpstr);
-
+        
         /*  TODO: Linux/MobilePro looks at 0x14000170 and 0x1f0...  */
         /*  Yuck. Now there are two. How should this be solved nicely?  */
         snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x140001f0 irq=%s.giu.9",

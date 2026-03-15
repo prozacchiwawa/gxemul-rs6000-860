@@ -81,6 +81,7 @@ int force_debugger_at_exit = 0;
 volatile int single_step_breakpoint = 0;
 int debugger_n_steps_left_before_interaction = 0;
 uint64_t trace_low, trace_high;
+uint32_t required_sr1;
 
 int old_instruction_trace = 0;
 int old_quiet_mode = 0;

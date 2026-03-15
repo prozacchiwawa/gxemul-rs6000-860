@@ -1674,6 +1674,14 @@ static void debugger_cmd_e7(struct machine *m, char *cmd_line) {
   ppc_exception(m->cpus[0], PPC_EXCEPTION_PRG, 1 << 17);
 }
 
+static void debugger_cmd_want_sr1(struct machine *m, char *cmd_line) {
+  if (!*cmd_line) {
+    required_sr1 = 0;
+  }
+  required_sr1 = strtoull(cmd_line, nullptr, 16);
+  fprintf(stderr, "want sr1 %s -> %08x\n", cmd_line, (unsigned int)required_sr1);
+}
+
 /****************************************************************************/
 
 
@@ -1794,6 +1802,8 @@ static struct cmd cmds[] = {
   { "ss", "filename", 0, debugger_cmd_screenshot, "Create a screenshot of the framebuffer content" },
 
   { "trap", "", 0, debugger_cmd_e7, "Execute an exception 7" },
+
+  { "wantsr1", "value", 0, debugger_cmd_want_sr1, "Step only along code that has a specific sr1 value" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

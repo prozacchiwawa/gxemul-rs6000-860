@@ -469,6 +469,18 @@ void cpu_init(void);
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #endif
 
+class DoReturn {
+public:
+  void end_trace(struct cpu *cpu, uint64_t target) {
+    cpu->functioncall_end_trace(cpu, target);
+  }
+};
+
+class NotReturn {
+public:
+  void end_trace(struct cpu *cpu, uint64_t target) { }
+};
+
 extern void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, uint64_t addr_end);
 
 #endif	/*  CPU_H  */

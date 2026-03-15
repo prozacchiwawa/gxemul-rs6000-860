@@ -131,8 +131,10 @@ DEVICE_ACCESS(ns16550)
 	size_t i;
 	struct ns_data *d = (struct ns_data *) extra;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
+    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
+  }
 
 #if 0
 	/*  The NS16550 should be accessed using byte read/writes:  */
@@ -228,9 +230,12 @@ DEVICE_ACCESS(ns16550)
 			    "\n", d->name, (int)idata);
 			d->fcr = idata;
 		} else {
-			odata = d->reg[com_iir];
-			if (d->reg[com_iir] & IIR_TXRDY)
+      auto iir_val = d->reg[com_iir];
+			odata = (iir_val == 0) ? 1 : iir_val;
+			if (d->reg[com_iir] & IIR_TXRDY) {
 				d->reg[com_iir] &= ~IIR_TXRDY;
+      }
+      d->sent_recently = false;
 			debug("[ ns16550 (%s): read from iir: 0x%02x ]\n",
 			    d->name, (int)odata);
 		}
@@ -328,8 +333,10 @@ DEVICE_ACCESS(ns16550)
 		}
 	}
 
-	if (writeflag == MEM_READ)
+	if (writeflag == MEM_READ) {
+    fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
 		memory_writemax64(cpu, data, len, odata);
+  }
 
 	return 1;
 }

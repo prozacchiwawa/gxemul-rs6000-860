@@ -103,7 +103,7 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
  *  Returns 0 if no match was found.
  */
 static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
-	uint32_t *lowp, uint32_t cmp)
+    uint32_t *lowp, uint32_t cmp, bool write)
 {
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
@@ -118,16 +118,17 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
   }
 
   for (i=0; i<8; i++) {
-
 		uint32_t *ep = (uint32_t *) (pte + (i << 3)), upper;
 		upper = *ep;
 		upper = BE32_TO_HOST(upper);
 
 		/*  Valid PTE, and correct api and vsid?  */
 		if (upper == cmp) {
-			uint32_t lo = ep[1];
-			lo = BE32_TO_HOST(lo);
+			uint32_t lo = BE32_TO_HOST(ep[1]);
 			*lowp = lo;
+
+      d[((i << 3) + 6) ^ swizzle] |= 1;
+      d[((i << 3) + 7) ^ swizzle] |= write ? 0x80 : 0;
 			return 1;
 		}
 	}
@@ -147,7 +148,7 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
  *  access, or 2 for read/write access.
  */
 static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
-	int *resp, uint64_t msr, int writeflag, int instr)
+    int *resp, uint64_t msr, int writeflag, int instr)
 {
 	int srn = (vaddr >> 28) & 15, api = (vaddr >> 22) & PTE_API;
 	int access, key, match;
@@ -167,7 +168,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH1] = pteg_select;
 	cmp = cpu->cd.ppc.spr[instr? SPR_ICMP : SPR_DCMP] =
 	    PTE_VALID | api | (vsid << PTE_VSID_SHFT);
-	match = get_pte_low(cpu, pteg_select, &lower_pte, cmp);
+	match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, writeflag);
 
 	/*  Secondary hash:  */
 	hash2 = hash1 ^ 0x7ffff;
@@ -178,7 +179,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH2] = pteg_select;
 	if (!match) {
 		cmp |= PTE_HID;
-		match = get_pte_low(cpu, pteg_select, &lower_pte, cmp);
+		match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, writeflag);
 	}
 
 	*resp = 0;

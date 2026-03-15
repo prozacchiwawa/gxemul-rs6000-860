@@ -666,14 +666,23 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     }
 
     case 0x15:
+      if (req->cmd.buf[4]) {
+        req->status = 0;
+        req->xfer.cmd = req->cmd.buf;
+        req->xfer.cmd_len = req->cmd.len;
+        req->xfer.data_out_len = req->cmd.buf[4];
+        req->hba_private->dma_len = req->xfer.data_out_len;
+        fprintf(stderr, "LSI: mode select data out %d bytes\n", (int)req->xfer.data_out_len);
+        return -req->xfer.data_out_len;
+      }
     case 0x1b:
     case 0x1e:
     case 0x35: {
-        fprintf(stderr, "LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
-        req->status = 0;
-        req->xfer.data_in_len = 0;
-        req->dev->sense_data_len = 0;
-        return 1;
+      fprintf(stderr, "LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
+      req->status = 0;
+      req->xfer.data_in_len = 0;
+      req->dev->sense_data_len = 0;
+      return 1;
     }
 
     case 0x00:
@@ -877,7 +886,6 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
 
     switch (req->cmd.buf[0]) {
     case 0x00:
-    case 0x15:
     case 0x1b:
     case 0x1e:
     case 0x35:
@@ -888,6 +896,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
         break;
     }
     case 0x0a:
+    case 0x15:
     case 0x2a: {
         if (!req->transferred) {
             // Write
@@ -1289,7 +1298,6 @@ static void lsi_bad_selection(LSIState *s, uint32_t id)
 {
     trace_lsi_bad_selection(id);
     s->pending_bad = id | (((1 << s->stime0) / SCSI_TIMER_SPEED_FACTOR) << 3);
-    lsi_stop_script(s);
 }
 
 /* Initiate a SCSI layer data transfer.  */
@@ -2015,7 +2023,7 @@ again:
             switch (opcode) {
             case 0: /* Select */
                 s->sdid = id;
-                fprintf(stderr, "lsi: select scsi id %d\n", id);
+                fprintf(stderr, "lsi: select scsi id %d dnad %08x\n", id, (unsigned int)s->dnad);
                 if (s->scntl1 & LSI_SCNTL1_CON) {
                     trace_lsi_execute_script_io_alreadyreselected();
                     s->dsp = s->dnad;
@@ -2025,7 +2033,6 @@ again:
                 s->scntl1 &= ~LSI_SCNTL1_IARB;
                 if (!scsi_device_find(cpu, s, &s->bus, 0, id, 0)) {
                     lsi_bad_selection(s, id);
-                    s->dsp = s->dsps;
                     break;
                 }
                 trace_lsi_execute_script_io_selected(id,
@@ -2216,6 +2223,10 @@ again:
                 cond &= (s->carry != 0) == jmp;
             }
             if (insn & (1 << 17)) {
+                if (s->pending_bad != -1) {
+                    lsi_stop_script(s);
+                    break;
+                }
                 trace_lsi_execute_script_tc_compp(scsi_phase_name(s->sstat1),
                         jmp ? '=' : '!', scsi_phase_name(insn >> 24));
                 cond &= ((s->sstat1 & PHASE_MASK) == ((insn >> 24) & 7)) == jmp;

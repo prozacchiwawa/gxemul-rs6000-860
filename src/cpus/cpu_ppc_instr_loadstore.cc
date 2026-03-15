@@ -116,6 +116,10 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
     store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
+    uint64_t unused_return;
+    // Ensure we set written.
+    ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+
     if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
                         MEM_WRITE, CACHE_DATA)) {
       return;
@@ -254,6 +258,11 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
   access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #else	/*  !LS_LOAD  */
+
+  uint64_t unused_return;
+  // Ensure we set written.
+  ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+
   /*  Store:  */
   store_reg<LS_SIZE * 8>(ic->arg[0], &page[addr ^ offset], swizzle);
 

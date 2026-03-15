@@ -56,8 +56,8 @@
       return; } }
 #endif
 
-template <class T>
-static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, uint64_t addr) {
+template <class T, class Return>
+static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, Return report, uint64_t addr) {
 	uint64_t old_pc = cpu->pc;
 
   auto alignment_shift = cpu_traits<T>::instr_alignment_shift();
@@ -70,7 +70,7 @@ static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, uint64_
   auto target = addr & ~((1 << alignment_shift) - 1);
 
   /*  TODO: trace in separate (duplicate) function?  */
-  cpu->functioncall_end_trace(cpu, target);
+  report.end_trace(cpu, target);
   cpu->pc = target;
   if ((old_pc & ~mask_within_page) == (cpu->pc & ~mask_within_page)) {
     cpu->cd.DYNTRANS_ARCH.VPH.set_next_ic(cpu->pc);
@@ -227,7 +227,7 @@ X(bclr)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (ctr_ok && cond_ok) {
-    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
+		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, DoReturn(), addr);
 	}
 }
 /*
@@ -258,7 +258,7 @@ X(bclr_l)
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (ctr_ok && cond_ok) {
-    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
+		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, NotReturn(), addr);
 	}
 }
 
@@ -278,8 +278,7 @@ X(bcctr)
 	int cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (cond_ok) {
-    
-    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
+		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, NotReturn(), addr);
 	}
 }
 X(bcctr_l)
@@ -297,7 +296,7 @@ X(bcctr_l)
 	cpu->cd.ppc.spr[SPR_LR] += (low_pc << PPC_INSTR_ALIGNMENT_SHIFT);
 
 	if (cond_ok) {
-    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, addr);
+		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, NotReturn(), addr);
 	}
 }
 
@@ -1608,7 +1607,6 @@ X(icbi)
 {
   sync_pc(cpu, ic);
   auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
   auto old_msr = cpu->cd.ppc.msr;
   auto dr = !!(old_msr & PPC_MSR_DR);
   cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
@@ -2013,6 +2011,10 @@ X(stmw) {
 			return;
 		}
 
+    uint64_t unused_return;
+    // Ensure we set written.
+    ppc_translate_v2p(cpu, addr ^ offset, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+
 		rs ++;
 		addr += sizeof(uint32_t);
 	}
@@ -2127,12 +2129,18 @@ X(stswi)
     if (sub == 0) {
       // fprintf(stderr, "stsw%c: r%02d %08x = %08x\n", ix, rs, (unsigned int)addr, cur);
     }
+
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
       fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
 			/*  exception  */
 			return;
 		}
+
+    // Update written
+    uint64_t unused_return;
+    // Ensure we set written.
+    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
 
 		cur <<= 8;
 		sub ++;
@@ -2871,7 +2879,6 @@ X(tlbie)
     cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
     addr_page &= increment - 1;
     for (int i = 0; i < 16; i++) {
-      fprintf(stderr, "[ tlb invalidate lowbits %08x %08x ]\n", (unsigned int)cpu->cd.ppc.msr, (unsigned int)addr_page);
       cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
       cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
       addr_page += increment;
@@ -2970,6 +2977,8 @@ X(end_of_page)
 
 
 X(dump_registers) {
+  extern uint64_t trace_low, trace_high;
+
   if (ic->pc == 0) {
     auto old_readahead = cpu->translation_readahead;
     cpu->translation_readahead = 1;
@@ -2978,9 +2987,13 @@ X(dump_registers) {
     cpu->translation_readahead = old_readahead;
   }
 
-  cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
-  if (cpu->machine->register_dump) {
-    ppc_cpu_register_dump(cpu, true, false);
+  auto iowait_exclusion = cpu->pc <= 0x150000 || cpu->pc > 0x160000;
+  auto in_trace_region = (trace_low == trace_high) || (cpu->pc >= trace_low && cpu->pc < trace_high);
+  if (single_step || (iowait_exclusion && in_trace_region)) {
+    cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
+    if (cpu->machine->register_dump) {
+      ppc_cpu_register_dump(cpu, true, false);
+    }
   }
 }
 
@@ -3054,9 +3067,6 @@ X(to_be_translated)
 #define DYNTRANS_TO_BE_TRANSLATED_HEAD
 #include "cpu_dyntrans.cc"
 #undef  DYNTRANS_TO_BE_TRANSLATED_HEAD
-  memcpy(ic->instr, ib, sizeof(ic->instr));
-  ic->pc = addr;
-
 	/*
 	 *  Translate the instruction:
 	 */

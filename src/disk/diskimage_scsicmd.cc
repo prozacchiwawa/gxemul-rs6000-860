@@ -272,7 +272,7 @@ static int append_scsi_mode_sense_page(struct cpu *cpu, struct diskimage *d, int
  *  Returns:
  *	2 if the command expects data from the DATA_OUT phase,
  *	1 if otherwise ok,
- *	0 on error.
+ *	0 or negative on error.
  */
 int diskimage_scsicommand(struct cpu *cpu, int id, int type,
 	struct scsi_transfer *xferp)
@@ -345,6 +345,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
   uint8_t buf[256];
   uint8_t *old_ptr;
+  const int MAX_INQUIRY_LEN = 96;
 
 	switch (xferp->cmd[0]) {
 
@@ -366,126 +367,191 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		debug("INQUIRY");
 		if (xferp->cmd_len != 6)
 			debug(" (weird len=%i)", xferp->cmd_len);
-    /*
-      if (xferp->cmd[1] != 0x00) {
-			debug("WARNING: INQUIRY with cmd[1]=0x%02x not yet "
-			    "implemented\n", (int)xferp->cmd[1]);
 
-			break;
-		}
-    */
+    retlen = xferp->cmd[4];
+    memset(buf, 0, retlen);
 
-		/*  Return values:  */
-		retlen = xferp->cmd[4];
-		if (retlen > 96) {
-			fatal("WARNING: SCSI inquiry len=%i, >96?\n", retlen);
-			retlen = 96;
-		}
+    if (xferp->cmd[1] & 1) {
+      const uint32_t MEGABYTE = 1024 * 1024;
+      uint32_t meg_size;
 
-		/*  Return data:  */
-    fprintf(stderr, "SCSI: Allocate data buf\n");
-		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in,
-		    retlen, 1);
+      fprintf(stderr, "SCSI: try to do VPD page %x\n", xferp->cmd[2]);
 
-    old_ptr = xferp->data_in;
-    xferp->data_in = buf;
+      // VPD
+      switch (xferp->cmd[2]) {
+        // "MF0808C,TM1010C,RL2004C,Z00008X,PN880cC,EC7e0aC,FN720cC"
 
-    fprintf(stderr, "SCSI: data buf %p", xferp->data_in);
-		xferp->data_in[0] = 0x00;  /*  0x00 = Direct-access disk  */
-		xferp->data_in[1] = 0x00;  /*  0x00 = non-removable  */
-		xferp->data_in[2] = 0x02;  /*  SCSI-2  */
-    xferp->data_in[3] = 0x02;	/*  Response data format = SCSI-2  */
-		// xferp->data_in[4] = retlen - 4;	/*  Additional length  */
-    xferp->data_in[4] = 91;	/*  Additional length  */
-		xferp->data_in[6] = 0x04;  /*  ACKREQQ  */
-		xferp->data_in[7] = 0x60;  /*  WBus32, WBus16  */
+	      /*
+      case 0xc7: // disk or cdrom vpd
+        //  Return data:
+        buf[1] = xferp->cmd[2];
+        buf[2] = 0;
+        buf[3] = retlen;
+        
+        if (d->is_a_cdrom) {
+          buf[0] = 5;
+        }
+        buf[3] = 0x60;
+        buf[4] = 4;
+        buf[5] = 'S';
+        buf[6] = 'C';
+        buf[7] = 'D';
+        buf[8] = 'D';
 
-		/*  These are padded with spaces:  */
+	// number of luns
+        buf[9] = 1;
 
-    fprintf(stderr, "SCSI: copying in name\n");
-		memcpy(xferp->data_in+8,  "GXemul  ", 8);
-		if (diskimage_getname(cpu->machine, id,
-		    type, namebuf, sizeof(namebuf))) {
-      fprintf(stderr, "SCSI: start namebuf\n");
-			for (size_t j=0; j<sizeof(namebuf); j++) {
-				if (namebuf[j] == 0) {
-					for (; j<sizeof(namebuf); j++)
-						namebuf[j] = ' ';
-					break;
-				}
-			}
+	// storage capacity in mb
+        diskimage_recalc_size(d);
+        meg_size = (d->total_size + (MEGABYTE - 1)) / MEGABYTE;
+        buf[10] = meg_size >> 24;
+        buf[11] = meg_size >> 16;
+        buf[12] = meg_size >> 8;
+        buf[13] = meg_size;
+
+	// queue depth
+	buf[20] = 1;
+
+	// technology code
+	buf[33] = 1;
+	// interface id
+	buf[34] = 1;
+
+	// length of os identifier
+	buf[75] = 3;
+	buf[76] = 'A';
+	buf[77] = 'I';
+	buf[78] = 'X';
+
+	// led code
+        buf[85] = 0x73;
+        buf[86] = 0x40;
+        buf[87] = 0x00;
+        break;
+
+      case 0xc8:
+      case 0xc9:
+        buf[1] = xferp->cmd[2];
+        buf[2] = 0;
+
+        if (d->is_a_cdrom) {
+          uint8_t c8_mode_data[] = {
+            0x00, 0x00, 0x00, 0x08,  0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x02, 0x00,  0x02, 0x0a, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+            0x0a, 0x06, 0x00, 0x01,  0x00, 0x00, 0x00, 0x00,
+            0x0e, 0x0e, 0x04, 0x00,  0x00, 0x00, 0x00, 0x00,
+            0x01, 0x80, 0x02, 0x80,  0x04, 0x80, 0x08, 0x80
+          };
+          buf[3] = sizeof(c8_mode_data);
+          buf[0] = 5;
+          memcpy(buf + 4, c8_mode_data, sizeof(c8_mode_data));
+        }
+        break;
+	*/
+        
+      default:
+        if (d->is_a_cdrom) {
+          buf[0] = 5;
+        }
+        buf[1] = xferp->cmd[2];
+        buf[2] = 0;
+        buf[3] = 4;
+        break;
+      }
+		} else {
+      buf[2] = 0x02;  /*  SCSI-2  */
+      buf[3] = 0x02;	/*  Response data format = SCSI-2  */
+      // buf[4] = retlen - 4;	/*  Additional length  */
+      buf[4] = 91;	/*  Additional length  */
+      buf[6] = 0x04;  /*  ACKREQQ  */
+      buf[7] = 0x62;  /*  WBus32, WBus16, CmdQ  */
+
+      /*  These are padded with spaces:  */
+      fprintf(stderr, "SCSI: copying in name\n");
+      memcpy(buf+8,  "GXemul  ", 8);
+      if (diskimage_getname(cpu->machine, id, type, namebuf, sizeof(namebuf))) {
+        fprintf(stderr, "SCSI: start namebuf\n");
+        for (size_t j=0; j<sizeof(namebuf); j++) {
+          if (namebuf[j] == 0) {
+            for (; j<sizeof(namebuf); j++)
+              namebuf[j] = ' ';
+            break;
+          }
+        }
+
+        fprintf(stderr, "SCSI: finish namebuf\n");
+        memcpy(buf+16, namebuf, 16);
+      } else {
+        fprintf(stderr, "SCSI: generic namebuf\n");
+        memcpy(buf+16, "DISK            ", 16);
+      }
 
       fprintf(stderr, "SCSI: finish namebuf\n");
-			memcpy(xferp->data_in+16, namebuf, 16);
-		} else {
-      fprintf(stderr, "SCSI: generic namebuf\n");
-			memcpy(xferp->data_in+16, "DISK            ", 16);
+      memcpy(buf+32, "0   ", 4);
+      
+      /*
+       *  Some Ultrix kernels want specific responses from
+       *  the drives.
+       */
+      if (machine->machine_type == MACHINE_PMAX) {
+        /*  DEC, RZ25 (rev 0900) = 832527 sectors  */
+        /*  DEC, RZ58 (rev 2000) = 2698061 sectors  */
+        memcpy(buf+8,  "DEC     ", 8);
+        memcpy(buf+16, "RZ58     (C) DEC", 16);
+        memcpy(buf+32, "2000", 4);
+      }
+
+      /*  Some data is different for CD-ROM drives:  */
+      fprintf(stderr, "SCSI: check device ptr %p\n", d);
+      if (d->is_a_cdrom) {
+        buf[0] = 0x05;  /*  0x05 = CD-ROM  */
+        buf[1] = 0x80;  /*  0x80 = removable  */
+        /*  memcpy(buf+16, "CD-ROM          ", 16);*/
+
+        if (machine->machine_type == MACHINE_PMAX) {
+          /*  SONY, CD-ROM:  */
+          memcpy(buf+8, "SONY    ", 8);
+          memcpy(buf+16,
+                 "CD-ROM          ", 16);
+          
+          /*  ... or perhaps this:  */
+          memcpy(buf+8, "DEC     ", 8);
+          memcpy(buf+16,
+                 "RRD42   (C) DEC ", 16);
+          memcpy(buf+32, "4.5d", 4);
+        } else if (machine->machine_type == MACHINE_ARC) {
+          /*  NEC, CD-ROM:  */
+          memcpy(buf+8, "NEC     ", 8);
+          memcpy(buf+16,
+                 "CD-ROM CDR-210P ", 16);
+          memcpy(buf+32, "1.0 ", 4);
+        }
+      }
+
+      /*  Data for tape devices:  */
+      if (d->is_a_tape) {
+        buf[0] = 0x01;  /*  0x01 = tape  */
+        buf[1] = 0x80;  /*  0x80 = removable  */
+        memcpy(buf+16, "TAPE            ", 16);
+        
+        if (machine->machine_type == MACHINE_PMAX) {
+          /*
+           *  TODO:  find out if these are correct.
+           *
+           *  The name might be TZK10, TSZ07, or TLZ04,
+           *  or something completely different.
+           */
+          memcpy(buf+8, "DEC     ", 8);
+          memcpy(buf+16,
+                 "TK50     (C) DEC", 16);
+          memcpy(buf+32, "2000", 4);
+        }
+      }
     }
 
-    fprintf(stderr, "SCSI: finish namebuf\n");
-		memcpy(xferp->data_in+32, "0   ", 4);
-
-		/*
-		 *  Some Ultrix kernels want specific responses from
-		 *  the drives.
-		 */
-		if (machine->machine_type == MACHINE_PMAX) {
-			/*  DEC, RZ25 (rev 0900) = 832527 sectors  */
-			/*  DEC, RZ58 (rev 2000) = 2698061 sectors  */
-			memcpy(xferp->data_in+8,  "DEC     ", 8);
-			memcpy(xferp->data_in+16, "RZ58     (C) DEC", 16);
-			memcpy(xferp->data_in+32, "2000", 4);
-		}
-
-		/*  Some data is different for CD-ROM drives:  */
-    fprintf(stderr, "SCSI: check device ptr %p\n", d);
-		if (d->is_a_cdrom) {
-			xferp->data_in[0] = 0x05;  /*  0x05 = CD-ROM  */
-			xferp->data_in[1] = 0x80;  /*  0x80 = removable  */
-			/*  memcpy(xferp->data_in+16, "CD-ROM          ", 16);*/
-
-			if (machine->machine_type == MACHINE_PMAX) {
-				/*  SONY, CD-ROM:  */
-				memcpy(xferp->data_in+8, "SONY    ", 8);
-				memcpy(xferp->data_in+16,
-				    "CD-ROM          ", 16);
-
-				/*  ... or perhaps this:  */
-				memcpy(xferp->data_in+8, "DEC     ", 8);
-				memcpy(xferp->data_in+16,
-				    "RRD42   (C) DEC ", 16);
-				memcpy(xferp->data_in+32, "4.5d", 4);
-			} else if (machine->machine_type == MACHINE_ARC) {
-				/*  NEC, CD-ROM:  */
-				memcpy(xferp->data_in+8, "NEC     ", 8);
-				memcpy(xferp->data_in+16,
-				    "CD-ROM CDR-210P ", 16);
-				memcpy(xferp->data_in+32, "1.0 ", 4);
-			}
-		}
-
-		/*  Data for tape devices:  */
-		if (d->is_a_tape) {
-			xferp->data_in[0] = 0x01;  /*  0x01 = tape  */
-			xferp->data_in[1] = 0x80;  /*  0x80 = removable  */
-			memcpy(xferp->data_in+16, "TAPE            ", 16);
-
-			if (machine->machine_type == MACHINE_PMAX) {
-				/*
-				 *  TODO:  find out if these are correct.
-				 *
-				 *  The name might be TZK10, TSZ07, or TLZ04,
-				 *  or something completely different.
-				 */
-				memcpy(xferp->data_in+8, "DEC     ", 8);
-				memcpy(xferp->data_in+16,
-				    "TK50     (C) DEC", 16);
-				memcpy(xferp->data_in+32, "2000", 4);
-			}
-		}
-
-    memcpy(old_ptr, buf, retlen);
-    xferp->data_in = old_ptr;
+		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in, retlen, 1);
+    memcpy(xferp->data_in, buf, retlen);
 
 		diskimage__return_default_status_and_message(xferp);
 		break;
@@ -505,8 +571,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		}
 
 		/*  Return data:  */
-		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in,
-		    8, 1);
+		scsi_transfer_allocbuf(&xferp->data_in_len, &xferp->data_in, 8, 1);
 
 		diskimage_recalc_size(d);
 
@@ -525,6 +590,8 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		xferp->data_in[5] = (d->logical_block_size >> 16) & 255;
 		xferp->data_in[6] = (d->logical_block_size >> 8) & 255;
 		xferp->data_in[7] = d->logical_block_size & 255;
+
+    fprintf(stderr, "scsi: read capacity returning blocks %08x block size %08x\n", (unsigned int)size, (unsigned int)d->logical_block_size);
 
 		diskimage__return_default_status_and_message(xferp);
 		break;
@@ -1117,16 +1184,29 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		/*  Set sector size to 2048:  */
 		/*  00 05 00 08 00 03 ca 40 00 00 08 00  */
+    for (int i = 0; i < xferp->data_out_len; i += 16) {
+      fprintf(stderr, "%02x:", (unsigned int)i);
+      for (int j = 0; j < 16 && j + i < xferp->data_out_len; j++) {
+        fprintf(stderr, " %02x", (unsigned int)xferp->data_out[i + j]);
+      }
+      fprintf(stderr, "\n");
+    }
 		if (xferp->data_out[0] == 0x00 &&
 		    xferp->data_out[1] == 0x05 &&
 		    xferp->data_out[2] == 0x00 &&
 		    xferp->data_out[3] == 0x08) {
-			d->logical_block_size =
-			    (xferp->data_out[9] << 16) +
-			    (xferp->data_out[10] << 8) +
-			    xferp->data_out[11];
-			debug("[ setting logical_block_size to %i ]\n",
-			    d->logical_block_size);
+      uint32_t new_block_size =
+        (xferp->data_out[9] << 16) +
+        (xferp->data_out[10] << 8) +
+        xferp->data_out[11];
+      if (new_block_size) {
+        d->logical_block_size = new_block_size;
+        debug("[ setting logical_block_size to %i ]\n",
+              d->logical_block_size);
+      } else {
+        debug("[ logical block size zero specified? set to 512? ]\n");
+        d->logical_block_size = 0x200;
+      }
 		} else {
 			int j;
 			fatal("[ unknown MODE_SELECT: cmd =");

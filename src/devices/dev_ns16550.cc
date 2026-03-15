@@ -112,7 +112,7 @@ DEVICE_TICK(ns16550)
 		}
 		d->available = ch;
     d->reg[com_lsr] |= LSR_RXRDY;
-		d->reg[com_iir] |= IIR_RXRDY;
+		d->reg[com_iir] |= IIR_RXTOUT; // (d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY;
 		break;
 	}
 
@@ -187,7 +187,7 @@ DEVICE_ACCESS(ns16550)
 		} else {
       fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
 			odata = d->available;
-      d->reg[com_iir] &= ~IIR_RXRDY;
+      d->reg[com_iir] &= ~IIR_RXTOUT; // ((d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY);
       d->reg[com_lsr] &= ~LSR_RXRDY;
       eval_interrupt(d);
 		}

@@ -781,6 +781,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 	case SCSICMD_WRITE:
 	case SCSICMD_WRITE_10:
+  case SCSICMD_WRITE_VERIFY_10:
 		debug("WRITE");
 
 		/*  TODO: tape  */
@@ -1199,7 +1200,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
         (xferp->data_out[9] << 16) +
         (xferp->data_out[10] << 8) +
         xferp->data_out[11];
-      if (new_block_size) {
+      if (new_block_size == 0x200 || new_block_size == 0x800) {
         d->logical_block_size = new_block_size;
         debug("[ setting logical_block_size to %i ]\n",
               d->logical_block_size);
@@ -1228,6 +1229,13 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		diskimage__return_default_status_and_message(xferp);
 		break;
+
+  case SCSICMD_RESERVE:
+  case SCSICMD_RESERVE_10:
+  case SCSICMD_RELEASE:
+  case SCSICMD_RELEASE_10:
+    diskimage__return_default_status_and_message(xferp);
+    break;
 
 	case 0xbd:
 		fatal("[ SCSI 0x%02x (len %i), TODO: ", xferp->cmd[0],

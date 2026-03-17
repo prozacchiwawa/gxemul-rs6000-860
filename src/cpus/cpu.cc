@@ -327,7 +327,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	symbol = get_symbol_name_and_n_args(cpu, &cpu->machine->symbol_context,
 	    f, &offset, &n_args);
 
-        if (pc == 0x97f04 || pc == 0x9b00 || (pc >= 0x150000 && pc < 0x160000) || (strchr(symbol, '+') && (trace_low != trace_high && pc < trace_low || pc >= trace_high))) {
+        if (pc == 0x97f04 || pc == 0x9b00 || (pc >= 0x150000 && pc < 0x160000) || ((symbol && strchr(symbol, '+')) && (trace_low != trace_high && pc < trace_low || pc >= trace_high))) {
           return;
         }
 

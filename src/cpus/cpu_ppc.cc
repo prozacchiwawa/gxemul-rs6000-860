@@ -2153,6 +2153,23 @@ int fpu_vsoft(struct cpu *cpu) {
   return (cpu->cd.ppc.fpscr & PPC_FPSCR_VXSOFT);
 }
 
+static inline void fpu_bit_ladder(struct cpu *cpu, bool isnan,  uint64_t &fpscr) {
+  if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
+    fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
+  }
+
+  // Propogate exceptions to fex.
+  uint32_t o = (fpscr & PPC_FPSCR_OE) && (fpscr & PPC_FPSCR_OX);
+  uint32_t u = (fpscr & PPC_FPSCR_UE) && (fpscr & PPC_FPSCR_UX);
+  uint32_t v = (fpscr & PPC_FPSCR_VE) && (fpscr & PPC_FPSCR_VX);
+  uint32_t z = (fpscr & PPC_FPSCR_ZE) && (fpscr & PPC_FPSCR_ZX);
+  uint32_t x = (fpscr & PPC_FPSCR_XE) && (fpscr & PPC_FPSCR_XX);
+
+  fprintf(stderr, "o %x u %x v %x z %x x %x\n", o, u, v, z, x);
+  bool fex = o | u | v | z | x;
+  fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
+}
+
 void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
 
@@ -2177,20 +2194,7 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
   bool qnan = !f64_isSignalingNaN(*result) && isnan;
   fprintf(stderr, "isnan %d qnan %d\n", isnan, qnan);
 
-  if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
-    fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
-  }
-
-  // Propogate exceptions to fex.
-  uint32_t o = (fpscr & PPC_FPSCR_OE) && (fpscr & PPC_FPSCR_OX);
-  uint32_t u = (fpscr & PPC_FPSCR_UE) && (fpscr & PPC_FPSCR_UX);
-  uint32_t v = (fpscr & PPC_FPSCR_VE) && (fpscr & PPC_FPSCR_VX);
-  uint32_t z = (fpscr & PPC_FPSCR_ZE) && (fpscr & PPC_FPSCR_ZX);
-  uint32_t x = (fpscr & PPC_FPSCR_XE) && (fpscr & PPC_FPSCR_XX);
-
-  fprintf(stderr, "o %x u %x v %x z %x x %x\n", o, u, v, z, x);
-  bool fex = o | u | v | z | x;
-  fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
+  fpu_bit_ladder(cpu, isnan, fpscr);
 
   if (qnan || f64_denormalized(*result) || !memcmp(result, &neg_zero, sizeof(neg_zero))) {
     fpscr |= PPC_FPSCR_CLASS;

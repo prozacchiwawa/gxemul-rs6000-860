@@ -816,6 +816,24 @@ X(mtfsfi)
 
 
 /*
+ *  mtfsb1x: set specified bit in FPSCR
+ *
+ *  arg[0] = crf
+ *  arg[1] = Rc
+ */
+X(mtfsb1x)
+{
+  uint64_t fpscr = cpu->cd.ppc.fpscr;
+    
+  fpscr |= 1 << ic->arg[0];
+  if (ic->arg[1]) {
+    fpu_bit_ladder(cpu, false, fpscr);
+  }
+  
+  cpu->cd.ppc.fpscr = fpscr;
+}
+
+/*
  *  mffs:  Copy FPSCR into a FPR.
  *
  *  arg[0] = ptr to frt
@@ -4348,6 +4366,12 @@ X(to_be_translated)
 				ic->arg[1] = (iword >> 24) & 7;
         ic->arg[2] = (iword >> 12) & 15;
         break;
+      case PPC_63_MTFSB1x:
+        ic->f = instr(mtfsb1x);
+        ic->arg[0] = 31 - ((iword >> 21) & 31);
+        ic->arg[1] = iword & 1;
+        break;
+        
 			default:{
         fprintf(stderr, "PPC_63: unknown xo %d (%08x)\n", xo, iword);
         goto bad;

@@ -688,13 +688,17 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     case 0x00:
     case 0x08:
     case 0x12:
+    case 0x16:
+    case 0x17:
     case 0x1a:
     case 0x25:
     case 0x28:
     case 0x42:
     case 0x43:
     case 0x51:
-    case 0x52: {
+    case 0x52:
+    case 0x56:
+    case 0x57: {
       if (req->cmd.buf[0] == 0x12 && req->cmd.buf[1] & 0x20 && req->cmd.buf[2]) {
         req->status = 2; // CHECK_CONDITION
         return 1;
@@ -734,6 +738,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
 
     case 0x0a:
     case 0x2a:
+    case 0x2e:
     case 0xaa:
     case 0x8a:
     case 0x7f: // Write
@@ -743,7 +748,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         if (req->xfer.cmd[0] == 0x0a) {
             req->xfer.data_out_len = req->cmd.buf[4] * req->dev->block_size;
             req->hba_private->dma_len = req->xfer.data_out_len;
-        } else if (req->xfer.cmd[0] == 0x2a) {
+        } else if (req->xfer.cmd[0] == 0x2a || req->xfer.cmd[0] == 0x2e) {
             req->xfer.data_out_len = ((req->cmd.buf[7] << 8) | req->cmd.buf[8]) * req->dev->block_size;
             req->hba_private->dma_len = req->xfer.data_out_len;
         } else {
@@ -897,7 +902,8 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     }
     case 0x0a:
     case 0x15:
-    case 0x2a: {
+    case 0x2a:
+    case 0x2e: {
         if (!req->transferred) {
             // Write
             req->result_buf = (uint8_t*)malloc(req->xfer.data_out_len);

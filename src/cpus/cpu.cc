@@ -502,6 +502,9 @@ void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *retur
 
         fprintf(stderr, "inq result\n");
         debug_mem_hexdump(cpu, cpu->mem, md_read, md_read + 256);
+      } else if (ioctl == 0xff01) {
+	fprintf(stderr, "device info\n");
+	debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[5 - 3], trace_match->stored[5 - 3] + 0x200);
       } else {
         fprintf(stderr, "don't know ioctl type\n");
       }

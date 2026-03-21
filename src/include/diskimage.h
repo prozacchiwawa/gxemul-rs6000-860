@@ -89,7 +89,7 @@ struct diskimage {
 	int		filemark;
 
 	int		rpms;
-	int		ncyls;
+  int   native_sector_size;
 };
 
 

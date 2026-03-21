@@ -2067,6 +2067,10 @@ void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, i
 #define EXP_MASK ((1 << EXP_BITS) - 1)
 #define MANTISSA_BITS 52
 #define MANTISSA_MASK ((1ull << MANTISSA_BITS) - 1)
+#define EXP32_BITS 7
+#define EXP32_MASK ((1 << EXP32_BITS) - 1)
+#define MANTI32A_BITS 23
+#define MANTI32A_MASK ((1ull << MANTI32A_BITS) - 1)
 
 float64_t pos_zero = { 0 };
 float64_t neg_zero = { 0x8000000000000000ull };
@@ -2105,6 +2109,18 @@ int f64_isnan(float64_t f) {
   uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
   uint64_t mantissa = f.v & MANTISSA_MASK;
   return exp == EXP_MASK && mantissa != 0;
+}
+
+int f32_isnan(float32_t f) {
+  uint64_t exp = (f.v >> MANTI32A_BITS) & EXP32_MASK;
+  uint64_t mantissa = f.v & MANTI32A_MASK;
+  return exp == EXP32_MASK && mantissa != 0;
+}
+
+int f64_isqnan(float64_t f) {
+  uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
+  uint64_t mantissa = f.v & MANTISSA_MASK;
+  return exp == EXP_MASK && (mantissa & ~(MANTISSA_MASK >> 1));
 }
 
 static inline uint64_t ppc_sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
@@ -2170,6 +2186,14 @@ static inline void fpu_bit_ladder(struct cpu *cpu, bool isnan,  uint64_t &fpscr)
   fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
 }
 
+std::string format_float(uint64_t fval) {
+  double f;
+  memcpy(&f, &fval, sizeof(f));
+  char buf[500];
+  sprintf(buf, "%f", f);
+  return std::string(buf);
+}
+
 void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
 
@@ -2214,7 +2238,8 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
     fpscr |= PPC_FPSCR_FE;
   }
 
-  fprintf(stderr, "final fpscr %08" PRIx64 "\n", fpscr);
+  auto formatted = format_float(result->v);
+  fprintf(stderr, "final fpscr %08" PRIx64 " value %s\n", fpscr, formatted.c_str());
   cpu->cd.ppc.fpscr = fpscr;
 }
 
@@ -2240,8 +2265,8 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   FPINST_PRELUDE();
 
   // Multiplying inf by 0 is an invalid multiplication.
-  if ((f64_isnan(fra) && f64_iszero(frc)) ||
-      (f64_iszero(fra) && f64_isnan(frc))) {
+  if ((f64_isnan(frc) && f64_iszero(frc)) ||
+      (f64_iszero(frc) && f64_isnan(frc))) {
     FP_SET_BIT(PPC_FPSCR_VXIMZ | PPC_FPSCR_VX);
     FPU_EXN;
   }
@@ -2253,6 +2278,10 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   extFloat80_t result;
   extF80M_mul(&efra, &efrc, &result);
   float64_t result_64 = extF80M_to_f64(&result);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
+  fprintf
+    (stderr, "fmul: %s * %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
   fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
@@ -2264,7 +2293,7 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   FPINST_PRELUDE();
 
   // Divide by zero.
-  if (f64_iszero(fra) && f64_iszero(frc)) {
+  if (f64_iszero(frc)) {
     FP_SET_BIT(PPC_FPSCR_VXZDZ);
     FPU_EXN;
   }
@@ -2274,22 +2303,19 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
     FPU_EXN;
   }
 
+  float64_t result_64 = f64_div(fra, frc);
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_div(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fdiv: %s / %s = %s\n", efra_str, efrc_str, result_str);
-  float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  result_64 = extF80M_to_f64(&result);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fdiv: %s / %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2307,16 +2333,12 @@ void base_fadd(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_add(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fadd: %s + %s = %s\n", efra_str, efrc_str, result_str);
   float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fadd: %s + %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2334,16 +2356,12 @@ void base_fsub(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_sub(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fsub: %s - %s = %s\n", efra_str, efrc_str, result_str);
   float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fsub: %s - %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2353,11 +2371,6 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
 
   FPINST_PRELUDE();
 
-  if (f64_iszero(frc)) {
-    FP_SET_BIT(PPC_FPSCR_VX);
-    FPU_EXN;
-  }
-
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
@@ -2365,7 +2378,8 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
   extFloat80_t result;
   extF80M_sub(&efra, &efrc, &result);
   float64_t result_64 = extF80M_to_f64(&result);
-  fprintf(stderr, "fcmp %" PRIX64 " - %" PRIx64 " = %" PRIx64 "\n", fra.v, frc.v, result_64.v);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
+  fprintf(stderr, "fcmp %s - %s -> %s\n", fra_s.c_str(), frc_s.c_str(), result_s.c_str());
   fpu_epilog(cpu, &result, &result_64);
 }
 

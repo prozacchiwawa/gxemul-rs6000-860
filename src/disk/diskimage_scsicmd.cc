@@ -196,19 +196,18 @@ static void diskimage__switch_tape(struct diskimage *d)
 /**************************************************************************/
 
 static int append_scsi_mode_sense_page(struct cpu *cpu, struct diskimage *d, int q, int pagecode, struct scsi_transfer *xferp) {
+  auto set_up_page = [pagecode, xferp, q](size_t size) {
+      memset(&xferp->data_in[q+2], 0, size);
+      xferp->data_in[q] = pagecode;
+      xferp->data_in[q+1] = size;
+    };
 		/*  page, n bytes (each)  */
 		switch (pagecode) {
-		case 0:
-			/*  TODO: Nothing here?  */
-      return 0;
-
 		case 1:		/*  read-write error recovery page  */
-			xferp->data_in[q + 0] = pagecode;
-			xferp->data_in[q + 1] = 10;
+      set_up_page(10);
       return 12;
 		case 3:		/*  format device page  */
-			xferp->data_in[q + 0] = pagecode;
-			xferp->data_in[q + 1] = 22;
+      set_up_page(22);
 
 			/*  10,11 = sectors per track  */
 			xferp->data_in[q + 10] = 0;
@@ -216,23 +215,23 @@ static int append_scsi_mode_sense_page(struct cpu *cpu, struct diskimage *d, int
 
 			/*  12,13 = physical sector size  */
 			xferp->data_in[q + 12] =
-			    (d->logical_block_size >> 8) & 255;
-			xferp->data_in[q + 13] = d->logical_block_size & 255;
+			    (d->native_sector_size >> 8) & 255;
+			xferp->data_in[q + 13] = d->native_sector_size & 255;
       return 24;
 		case 4:		/*  rigid disk geometry page  */
-			xferp->data_in[q + 0] = pagecode;
-			xferp->data_in[q + 1] = 22;
-			xferp->data_in[q + 2] = (d->ncyls >> 16) & 255;
-			xferp->data_in[q + 3] = (d->ncyls >> 8) & 255;
-			xferp->data_in[q + 4] = d->ncyls & 255;
+      set_up_page(22);
+      fprintf(stderr, "mode sense page 4 (22 bytes): %d cylinder, %d heads\n", d->cylinders, d->heads);
+			xferp->data_in[q + 2] = (d->cylinders >> 16) & 255;
+			xferp->data_in[q + 3] = (d->cylinders >> 8) & 255;
+			xferp->data_in[q + 4] = d->cylinders & 255;
 			xferp->data_in[q + 5] = d->heads;
 
 			xferp->data_in[q + 20] = (d->rpms >> 8) & 255;
 			xferp->data_in[q + 21] = d->rpms & 255;
       return 24;
 		case 5:		/*  flexible disk page  */
-			xferp->data_in[q + 0] = pagecode;
-			xferp->data_in[q + 1] = 0x1e;
+      set_up_page(0x1e);
+      fprintf(stderr, "mode sense page 5 (1e bytes): %d heads, %d sectors per track, %d native sector size, %d cylinders\n", d->heads, d->sectors_per_track, d->native_sector_size, d->cylinders);
 
 			/*  2,3 = transfer rate  */
 			xferp->data_in[q + 2] = ((5000) >> 8) & 255;
@@ -242,12 +241,12 @@ static int append_scsi_mode_sense_page(struct cpu *cpu, struct diskimage *d, int
 			xferp->data_in[q + 5] = d->sectors_per_track;
 
 			/*  6,7 = data bytes per sector  */
-			xferp->data_in[q + 6] = (d->logical_block_size >> 8)
+			xferp->data_in[q + 6] = (d->native_sector_size >> 8)
 			    & 255;
-			xferp->data_in[q + 7] = d->logical_block_size & 255;
+			xferp->data_in[q + 7] = d->native_sector_size & 255;
 
-			xferp->data_in[q + 8] = (d->ncyls >> 8) & 255;
-			xferp->data_in[q + 9] = d->ncyls & 255;
+			xferp->data_in[q + 8] = (d->cylinders >> 8) & 255;
+			xferp->data_in[q + 9] = d->cylinders & 255;
 
 			xferp->data_in[q + 28] = (d->rpms >> 8) & 255;
 			xferp->data_in[q + 29] = d->rpms & 255;
@@ -255,7 +254,8 @@ static int append_scsi_mode_sense_page(struct cpu *cpu, struct diskimage *d, int
 		default:
 			fatal("[ MODE_SENSE for page %i is not yet "
 			    "implemented! ]\n", pagecode);
-      return 0;
+      set_up_page(0);
+      return 2;
 		}
 }
 
@@ -371,6 +371,14 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
     retlen = xferp->cmd[4];
     memset(buf, 0, retlen);
 
+    // Setup the default empty page in case nothing matches.
+    if (d->is_a_cdrom) {
+      buf[0] = 5;
+    }
+    buf[1] = xferp->cmd[2];
+    buf[2] = 0;
+    buf[3] = 4;
+
     if (xferp->cmd[1] & 1) {
       const uint32_t MEGABYTE = 1024 * 1024;
       uint32_t meg_size;
@@ -381,8 +389,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
       switch (xferp->cmd[2]) {
         // "MF0808C,TM1010C,RL2004C,Z00008X,PN880cC,EC7e0aC,FN720cC"
 
-	      /*
       case 0xc7: // disk or cdrom vpd
+        if (true) { // d->is_a_cdrom) {
+          break;
+        }
         //  Return data:
         buf[1] = xferp->cmd[2];
         buf[2] = 0;
@@ -390,6 +400,8 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
         
         if (d->is_a_cdrom) {
           buf[0] = 5;
+        } else {
+          buf[0] = 0;
         }
         buf[3] = 0x60;
         buf[4] = 4;
@@ -398,10 +410,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
         buf[7] = 'D';
         buf[8] = 'D';
 
-	// number of luns
+        // number of luns
         buf[9] = 1;
 
-	// storage capacity in mb
+        // storage capacity in mb
         diskimage_recalc_size(d);
         meg_size = (d->total_size + (MEGABYTE - 1)) / MEGABYTE;
         buf[10] = meg_size >> 24;
@@ -409,21 +421,27 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
         buf[12] = meg_size >> 8;
         buf[13] = meg_size;
 
-	// queue depth
-	buf[20] = 1;
+        // queue depth
+        buf[20] = 1;
+        
+        // technology code
+        buf[33] = 1;
+        // interface id
+        buf[34] = 1;
 
-	// technology code
-	buf[33] = 1;
-	// interface id
-	buf[34] = 1;
+        // length of os identifier
+        buf[75] = 8;
+        buf[76] = '0';
+        buf[77] = '1';
+        buf[78] = '2';
+        buf[79] = '3';
+        buf[80] = '4';
+        buf[81] = '5';
+        buf[82] = '6';
+        buf[83] = '7';
+        buf[84] = '8';
 
-	// length of os identifier
-	buf[75] = 3;
-	buf[76] = 'A';
-	buf[77] = 'I';
-	buf[78] = 'X';
-
-	// led code
+        // led code
         buf[85] = 0x73;
         buf[86] = 0x40;
         buf[87] = 0x00;
@@ -448,15 +466,8 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
           memcpy(buf + 4, c8_mode_data, sizeof(c8_mode_data));
         }
         break;
-	*/
         
       default:
-        if (d->is_a_cdrom) {
-          buf[0] = 5;
-        }
-        buf[1] = xferp->cmd[2];
-        buf[2] = 0;
-        buf[3] = 4;
         break;
       }
 		} else {
@@ -597,8 +608,11 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICMD_MODE_SENSE:
-	case SCSICMD_MODE_SENSE10:
+	case SCSICMD_MODE_SENSE10: {
 		debug("MODE_SENSE");
+    int program_control = xferp->cmd[2] >> 6;
+    int subpage_code = xferp->cmd[3];
+
 		q = 4; retlen = xferp->cmd[4];
 		switch (xferp->cmd_len) {
 		case 6:	break;
@@ -609,6 +623,15 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 			    xferp->cmd_len);
 		}
 
+    if (subpage_code != 0) {
+      fprintf(stderr, "mode sense: unknown subpage code %02x\n", subpage_code);
+    }
+
+    int control = xferp->cmd[q+1];
+    if (control != 0) {
+      fprintf(stderr, "mode sense: control %02x\n", control);
+    }
+
 		/*
 		 *  NOTE/TODO: This code doesn't handle too short retlens
 		 *  very well. A quick hack around this is that I allocate
@@ -618,9 +641,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		retlen += 100;		/*  Should be enough. (Ugly.)  */
 
-		if ((xferp->cmd[2] & 0xc0) != 0)
+		if ((xferp->cmd[2] & 0xc0) != 0) {
 			fatal("WARNING: mode sense, cmd[2] = 0x%02x\n",
 			    xferp->cmd[2]);
+    }
 
 		/*  Return data:  */
 		scsi_transfer_allocbuf(&xferp->data_in_len,
@@ -643,9 +667,13 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 						    length: 1 page (?)  */
 
 		xferp->data_in[q+0] = 0x00;	/*  density code  */
-		xferp->data_in[q+1] = 0;	/*  nr of blocks, high  */
-		xferp->data_in[q+2] = 0;	/*  nr of blocks, mid  */
-		xferp->data_in[q+3] = 0;	/*  nr of blocks, low */
+    auto number_of_blocks = d->total_size / d->logical_block_size;
+    if (number_of_blocks >= 1 << 24) {
+        number_of_blocks = 0;
+    }
+		xferp->data_in[q+1] = number_of_blocks >> 16;	/*  nr of blocks, high  */
+		xferp->data_in[q+2] = number_of_blocks >> 8;	/*  nr of blocks, mid  */
+		xferp->data_in[q+3] = number_of_blocks;	/*  nr of blocks, low */
 		xferp->data_in[q+4] = 0x00;	/*  reserved  */
 		xferp->data_in[q+5] = (d->logical_block_size >> 16) & 255;
 		xferp->data_in[q+6] = (d->logical_block_size >> 8) & 255;
@@ -655,15 +683,25 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		diskimage__return_default_status_and_message(xferp);
 
 		/*  descriptors, 8 bytes (each)  */
+    auto zero_page_code_data = [xferp](int old_q, int q) {
+      auto first_zero_byte = (uint8_t *)&xferp->data_in[old_q+2];
+      auto end_zero_byte = (uint8_t *)&xferp->data_in[q];
+      memset(first_zero_byte, 0, end_zero_byte - first_zero_byte);
+    };
+    
     if (pagecode == 63) {
-      q += append_scsi_mode_sense_page(cpu, d, q, 1, xferp);
-      q += append_scsi_mode_sense_page(cpu, d, q, 3, xferp);
-      q += append_scsi_mode_sense_page(cpu, d, q, 4, xferp);
-      q += append_scsi_mode_sense_page(cpu, d, q, 5, xferp);
+      int page_codes[] = {0}; // ,1,3,4,5,0};
+      for (int i = 0; page_codes[i]; i++) {
+        int old_q = q;
+        q += append_scsi_mode_sense_page(cpu, d, q, page_codes[i], xferp);
+        if (program_control == 1) { zero_page_code_data(old_q, q); }
+      }
     } else {
-      append_scsi_mode_sense_page(cpu, d, q, pagecode, xferp);
+      int old_q = q;
+        int end_q = append_scsi_mode_sense_page(cpu, d, q, pagecode, xferp);
+        if (program_control == 1) { zero_page_code_data(old_q, end_q); }
     }
-		break;
+  } break;
 
 	case SCSICMD_READ:
 	case SCSICMD_READ_10:

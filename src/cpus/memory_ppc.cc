@@ -103,7 +103,7 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
  *  Returns 0 if no match was found.
  */
 static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
-    uint32_t *lowp, uint32_t cmp, bool write)
+                       uint32_t *lowp, uint64_t vaddr, uint32_t cmp, bool write)
 {
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
@@ -127,8 +127,13 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
 			uint32_t lo = BE32_TO_HOST(ep[1]);
 			*lowp = lo;
 
-      d[((i << 3) + 6) ^ swizzle] |= 1;
-      d[((i << 3) + 7) ^ swizzle] |= write ? 0x80 : 0;
+      auto ent_ptr = &d[((i << 3) + 7) ^ swizzle];
+      auto old_write_ent = *ent_ptr;
+      d[((i << 3) + 6) ^ swizzle] |= PTE_REF >> 8;
+      *ent_ptr |= write ? PTE_CHG : 0;
+      if (*ent_ptr != old_write_ent) {
+        fprintf(stderr, "[ ppc_pte: %08x set to R%c ]\n", (unsigned int)vaddr, (*ent_ptr & PTE_CHG) ? 'C' : 'c');
+      }
 			return 1;
 		}
 	}
@@ -168,7 +173,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH1] = pteg_select;
 	cmp = cpu->cd.ppc.spr[instr? SPR_ICMP : SPR_DCMP] =
 	    PTE_VALID | api | (vsid << PTE_VSID_SHFT);
-	match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, writeflag);
+	match = get_pte_low(cpu, pteg_select, &lower_pte, vaddr, cmp, writeflag);
 
 	/*  Secondary hash:  */
 	hash2 = hash1 ^ 0x7ffff;
@@ -179,7 +184,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH2] = pteg_select;
 	if (!match) {
 		cmp |= PTE_HID;
-		match = get_pte_low(cpu, pteg_select, &lower_pte, cmp, writeflag);
+		match = get_pte_low(cpu, pteg_select, &lower_pte, vaddr, cmp, writeflag);
 	}
 
 	*resp = 0;

@@ -58,6 +58,9 @@
 
 template <class T, class Return>
 static inline void instr(update_pc_for_branch)(struct cpu *cpu, T &arch, Return report, uint64_t addr) {
+  if (addr >= 0xffffffff) {
+    abort();
+  }
 	uint64_t old_pc = cpu->pc;
 
   auto alignment_shift = cpu_traits<T>::instr_alignment_shift();
@@ -1302,6 +1305,10 @@ X(llsc)
       d[3^swizzle] = value;
     }
 
+    uint64_t unused_return;
+    // Ensure we set written.
+    ppc_translate_v2p(cpu, addr ^ offset, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+
     if (page) {
       memcpy(page + ((addr & 0xfff) ^ offset), d, len);
     } else if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
@@ -1389,9 +1396,9 @@ X(mtsr)
 
   sync_pc(cpu, ic);
 
-  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
-    fprintf(stderr, "[ %08x mtsr (%s) %x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", sr_num, (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
-  }
+  // if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    // fprintf(stderr, "[ %08x mtsr (%s) %x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", sr_num, (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  // }
 
 	if (cpu->cd.ppc.sr[sr_num] != old)
 		cpu->invalidate_translation_caches(cpu, sr_num << 28,
@@ -1406,9 +1413,9 @@ X(mtsrin)
 
   sync_pc(cpu, ic);
 
-  if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
-    fprintf(stderr, "[ %08x mtsrin (%s) %08x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", (unsigned int)reg(ic->arg[0]), (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
-  }
+  // if (sr_num == 3 && old != cpu->cd.ppc.sr[sr_num]) {
+    // fprintf(stderr, "[ %08x mtsrin (%s) %08x = %08x -> %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, user ? "USER" : "kern", (unsigned int)reg(ic->arg[0]), (unsigned int)old, (unsigned int)cpu->cd.ppc.sr[sr_num], cpu->ninstrs);
+  // }
 
 	if (cpu->cd.ppc.sr[sr_num] != old)
 		cpu->invalidate_translation_caches(cpu, sr_num << 28,
@@ -1829,9 +1836,9 @@ X(rfi)
 	tmp |= (cpu->cd.ppc.spr[SPR_SRR1] & 0xffff);
 
   auto new_addr = cpu->cd.ppc.spr[SPR_SRR0];
-  if (new_addr == 0x804c0004) {
-    fprintf(stderr, "%08x: new addr 0x804c0004\n", (unsigned int)cpu->pc);
-  }
+  // if (new_addr == 0x804c0004) {
+    // fprintf(stderr, "%08x: new addr 0x804c0004\n", (unsigned int)cpu->pc);
+  // }
   cpu->pc = cpu->cd.ppc.spr[SPR_SRR0];
 	reg_access_msr(cpu, &tmp, 1, ic, 0);
 
@@ -2072,7 +2079,7 @@ X(lswi)
     addr += (ssize_t)cpu->cd.ppc.gpr[rb];
     nb = cpu->cd.ppc.spr[SPR_XER] & 127;
     if (nb == 0) {
-      fprintf(stderr, "lswx: zero bytes\n");
+      // fprintf(stderr, "lswx: zero bytes\n");
       cpu->cd.ppc.gpr[rt] = 0;
       return;
     }
@@ -2094,7 +2101,7 @@ X(lswi)
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
                        MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
-      fprintf(stderr, "%08x LSW%c read failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
+      // fprintf(stderr, "%08x LSW%c read failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
 			return;
 		}
 
@@ -2106,7 +2113,7 @@ X(lswi)
 
   while (rt != start_rt) {
     if ((&cpu->cd.ppc.gpr[rt] == (uint64_t *)ic->arg[1]) || (rt == rb)) {
-      fprintf(stderr, "lsw%c: skip overlap of ra or rb register %02d\n", ix, rt);
+      // fprintf(stderr, "lsw%c: skip overlap of ra or rb register %02d\n", ix, rt);
     } else {
       // fprintf(stderr, "lsw%c: r%02d = %08x\n", ix, rt, (unsigned int)register_values[rt]);
       cpu->cd.ppc.gpr[rt] = register_values[rt];
@@ -2141,6 +2148,9 @@ X(stswi)
   }
 
   sync_pc(cpu, ic);
+  auto current_addr = addr;
+  // Update written
+  uint64_t unused_return;
 
 	while (nb > 0) {
 		unsigned char d = cur >> 24;
@@ -2148,6 +2158,9 @@ X(stswi)
     if (sub == 0) {
       // fprintf(stderr, "stsw%c: r%02d %08x = %08x\n", ix, rs, (unsigned int)addr, cur);
     }
+
+    // Ensure we set written.
+    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
 
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
 		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
@@ -2171,6 +2184,10 @@ X(stswi)
 		addr ++;
 		nb --;
 	}
+
+  if (addr ^ current_addr < 0x1000) {
+    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
+  }
 }
 
 
@@ -2891,7 +2908,7 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  // fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;

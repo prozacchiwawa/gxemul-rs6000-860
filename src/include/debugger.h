@@ -57,6 +57,7 @@ typedef struct _keyboard_event_t {
 } keyboard_event_t;
 
 extern std::deque<keyboard_event_t> keyboard_debug_events;
+extern std::deque<uint8_t> debug_serial0_chars;
 
 struct dump_register_state_t {
   void *f;

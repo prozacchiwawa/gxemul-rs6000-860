@@ -1504,6 +1504,21 @@ static void debugger_cmd_kbd(struct machine *m, char *cmd_line) {
   } while (isxdigit(*endptr));
 }
 
+static void debugger_cmd_serial(struct machine *m, char *cmd_line) {
+  char *endptr;
+
+  do {
+    unsigned long ch = strtoul(cmd_line, &endptr, 16);
+    while (*endptr == ' ') {
+      endptr++;
+    }
+
+    cmd_line = endptr;
+
+    debug_serial0_chars.push_back(ch);
+  } while (isxdigit(*endptr));
+}
+
 static void debugger_cmd_script(struct machine *m, char *cmd_line) {
   std::string line;
   std::ifstream in;
@@ -1789,6 +1804,8 @@ static struct cmd cmds[] = {
   { "until", "number of instructions", 0, debugger_cmd_until, "Run until roughly the n'th emulated instruction" },
 
   { "kbd", "hex ...", 0, debugger_cmd_kbd, "Inject these bytes into the keyboard byte stream" },
+
+  { "serial", "hex ...", 0, debugger_cmd_serial, "Inject these bytes into the serial byte stream" },
 
   { "script", "file", 0, debugger_cmd_script, "Inject a script.  The next command will be run whenever the debugger needs a new command until empty." },
 

@@ -483,4 +483,11 @@ public:
 
 extern void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, uint64_t addr_end);
 
+struct ba_target_name {
+  uint32_t address;
+  const char *name;
+};
+
+extern struct ba_target_name ba_names[];
+
 #endif	/*  CPU_H  */

@@ -60,6 +60,7 @@ constexpr int STORED_CALL_CFGSCCD_ODM_GET_OBJ_PROXY = 9;
 constexpr int STORED_CALL_QUERY_VPD = 10;
 constexpr int STORED_CALL_ODM_GET_LIST = 11;
 constexpr int STORED_CALL_ODM_ADD_OBJ_PROXY = 12;
+constexpr int STORED_CALL_DEVWRITE = 13;
 // constexpr int STORED_SYSCALL_LOG_ERROR = 5;
 // constexpr int STORED_SYSCALL_LOG_MESSAGE = 6;
 // constexpr int STORED_CALL_DEVSWQRY = 7;
@@ -89,6 +90,7 @@ struct match_functions_t trace_functions[] = {
   { "query_vpd", (1 << 3) | (1 << 4) | (1 << 6) },
   { "odm_get_list_proxy", (1 << 4), 0xd00f8110, 0xd00f8114 },
   { "odm_add_obj_proxy", (1 << 5) },
+  { "devwrite", (1 << 3) | (1 << 4) },
 //  { "devswqry", 1 << 4, 0x57a34, 0x57864 },
 //  { "devswadd", 1 << 4, 0xfbfbc },
 //   { "devswdel", 1 << 4, 0xfbdd8 },
@@ -404,6 +406,10 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
     fprintf(stderr, "r4\n");
     debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x200);
     break;
+
+  case STORED_CALL_DEVWRITE:
+    fprintf(stderr, "r3\n");
+    
   }
 
     /*
@@ -896,3 +902,21 @@ void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, u
 		addr += sizeof(buf);
 	}
 }
+
+struct ba_target_name ba_names[] = {
+  { 0x000a4f78, "p_getpte_ppc" },
+  { 0x000a556c, "p_delpte_ppc" },
+  { 0x000a56d0, "p_delallpte_ppc" },
+  { 0x000a5820, "p_inspte_ppc" },
+  { 0x000a5a7c, "p_lookup_ppc" },
+  { 0x000a5bb8, "p_page_protect_ppc" },
+  { 0x000a5ce4, "p_protect_ppc" },
+  { 0x000a5e30, "p_clear_modify_ppc" },
+  { 0x000a5f80, "p_is_referenced_ppc" },
+  { 0x000a60d4, "p_is_modified_ppc" },
+  { 0x000a61cc, "p_remove_all_ppc" },
+  { 0x000a6268, "p_remove_ppc" },
+  { 0x000a63f0, "p_rename_ppc" },
+  { 0x000a6488, "p_enter_ppc" },
+  {}
+};

@@ -1751,7 +1751,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			unsigned char tw[8];
 			uint64_t tdata = 0;
 			int i, res = cpu->memory_rw(cpu, cpu->mem, addr, tw,
-			    wlen, MEM_READ, NO_EXCEPTIONS);
+			    wlen, MEM_READ, NO_EXCEPTIONS | HOST_ACCESS);
 			if (res) {
 				if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
 					for (i=0; i<wlen; i++) {

@@ -502,7 +502,11 @@ static const char *scsi_phases[] = {
     "MSGIN"
 };
 
+#if 0
 #define TRACE(kind, alist, args...) fprintf(stderr, kind " %s:%d (" alist ")\n", __FILE__, __LINE__ ,##args)
+#else
+#define TRACE(kind, alist, args...) do { } while (0)
+#endif
 
 #define trace_lsi_reset(args...) TRACE("trace_lsi_reset", "",##args)
 #define trace_lsi_update_irq(args...) TRACE("trace_lsi_update_irq", "%d %08x %08x %08x",##args)

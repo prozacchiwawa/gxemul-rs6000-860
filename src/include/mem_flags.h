@@ -14,6 +14,7 @@
 #define	NO_EXCEPTIONS			2
 #define	PHYSICAL			32
 #define	MEMORY_USER_ACCESS		64	/*  for ARM and M88K  */
+#define HOST_ACCESS 256
 
 /*  Dyntrans Memory flags:  */
 #define	DM_DEFAULT				0
@@ -25,6 +26,7 @@
 #define FLAG_WRITEFLAG          MEM_WRITE
 #define FLAG_NOEXCEPTIONS       NO_EXCEPTIONS
 #define FLAG_INSTR              4
+#define FLAG_HOST               HOST_ACCESS
 #define FLAG_VERBOSE            0x80000000
 
 #define	MEMORY_ACCESS_FAILED		0

@@ -316,9 +316,18 @@ X(b)
 	/*  Find the new physical page and update the translation pointers:  */
 	quick_pc_to_pointers(cpu);
 }
+
 X(ba)
 {
 	cpu->pc = ic->arg[0];
+  if (cpu->machine->show_trace_tree) {
+    for (auto i = 0; ba_names[i].name; i++) {
+      if (ba_names[i].address == cpu->pc) {
+        cpu_functioncall_trace(cpu, ba_names[i].address);
+        break;
+      }
+    }
+  }
 	quick_pc_to_pointers(cpu);
 }
 
@@ -802,6 +811,11 @@ X(mtfsf)
 	cpu->cd.ppc.fpscr &= ~ic->arg[1];
 	cpu->cd.ppc.fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
 }
+X(mtfsf_dot)
+{
+  instr(mtfsf)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 
 /*
  *  mtfsf:  Copy FPR into the FPSCR.
@@ -816,24 +830,30 @@ X(mtfsfi)
 	cpu->cd.ppc.fpscr &= ~(15 << (ic->arg[1] * 4));
 	cpu->cd.ppc.fpscr |= ic->arg[2] << (ic->arg[1] * 4);
 }
+X(mtfsfi_dot)
+{
+  instr(mtfsfi)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 
 
 /*
  *  mtfsb1x: set specified bit in FPSCR
  *
  *  arg[0] = crf
- *  arg[1] = Rc
+ *  arg[1] = zero the bit
  */
 X(mtfsb1x)
 {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
     
-  fpscr |= 1 << ic->arg[0];
-  if (ic->arg[1]) {
-    fpu_bit_ladder(cpu, false, fpscr);
-  }
-  
+  fpscr = (fpscr | (1 << ic->arg[0])) ^ (ic->arg[1] << ic->arg[0]);
   cpu->cd.ppc.fpscr = fpscr;
+}
+X(mtfsb1x_dot)
+{
+  instr(mtfsb1x)(cpu, ic);
+  fpu_update_cr1(cpu);
 }
 
 /*
@@ -845,6 +865,11 @@ X(mffs)
 {
 	CHECK_FOR_FPU_EXCEPTION;
 	(*(uint64_t *)ic->arg[0]) = cpu->cd.ppc.fpscr;
+}
+X(mffs_dot)
+{
+  instr(mffs)(cpu, ic);
+  fpu_update_cr1(cpu);
 }
 
 /*
@@ -877,7 +902,11 @@ X(fmr)
 	CHECK_FOR_FPU_EXCEPTION;
 	*(uint64_t *)ic->arg[1] = *(uint64_t *)ic->arg[0];
 }
-
+X(fmr_dot)
+{
+  instr(fmr)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 
 /*
  *  fabs:  Floating-point Absulute Value
@@ -891,6 +920,11 @@ X(fabs)
 	CHECK_FOR_FPU_EXCEPTION;
 	v = *(uint64_t *)ic->arg[0];
 	*(uint64_t *)ic->arg[1] = v & 0x7fffffffffffffffULL;
+}
+X(fabs_dot)
+{
+  instr(fabs)(cpu, ic);
+  fpu_update_cr1(cpu);
 }
 
 
@@ -906,6 +940,11 @@ X(fneg)
 	CHECK_FOR_FPU_EXCEPTION;
 	v = *(uint64_t *)ic->arg[0];
 	*(uint64_t *)ic->arg[1] = v ^ 0x8000000000000000ULL;
+}
+X(fneg_dot)
+{
+  instr(fneg)(cpu, ic);
+  fpu_update_cr1(cpu);
 }
 
 
@@ -958,6 +997,10 @@ X(frsp)
 	cpu->cd.ppc.fpscr |= (c << PPC_FPSCR_FPCC_SHIFT);
 	(*(uint64_t *)ic->arg[1]) = f32_to_f64(float_result).v;
 }
+X(frsp_dot) {
+  instr(frsp)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 
 
 /*
@@ -991,6 +1034,11 @@ X(fctiwz)
 
 	*(uint64_t *)ic->arg[1] = (uint32_t)res;
 }
+X(fctiwz_dot)
+{
+  instr(fctiwz)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 
 /*
  *  fmul:  Floating-point Multiply
@@ -1018,6 +1066,11 @@ X(fmuls)
 	/*  TODO  */
   fprintf(stderr, "fmuls: f%d x f%d -> f%d\n", (uint64_t *)ic->arg[1] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[2] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[0] - cpu->cd.ppc.fpr);
 	instr(fmul)(cpu, ic);
+}
+X(fmuls_dot)
+{
+  instr(fmuls)(cpu, ic);
+  fpu_update_cr1(cpu);
 }
 
 
@@ -1052,6 +1105,11 @@ X(fmadd)
 	(*(uint64_t *)ic->arg[0]) = result.v;
 }
 
+X(fmadd_dot)
+{
+  instr(fmadd)(cpu, ic);
+  fpu_update_cr1(cpu);  
+}
 
 /*
  *  fmsub:  Floating-point Multiply and Sub
@@ -1065,6 +1123,7 @@ X(fmsub)
 	uint32_t iw = ic->arg[2];
 	int b = (iw >> 11) & 31, c = (iw >> 6) & 31;
 	int nan = 0, cc;
+  bool fnm = ((iw >> 1) & 0x1f) == PPC_63_FNMSUBX;
 
 	CHECK_FOR_FPU_EXCEPTION;
 
@@ -1080,8 +1139,12 @@ X(fmsub)
   } else {
     float64_t mul_result = f64_mul(fra, frc);
     result = f64_sub(mul_result, frb);
+    if (fnm) {
+      float64_t zero = { 0 };
+      result = f64_sub(zero, result);
+    }
     auto fa = format_float(fra.v), fb = format_float(frb.v), fc = format_float(frc.v), fr = format_float(result.v);
-    fprintf(stderr, "fmsub %s * %s - %s = %s\n", fa.c_str(), fb.c_str(), fc.c_str(), fr.c_str());
+    fprintf(stderr, "f%smsub %s * %s - %s = %s\n", fnm ? "n" : "", fa.c_str(), fc.c_str(), fb.c_str(), fr.c_str());
   }
 
   if (nan) {
@@ -1100,6 +1163,18 @@ X(fmsub)
 	cpu->cd.ppc.fpscr |= (cc << PPC_FPSCR_FPCC_SHIFT);
 
 	(*(uint64_t *)ic->arg[0]) = result.v;
+}
+
+X(fmsub_dot)
+{
+  instr(fmsub)(cpu, ic);
+  fpu_update_cr1(cpu);
+}  
+
+X(fnmsubx_dot)
+{
+  instr(fmsub)(cpu, ic);
+  fpu_update_cr1(cpu);  
 }
 
 
@@ -1127,6 +1202,11 @@ X(fadds)
 	/*  TODO  */
 	instr(fadd)(cpu, ic);
 }
+X(fadds_dot)
+{
+  instr(fadds)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 X(fsub)
 {
   base_fsub(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
@@ -1141,6 +1221,11 @@ X(fsubs)
 	/*  TODO  */
 	instr(fsub)(cpu, ic);
 }
+X(fsubs_dot)
+{
+	instr(fsubs)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
 X(fdiv)
 {
   base_fdiv(cpu, ic, (uint64_t *)ic->arg[2], (uint64_t*)ic->arg[0], (uint64_t *)ic->arg[1]);
@@ -1154,6 +1239,11 @@ X(fdivs)
 {
 	/*  TODO  */
 	instr(fdiv)(cpu, ic);
+}
+X(fdivs_dot)
+{
+  instr(fdivs)(cpu, ic);
+  fpu_update_cr1(cpu);  
 }
 
 
@@ -1199,7 +1289,7 @@ X(llsc)
 	/*  Synchronize the PC so the exception below can target the right location.  */
   sync_pc(cpu, ic);
 
-  if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, 0)) {
+  if (!ppc_translate_v2p(cpu, addr ^ offset, &final_addr, load ? 0 : MEM_WRITE)) {
     // Will throw.
     fprintf(stderr, "llsc: no translation?\n");
     return;
@@ -1304,10 +1394,6 @@ X(llsc)
       d[2^swizzle] = value >> 8;
       d[3^swizzle] = value;
     }
-
-    uint64_t unused_return;
-    // Ensure we set written.
-    ppc_translate_v2p(cpu, addr ^ offset, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
 
     if (page) {
       memcpy(page + ((addr & 0xfff) ^ offset), d, len);
@@ -2140,39 +2226,46 @@ X(stswi)
     int rb = ic->arg[2] & 31;
     addr += (ssize_t)cpu->cd.ppc.gpr[rb];
     nb = cpu->cd.ppc.spr[SPR_XER] & 127;
-    if (nb == 0) {
-      // fprintf(stderr, "lswx: zero bytes\n");
-      return;
-    }
-    // fprintf(stderr, "stswx: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
+  }
+
+  // Ensure no action is taken unless we have bytes.
+  if (nb == 0) {
+    return;
   }
 
   sync_pc(cpu, ic);
-  auto current_addr = addr;
-  // Update written
-  uint64_t unused_return;
+  auto pc = cpu->pc;
 
-	while (nb > 0) {
+  // Update written
+  uint64_t physical_pages[2];
+
+  // Ensure we set written.
+  // fprintf(stderr, "%08x STSW%c set written %08x nb %d\n", (unsigned int)cpu->pc, ix, (unsigned int)addr, nb);
+  if (!ppc_translate_v2p(cpu, addr, &physical_pages[0], FLAG_WRITEFLAG)) {
+    // fprintf(stderr, "%08x STSW%c set written failed %08x\n", (unsigned int)pc, ix, (unsigned int)addr);
+    /* exception */
+    return;
+  }
+
+  auto last_byte_ptr = addr + nb - 1;
+  if ((last_byte_ptr ^ addr) >= 0x1000) {
+    // fprintf(stderr, "%08x STSW%c setting a second write bit for addr %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)last_byte_ptr);
+    if (!ppc_translate_v2p(cpu, last_byte_ptr, &physical_pages[1], FLAG_WRITEFLAG)) {
+      // fprintf(stderr, "%08x STSW%c set written failed %08x\n", (unsigned int)pc, ix, (unsigned int)addr);
+      /* exception */
+      return;
+    }
+  }
+
+  do {
 		unsigned char d = cur >> 24;
 
-    if (sub == 0) {
-      // fprintf(stderr, "stsw%c: r%02d %08x = %08x\n", ix, rs, (unsigned int)addr, cur);
-    }
-
-    // Ensure we set written.
-    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
-
 		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
-		    MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
-      fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
-			/*  exception  */
-			return;
-		}
-
-    // Update written
-    uint64_t unused_return;
-    // Ensure we set written.
-    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
+                       MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+      fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)pc, ix, addr);
+      /* exception */
+      return;
+    }
 
 		cur <<= 8;
 		sub ++;
@@ -2183,11 +2276,7 @@ X(stswi)
 		}
 		addr ++;
 		nb --;
-	}
-
-  if (addr ^ current_addr < 0x1000) {
-    ppc_translate_v2p(cpu, addr ^ offset ^ swizzle, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);    
-  }
+	} while (nb > 0);
 }
 
 
@@ -2584,7 +2673,7 @@ X(lfsx)
 #else
 	ppc_loadstore_indexed
 #endif
-	    [2 + 4 + 8 + 16](cpu, ic);
+	    [2 + 4 + 8](cpu, ic);
 
 	if (old_pc == cpu->pc) {
 		/*  The load succeeded. Let's convert the value:  */
@@ -2629,7 +2718,7 @@ X(lfdx)
 #else
 	ppc_loadstore_indexed
 #endif
-	    [3 + 4 + 8 + 16](cpu, ic);
+	    [3 + 4 + 8](cpu, ic);
 }
 X(stfs)
 {
@@ -4244,16 +4333,38 @@ X(to_be_translated)
 		case PPC_59_FSUBS:
 		case PPC_59_FADDS:
 			switch (xo & 31) {
-			case PPC_59_FDIVS: ic->f = instr(fdivs); break;
-			case PPC_59_FSUBS: ic->f = instr(fsubs); break;
-			case PPC_59_FADDS: ic->f = instr(fadds); break;
+			case PPC_59_FDIVS:
+        if (rc) {
+          ic->f = instr(fdivs_dot);
+        } else {
+          ic->f = instr(fdivs);
+        }
+        break;
+			case PPC_59_FSUBS:
+        if (rc) {
+          ic->f = instr(fsubs_dot);
+        } else {
+          ic->f = instr(fsubs);
+        }
+        break;
+			case PPC_59_FADDS:
+        if (rc) {
+          ic->f = instr(fadds_dot);
+        } else {
+          ic->f = instr(fadds);
+        }
+        break;
 			}
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			break;
 		case PPC_59_FMULS:
-			ic->f = instr(fmuls);
+      if (rc) {
+        ic->f = instr(fmuls_dot);
+      } else {
+        ic->f = instr(fmuls);
+      }
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rs]);
@@ -4319,11 +4430,32 @@ X(to_be_translated)
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rs]);
 			break;
+      
 		case PPC_63_FMSUB:
 		case PPC_63_FMADD:
+    case PPC_63_FNMSUBX:
 			switch (xo & 31) {
-			case PPC_63_FMSUB: ic->f = instr(fmsub); break;
-			case PPC_63_FMADD: ic->f = instr(fmadd); break;
+			case PPC_63_FMSUB:
+        if (rc) {
+          ic->f = instr(fmsub_dot);
+        } else {
+          ic->f = instr(fmsub);
+        }
+        break;
+			case PPC_63_FMADD:
+        if (rc) {
+          ic->f = instr(fmadd_dot);
+        } else {
+          ic->f = instr(fmadd);
+        }
+        break;
+      case PPC_63_FNMSUBX:
+        if (rc) {
+          ic->f = instr(fnmsubx_dot);
+        } else {
+          ic->f = instr(fmsub);
+        }
+        break;
 			}
 			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
@@ -4351,19 +4483,59 @@ X(to_be_translated)
 			case PPC_63_FABS:
 			case PPC_63_FMR:
 				switch (xo) {
-				case PPC_63_FRSP:   ic->f = instr(frsp); break;
-				case PPC_63_FCTIWZ: ic->f = instr(fctiwz);break;
+				case PPC_63_FRSP:
+          if (rc) {
+            ic->f = instr(frsp_dot);
+          } else {
+            ic->f = instr(frsp);
+          }
+          break;
+				case PPC_63_FCTIWZ:
+          if (rc) {
+            ic->f = instr(fctiwz_dot);
+          } else {
+            ic->f = instr(fctiwz);
+          }
+          break;
           // XXX check.
-				case PPC_63_FCTIW: ic->f = instr(fctiwz);break;
-				case PPC_63_FNEG:   ic->f = instr(fneg); break;
-				case PPC_63_FABS:   ic->f = instr(fabs); break;
-				case PPC_63_FMR:    ic->f = instr(fmr); break;
+				case PPC_63_FCTIW:
+          if (rc) {
+            ic->f = instr(fctiwz_dot);
+          } else {
+            ic->f = instr(fctiwz);
+          }
+          break;
+				case PPC_63_FNEG:
+          if (rc) {
+            ic->f = instr(fneg_dot);
+          } else {
+            ic->f = instr(fneg);
+          }
+          break;
+				case PPC_63_FABS:
+          if (rc) {
+            ic->f = instr(fabs_dot);
+          } else {
+            ic->f = instr(fabs);
+          }
+          break;
+				case PPC_63_FMR:
+          if (rc) {
+            ic->f = instr(fmr_dot);
+          } else {
+            ic->f = instr(fmr);
+          }
+          break;
 				}
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 				break;
 			case PPC_63_MFFS:
-				ic->f = instr(mffs);
+        if (rc) {
+          ic->f = instr(mffs_dot);
+        } else {
+          ic->f = instr(mffs);
+        }
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 				break;
       case PPC_63_MCRFS:
@@ -4372,25 +4544,38 @@ X(to_be_translated)
         ic->arg[1] = (iword >> 18) & 7;
         break;
 			case PPC_63_MTFSF:
-				ic->f = instr(mtfsf);
+        if (rc) {
+          ic->f = instr(mtfsf_dot);
+        } else {
+          ic->f = instr(mtfsf);
+        }
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				ic->arg[1] = 0;
 				for (bi=7; bi>=0; bi--) {
-					ic->arg[1] <<= 8;
+					ic->arg[1] <<= 4;
 					if (iword & (1 << (17+bi)))
 						ic->arg[1] |= 0xf;
 				}
 				break;
       case PPC_63_MTFSFI:
-        ic->f = instr(mtfsfi);
+        if (rc) {
+          ic->f = instr(mtfsfi_dot);
+        } else {
+          ic->f = instr(mtfsfi);
+        }
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				ic->arg[1] = (iword >> 24) & 7;
         ic->arg[2] = (iword >> 12) & 15;
         break;
       case PPC_63_MTFSB1x:
-        ic->f = instr(mtfsb1x);
+      case PPC_63_MTFSB0x:
+        if (rc) {
+          ic->f = instr(mtfsb1x_dot);
+        } else {
+          ic->f = instr(mtfsb1x);
+        }
         ic->arg[0] = 31 - ((iword >> 21) & 31);
-        ic->arg[1] = iword & 1;
+        ic->arg[1] = xo == PPC_63_MTFSB0x;
         break;
         
 			default:{

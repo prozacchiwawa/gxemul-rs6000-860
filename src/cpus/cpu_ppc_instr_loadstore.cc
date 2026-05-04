@@ -67,6 +67,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    ofs;
 #endif
   unsigned char data[LS_SIZE] = { };
+  uint64_t unused_return;
 
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
@@ -116,13 +117,14 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
     store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
-    uint64_t unused_return;
     // Ensure we set written.
     ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
-
-    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
-                        MEM_WRITE, CACHE_DATA)) {
-      return;
+    if (second_span) {
+      ppc_translate_v2p(cpu, second_page, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+      if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
+                          MEM_WRITE, CACHE_DATA)) {
+        return;
+      }
     }
 
     if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span,
@@ -153,6 +155,9 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
   store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
   access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
+
+  // Ensure we set written.
+  ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
 
 	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
                       MEM_WRITE, CACHE_DATA)) {
@@ -201,6 +206,7 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 	    ;
 
+  uint64_t unused_return;
   uint64_t full_addr = addr;
 
   int swizzle, offset;
@@ -259,9 +265,8 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
   access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
 #else	/*  !LS_LOAD  */
 
-  uint64_t unused_return;
   // Ensure we set written.
-  ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
+  ppc_translate_v2p(cpu, full_addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
 
   /*  Store:  */
   store_reg<LS_SIZE * 8>(ic->arg[0], &page[addr ^ offset], swizzle);

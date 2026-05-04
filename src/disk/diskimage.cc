@@ -901,15 +901,17 @@ int diskimage_add(struct machine *machine, char *fname)
 
   d->logical_block_size = d->native_sector_size;
 
-	if ((d->total_size == 720*1024 || d->total_size == 1474560
-	    || d->total_size == 2949120 || d->total_size == 1228800)
-	    && !prefix_i && !prefix_s && !prefix_R) {
-		d->type = DISKIMAGE_FLOPPY;
+  if ((d->total_size == 720*1024 || d->total_size == 1474560
+    || d->total_size == 2949120 || d->total_size == 1228800)
+    && !prefix_i && !prefix_s && !prefix_R) {
+      d->type = DISKIMAGE_FLOPPY;
+      fprintf(stderr, "detected floppy %s: total_size %x\n", d->fname, (unsigned int)d->total_size);
   }
 
   fprintf(stderr, "disk type %d: %s\n", d->type, d->fname);
 	switch (d->type) {
 	case DISKIMAGE_FLOPPY:
+		diskimage_recalc_size(d);
 		if (d->total_size < 737280) {
 			fatal("\nTODO: small (non-80-cylinder) floppies?\n\n");
 			exit(1);

@@ -30,6 +30,7 @@
  *  TODO: Implement the FIFO.
  */
 
+#include <deque>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,7 @@
 
 #include "thirdparty/comreg.h"
 
+std::deque<uint8_t> debug_serial0_chars;
 
 /*  #define debug fatal  */
 
@@ -105,17 +107,23 @@ DEVICE_TICK(ns16550)
 	 */
 	struct ns_data *d = (struct ns_data *) extra;
 
-	while (console_charavail(d->console_handle)) {
-		auto ch = console_readchar(d->console_handle);
-		if (ch >= 0x100) {
-			continue;
-		}
-		d->available = ch;
-    d->reg[com_lsr] |= LSR_RXRDY;
-		d->reg[com_iir] |= IIR_RXTOUT; // (d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY;
-		break;
-	}
+  if (!strcmp(d->name, "tty0") && debug_serial0_chars.size() && !(d->reg[com_lsr] & LSR_RXRDY)) {
+    fprintf(stderr, "[ ns16550: debug queue size %d ]\n", (int)debug_serial0_chars.size());
+    console_makeavail(d->console_handle, debug_serial0_chars.front());
+    debug_serial0_chars.pop_front();
+  }
 
+  while (console_charavail(d->console_handle)) {
+    auto ch = console_readchar(d->console_handle);
+    if (ch >= 0x100) {
+      continue;
+    }
+    d->available = ch;
+    d->reg[com_lsr] |= LSR_RXRDY;
+    d->reg[com_iir] |= IIR_RXTOUT; // (d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY;
+    break;
+  }
+  
   if (d->sent_recently) {
     d->sent_recently = false;
     d->reg[com_iir] |= IIR_TXRDY;

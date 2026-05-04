@@ -102,11 +102,17 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
  *  Returns 1 if the value was found, and *lowp is set to the low PTE word.
  *  Returns 0 if no match was found.
  */
-static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
-                       uint32_t *lowp, uint64_t vaddr, uint32_t cmp, bool write)
+static int get_pte_low
+(struct cpu *cpu,
+ uint64_t pteg_select,
+ uint32_t *lowp,
+ uint8_t **entry_ptr,
+ int *swizzle_ptr,
+ uint32_t cmp)
 {
   int swizzle, offset;
-  cpu_ppc_swizzle_offset(cpu, 8, 1, &swizzle, &offset);
+  cpu_ppc_swizzle_offset(cpu, 8, 0, &swizzle, &offset);
+  *swizzle_ptr = swizzle;
 
   unsigned char *d = memory_paddr_to_hostaddr(cpu->mem, pteg_select, 1);
   int i;
@@ -124,16 +130,9 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
 
 		/*  Valid PTE, and correct api and vsid?  */
 		if (upper == cmp) {
-			uint32_t lo = BE32_TO_HOST(ep[1]);
-			*lowp = lo;
-
-      auto ent_ptr = &d[((i << 3) + 7) ^ swizzle];
-      auto old_write_ent = *ent_ptr;
-      d[((i << 3) + 6) ^ swizzle] |= PTE_REF >> 8;
-      *ent_ptr |= write ? PTE_CHG : 0;
-      if (*ent_ptr != old_write_ent) {
-        fprintf(stderr, "[ ppc_pte: %08x set to R%c ]\n", (unsigned int)vaddr, (*ent_ptr & PTE_CHG) ? 'C' : 'c');
-      }
+      uint32_t lo = BE32_TO_HOST(ep[1]);
+      *entry_ptr = &d[i << 3];
+      *lowp = lo;
 			return 1;
 		}
 	}
@@ -153,10 +152,11 @@ static int get_pte_low(struct cpu *cpu, uint64_t pteg_select,
  *  access, or 2 for read/write access.
  */
 static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
-    int *resp, uint64_t msr, int writeflag, int instr)
+                     int *resp, uint64_t msr, bool writeflag, bool instr, bool host)
 {
 	int srn = (vaddr >> 28) & 15, api = (vaddr >> 22) & PTE_API;
-	int access, key, match;
+	int access, key, match, swizzle;
+  uint8_t *entry_ptr = nullptr;
 	uint32_t vsid = cpu->cd.ppc.sr[srn] & 0x00ffffff;
 	uint64_t sdr1 = cpu->cd.ppc.spr[SPR_SDR1], htaborg;
 	uint32_t hash1, hash2, pteg_select, tmp;
@@ -173,7 +173,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH1] = pteg_select;
 	cmp = cpu->cd.ppc.spr[instr? SPR_ICMP : SPR_DCMP] =
 	    PTE_VALID | api | (vsid << PTE_VSID_SHFT);
-	match = get_pte_low(cpu, pteg_select, &lower_pte, vaddr, cmp, writeflag);
+	match = get_pte_low(cpu, pteg_select, &lower_pte, &entry_ptr, &swizzle, cmp);
 
 	/*  Secondary hash:  */
 	hash2 = hash1 ^ 0x7ffff;
@@ -184,7 +184,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	cpu->cd.ppc.spr[SPR_HASH2] = pteg_select;
 	if (!match) {
 		cmp |= PTE_HID;
-		match = get_pte_low(cpu, pteg_select, &lower_pte, vaddr, cmp, writeflag);
+		match = get_pte_low(cpu, pteg_select, &lower_pte, &entry_ptr, &swizzle, cmp);
 	}
 
 	*resp = 0;
@@ -220,7 +220,19 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 		}
 	}
 
-	return 1;
+  if (!host && (*resp == 2 || (*resp > 0 && !writeflag))) {
+    auto ent_ptr_c = &entry_ptr[7 ^ swizzle];
+    // auto old_ent_c = *ent_ptr_c;
+    auto ent_ptr_r = &entry_ptr[6 ^ swizzle];
+    // auto old_ent_r = *ent_ptr_r;
+    *ent_ptr_r |= PTE_REF >> 8;
+    *ent_ptr_c |= writeflag ? PTE_CHG : 0;
+    // if (*ent_ptr_c != old_ent_c || *ent_ptr_r != old_ent_r) {
+    // fprintf(stderr, "[ ppc_pte: %08x set to R%c page %08x ]\n", (unsigned int)vaddr, (*ent_ptr_c & PTE_CHG) ? 'C' : 'c', (unsigned int)lower_pte);
+    // }
+  }
+
+  return 1;
 }
 
 
@@ -235,8 +247,11 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	uint64_t *return_paddr, int flags)
 {
-	int instr = flags & FLAG_INSTR, res = 0, match, user;
-	int writeflag = flags & FLAG_WRITEFLAG? 1 : 0;
+  int res = 0, match, user;
+	bool instr = flags & FLAG_INSTR;
+	bool writeflag = flags & FLAG_WRITEFLAG? 1 : 0;
+  bool host = flags & FLAG_HOST? 1 : 0;
+
 	uint64_t msr;
   // XX Set srr1 below in checks for bat+write or page table.
   int srr1_extra = 0;
@@ -272,7 +287,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	/*  Virtual to physical translation:  */
 	if (cpu->cd.ppc.bits == 32) {
 		match = ppc_vtp32(cpu, vaddr, return_paddr, &res, msr,
-		    writeflag, instr);
+                      writeflag, instr, host);
 		if (match && res > 0) {
       return res;
     }

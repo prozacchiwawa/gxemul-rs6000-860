@@ -53,6 +53,8 @@ extern "C" {
 #include "softfloat.h"
 }
 
+#include "memory_rw.h"
+
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
@@ -86,7 +88,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (found == -1)
 		return 0;
 
-	cpu->memory_rw = ppc_memory_rw;
+	cpu->memory_rw = memory_rw<ppc_tc_physpage>;
 
 	cpu->cd.ppc.cpu_type = cpu_type_defs[found];
 	cpu->name            = strdup(cpu->cd.ppc.cpu_type.name);

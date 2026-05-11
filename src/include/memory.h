@@ -156,5 +156,4 @@ void store_pointer_and_advance(struct cpu *cpu, uint64_t *addrp,
 void memory_warn_about_unimplemented_addr(struct cpu *cpu, struct memory *mem,
 	int writeflag, uint64_t paddr, uint8_t *data, size_t len);
 
-
 #endif	/*  MEMORY_H  */

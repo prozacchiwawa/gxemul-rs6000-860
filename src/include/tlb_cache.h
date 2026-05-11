@@ -56,6 +56,9 @@ struct host_load_store_t {
   uint8_t *host_store;
 };
 
+template <typename TcPhyspage> constexpr bool is_ppc() { return false; }
+template <> constexpr bool is_ppc<struct ppc_tc_physpage>() { return true; }
+
 template <typename TcPhyspage> constexpr bool is_arm() { return false; }
 template <> constexpr bool is_arm<struct arm_tc_physpage>() { return true; }
 
@@ -64,6 +67,9 @@ template <> constexpr bool is_m88k<struct m88k_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr bool is_mips() { return false; }
 template <> constexpr bool is_mips<struct mips_tc_physpage>() { return true; }
+
+template <typename TcPhyspage> constexpr bool is_alpha() { return false; }
+template <> constexpr bool is_mips<struct alpha_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr int pagesize() { return 1 << 12; }
 template <> constexpr int pagesize<struct alpha_tc_physpage>() { return 1 << 13; }

@@ -1,0 +1,319 @@
+#ifndef MEMORY_RW_H
+#define MEMORY_RW_H
+
+/*
+ *  memory_rw():
+ *
+ *  Read or write data from/to memory.
+ *
+ *	cpu		the cpu doing the read/write
+ *	mem		the memory object to use
+ *	vaddr		the virtual address
+ *	data		a pointer to the data to be written to memory, or
+ *			a placeholder for data when reading from memory
+ *	len		the length of the 'data' buffer
+ *	writeflag	set to MEM_READ or MEM_WRITE
+ *	misc_flags	CACHE_{NONE,DATA,INSTRUCTION} | other flags
+ *
+ *  If the address indicates access to a memory mapped device, that device'
+ *  read/write access function is called.
+ *
+ *  This function should not be called with cpu == NULL.
+ *
+ *  Returns one of the following:
+ *	MEMORY_ACCESS_FAILED
+ *	MEMORY_ACCESS_OK
+ *
+ *  (MEMORY_ACCESS_FAILED is 0.)
+ */
+
+#include "cop0.h"
+#include "mips_cpu_types.h"
+
+template <class TcPhyspage>
+int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
+	unsigned char *data, size_t len, int writeflag, int misc_flags)
+{
+	const int offset_mask = is_alpha<TcPhyspage>() ? 0x1fff : 0xfff;
+
+	int ok = 2;
+	uint64_t paddr;
+	int cache, no_exceptions, offset;
+	unsigned char *memblock;
+	int dyntrans_device_danger = 0;
+
+	no_exceptions = misc_flags & NO_EXCEPTIONS;
+	cache = misc_flags & CACHE_FLAGS_MASK;
+
+
+	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
+		paddr = vaddr;
+	} else {
+		ok = cpu->translate_v2p(cpu, vaddr, &paddr,
+		    (writeflag? FLAG_WRITEFLAG : 0) +
+		    (no_exceptions? FLAG_NOEXCEPTIONS : 0)
+		    + (misc_flags & MEMORY_USER_ACCESS)
+		    + (cache==CACHE_INSTRUCTION? FLAG_INSTR : 0));
+
+		/*
+		 *  If the translation caused an exception, or was invalid in
+		 *  some way, then simply return without doing the memory
+		 *  access:
+		 */
+		if (!ok)
+			return MEMORY_ACCESS_FAILED;
+	}
+
+	/*
+	 *  Memory mapped device?
+	 *
+	 *  TODO: if paddr < base, but len enough, then the device should
+	 *  still be written to!
+	 */
+	if (paddr >= mem->mmap_dev_minaddr && paddr < mem->mmap_dev_maxaddr) {
+		uint64_t orig_paddr = paddr;
+		int i, start, end, res;
+
+		start = 0; end = mem->n_mmapped_devices - 1;
+		i = mem->last_accessed_device;
+
+		/*  Scan through all devices:  */
+		do {
+			if (paddr >= mem->devices[i].baseaddr &&
+			    paddr < mem->devices[i].endaddr) {
+				/*  Found a device, let's access it:  */
+				mem->last_accessed_device = i;
+
+				paddr -= mem->devices[i].baseaddr;
+				if (paddr + len > mem->devices[i].length)
+					len = mem->devices[i].length - paddr;
+
+				if (cpu->update_translation_table != NULL &&
+				    !(ok & MEMORY_NOT_FULL_PAGE) &&
+				    mem->devices[i].flags & DM_DYNTRANS_OK) {
+					int wf = writeflag == MEM_WRITE? 1 : 0;
+					unsigned char *host_addr;
+
+					if (!(mem->devices[i].flags &
+					    DM_DYNTRANS_WRITE_OK))
+						wf = 0;
+
+					if (writeflag && wf) {
+						if (paddr < mem->devices[i].
+						    dyntrans_write_low)
+							mem->devices[i].
+							dyntrans_write_low =
+							    paddr &~offset_mask;
+						if (paddr >= mem->devices[i].
+						    dyntrans_write_high)
+							mem->devices[i].
+						 	dyntrans_write_high =
+							    paddr | offset_mask;
+					}
+
+					if (mem->devices[i].flags &
+					    DM_EMULATED_RAM) {
+						/*  MEM_WRITE to force the page
+						    to be allocated, if it
+						    wasn't already  */
+						uint64_t *pp = (uint64_t *)mem->
+						    devices[i].dyntrans_data;
+						uint64_t p = orig_paddr - *pp;
+						host_addr =
+						    memory_paddr_to_hostaddr(
+						    mem, p & ~offset_mask,
+						    MEM_WRITE);
+					} else {
+						host_addr = mem->devices[i].
+						    dyntrans_data +
+						    (paddr & ~offset_mask);
+					}
+
+          if (!no_exceptions) {
+            cpu->update_translation_table
+              (cpu,
+               vaddr & ~offset_mask, host_addr,
+               wf, orig_paddr & ~offset_mask,
+               !!(misc_flags & CACHE_INSTRUCTION)
+               );
+          }
+				}
+
+				res = 0;
+				if (!no_exceptions || (mem->devices[i].flags &
+				    DM_READS_HAVE_NO_SIDE_EFFECTS))
+					res = mem->devices[i].f(cpu, mem, paddr,
+					    data, len, writeflag,
+					    mem->devices[i].extra);
+
+				if (res == 0)
+					res = -1;
+
+				/*
+				 *  If accessing the memory mapped device
+				 *  failed, then return with an exception.
+				 *  (Architecture specific.)
+				 */
+				if (res <= 0 && !no_exceptions) {
+					debug("[ %s device '%s' addr %08lx "
+					    "failed ]\n", writeflag?
+					    "writing to" : "reading from",
+					    mem->devices[i].name, (long)paddr);
+          if (is_mips<TcPhyspage>()) {
+            mips_cpu_exception(cpu,
+					    cache == CACHE_INSTRUCTION?
+					    EXCEPTION_IBE : EXCEPTION_DBE,
+					    0, vaddr, 0, 0, 0, 0);
+          }
+
+
+          if (is_m88k<TcPhyspage>()) {
+            /*  TODO: This is enough for
+                OpenBSD/mvme88k's badaddr()
+                implementation... but the
+                faulting address should probably
+                be included somewhere too!  */
+            m88k_exception(cpu, cache == CACHE_INSTRUCTION
+					    ? M88K_EXCEPTION_INSTRUCTION_ACCESS
+					    : M88K_EXCEPTION_DATA_ACCESS, 0);
+          }
+					return MEMORY_ACCESS_FAILED;
+				}
+				goto do_return_ok;
+			}
+
+			if (paddr < mem->devices[i].baseaddr)
+				end = i - 1;
+			if (paddr >= mem->devices[i].endaddr)
+				start = i + 1;
+			i = (start + end) >> 1;
+		} while (start <= end);
+	}
+
+
+  if (is_mips<TcPhyspage>()) {
+    /*
+     *  Data and instruction cache emulation:
+     */
+
+    switch (cpu->cd.mips.cpu_type.mmu_model) {
+    case MMU3K:
+      /*  if not uncached addess  (TODO: generalize this)  */
+      if (!(misc_flags & PHYSICAL) && cache != CACHE_NONE &&
+          !((vaddr & 0xffffffffULL) >= 0xa0000000ULL &&
+            (vaddr & 0xffffffffULL) <= 0xbfffffffULL)) {
+        if (memory_cache_R3000(cpu, cache, paddr,
+                               writeflag, len, data))
+          goto do_return_ok;
+      }
+      break;
+    default:
+      /*  R4000 etc  */
+      /*  TODO  */
+      ;
+    }
+  }
+
+
+	/*  Outside of physical RAM?  */
+	if (paddr >= mem->physical_max) {
+    if (is_ppc<TcPhyspage>()) {
+      if ((paddr & 0xfffe0000) == 0xfffe0000) {
+        paddr &= ~0xffff0000;
+      }
+    } else if (is_mips<TcPhyspage>()) {
+      if ((paddr & 0xffffc00000ULL) == 0x1fc00000) {
+        /*  Ok, this is PROM stuff  */
+      } else if ((paddr & 0xfffff00000ULL) == 0x1ff00000) {
+        /*  Sprite reads from this area of memory...  */
+        /*  TODO: is this still correct?  */
+        if (writeflag == MEM_READ)
+          memset(data, 0, len);
+        goto do_return_ok;
+      }
+    }
+
+    if (paddr >= mem->physical_max && !no_exceptions)
+      memory_warn_about_unimplemented_addr
+        (cpu, mem, writeflag, paddr, data, len);
+    
+    if (writeflag == MEM_READ) {
+      /*  Return all zeroes? (Or 0xff? TODO)  */
+      memset(data, 0, len);
+    }
+
+    /*  Hm? Shouldn't there be a DBE exception for
+        invalid writes as well?  TODO  */
+    
+    goto do_return_ok;
+  }
+
+
+	/*
+	 *  Uncached access:
+	 *
+	 *  1)  Translate the physical address to a host address.
+	 *
+	 *  2)  Insert this virtual->physical->host translation into the
+	 *      fast translation arrays (using update_translation_table()).
+	 *
+	 *  3)  If this was a Write, then invalidate any code translations
+	 *      in that page.
+	 */
+	memblock = memory_paddr_to_hostaddr(mem, paddr & ~offset_mask,
+	    writeflag);
+	if (memblock == NULL) {
+		if (writeflag == MEM_READ)
+			memset(data, 0, len);
+		goto do_return_ok;
+	}
+
+	offset = paddr & offset_mask;
+
+	if (cpu->update_translation_table != NULL && !dyntrans_device_danger
+      && (!is_mips<TcPhyspage>() ||
+          (/*  Ugly hack for R2000/R3000 caches:  */
+           (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
+            !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
+           )
+          )
+      && !(ok & MEMORY_NOT_FULL_PAGE)
+	    && !no_exceptions)
+    cpu->update_translation_table
+      (cpu, vaddr & ~offset_mask,
+       memblock, (misc_flags & MEMORY_USER_ACCESS) |
+       (cache == CACHE_INSTRUCTION?
+        (writeflag == MEM_WRITE? 1 : 0) : ok - 1),
+       paddr & ~offset_mask, cache == CACHE_INSTRUCTION);
+
+	/*
+	 *  If writing, or if mapping a page where writing is ok later on,
+	 *  then invalidate code translations for the (physical) page address:
+	 */
+
+	if ((writeflag == MEM_WRITE
+	    || (ok == 2 && cache == CACHE_DATA)
+	    ) && cpu->invalidate_code_translation != NULL)
+		cpu->invalidate_code_translation(cpu, paddr, INVALIDATE_PADDR);
+
+	if ((paddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
+		if (!no_exceptions) {
+		    printf("Write over memblock boundary?\n");
+		    exit(1);
+		}
+
+		return MEMORY_ACCESS_FAILED;
+	}
+
+	/*  And finally, read or write the data:  */
+	if (writeflag == MEM_WRITE) {
+		memcpy(memblock + offset, data, len);
+  } else {
+		memcpy(data, memblock + offset, len);
+  }
+
+do_return_ok:
+	return MEMORY_ACCESS_OK;
+}
+
+#endif

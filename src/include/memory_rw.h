@@ -67,8 +67,6 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
   
   int res = access_result.res;
   if (access_result.res > 0) {
-    uint64_t orig_paddr = paddr;
-    paddr = access_result.device_offset;
     if (access_result.device_offset + len > access_result.device->length)
       len = access_result.device->length - access_result.device_offset;
 
@@ -101,7 +99,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             to be allocated, if it
             wasn't already  */
         uint64_t *pp = (uint64_t *)access_result.device->dyntrans_data;
-        uint64_t p = orig_paddr - *pp;
+        uint64_t p = paddr - *pp;
         host_addr =
           memory_paddr_to_hostaddr
           (mem, p & ~offset_mask,
@@ -116,7 +114,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
         cpu->update_translation_table
           (cpu,
            vaddr & ~offset_mask, host_addr,
-           wf, orig_paddr & ~offset_mask,
+           wf, paddr & ~offset_mask,
            !!(misc_flags & CACHE_INSTRUCTION)
            );
       }

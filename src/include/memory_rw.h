@@ -88,6 +88,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 				paddr -= mem->devices[i].baseaddr;
 
         access_result.res = 1;
+        access_result.device_offset = paddr;
         access_result.device = &mem->devices[i];
         break;
 			}

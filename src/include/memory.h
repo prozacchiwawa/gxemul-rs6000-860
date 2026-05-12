@@ -158,6 +158,7 @@ void memory_warn_about_unimplemented_addr(struct cpu *cpu, struct memory *mem,
 
 struct memory_access_result {
   int res;
+  uint64_t device_offset;
   struct memory_device *device;
 };
 

@@ -162,4 +162,6 @@ struct memory_access_result {
   struct memory_device *device;
 };
 
+struct memory_access_result memory_device_lookup(struct memory *mem, uint64_t paddr);
+
 #endif	/*  MEMORY_H  */

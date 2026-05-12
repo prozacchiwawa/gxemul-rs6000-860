@@ -64,41 +64,8 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	}
 
   uint64_t orig_paddr = paddr;
-  struct memory_access_result access_result = { 0 };
+  struct memory_access_result access_result = memory_device_lookup(mem, paddr);
   
-	/*
-	 *  Memory mapped device?
-	 *
-	 *  TODO: if paddr < base, but len enough, then the device should
-	 *  still be written to!
-	 */
-	if (paddr >= mem->mmap_dev_minaddr && paddr < mem->mmap_dev_maxaddr) {
-		int i, start, end, res;
-
-		start = 0; end = mem->n_mmapped_devices - 1;
-		i = mem->last_accessed_device;
-
-		/*  Scan through all devices:  */
-		do {
-			if (paddr >= mem->devices[i].baseaddr &&
-			    paddr < mem->devices[i].endaddr) {
-				/*  Found a device, let's access it:  */
-				mem->last_accessed_device = i;
-
-        access_result.res = 1;
-        access_result.device_offset = paddr - mem->devices[i].baseaddr;
-        access_result.device = &mem->devices[i];
-        break;
-			}
-
-			if (paddr < mem->devices[i].baseaddr)
-				end = i - 1;
-			if (paddr >= mem->devices[i].endaddr)
-				start = i + 1;
-			i = (start + end) >> 1;
-		} while (start <= end);
-	}
-
   int res = access_result.res;
   if (access_result.res > 0) {
     paddr = access_result.device_offset;

@@ -85,10 +85,8 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 				/*  Found a device, let's access it:  */
 				mem->last_accessed_device = i;
 
-				paddr -= mem->devices[i].baseaddr;
-
         access_result.res = 1;
-        access_result.device_offset = paddr;
+        access_result.device_offset = paddr - mem->devices[i].baseaddr;
         access_result.device = &mem->devices[i];
         break;
 			}
@@ -103,6 +101,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
   int res = access_result.res;
   if (access_result.res > 0) {
+    paddr = access_result.device_offset;
     if (paddr + len > access_result.device->length)
       len = access_result.device->length - paddr;
 

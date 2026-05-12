@@ -63,14 +63,14 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 			return MEMORY_ACCESS_FAILED;
 	}
 
-  uint64_t orig_paddr = paddr;
   struct memory_access_result access_result = memory_device_lookup(mem, paddr);
   
   int res = access_result.res;
   if (access_result.res > 0) {
+    uint64_t orig_paddr = paddr;
     paddr = access_result.device_offset;
-    if (paddr + len > access_result.device->length)
-      len = access_result.device->length - paddr;
+    if (access_result.device_offset + len > access_result.device->length)
+      len = access_result.device->length - access_result.device_offset;
 
     if (cpu->update_translation_table != NULL &&
         !(ok & MEMORY_NOT_FULL_PAGE) &&
@@ -83,16 +83,16 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
         wf = 0;
 
       if (writeflag && wf) {
-        if (paddr < access_result.device->
+        if (access_result.device_offset < access_result.device->
             dyntrans_write_low)
           access_result.device->
             dyntrans_write_low =
-            paddr &~offset_mask;
-        if (paddr >= access_result.device->
+            access_result.device_offset &~offset_mask;
+        if (access_result.device_offset >= access_result.device->
             dyntrans_write_high)
           access_result.device->
             dyntrans_write_high =
-            paddr | offset_mask;
+            access_result.device_offset | offset_mask;
       }
 
       if (access_result.device->flags &
@@ -109,7 +109,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       } else {
         host_addr = access_result.device->
           dyntrans_data +
-          (paddr & ~offset_mask);
+          (access_result.device_offset & ~offset_mask);
       }
       
       if (!no_exceptions) {
@@ -125,7 +125,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
     res = 0;
     if (!no_exceptions || (access_result.device->flags &
                            DM_READS_HAVE_NO_SIDE_EFFECTS))
-      res = access_result.device->f(cpu, mem, paddr,
+      res = access_result.device->f(cpu, mem, access_result.device_offset,
                               data, len, writeflag,
                               access_result.device->extra);
     
@@ -141,7 +141,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       debug("[ %s device '%s' addr %08lx "
             "failed ]\n", writeflag?
             "writing to" : "reading from",
-            access_result.device->name, (long)paddr);
+            access_result.device->name, (long)access_result.device_offset);
       if (is_mips<TcPhyspage>()) {
         mips_cpu_exception(cpu,
                            cache == CACHE_INSTRUCTION?

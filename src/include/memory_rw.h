@@ -45,7 +45,6 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	no_exceptions = misc_flags & NO_EXCEPTIONS;
 	cache = misc_flags & CACHE_FLAGS_MASK;
 
-
 	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
 		paddr = vaddr;
 	} else {
@@ -64,6 +63,9 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 			return MEMORY_ACCESS_FAILED;
 	}
 
+  uint64_t orig_paddr = paddr;
+  struct memory_access_result access_result = { 0 };
+  
 	/*
 	 *  Memory mapped device?
 	 *
@@ -71,7 +73,6 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	 *  still be written to!
 	 */
 	if (paddr >= mem->mmap_dev_minaddr && paddr < mem->mmap_dev_maxaddr) {
-		uint64_t orig_paddr = paddr;
 		int i, start, end, res;
 
 		start = 0; end = mem->n_mmapped_devices - 1;
@@ -85,101 +86,10 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 				mem->last_accessed_device = i;
 
 				paddr -= mem->devices[i].baseaddr;
-				if (paddr + len > mem->devices[i].length)
-					len = mem->devices[i].length - paddr;
 
-				if (cpu->update_translation_table != NULL &&
-				    !(ok & MEMORY_NOT_FULL_PAGE) &&
-				    mem->devices[i].flags & DM_DYNTRANS_OK) {
-					int wf = writeflag == MEM_WRITE? 1 : 0;
-					unsigned char *host_addr;
-
-					if (!(mem->devices[i].flags &
-					    DM_DYNTRANS_WRITE_OK))
-						wf = 0;
-
-					if (writeflag && wf) {
-						if (paddr < mem->devices[i].
-						    dyntrans_write_low)
-							mem->devices[i].
-							dyntrans_write_low =
-							    paddr &~offset_mask;
-						if (paddr >= mem->devices[i].
-						    dyntrans_write_high)
-							mem->devices[i].
-						 	dyntrans_write_high =
-							    paddr | offset_mask;
-					}
-
-					if (mem->devices[i].flags &
-					    DM_EMULATED_RAM) {
-						/*  MEM_WRITE to force the page
-						    to be allocated, if it
-						    wasn't already  */
-						uint64_t *pp = (uint64_t *)mem->
-						    devices[i].dyntrans_data;
-						uint64_t p = orig_paddr - *pp;
-						host_addr =
-						    memory_paddr_to_hostaddr(
-						    mem, p & ~offset_mask,
-						    MEM_WRITE);
-					} else {
-						host_addr = mem->devices[i].
-						    dyntrans_data +
-						    (paddr & ~offset_mask);
-					}
-
-          if (!no_exceptions) {
-            cpu->update_translation_table
-              (cpu,
-               vaddr & ~offset_mask, host_addr,
-               wf, orig_paddr & ~offset_mask,
-               !!(misc_flags & CACHE_INSTRUCTION)
-               );
-          }
-				}
-
-				res = 0;
-				if (!no_exceptions || (mem->devices[i].flags &
-				    DM_READS_HAVE_NO_SIDE_EFFECTS))
-					res = mem->devices[i].f(cpu, mem, paddr,
-					    data, len, writeflag,
-					    mem->devices[i].extra);
-
-				if (res == 0)
-					res = -1;
-
-				/*
-				 *  If accessing the memory mapped device
-				 *  failed, then return with an exception.
-				 *  (Architecture specific.)
-				 */
-				if (res <= 0 && !no_exceptions) {
-					debug("[ %s device '%s' addr %08lx "
-					    "failed ]\n", writeflag?
-					    "writing to" : "reading from",
-					    mem->devices[i].name, (long)paddr);
-          if (is_mips<TcPhyspage>()) {
-            mips_cpu_exception(cpu,
-					    cache == CACHE_INSTRUCTION?
-					    EXCEPTION_IBE : EXCEPTION_DBE,
-					    0, vaddr, 0, 0, 0, 0);
-          }
-
-
-          if (is_m88k<TcPhyspage>()) {
-            /*  TODO: This is enough for
-                OpenBSD/mvme88k's badaddr()
-                implementation... but the
-                faulting address should probably
-                be included somewhere too!  */
-            m88k_exception(cpu, cache == CACHE_INSTRUCTION
-					    ? M88K_EXCEPTION_INSTRUCTION_ACCESS
-					    : M88K_EXCEPTION_DATA_ACCESS, 0);
-          }
-					return MEMORY_ACCESS_FAILED;
-				}
-				goto do_return_ok;
+        access_result.res = 1;
+        access_result.device = &mem->devices[i];
+        break;
 			}
 
 			if (paddr < mem->devices[i].baseaddr)
@@ -190,7 +100,104 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 		} while (start <= end);
 	}
 
+  int res = access_result.res;
+  if (access_result.res > 0) {
+    if (paddr + len > access_result.device->length)
+      len = access_result.device->length - paddr;
 
+    if (cpu->update_translation_table != NULL &&
+        !(ok & MEMORY_NOT_FULL_PAGE) &&
+        access_result.device->flags & DM_DYNTRANS_OK) {
+      int wf = writeflag == MEM_WRITE? 1 : 0;
+      unsigned char *host_addr;
+
+      if (!(access_result.device->flags &
+            DM_DYNTRANS_WRITE_OK))
+        wf = 0;
+
+      if (writeflag && wf) {
+        if (paddr < access_result.device->
+            dyntrans_write_low)
+          access_result.device->
+            dyntrans_write_low =
+            paddr &~offset_mask;
+        if (paddr >= access_result.device->
+            dyntrans_write_high)
+          access_result.device->
+            dyntrans_write_high =
+            paddr | offset_mask;
+      }
+
+      if (access_result.device->flags &
+          DM_EMULATED_RAM) {
+        /*  MEM_WRITE to force the page
+            to be allocated, if it
+            wasn't already  */
+        uint64_t *pp = (uint64_t *)access_result.device->dyntrans_data;
+        uint64_t p = orig_paddr - *pp;
+        host_addr =
+          memory_paddr_to_hostaddr
+          (mem, p & ~offset_mask,
+           MEM_WRITE);
+      } else {
+        host_addr = access_result.device->
+          dyntrans_data +
+          (paddr & ~offset_mask);
+      }
+      
+      if (!no_exceptions) {
+        cpu->update_translation_table
+          (cpu,
+           vaddr & ~offset_mask, host_addr,
+           wf, orig_paddr & ~offset_mask,
+           !!(misc_flags & CACHE_INSTRUCTION)
+           );
+      }
+    }
+
+    res = 0;
+    if (!no_exceptions || (access_result.device->flags &
+                           DM_READS_HAVE_NO_SIDE_EFFECTS))
+      res = access_result.device->f(cpu, mem, paddr,
+                              data, len, writeflag,
+                              access_result.device->extra);
+    
+    if (res == 0)
+      res = -1;
+    
+    /*
+     *  If accessing the memory mapped device
+     *  failed, then return with an exception.
+     *  (Architecture specific.)
+     */
+    if (res <= 0 && !no_exceptions) {
+      debug("[ %s device '%s' addr %08lx "
+            "failed ]\n", writeflag?
+            "writing to" : "reading from",
+            access_result.device->name, (long)paddr);
+      if (is_mips<TcPhyspage>()) {
+        mips_cpu_exception(cpu,
+                           cache == CACHE_INSTRUCTION?
+                           EXCEPTION_IBE : EXCEPTION_DBE,
+                           0, vaddr, 0, 0, 0, 0);
+      }
+      
+      
+      if (is_m88k<TcPhyspage>()) {
+        /*  TODO: This is enough for
+            OpenBSD/mvme88k's badaddr()
+            implementation... but the
+            faulting address should probably
+            be included somewhere too!  */
+        m88k_exception(cpu, cache == CACHE_INSTRUCTION
+                       ? M88K_EXCEPTION_INSTRUCTION_ACCESS
+                       : M88K_EXCEPTION_DATA_ACCESS, 0);
+      }
+      return MEMORY_ACCESS_FAILED;
+    }
+    goto do_return_ok;
+  }
+  
   if (is_mips<TcPhyspage>()) {
     /*
      *  Data and instruction cache emulation:

@@ -1316,7 +1316,7 @@ X(llsc)
     // First check for a cache page as in ppc_instr_loadstore.
     if (page) {
       memcpy(d, page + ((addr & 0xfff) ^ offset), len);
-    } else if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
+    } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
       fatal("ll: error: TODO\n");
       return; // exit(1);
     }
@@ -1397,7 +1397,7 @@ X(llsc)
 
     if (page) {
       memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-    } else if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
+    } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
     }

@@ -490,13 +490,4 @@ struct ba_target_name {
 
 extern struct ba_target_name ba_names[];
 
-template<class TcPhyspage>
-host_load_store_t get_tlb_pointer(struct cpu *cpu, uint64_t vaddr, bool write, bool instr) {
-  host_load_store_t result = { 0 };
-  return result;
-}
-
-template<>
-host_load_store_t get_tlb_pointer<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool write, bool instr);
-
 #endif	/*  CPU_H  */

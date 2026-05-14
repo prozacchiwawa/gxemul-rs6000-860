@@ -1450,7 +1450,7 @@ X(loose_lhaux)
   if (page) {
     auto addr = full_addr & 0xfff;
     memcpy(raw_value, &page[addr ^ offset], 2);
-  } else if (!cpu->memory_rw(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 

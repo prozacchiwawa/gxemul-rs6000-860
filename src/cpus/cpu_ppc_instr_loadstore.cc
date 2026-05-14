@@ -117,10 +117,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #else
     store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
-    // Ensure we set written.
-    ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
     if (second_span) {
-      ppc_translate_v2p(cpu, second_page, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
       if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span,
                           MEM_WRITE, CACHE_DATA)) {
         return;

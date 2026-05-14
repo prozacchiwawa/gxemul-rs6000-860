@@ -325,9 +325,13 @@ struct cpu {
 
 	int		(*run_instr)(struct cpu *cpu);
 	int		(*memory_rw)(struct cpu *cpu,
-			    struct memory *mem, uint64_t vaddr,
-			    unsigned char *data, size_t len,
-			    int writeflag, int cache_flags);
+                     struct memory *mem, uint64_t vaddr,
+                     unsigned char *data, size_t len,
+                     int writeflag, int cache_flags);
+	int		(*cpu_memory_rw)(struct cpu *cpu,
+                     struct memory *mem, uint64_t vaddr,
+                     unsigned char *data, size_t len,
+                     int writeflag, int cache_flags);
 	int		(*translate_v2p)(struct cpu *, uint64_t vaddr,
 			    uint64_t *return_paddr, int flags);
   std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page, bool instr)> update_translation_table;

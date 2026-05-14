@@ -103,12 +103,12 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     auto first_span = second_page - addr;
 
 #ifdef LS_LOAD
-    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+    if (!cpu->cpu_memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
       // Throw
       return;
     }
 
-    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+    if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
       // Throw
       return;
     }
@@ -121,13 +121,13 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
     if (second_span) {
       ppc_translate_v2p(cpu, second_page, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
-      if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
+      if (!cpu->cpu_memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
                           MEM_WRITE, CACHE_DATA)) {
         return;
       }
     }
 
-    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span,
+    if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr, data, first_span,
                         MEM_WRITE, CACHE_DATA)) {
       return;
     }
@@ -142,7 +142,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_LOAD
-	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
+	if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
                       MEM_READ, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -159,7 +159,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
   // Ensure we set written.
   ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
 
-	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
+	if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
                       MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;

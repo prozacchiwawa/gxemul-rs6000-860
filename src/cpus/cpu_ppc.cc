@@ -89,6 +89,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		return 0;
 
 	cpu->memory_rw = memory_rw<ppc_tc_physpage>;
+	cpu->cpu_memory_rw = gen_memory_rw<ppc_tc_physpage, false>;
 
 	cpu->cd.ppc.cpu_type = cpu_type_defs[found];
 	cpu->name            = strdup(cpu->cd.ppc.cpu_type.name);

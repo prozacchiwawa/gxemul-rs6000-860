@@ -702,7 +702,7 @@ void dump_mem_string(struct cpu *cpu, uint64_t addr)
 		unsigned char ch = '\0';
 
 		cpu->memory_rw(cpu, cpu->mem, addr + i, &ch, sizeof(ch),
-		    MEM_READ, CACHE_DATA | NO_EXCEPTIONS);
+		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 		if (ch == '\0')
 			return;
 		if (ch >= ' ' && ch < 126)
@@ -723,7 +723,7 @@ void store_byte(struct cpu *cpu, uint64_t addr, uint8_t data)
 	if ((addr >> 32) == 0)
 		addr = (int64_t)(int32_t)addr;
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, &data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, &data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 

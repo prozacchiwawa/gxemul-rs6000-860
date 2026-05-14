@@ -3174,7 +3174,7 @@ X(to_be_translated)
 		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
 	} else {
 		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, ib,
+		if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, ib,
 		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
       fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
       memcpy(ic, &nothing_call, sizeof(nothing_call));

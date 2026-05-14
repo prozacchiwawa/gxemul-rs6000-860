@@ -2442,6 +2442,11 @@ template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr)
   }
 }
 
+template<>
+host_load_store_t get_tlb_pointer<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool write, bool instr) {
+  return cpu->cd.ppc.vph32.get_cached_tlb_pages(cpu, vaddr, instr);
+}
+
 #include "memory_ppc.cc"
 
 

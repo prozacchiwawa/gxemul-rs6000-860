@@ -40,6 +40,8 @@
 #include "settings.h"
 #include "timer.h"
 
+#include "cop0.h"
+#include "mips_cpu_types.h"
 
 extern size_t dyntrans_cache_size;
 extern uint32_t required_sr1;

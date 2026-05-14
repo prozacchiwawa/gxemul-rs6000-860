@@ -47,6 +47,24 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
 		paddr = vaddr;
 	} else {
+    auto host_pages = get_tlb_translation<TcPhyspage>(cpu, vaddr, misc_flags & FLAG_INSTR);
+    offset = vaddr & offset_mask;
+    if (offset + len < offset_mask) {
+      if (writeflag) {
+        auto host_page = host_pages.host_store;
+        if (host_page) {
+          memcpy(host_page + offset, data, len);
+          return MEMORY_ACCESS_OK;
+        }
+      } else {
+        auto host_page = host_pages.host_load;
+        if (host_page) {
+          memcpy(data, host_page + offset, len);
+          return MEMORY_ACCESS_OK;
+        }
+      }
+    }
+
 		ok = cpu->translate_v2p(cpu, vaddr, &paddr,
 		    (writeflag? FLAG_WRITEFLAG : 0) +
 		    (NoExceptions? FLAG_NOEXCEPTIONS : 0)

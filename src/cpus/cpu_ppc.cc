@@ -53,6 +53,11 @@ extern "C" {
 #include "softfloat.h"
 }
 
+template<>
+host_load_store_t get_tlb_translation<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool instr) {
+  return cpu->cd.ppc.vph32.get_cached_tlb_pages(cpu, vaddr, instr);
+}
+
 #include "memory_rw.h"
 
 #define	DYNTRANS_DUALMODE_32
@@ -89,7 +94,6 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 		return 0;
 
 	cpu->memory_rw = memory_rw<ppc_tc_physpage>;
-	cpu->cpu_memory_rw = gen_memory_rw<ppc_tc_physpage, false>;
 
 	cpu->cd.ppc.cpu_type = cpu_type_defs[found];
 	cpu->name            = strdup(cpu->cd.ppc.cpu_type.name);

@@ -787,7 +787,7 @@ X(dcbz)
     auto page = host_pages.host_store;
 		if (page != nullptr) {
 			memset(page + (addr & 0xfff), 0, to_clear);
-		} else if (cpu->cpu_memory_rw(cpu, cpu->mem, addr, cacheline,
+		} else if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
 		    to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -1316,7 +1316,7 @@ X(llsc)
     // First check for a cache page as in ppc_instr_loadstore.
     if (page) {
       memcpy(d, page + ((addr & 0xfff) ^ offset), len);
-    } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
+    } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
       fatal("ll: error: TODO\n");
       return; // exit(1);
     }
@@ -1397,7 +1397,7 @@ X(llsc)
 
     if (page) {
       memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-    } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
+    } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
     }
@@ -1450,7 +1450,7 @@ X(loose_lhaux)
   if (page) {
     auto addr = full_addr & 0xfff;
     memcpy(raw_value, &page[addr ^ offset], 2);
-  } else if (!cpu->cpu_memory_rw(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 
@@ -2067,7 +2067,7 @@ X(lmw) {
   auto original_rs = rs;
 
 	while (rs <= 31) {
-		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
+		if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
 		    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -2096,13 +2096,13 @@ X(stmw) {
 
   auto test_addr = addr;
   for (auto test_rs = rs; test_rs <= 31; test_rs++) {
-    if (cpu->cpu_memory_rw(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
+    if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
                        MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
       fprintf(stderr, "%08x STMW read probe failed %08x\n", (unsigned int)cpu->pc, (unsigned int)test_addr);
 			return;
 		}
-    if (cpu->cpu_memory_rw(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
+    if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, test_addr ^ offset, d, sizeof(d),
                        MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
       fprintf(stderr, "%08x STMW write probe failed %08x\n", (unsigned int)cpu->pc, (unsigned int)test_addr);
@@ -2117,7 +2117,7 @@ X(stmw) {
     d[3 ^ swizzle] = tmp; d[2 ^ swizzle] = tmp >> 8;
     d[1 ^ swizzle] = tmp >> 16; d[0 ^ swizzle] = tmp >> 24;
     // fprintf(stderr, "%08x: STMW: %08x = %08x - %" PRIx64 "\n", (unsigned int)cpu->pc, (unsigned int)addr, (unsigned int)tmp, cpu->ninstrs);
-		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
+		if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, sizeof(d),
                        MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
@@ -2184,7 +2184,7 @@ X(lswi)
 			sub = 0;
 		}
 
-		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
+		if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
                        MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
       // fprintf(stderr, "%08x LSW%c read failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
@@ -2260,7 +2260,7 @@ X(stswi)
   do {
 		unsigned char d = cur >> 24;
 
-		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
+		if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
                        MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
       fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)pc, ix, addr);
       /* exception */
@@ -2849,7 +2849,7 @@ X(lvx)
 
   abort();
 
-	if (cpu->cpu_memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
+	if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, sizeof(data),
 	    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 		/*  exception  */
 		return;
@@ -2900,7 +2900,7 @@ X(stvx)
 	data[14] = lo >> 8;
 	data[15] = lo;
 
-	cpu->cpu_memory_rw(cpu, cpu->mem, addr, data,
+	gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data,
 	    sizeof(data), MEM_WRITE, CACHE_DATA);
 }
 
@@ -3174,7 +3174,7 @@ X(to_be_translated)
 		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
 	} else {
 		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset, ib,
+		if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, ib,
 		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
       fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
       memcpy(ic, &nothing_call, sizeof(nothing_call));

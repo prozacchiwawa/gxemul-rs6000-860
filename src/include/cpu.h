@@ -328,10 +328,6 @@ struct cpu {
                      struct memory *mem, uint64_t vaddr,
                      unsigned char *data, size_t len,
                      int writeflag, int cache_flags);
-	int		(*cpu_memory_rw)(struct cpu *cpu,
-                     struct memory *mem, uint64_t vaddr,
-                     unsigned char *data, size_t len,
-                     int writeflag, int cache_flags);
 	int		(*translate_v2p)(struct cpu *, uint64_t vaddr,
 			    uint64_t *return_paddr, int flags);
   std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page, bool instr)> update_translation_table;
@@ -493,5 +489,14 @@ struct ba_target_name {
 };
 
 extern struct ba_target_name ba_names[];
+
+template <class TcPhyspage>
+host_load_store_t get_tlb_translation(struct cpu *cpu, uint64_t vaddr, bool instr) {
+  return host_load_store_t { 0 };
+}
+
+template <>
+host_load_store_t get_tlb_translation<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool instr);
+
 
 #endif	/*  CPU_H  */

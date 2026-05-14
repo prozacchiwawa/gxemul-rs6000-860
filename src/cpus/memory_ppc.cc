@@ -276,7 +276,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	if (cpu->cd.ppc.bits == 32) {
 		res = ppc_bat(cpu, vaddr, return_paddr, flags, user);
 		if (res > 0) {
-			return res;
+			return res | 4;
     }
 		if (res == 0) {
 			fatal("[ TODO: BAT exception ]\n");

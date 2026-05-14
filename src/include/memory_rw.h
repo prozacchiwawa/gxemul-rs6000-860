@@ -127,7 +127,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
           (access_result.device_offset & ~offset_mask);
       }
       
-      if (!NoExceptions) {
+      if (!NoExceptions && !(ok & 4)) {
         cpu->update_translation_table
           (cpu,
            vaddr & ~offset_mask, host_addr,

@@ -123,12 +123,12 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
     data_buf[2] = idata >> 16;
     data_buf[3] = idata >> 24;
     if (target_addr) {
-      cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL);
+      cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     } else {
       fprintf(stderr, "[ eagle: PCI %s passthrough write %08x = %08x @ %08x ]\n", io_space ? "io" : "mem", real_addr, idata, (unsigned int)cpu->pc);
     }
 	} else {
-    cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     odata = data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) | (data_buf[3] << 24);
     if (target_addr) {
       memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
@@ -202,11 +202,11 @@ DEVICE_ACCESS(eagle_8mb)
   }
 
   if (writeflag == MEM_READ) {
-    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
   } else {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
   }
 
   return 1;

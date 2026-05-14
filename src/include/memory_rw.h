@@ -137,15 +137,14 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       }
     }
 
-    res = 0;
-    if (!NoExceptions || (access_result.device->flags &
-                           DM_READS_HAVE_NO_SIDE_EFFECTS))
-      res = access_result.device->f(cpu, mem, access_result.device_offset,
-                              data, len, writeflag,
-                              access_result.device->extra);
+    res = access_result.device->f(cpu, mem, access_result.device_offset,
+                                  data, len, writeflag,
+                                  access_result.device->extra);
     
-    if (res == 0)
+    if (res < 1) {
+      memset(data, 0, len);
       res = -1;
+    }
     
     /*
      *  If accessing the memory mapped device
@@ -282,8 +281,9 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 	if ((writeflag == MEM_WRITE
 	    || (ok == 2 && cache == CACHE_DATA)
-	    ) && cpu->invalidate_code_translation != NULL)
+       ) && cpu->invalidate_code_translation != NULL) {
 		cpu->invalidate_code_translation(cpu, paddr, INVALIDATE_PADDR);
+  }
 
 	if ((paddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
 		if (!NoExceptions) {

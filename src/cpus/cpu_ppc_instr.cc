@@ -2184,7 +2184,7 @@ X(lswi)
 			sub = 0;
 		}
 
-		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
+		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
                        MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
       // fprintf(stderr, "%08x LSW%c read failed %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)addr);
@@ -2260,7 +2260,7 @@ X(stswi)
   do {
 		unsigned char d = cur >> 24;
 
-		if (cpu->memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
+		if (cpu->cpu_memory_rw(cpu, cpu->mem, addr ^ offset ^ swizzle, &d, 1,
                        MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
       fprintf(stderr, "%08x STSW%c real write failed %08x\n", (unsigned int)pc, ix, addr);
       /* exception */
@@ -2849,7 +2849,7 @@ X(lvx)
 
   abort();
 
-	if (cpu->memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
+	if (cpu->cpu_memory_rw(cpu, cpu->mem, addr, data, sizeof(data),
 	    MEM_READ, CACHE_DATA) != MEMORY_ACCESS_OK) {
 		/*  exception  */
 		return;
@@ -2900,7 +2900,7 @@ X(stvx)
 	data[14] = lo >> 8;
 	data[15] = lo;
 
-	cpu->memory_rw(cpu, cpu->mem, addr, data,
+	cpu->cpu_memory_rw(cpu, cpu->mem, addr, data,
 	    sizeof(data), MEM_WRITE, CACHE_DATA);
 }
 

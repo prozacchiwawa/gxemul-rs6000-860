@@ -787,7 +787,7 @@ X(dcbz)
     auto page = host_pages.host_store;
 		if (page != nullptr) {
 			memset(page + (addr & 0xfff), 0, to_clear);
-		} else if (cpu->memory_rw(cpu, cpu->mem, addr, cacheline,
+		} else if (cpu->cpu_memory_rw(cpu, cpu->mem, addr, cacheline,
 		    to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;

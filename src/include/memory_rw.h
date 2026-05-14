@@ -30,19 +30,18 @@
 #include "cop0.h"
 #include "mips_cpu_types.h"
 
-template <class TcPhyspage>
-int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
-	unsigned char *data, size_t len, int writeflag, int misc_flags)
+template <class TcPhyspage, bool NoExceptions>
+int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
+                  unsigned char *data, size_t len, int writeflag, int misc_flags)
 {
 	const int offset_mask = is_alpha<TcPhyspage>() ? 0x1fff : 0xfff;
 
 	int ok = 2;
 	uint64_t paddr;
-	int cache, no_exceptions, offset;
+	int cache, offset;
 	unsigned char *memblock;
 	int dyntrans_device_danger = 0;
 
-	no_exceptions = misc_flags & NO_EXCEPTIONS;
 	cache = misc_flags & CACHE_FLAGS_MASK;
 
 	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
@@ -50,7 +49,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	} else {
 		ok = cpu->translate_v2p(cpu, vaddr, &paddr,
 		    (writeflag? FLAG_WRITEFLAG : 0) +
-		    (no_exceptions? FLAG_NOEXCEPTIONS : 0)
+		    (NoExceptions? FLAG_NOEXCEPTIONS : 0)
 		    + (misc_flags & MEMORY_USER_ACCESS)
 		    + (cache==CACHE_INSTRUCTION? FLAG_INSTR : 0));
 
@@ -110,7 +109,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
           (access_result.device_offset & ~offset_mask);
       }
       
-      if (!no_exceptions) {
+      if (!NoExceptions) {
         cpu->update_translation_table
           (cpu,
            vaddr & ~offset_mask, host_addr,
@@ -121,7 +120,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
     }
 
     res = 0;
-    if (!no_exceptions || (access_result.device->flags &
+    if (!NoExceptions || (access_result.device->flags &
                            DM_READS_HAVE_NO_SIDE_EFFECTS))
       res = access_result.device->f(cpu, mem, access_result.device_offset,
                               data, len, writeflag,
@@ -135,7 +134,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
      *  failed, then return with an exception.
      *  (Architecture specific.)
      */
-    if (res <= 0 && !no_exceptions) {
+    if (res <= 0 && !NoExceptions) {
       debug("[ %s device '%s' addr %08lx "
             "failed ]\n", writeflag?
             "writing to" : "reading from",
@@ -205,7 +204,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       }
     }
 
-    if (paddr >= mem->physical_max && !no_exceptions)
+    if (paddr >= mem->physical_max && !NoExceptions)
       memory_warn_about_unimplemented_addr
         (cpu, mem, writeflag, paddr, data, len);
     
@@ -250,7 +249,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
            )
           )
       && !(ok & MEMORY_NOT_FULL_PAGE)
-	    && !no_exceptions)
+	    && !NoExceptions)
     cpu->update_translation_table
       (cpu, vaddr & ~offset_mask,
        memblock, (misc_flags & MEMORY_USER_ACCESS) |
@@ -269,7 +268,7 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 		cpu->invalidate_code_translation(cpu, paddr, INVALIDATE_PADDR);
 
 	if ((paddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
-		if (!no_exceptions) {
+		if (!NoExceptions) {
 		    printf("Write over memblock boundary?\n");
 		    exit(1);
 		}
@@ -286,6 +285,17 @@ int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 do_return_ok:
 	return MEMORY_ACCESS_OK;
+}
+
+template <class TcPhyspage>
+int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
+                  unsigned char *data, size_t len, int writeflag, int misc_flags) {
+  auto no_exceptions = misc_flags & NO_EXCEPTIONS;
+  if (no_exceptions) {
+    return gen_memory_rw<TcPhyspage, true>(cpu, mem, vaddr, data, len, writeflag, misc_flags);
+  } else {
+    return gen_memory_rw<TcPhyspage, false>(cpu, mem, vaddr, data, len, writeflag, misc_flags);
+  }
 }
 
 #endif

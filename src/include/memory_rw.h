@@ -148,6 +148,21 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
     }
 
+    if ((!is_mips<TcPhyspage>() ||
+         (/*  Ugly hack for R2000/R3000 caches:  */
+          (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
+           !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
+          )
+         ) &&
+        !NoExceptions) {
+      cpu->update_translation_table
+        (cpu, vaddr & ~mapping.offset_mask,
+         mapping.host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
+         (mapping.cache == CACHE_INSTRUCTION?
+          (writeflag == MEM_WRITE? 1 : 0) : mapping.ok - 1),
+         mapping.host_pages.physaddr & ~mapping.offset_mask, mapping.cache == CACHE_INSTRUCTION);
+    }
+
     if (mapping.host_pages.host_load) {
       /*  And finally, read or write the data:  */
       if (writeflag == MEM_WRITE) {
@@ -314,20 +329,6 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
     goto do_return_ok;
   }
 
-
-	if ((!is_mips<TcPhyspage>() ||
-       (/*  Ugly hack for R2000/R3000 caches:  */
-        (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
-         !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
-        )
-       ) &&
-      !NoExceptions)
-    cpu->update_translation_table
-      (cpu, vaddr & ~mapping.offset_mask,
-       mapping.host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
-       (mapping.cache == CACHE_INSTRUCTION?
-        (writeflag == MEM_WRITE? 1 : 0) : mapping.ok - 1),
-       mapping.host_pages.physaddr & ~mapping.offset_mask, mapping.cache == CACHE_INSTRUCTION);
 
 	if ((mapping.host_pages.physaddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
 		if (!NoExceptions) {

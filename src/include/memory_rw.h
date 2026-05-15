@@ -45,7 +45,6 @@ mapping_result_t determine_paddr
 (struct cpu *cpu,
  struct memory *mem,
  uint64_t vaddr,
- unsigned char *data,
  size_t len,
  int writeflag,
  int misc_flags)
@@ -62,14 +61,12 @@ mapping_result_t determine_paddr
       if (writeflag) {
         auto host_page = mapping.host_pages.host_store;
         if (host_page) {
-          memcpy(host_page + mapping.offset, data, len);
           mapping.early_success = true;
           return mapping;
         }
       } else {
         auto host_page = mapping.host_pages.host_load;
         if (host_page) {
-          memcpy(data, host_page + mapping.offset, len);
           mapping.early_success = true;
           return mapping;
         }
@@ -92,23 +89,25 @@ mapping_result_t determine_paddr
   return mapping;
 }
 
-  template <class TcPhyspage, bool NoExceptions>
+template <class TcPhyspage, bool NoExceptions>
 int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
                   unsigned char *data, size_t len, int writeflag, int misc_flags)
 {
-
-	int dyntrans_device_danger = 0;
 
   auto mapping = determine_paddr<TcPhyspage, NoExceptions>
     (cpu,
      mem,
      vaddr,
-     data,
      len,
      writeflag,
      misc_flags);
 
   if (mapping.early_success) {
+    if (writeflag) {
+      memcpy(mapping.host_pages.host_load + mapping.offset, data, len);
+    } else {
+      memcpy(data, mapping.host_pages.host_load + mapping.offset, len);
+    }
     return MEMORY_ACCESS_OK;
   } else if (mapping.ok < 1) {
     return MEMORY_ACCESS_FAILED;
@@ -292,15 +291,13 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 	mapping.offset = mapping.host_pages.physaddr & mapping.offset_mask;
 
-	if (cpu->update_translation_table != NULL && !dyntrans_device_danger
-      && (!is_mips<TcPhyspage>() ||
-          (/*  Ugly hack for R2000/R3000 caches:  */
-           (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
-            !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
-           )
-          )
-      && !(mapping.ok & MEMORY_NOT_FULL_PAGE)
-	    && !NoExceptions)
+	if ((!is_mips<TcPhyspage>() ||
+       (/*  Ugly hack for R2000/R3000 caches:  */
+        (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
+         !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
+        )
+       ) &&
+      !NoExceptions)
     cpu->update_translation_table
       (cpu, vaddr & ~mapping.offset_mask,
        mapping.host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
@@ -342,12 +339,7 @@ do_return_ok:
 template <class TcPhyspage>
 int memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
                   unsigned char *data, size_t len, int writeflag, int misc_flags) {
-  auto no_exceptions = misc_flags & NO_EXCEPTIONS;
-  if (no_exceptions) {
-    return gen_memory_rw<TcPhyspage, true>(cpu, mem, vaddr, data, len, writeflag, misc_flags);
-  } else {
-    return gen_memory_rw<TcPhyspage, false>(cpu, mem, vaddr, data, len, writeflag, misc_flags);
-  }
+  return gen_memory_rw<TcPhyspage, true>(cpu, mem, vaddr, data, len, writeflag, misc_flags);
 }
 
 #endif

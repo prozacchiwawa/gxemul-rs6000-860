@@ -67,7 +67,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	    ofs;
 #endif
   unsigned char data[LS_SIZE] = { };
-  uint64_t unused_return;
 
   int swizzle, offset;
   cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
@@ -152,9 +151,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
   store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
   access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
-
-  // Ensure we set written.
-  ppc_translate_v2p(cpu, addr, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
 
 	if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr^offset, data, sizeof(data),
                       MEM_WRITE, CACHE_DATA)) {

@@ -154,13 +154,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
            !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
           )
          ) &&
+        !(mapping.ok & 4) &&
         !NoExceptions) {
       cpu->update_translation_table
-        (cpu, vaddr & ~mapping.offset_mask,
-         mapping.host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
-         (mapping.cache == CACHE_INSTRUCTION?
-          (writeflag == MEM_WRITE? 1 : 0) : mapping.ok - 1),
-         mapping.host_pages.physaddr & ~mapping.offset_mask, mapping.cache == CACHE_INSTRUCTION);
+        (cpu,
+         vaddr & ~mapping.offset_mask,
+         mapping.host_pages.host_load,
+         writeflag ? 1 : 0,
+         mapping.host_pages.physaddr & ~mapping.offset_mask,
+         mapping.cache == CACHE_INSTRUCTION);
     }
 
     if (mapping.host_pages.host_load) {

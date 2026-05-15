@@ -143,8 +143,19 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	 *  then invalidate code translations for the (physical) page address:
 	 */
 
-	if (mapping.ok > 0 && writeflag) {
-		cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
+	if (mapping.ok > 0) {
+    if (writeflag) {
+      cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
+    }
+
+    if (mapping.host_pages.host_load) {
+      /*  And finally, read or write the data:  */
+      if (writeflag == MEM_WRITE) {
+        memcpy(mapping.host_pages.host_load + mapping.offset, data, len);
+      } else {
+        memcpy(data, mapping.host_pages.host_load + mapping.offset, len);
+      }
+    }
   }
   
   struct memory_access_result access_result = memory_device_lookup(mem, mapping.host_pages.physaddr);
@@ -326,13 +337,6 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 		return MEMORY_ACCESS_FAILED;
 	}
-
-	/*  And finally, read or write the data:  */
-	if (writeflag == MEM_WRITE) {
-		memcpy(mapping.host_pages.host_load + mapping.offset, data, len);
-  } else {
-		memcpy(data, mapping.host_pages.host_load + mapping.offset, len);
-  }
 
 do_return_ok:
 	return MEMORY_ACCESS_OK;

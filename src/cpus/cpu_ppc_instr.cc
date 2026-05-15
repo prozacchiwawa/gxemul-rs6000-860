@@ -2123,10 +2123,6 @@ X(stmw) {
 			return;
 		}
 
-    uint64_t unused_return;
-    // Ensure we set written.
-    ppc_translate_v2p(cpu, addr ^ offset, &unused_return, FLAG_WRITEFLAG | FLAG_NOEXCEPTIONS);
-
 		rs ++;
 		addr += sizeof(uint32_t);
 	}
@@ -2241,21 +2237,8 @@ X(stswi)
 
   // Ensure we set written.
   // fprintf(stderr, "%08x STSW%c set written %08x nb %d\n", (unsigned int)cpu->pc, ix, (unsigned int)addr, nb);
-  if (!ppc_translate_v2p(cpu, addr, &physical_pages[0], FLAG_WRITEFLAG)) {
-    // fprintf(stderr, "%08x STSW%c set written failed %08x\n", (unsigned int)pc, ix, (unsigned int)addr);
-    /* exception */
-    return;
-  }
 
   auto last_byte_ptr = addr + nb - 1;
-  if ((last_byte_ptr ^ addr) >= 0x1000) {
-    // fprintf(stderr, "%08x STSW%c setting a second write bit for addr %08x\n", (unsigned int)cpu->pc, ix, (unsigned int)last_byte_ptr);
-    if (!ppc_translate_v2p(cpu, last_byte_ptr, &physical_pages[1], FLAG_WRITEFLAG)) {
-      // fprintf(stderr, "%08x STSW%c set written failed %08x\n", (unsigned int)pc, ix, (unsigned int)addr);
-      /* exception */
-      return;
-    }
-  }
 
   do {
 		unsigned char d = cur >> 24;

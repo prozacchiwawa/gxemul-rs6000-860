@@ -172,6 +172,8 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       } else {
         memcpy(data, mapping.host_pages.host_load + mapping.offset, len);
       }
+
+      return MEMORY_ACCESS_OK;
     }
   }
   

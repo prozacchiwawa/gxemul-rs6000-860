@@ -777,18 +777,8 @@ X(dcbz)
 	while (cleared < cacheline_size) {
 		int to_clear = cacheline_size < sizeof(cacheline)?
 		    cacheline_size : sizeof(cacheline);
-    auto host_pages =
-#ifdef MODE32
-      CPU32(get_cached_tlb_pages)(cpu, addr, false)
-#else
-      CPU64(get_cached_tlb_pages)(cpu, addr, false)
-#endif
-      ;
-    auto page = host_pages.host_store;
-		if (page != nullptr) {
-			memset(page + (addr & 0xfff), 0, to_clear);
-		} else if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
-		    to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+    if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
+                                              to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
 		}
@@ -1297,16 +1287,6 @@ X(llsc)
 
   final_addr = (final_addr & ~0xfff) | ((addr & 0xfff) ^ offset);
 
-  auto host_pages =
-#ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr, false)
-#else
-    ppc64_get_cached_tlb_pages(cpu, addr, false)
-#endif
-    ;
-
-  auto page = load ? host_pages.host_load : host_pages.host_store;
-
 	if (load) {
 		if (rc) {
 			fatal("ll: rc-bit set?\n");
@@ -1314,9 +1294,7 @@ X(llsc)
 		}
 
     // First check for a cache page as in ppc_instr_loadstore.
-    if (page) {
-      memcpy(d, page + ((addr & 0xfff) ^ offset), len);
-    } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_READ, CACHE_DATA)) {
       fatal("ll: error: TODO\n");
       return; // exit(1);
     }
@@ -1395,9 +1373,7 @@ X(llsc)
       d[3^swizzle] = value;
     }
 
-    if (page) {
-      memcpy(page + ((addr & 0xfff) ^ offset), d, len);
-    } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
     }
@@ -1430,15 +1406,6 @@ X(loose_lhaux)
     full_addr += ic->arg[2];
   }
 
-  auto host_pages =
-#ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, full_addr, false)
-#else
-    ppc64_get_cached_tlb_pages(cpu, full_addr, false)
-#endif
-    ;
-  auto page = host_pages.host_load;
-
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
@@ -1447,10 +1414,7 @@ X(loose_lhaux)
   /*  Synchronize the PC:  */
   sync_pc(cpu, ic);
 
-  if (page) {
-    auto addr = full_addr & 0xfff;
-    memcpy(raw_value, &page[addr ^ offset], 2);
-  } else if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 
@@ -3143,27 +3107,12 @@ X(to_be_translated)
   // fprintf(stderr, "%08x: translate %08x\n", (unsigned int)cpu->ninstrs, (unsigned int)addr);
 
 	/*  Read the instruction word from memory:  */
-  auto host_pages =
-#ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr, true)
-#else
-    ppc64_get_cached_tlb_pages(cpu, addr, true)
-#endif
-    ;
-  page = host_pages.host_load;
-
-	if (page != NULL) {
-		/*  fatal("TRANSLATION HIT!\n");  */
-		memcpy(ib, page + ((addr ^ offset) & 0xfff), sizeof(ib));
-	} else {
-		/*  fatal("TRANSLATION MISS!\n");  */
-		if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, ib,
-		    sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
-      fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
-      memcpy(ic, &nothing_call, sizeof(nothing_call));
-      goto bad;
-		}
-	}
+  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, ib,
+                                             sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
+    fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
+    memcpy(ic, &nothing_call, sizeof(nothing_call));
+    goto bad;
+  }
 
 	{
 		uint32_t *p = (uint32_t *) ib;

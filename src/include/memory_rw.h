@@ -37,6 +37,7 @@ public:
   int offset_mask;
   int offset;
   bool early_success;
+  bool outside_ram;
   host_load_store_t host_pages;
 };
 
@@ -86,6 +87,31 @@ mapping_result_t determine_paddr
 		 */
 	}
 
+  if (mapping.ok > 0) {
+    if (mapping.host_pages.physaddr < mem->physical_max) {
+      /*
+       *  Uncached access:
+       *
+       *  1)  Translate the physical address to a host address.
+       *
+       *  2)  Insert this virtual->physical->host translation into the
+       *      fast translation arrays (using update_translation_table()).
+       *
+       *  3)  If this was a Write, then invalidate any code translations
+       *      in that page.
+       */
+      mapping.host_pages.host_load =
+        memory_paddr_to_hostaddr
+        (mem,
+         mapping.host_pages.physaddr & ~mapping.offset_mask,
+         writeflag);
+      
+      mapping.offset = mapping.host_pages.physaddr & mapping.offset_mask;
+    } else {
+      mapping.outside_ram = true;
+    }
+  }
+
   return mapping;
 }
 
@@ -93,7 +119,6 @@ template <class TcPhyspage, bool NoExceptions>
 int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
                   unsigned char *data, size_t len, int writeflag, int misc_flags)
 {
-
   auto mapping = determine_paddr<TcPhyspage, NoExceptions>
     (cpu,
      mem,
@@ -113,6 +138,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
     return MEMORY_ACCESS_FAILED;
   }
 
+	/*
+	 *  If writing, or if mapping a page where writing is ok later on,
+	 *  then invalidate code translations for the (physical) page address:
+	 */
+
+	if (mapping.ok > 0 && writeflag) {
+		cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
+  }
+  
   struct memory_access_result access_result = memory_device_lookup(mem, mapping.host_pages.physaddr);
   
   int res = access_result.res;
@@ -237,7 +271,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 
 	/*  Outside of physical RAM?  */
-	if (mapping.host_pages.physaddr >= mem->physical_max) {
+	if (mapping.outside_ram) {
     if (is_ppc<TcPhyspage>()) {
       if ((mapping.host_pages.physaddr & 0xfffe0000) == 0xfffe0000) {
         mapping.host_pages.physaddr &= ~0xffff0000;
@@ -270,27 +304,6 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
   }
 
 
-	/*
-	 *  Uncached access:
-	 *
-	 *  1)  Translate the physical address to a host address.
-	 *
-	 *  2)  Insert this virtual->physical->host translation into the
-	 *      fast translation arrays (using update_translation_table()).
-	 *
-	 *  3)  If this was a Write, then invalidate any code translations
-	 *      in that page.
-	 */
-	mapping.host_pages.host_load = memory_paddr_to_hostaddr(mem, mapping.host_pages.physaddr & ~mapping.offset_mask,
-	    writeflag);
-	if (mapping.host_pages.host_load == NULL) {
-		if (writeflag == MEM_READ)
-			memset(data, 0, len);
-		goto do_return_ok;
-	}
-
-	mapping.offset = mapping.host_pages.physaddr & mapping.offset_mask;
-
 	if ((!is_mips<TcPhyspage>() ||
        (/*  Ugly hack for R2000/R3000 caches:  */
         (cpu->cd.mips.cpu_type.mmu_model != MMU3K ||
@@ -304,17 +317,6 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
        (mapping.cache == CACHE_INSTRUCTION?
         (writeflag == MEM_WRITE? 1 : 0) : mapping.ok - 1),
        mapping.host_pages.physaddr & ~mapping.offset_mask, mapping.cache == CACHE_INSTRUCTION);
-
-	/*
-	 *  If writing, or if mapping a page where writing is ok later on,
-	 *  then invalidate code translations for the (physical) page address:
-	 */
-
-	if ((writeflag == MEM_WRITE
-	    || (mapping.ok == 2 && mapping.cache == CACHE_DATA)
-       ) && cpu->invalidate_code_translation != NULL) {
-		cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
-  }
 
 	if ((mapping.host_pages.physaddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
 		if (!NoExceptions) {

@@ -30,56 +30,91 @@
 #include "cop0.h"
 #include "mips_cpu_types.h"
 
+class mapping_result_t {
+public:
+  int ok;
+  int cache;
+  int offset_mask;
+  int offset;
+  bool early_success;
+  host_load_store_t host_pages;
+};
+
 template <class TcPhyspage, bool NoExceptions>
-int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
-                  unsigned char *data, size_t len, int writeflag, int misc_flags)
+mapping_result_t determine_paddr
+(struct cpu *cpu,
+ struct memory *mem,
+ uint64_t vaddr,
+ unsigned char *data,
+ size_t len,
+ int writeflag,
+ int misc_flags)
 {
 	const int offset_mask = is_alpha<TcPhyspage>() ? 0x1fff : 0xfff;
+	mapping_result_t mapping = { 2, misc_flags & CACHE_FLAGS_MASK, offset_mask };
 
-	int ok = 2;
-	int cache, offset;
-  host_load_store_t host_pages = { 0 };
-	int dyntrans_device_danger = 0;
-
-	cache = misc_flags & CACHE_FLAGS_MASK;
-
-	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
-		host_pages.physaddr = vaddr;
+	if (misc_flags & PHYSICAL) {
+		mapping.host_pages.physaddr = vaddr;
 	} else {
-    host_pages = get_tlb_translation<TcPhyspage>(cpu, vaddr, misc_flags & FLAG_INSTR);
-    offset = vaddr & offset_mask;
-    if (offset + len < offset_mask) {
+    mapping.host_pages = get_tlb_translation<TcPhyspage>(cpu, vaddr, misc_flags & FLAG_INSTR);
+    mapping.offset = vaddr & offset_mask;
+    if (mapping.offset + len < mapping.offset_mask) {
       if (writeflag) {
-        auto host_page = host_pages.host_store;
+        auto host_page = mapping.host_pages.host_store;
         if (host_page) {
-          memcpy(host_page + offset, data, len);
-          return MEMORY_ACCESS_OK;
+          memcpy(host_page + mapping.offset, data, len);
+          mapping.early_success = true;
+          return mapping;
         }
       } else {
-        auto host_page = host_pages.host_load;
+        auto host_page = mapping.host_pages.host_load;
         if (host_page) {
-          memcpy(data, host_page + offset, len);
-          return MEMORY_ACCESS_OK;
+          memcpy(data, host_page + mapping.offset, len);
+          mapping.early_success = true;
+          return mapping;
         }
       }
     }
 
-		ok = cpu->translate_v2p(cpu, vaddr, &host_pages.physaddr,
+		mapping.ok = cpu->translate_v2p(cpu, vaddr, &mapping.host_pages.physaddr,
 		    (writeflag? FLAG_WRITEFLAG : 0) +
 		    (NoExceptions? FLAG_NOEXCEPTIONS : 0)
 		    + (misc_flags & MEMORY_USER_ACCESS)
-		    + (cache==CACHE_INSTRUCTION? FLAG_INSTR : 0));
+		    + (mapping.cache==CACHE_INSTRUCTION? FLAG_INSTR : 0));
 
 		/*
 		 *  If the translation caused an exception, or was invalid in
 		 *  some way, then simply return without doing the memory
 		 *  access:
 		 */
-		if (!ok)
-			return MEMORY_ACCESS_FAILED;
 	}
 
-  struct memory_access_result access_result = memory_device_lookup(mem, host_pages.physaddr);
+  return mapping;
+}
+
+  template <class TcPhyspage, bool NoExceptions>
+int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
+                  unsigned char *data, size_t len, int writeflag, int misc_flags)
+{
+
+	int dyntrans_device_danger = 0;
+
+  auto mapping = determine_paddr<TcPhyspage, NoExceptions>
+    (cpu,
+     mem,
+     vaddr,
+     data,
+     len,
+     writeflag,
+     misc_flags);
+
+  if (mapping.early_success) {
+    return MEMORY_ACCESS_OK;
+  } else if (mapping.ok < 1) {
+    return MEMORY_ACCESS_FAILED;
+  }
+
+  struct memory_access_result access_result = memory_device_lookup(mem, mapping.host_pages.physaddr);
   
   int res = access_result.res;
   if (access_result.res > 0) {
@@ -87,7 +122,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       len = access_result.device->length - access_result.device_offset;
 
     if (cpu->update_translation_table != NULL &&
-        !(ok & MEMORY_NOT_FULL_PAGE) &&
+        !(mapping.ok & MEMORY_NOT_FULL_PAGE) &&
         access_result.device->flags & DM_DYNTRANS_OK) {
       int wf = writeflag == MEM_WRITE? 1 : 0;
       unsigned char *host_addr;
@@ -101,12 +136,12 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             dyntrans_write_low)
           access_result.device->
             dyntrans_write_low =
-            access_result.device_offset &~offset_mask;
+            access_result.device_offset &~mapping.offset_mask;
         if (access_result.device_offset >= access_result.device->
             dyntrans_write_high)
           access_result.device->
             dyntrans_write_high =
-            access_result.device_offset | offset_mask;
+            access_result.device_offset | mapping.offset_mask;
       }
 
       if (access_result.device->flags &
@@ -115,22 +150,22 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             to be allocated, if it
             wasn't already  */
         uint64_t *pp = (uint64_t *)access_result.device->dyntrans_data;
-        uint64_t p = host_pages.physaddr - *pp;
+        uint64_t p = mapping.host_pages.physaddr - *pp;
         host_addr =
           memory_paddr_to_hostaddr
-          (mem, p & ~offset_mask,
+          (mem, p & ~mapping.offset_mask,
            MEM_WRITE);
       } else {
         host_addr = access_result.device->
           dyntrans_data +
-          (access_result.device_offset & ~offset_mask);
+          (access_result.device_offset & ~mapping.offset_mask);
       }
       
-      if (!NoExceptions && !(ok & 4)) {
+      if (!NoExceptions && !(mapping.ok & 4)) {
         cpu->update_translation_table
           (cpu,
-           vaddr & ~offset_mask, host_addr,
-           wf, host_pages.physaddr & ~offset_mask,
+           vaddr & ~mapping.offset_mask, host_addr,
+           wf, mapping.host_pages.physaddr & ~mapping.offset_mask,
            !!(misc_flags & CACHE_INSTRUCTION)
            );
       }
@@ -157,7 +192,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             access_result.device->name, (long)access_result.device_offset);
       if (is_mips<TcPhyspage>()) {
         mips_cpu_exception(cpu,
-                           cache == CACHE_INSTRUCTION?
+                           mapping.cache == CACHE_INSTRUCTION?
                            EXCEPTION_IBE : EXCEPTION_DBE,
                            0, vaddr, 0, 0, 0, 0);
       }
@@ -169,7 +204,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             implementation... but the
             faulting address should probably
             be included somewhere too!  */
-        m88k_exception(cpu, cache == CACHE_INSTRUCTION
+        m88k_exception(cpu, mapping.cache == CACHE_INSTRUCTION
                        ? M88K_EXCEPTION_INSTRUCTION_ACCESS
                        : M88K_EXCEPTION_DATA_ACCESS, 0);
       }
@@ -186,10 +221,10 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
     switch (cpu->cd.mips.cpu_type.mmu_model) {
     case MMU3K:
       /*  if not uncached addess  (TODO: generalize this)  */
-      if (!(misc_flags & PHYSICAL) && cache != CACHE_NONE &&
+      if (!(misc_flags & PHYSICAL) && mapping.cache != CACHE_NONE &&
           !((vaddr & 0xffffffffULL) >= 0xa0000000ULL &&
             (vaddr & 0xffffffffULL) <= 0xbfffffffULL)) {
-        if (memory_cache_R3000(cpu, cache, host_pages.physaddr,
+        if (memory_cache_R3000(cpu, mapping.cache, mapping.host_pages.physaddr,
                                writeflag, len, data))
           goto do_return_ok;
       }
@@ -203,15 +238,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 
 	/*  Outside of physical RAM?  */
-	if (host_pages.physaddr >= mem->physical_max) {
+	if (mapping.host_pages.physaddr >= mem->physical_max) {
     if (is_ppc<TcPhyspage>()) {
-      if ((host_pages.physaddr & 0xfffe0000) == 0xfffe0000) {
-        host_pages.physaddr &= ~0xffff0000;
+      if ((mapping.host_pages.physaddr & 0xfffe0000) == 0xfffe0000) {
+        mapping.host_pages.physaddr &= ~0xffff0000;
       }
     } else if (is_mips<TcPhyspage>()) {
-      if ((host_pages.physaddr & 0xffffc00000ULL) == 0x1fc00000) {
+      if ((mapping.host_pages.physaddr & 0xffffc00000ULL) == 0x1fc00000) {
         /*  Ok, this is PROM stuff  */
-      } else if ((host_pages.physaddr & 0xfffff00000ULL) == 0x1ff00000) {
+      } else if ((mapping.host_pages.physaddr & 0xfffff00000ULL) == 0x1ff00000) {
         /*  Sprite reads from this area of memory...  */
         /*  TODO: is this still correct?  */
         if (writeflag == MEM_READ)
@@ -220,9 +255,9 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       }
     }
 
-    if (host_pages.physaddr >= mem->physical_max && !NoExceptions)
+    if (mapping.host_pages.physaddr >= mem->physical_max && !NoExceptions)
       memory_warn_about_unimplemented_addr
-        (cpu, mem, writeflag, host_pages.physaddr, data, len);
+        (cpu, mem, writeflag, mapping.host_pages.physaddr, data, len);
     
     if (writeflag == MEM_READ) {
       /*  Return all zeroes? (Or 0xff? TODO)  */
@@ -247,15 +282,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	 *  3)  If this was a Write, then invalidate any code translations
 	 *      in that page.
 	 */
-	host_pages.host_load = memory_paddr_to_hostaddr(mem, host_pages.physaddr & ~offset_mask,
+	mapping.host_pages.host_load = memory_paddr_to_hostaddr(mem, mapping.host_pages.physaddr & ~mapping.offset_mask,
 	    writeflag);
-	if (host_pages.host_load == NULL) {
+	if (mapping.host_pages.host_load == NULL) {
 		if (writeflag == MEM_READ)
 			memset(data, 0, len);
 		goto do_return_ok;
 	}
 
-	offset = host_pages.physaddr & offset_mask;
+	mapping.offset = mapping.host_pages.physaddr & mapping.offset_mask;
 
 	if (cpu->update_translation_table != NULL && !dyntrans_device_danger
       && (!is_mips<TcPhyspage>() ||
@@ -264,14 +299,14 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             !(cpu->cd.mips.coproc[0]->reg[COP0_STATUS] & MIPS1_ISOL_CACHES))
            )
           )
-      && !(ok & MEMORY_NOT_FULL_PAGE)
+      && !(mapping.ok & MEMORY_NOT_FULL_PAGE)
 	    && !NoExceptions)
     cpu->update_translation_table
-      (cpu, vaddr & ~offset_mask,
-       host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
-       (cache == CACHE_INSTRUCTION?
-        (writeflag == MEM_WRITE? 1 : 0) : ok - 1),
-       host_pages.physaddr & ~offset_mask, cache == CACHE_INSTRUCTION);
+      (cpu, vaddr & ~mapping.offset_mask,
+       mapping.host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
+       (mapping.cache == CACHE_INSTRUCTION?
+        (writeflag == MEM_WRITE? 1 : 0) : mapping.ok - 1),
+       mapping.host_pages.physaddr & ~mapping.offset_mask, mapping.cache == CACHE_INSTRUCTION);
 
 	/*
 	 *  If writing, or if mapping a page where writing is ok later on,
@@ -279,12 +314,12 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	 */
 
 	if ((writeflag == MEM_WRITE
-	    || (ok == 2 && cache == CACHE_DATA)
+	    || (mapping.ok == 2 && mapping.cache == CACHE_DATA)
        ) && cpu->invalidate_code_translation != NULL) {
-		cpu->invalidate_code_translation(cpu, host_pages.physaddr, INVALIDATE_PADDR);
+		cpu->invalidate_code_translation(cpu, mapping.host_pages.physaddr, INVALIDATE_PADDR);
   }
 
-	if ((host_pages.physaddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
+	if ((mapping.host_pages.physaddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
 		if (!NoExceptions) {
 		    printf("Write over host_pages.host_load boundary?\n");
 		    exit(1);
@@ -295,9 +330,9 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 	/*  And finally, read or write the data:  */
 	if (writeflag == MEM_WRITE) {
-		memcpy(host_pages.host_load + offset, data, len);
+		memcpy(mapping.host_pages.host_load + mapping.offset, data, len);
   } else {
-		memcpy(data, host_pages.host_load + offset, len);
+		memcpy(data, mapping.host_pages.host_load + mapping.offset, len);
   }
 
 do_return_ok:

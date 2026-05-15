@@ -37,17 +37,16 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	const int offset_mask = is_alpha<TcPhyspage>() ? 0x1fff : 0xfff;
 
 	int ok = 2;
-	uint64_t paddr;
 	int cache, offset;
-	unsigned char *memblock;
+  host_load_store_t host_pages = { 0 };
 	int dyntrans_device_danger = 0;
 
 	cache = misc_flags & CACHE_FLAGS_MASK;
 
 	if (misc_flags & PHYSICAL || cpu->translate_v2p == NULL) {
-		paddr = vaddr;
+		host_pages.physaddr = vaddr;
 	} else {
-    auto host_pages = get_tlb_translation<TcPhyspage>(cpu, vaddr, misc_flags & FLAG_INSTR);
+    host_pages = get_tlb_translation<TcPhyspage>(cpu, vaddr, misc_flags & FLAG_INSTR);
     offset = vaddr & offset_mask;
     if (offset + len < offset_mask) {
       if (writeflag) {
@@ -65,7 +64,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       }
     }
 
-		ok = cpu->translate_v2p(cpu, vaddr, &paddr,
+		ok = cpu->translate_v2p(cpu, vaddr, &host_pages.physaddr,
 		    (writeflag? FLAG_WRITEFLAG : 0) +
 		    (NoExceptions? FLAG_NOEXCEPTIONS : 0)
 		    + (misc_flags & MEMORY_USER_ACCESS)
@@ -80,7 +79,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 			return MEMORY_ACCESS_FAILED;
 	}
 
-  struct memory_access_result access_result = memory_device_lookup(mem, paddr);
+  struct memory_access_result access_result = memory_device_lookup(mem, host_pages.physaddr);
   
   int res = access_result.res;
   if (access_result.res > 0) {
@@ -116,7 +115,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
             to be allocated, if it
             wasn't already  */
         uint64_t *pp = (uint64_t *)access_result.device->dyntrans_data;
-        uint64_t p = paddr - *pp;
+        uint64_t p = host_pages.physaddr - *pp;
         host_addr =
           memory_paddr_to_hostaddr
           (mem, p & ~offset_mask,
@@ -131,7 +130,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
         cpu->update_translation_table
           (cpu,
            vaddr & ~offset_mask, host_addr,
-           wf, paddr & ~offset_mask,
+           wf, host_pages.physaddr & ~offset_mask,
            !!(misc_flags & CACHE_INSTRUCTION)
            );
       }
@@ -190,7 +189,7 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       if (!(misc_flags & PHYSICAL) && cache != CACHE_NONE &&
           !((vaddr & 0xffffffffULL) >= 0xa0000000ULL &&
             (vaddr & 0xffffffffULL) <= 0xbfffffffULL)) {
-        if (memory_cache_R3000(cpu, cache, paddr,
+        if (memory_cache_R3000(cpu, cache, host_pages.physaddr,
                                writeflag, len, data))
           goto do_return_ok;
       }
@@ -204,15 +203,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 
 	/*  Outside of physical RAM?  */
-	if (paddr >= mem->physical_max) {
+	if (host_pages.physaddr >= mem->physical_max) {
     if (is_ppc<TcPhyspage>()) {
-      if ((paddr & 0xfffe0000) == 0xfffe0000) {
-        paddr &= ~0xffff0000;
+      if ((host_pages.physaddr & 0xfffe0000) == 0xfffe0000) {
+        host_pages.physaddr &= ~0xffff0000;
       }
     } else if (is_mips<TcPhyspage>()) {
-      if ((paddr & 0xffffc00000ULL) == 0x1fc00000) {
+      if ((host_pages.physaddr & 0xffffc00000ULL) == 0x1fc00000) {
         /*  Ok, this is PROM stuff  */
-      } else if ((paddr & 0xfffff00000ULL) == 0x1ff00000) {
+      } else if ((host_pages.physaddr & 0xfffff00000ULL) == 0x1ff00000) {
         /*  Sprite reads from this area of memory...  */
         /*  TODO: is this still correct?  */
         if (writeflag == MEM_READ)
@@ -221,9 +220,9 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       }
     }
 
-    if (paddr >= mem->physical_max && !NoExceptions)
+    if (host_pages.physaddr >= mem->physical_max && !NoExceptions)
       memory_warn_about_unimplemented_addr
-        (cpu, mem, writeflag, paddr, data, len);
+        (cpu, mem, writeflag, host_pages.physaddr, data, len);
     
     if (writeflag == MEM_READ) {
       /*  Return all zeroes? (Or 0xff? TODO)  */
@@ -248,15 +247,15 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	 *  3)  If this was a Write, then invalidate any code translations
 	 *      in that page.
 	 */
-	memblock = memory_paddr_to_hostaddr(mem, paddr & ~offset_mask,
+	host_pages.host_load = memory_paddr_to_hostaddr(mem, host_pages.physaddr & ~offset_mask,
 	    writeflag);
-	if (memblock == NULL) {
+	if (host_pages.host_load == NULL) {
 		if (writeflag == MEM_READ)
 			memset(data, 0, len);
 		goto do_return_ok;
 	}
 
-	offset = paddr & offset_mask;
+	offset = host_pages.physaddr & offset_mask;
 
 	if (cpu->update_translation_table != NULL && !dyntrans_device_danger
       && (!is_mips<TcPhyspage>() ||
@@ -269,10 +268,10 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	    && !NoExceptions)
     cpu->update_translation_table
       (cpu, vaddr & ~offset_mask,
-       memblock, (misc_flags & MEMORY_USER_ACCESS) |
+       host_pages.host_load, (misc_flags & MEMORY_USER_ACCESS) |
        (cache == CACHE_INSTRUCTION?
         (writeflag == MEM_WRITE? 1 : 0) : ok - 1),
-       paddr & ~offset_mask, cache == CACHE_INSTRUCTION);
+       host_pages.physaddr & ~offset_mask, cache == CACHE_INSTRUCTION);
 
 	/*
 	 *  If writing, or if mapping a page where writing is ok later on,
@@ -282,12 +281,12 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 	if ((writeflag == MEM_WRITE
 	    || (ok == 2 && cache == CACHE_DATA)
        ) && cpu->invalidate_code_translation != NULL) {
-		cpu->invalidate_code_translation(cpu, paddr, INVALIDATE_PADDR);
+		cpu->invalidate_code_translation(cpu, host_pages.physaddr, INVALIDATE_PADDR);
   }
 
-	if ((paddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
+	if ((host_pages.physaddr&((1<<BITS_PER_MEMBLOCK)-1)) + len > (1<<BITS_PER_MEMBLOCK)) {
 		if (!NoExceptions) {
-		    printf("Write over memblock boundary?\n");
+		    printf("Write over host_pages.host_load boundary?\n");
 		    exit(1);
 		}
 
@@ -296,9 +295,9 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
 	/*  And finally, read or write the data:  */
 	if (writeflag == MEM_WRITE) {
-		memcpy(memblock + offset, data, len);
+		memcpy(host_pages.host_load + offset, data, len);
   } else {
-		memcpy(data, memblock + offset, len);
+		memcpy(data, host_pages.host_load + offset, len);
   }
 
 do_return_ok:

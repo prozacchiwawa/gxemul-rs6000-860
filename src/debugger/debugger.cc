@@ -252,7 +252,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
 
   while (addr < max_addr) {
     r = c->memory_rw(c, mem, addr, cur_insn, sizeof(cur_insn),
-                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
     if (r == MEMORY_ACCESS_FAILED) {
       return 0;
     }
@@ -262,7 +262,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
       char namebuf[68];
 
       r = c->memory_rw(c, mem, addr + 0x18, (unsigned char *)namebuf, sizeof(namebuf),
-                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 
       if (r == MEMORY_ACCESS_FAILED) {
         return 0;

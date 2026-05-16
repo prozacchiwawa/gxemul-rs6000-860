@@ -176,6 +176,13 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
       return MEMORY_ACCESS_OK;
     }
   }
+
+  if (misc_flags & HOST_ACCESS) {
+    if (!writeflag) {
+      memset(data, 0, len);
+    }
+    return MEMORY_ACCESS_OK;
+  }
   
   struct memory_access_result access_result = memory_device_lookup(mem, mapping.host_pages.physaddr);
   

@@ -740,7 +740,7 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 			printf(" (NOTE: truncating %0" PRIx64")",
 			    (uint64_t) data);
 		res = m->cpus[0]->memory_rw(m->cpus[0], m->cpus[0]->mem, addr,
-		    &a_byte, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
+		    &a_byte, 1, MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 		if (!res)
 			printf("  FAILED!\n");
 		printf("\n");
@@ -1210,7 +1210,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 		for (i=0; i<sizeof(buf); i++) {
 			if (c->memory_rw(c, mem, (addr+i)^offset, buf+i, 1, MEM_READ,
-			    CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED)
+			    CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS) == MEMORY_ACCESS_FAILED)
 				failed ++;
 		}
 
@@ -1323,7 +1323,7 @@ static void debugger_cmd_findcrc(struct machine *m, char *cmd_line)
 
   x = 1; /* First run */
   r = c->memory_rw(c, mem, addr, &buf[length], length,
-                   MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                   MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 
 	while (addr < addr_end - length) {
 		if (r == MEMORY_ACCESS_FAILED) {
@@ -1356,7 +1356,7 @@ static void debugger_cmd_findcrc(struct machine *m, char *cmd_line)
 		addr += length;
     memmove(&buf[0], &buf[length], length);
     r = c->memory_rw(c, mem, addr, &buf[length], length,
-                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 	}
 }
 

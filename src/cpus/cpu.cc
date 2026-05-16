@@ -281,7 +281,7 @@ struct match_functions_t *try_match_function(struct cpu *cpu, uint64_t f, const 
 
 static bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result) {
   uint8_t buf[sizeof(uint32_t)] = { };
-  auto r = cpu->memory_rw(cpu, cpu->mem, addr, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+  auto r = cpu->memory_rw(cpu, cpu->mem, addr, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
   if (r == MEMORY_ACCESS_FAILED) {
     return false;
   }
@@ -866,7 +866,7 @@ void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, u
 		unsigned char buf[16];
 		memset(buf, 0, sizeof(buf));
 		r = c->memory_rw(c, mem, addr, &buf[0], sizeof(buf),
-                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 
 		if (c->is_32bit)
 			printf("0x%08" PRIx32"  ", (uint32_t) addr);

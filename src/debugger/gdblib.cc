@@ -443,7 +443,7 @@ void GotPacket(struct cpu *cpu)
         {
             int readsize = memsize > sizeof(membuf) ? sizeof(membuf) : memsize;
 
-            if (cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+            if (cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS) == MEMORY_ACCESS_FAILED) {
                 break;
             }
 

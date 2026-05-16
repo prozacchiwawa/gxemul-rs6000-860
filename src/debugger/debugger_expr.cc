@@ -359,7 +359,7 @@ int debugger_parse_expression(struct machine *m, char *expr, int writeflag,
         case '@':
           (*valuep) = left + right;
           if (cpu->memory_rw(cpu, mem, *valuep, buf, sizeof(buf), MEM_READ,
-                           CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+                           CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS) == MEMORY_ACCESS_FAILED) {
             goto return_failure;
           }
           *valuep = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];

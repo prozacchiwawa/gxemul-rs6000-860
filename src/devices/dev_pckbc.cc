@@ -70,7 +70,7 @@ std::deque<keyboard_event_t> keyboard_debug_events;
 
 #define	PS2	100
 
-#define	PCKBC_TICKSHIFT		15
+#define	PCKBC_TICKSHIFT		11
 
 struct pckbc_data {
 	int		console_handle;
@@ -111,6 +111,7 @@ struct pckbc_data {
   int mouse_last_x, mouse_last_y, mouse_last_but;
 
   int mouse_timeout;
+  int rst_order;
 };
 
 #define	STATE_NORMAL			0
@@ -336,20 +337,20 @@ KeynameToPCKeyboard pc_type_3[] = {
   { KeyNames::F11, 0, NONE, F0, 0x56 },
   { KeyNames::F12, 0, NONE, F0, 0x5e },
   { KeyNames::ESC, 0, NONE, F0, 0x08 },
-  { KeyNames::N1, 0, NONE, F0, 0x02 },
-  { KeyNames::N2, 0, NONE, F0, 0x03 },
-  { KeyNames::N3, 0, NONE, F0, 0x04 },
-  { KeyNames::N4, 0, NONE, F0, 0x05 },
-  { KeyNames::N5, 0, NONE, F0, 0x06 },
-  { KeyNames::N6, 0, NONE, F0, 0x07 },
-  { KeyNames::N7, 0, NONE, F0, 0x08 },
-  { KeyNames::N8, 0, NONE, F0, 0x09 },
-  { KeyNames::N9, 0, NONE, F0, 0x0a },
-  { KeyNames::N0, 0, NONE, F0, 0x0b },
-  { KeyNames::Minus, 0, NONE, F0, 0x0c },
-  { KeyNames::Equals, 0, NONE, F0, 0x0d },
-  { KeyNames::Backspace, 0, NONE, F0, 0x0e },
-  { KeyNames::Tab, 0, NONE, F0, 0x0f },
+  { KeyNames::N1, 0, NONE, F0, 0x16 },
+  { KeyNames::N2, 0, NONE, F0, 0x1e },
+  { KeyNames::N3, 0, NONE, F0, 0x26 },
+  { KeyNames::N4, 0, NONE, F0, 0x25 },
+  { KeyNames::N5, 0, NONE, F0, 0x2e },
+  { KeyNames::N6, 0, NONE, F0, 0x36 },
+  { KeyNames::N7, 0, NONE, F0, 0x3d },
+  { KeyNames::N8, 0, NONE, F0, 0x3e },
+  { KeyNames::N9, 0, NONE, F0, 0x46 },
+  { KeyNames::N0, 0, NONE, F0, 0x45 },
+  { KeyNames::Minus, 0, NONE, F0, 0x4e },
+  { KeyNames::Equals, 0, NONE, F0, 0x55 },
+  { KeyNames::Backspace, 0, NONE, F0, 0x66 },
+  { KeyNames::Tab, 0, NONE, F0, 0x0d },
   { KeyNames::Q, 0, NONE, F0, 0x15 },
   { KeyNames::W, 0, NONE, F0, 0x1d },
   { KeyNames::E, 0, NONE, F0, 0x24 },
@@ -363,7 +364,7 @@ KeynameToPCKeyboard pc_type_3[] = {
   { KeyNames::LBrace, 0, NONE, F0, 0x54 },
   { KeyNames::RBrace, 0, NONE, F0, 0x5b },
   { KeyNames::Backslash, 0, NONE, F0, 0x5c },
-  { KeyNames::Return, 0, NONE, F0, 0x1c },
+  { KeyNames::Return, 0, NONE, F0, 0x5a },
   { KeyNames::Ctrl, 0, NONE, F0, 0x11 },
   { KeyNames::A, 0, NONE, F0, 0x1c },
   { KeyNames::S, 0, NONE, F0, 0x1b },
@@ -384,7 +385,7 @@ KeynameToPCKeyboard pc_type_3[] = {
   { KeyNames::V, 0, NONE, F0, 0x2a },
   { KeyNames::B, 0, NONE, F0, 0x32 },
   { KeyNames::N, 0, NONE, F0, 0x31 },
-  { KeyNames::M, 0, NONE, F0, 0x41 },
+  { KeyNames::M, 0, NONE, F0, 0x3a },
   { KeyNames::Comma, 0, NONE, F0, 0x41 },
   { KeyNames::Dot, 0, NONE, F0, 0x49 },
   { KeyNames::Slash, 0, NONE, F0, 0x4a },
@@ -451,13 +452,20 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 	else
 		d->tail[port] = (d->tail[port]+1) % MAX_8042_QUEUELEN;
 
-  if (d->currently_asserted[port]) {
+  if (d->tail[port] == d->head[port]) {
     if (port) {
       INTERRUPT_DEASSERT(d->irq_mouse);
     } else {
       INTERRUPT_DEASSERT(d->irq_keyboard);
     }
     d->currently_asserted[port] = false;
+  } else {
+    if (port) {
+      INTERRUPT_ASSERT(d->irq_mouse);
+    } else {
+      INTERRUPT_ASSERT(d->irq_keyboard);
+    }
+    d->currently_asserted[port] = true;
   }
 
 	return d->key_queue[port][d->tail[port]];
@@ -554,7 +562,7 @@ DEVICE_TICK(pckbc)
   }
 
   for (int port = 0; port < 2; port++) {
-    if ((d->head[port] != d->tail[port]) && !d->currently_asserted[port]) {
+    if (d->head[port] != d->tail[port]) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port == 0) {
         INTERRUPT_ASSERT(d->irq_keyboard);
@@ -582,6 +590,7 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
   if (d->state == STATE_WAITING_FOR_LEDS) {
     debug("[ pckbc: leds: %x ]\n", cmd);
     d->state = STATE_NORMAL;
+		pckbc_add_code(d, KBR_ACK, port_nr);
     return;
   }
 
@@ -749,6 +758,38 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 		pckbc_add_code(d, KBR_ACK, port_nr);
 		break;
 
+  case 0x11:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x12:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x14:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x19:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x21:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x58:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x59:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
+  case 0x76:
+    pckbc_add_code(d, 0xfa, port_nr);
+    break;
+
 	case KBC_MODEIND:	/*  Set LEDs  */
 		/*  Just ACK, no LEDs are actually set.  */
     d->state = STATE_WAITING_FOR_LEDS;
@@ -798,9 +839,18 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 		d->state = STATE_WAITING_FOR_ONEKEY_MB;
 		break;
 
+  case KBC_GETTABLE:
+		pckbc_add_code(d, 0xfa, port_nr);
+		pckbc_add_code(d, 0xb1, port_nr);
+    pckbc_add_code(d, 0xbf, port_nr);
+    break;
+
 	case KBC_RESET:
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		pckbc_add_code(d, KBR_RSTDONE, port_nr);
+    d->head[0] = d->tail[0] = 0;
+    pckbc_add_code(d, KBR_ACK, port_nr);
+    pckbc_add_code(d, KBR_RSTDONE, port_nr);
+    pckbc_add_code(d, 0xb2, port_nr);
+
 		/*
 		 *  Disable interrupts during reset, or Linux 2.6
 		 *  prints warnings about spurious interrupts.
@@ -935,7 +985,7 @@ DEVICE_ACCESS(pckbc)
           d->state == STATE_RDCMDBYTE ||
           d->state == STATE_RDOUTPUT) {
         odata |= KBS_DIB;
-        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[1], d->tail[1]);
+        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[0], d->tail[0]);
       } else if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;

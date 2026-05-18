@@ -75,8 +75,10 @@
 #define	KBC_TYPEMATIC	0xF3	/* set typematic rate and delay */
 #define	KBC_GETID	0xF2	/* get keyboard id */
 #define	KBC_SETTABLE	0xF0	/* set scancode translation table */
+#define KBC_GETTABLE  0xEF  /* get scancode translation table */
 #define	KBC_ECHO	0xEE	/* request an echo from the keyboard */
 #define	KBC_MODEIND	0xED	/* set mode indicators (i.e. LEDs) */
+#define KBC_SET_L_ALT_SCAN_CODE 0x19 /* Set left alt scan code */
 
 /* keyboard responses */
 #define	KBR_EXTENDED	0xE0	/* extended key sequence */

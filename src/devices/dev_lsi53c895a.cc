@@ -642,10 +642,10 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         return req->xfer.data_in_len;
     }
 
-	case 0x2f:
     case 0x15:
     case 0x1b:
     case 0x1e:
+	case 0x2f:
     case 0x35: {
         fprintf(stderr, "LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
         req->status = 0;

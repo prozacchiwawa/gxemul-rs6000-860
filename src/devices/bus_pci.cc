@@ -273,6 +273,8 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 		abort();
 	}
 
+  fprintf(stderr, "PCI: bus%d device%d = %s\n", bus, device, name);
+
 	/*  Find the PCI device:  */
 	init = pci_lookup_initf(name);
 
@@ -308,7 +310,7 @@ void bus_pci_add(struct machine *machine, struct pci_data *pci_data,
 	 *  The size registers should also be set up on a per-device basis.
 	 */
 	PCI_SET_DATA(PCI_COMMAND_STATUS_REG,
-	    PCI_COMMAND_IO_ENABLE | PCI_COMMAND_MEM_ENABLE);
+               PCI_COMMAND_IO_ENABLE | PCI_COMMAND_MEM_ENABLE);
 	for (ofs = PCI_MAPREG_START; ofs < PCI_MAPREG_END; ofs += 4)
 		PCI_SET_DATA_SIZE(ofs, 0x00100000 - 1);
 
@@ -493,10 +495,9 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
   case 0x10:
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    if (value & 0xffff == 0x55aa) {
-      PCI_SET_DATA(reg, value & ~0xffff);
-    } else {
-      PCI_SET_DATA(reg, value & ~0x1ffffff);
+    if (value) {
+      uint32_t mem_stride = 0xfc000000;
+      PCI_SET_DATA(reg, value & mem_stride);
     }
     return 1;
 
@@ -506,6 +507,11 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, 0);
     return 1;
 
+  case 0x3c:
+    fprintf(stderr, "vga: set interrupt line? %08x\n", value);
+    PCI_SET_DATA(reg, 0x100 | (value & 0xff));
+    return 1;
+
   default:
     return 0;
   }
@@ -513,26 +519,53 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
 PCIINIT(s3_virge)
 {
-	PCI_SET_DATA(PCI_ID_REG,
-	    PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA /*PCI_PRODUCT_S3_VIRGE_DX*/));
+  auto id_code = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  PCI_SET_DATA(PCI_ID_REG, id_code);
 
 	PCI_SET_DATA(PCI_CLASS_REG,
-	    PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
-	    PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
+               PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
+                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
-	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0000010f);	/*  interrupt pin D  */
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 0;
   assoc->size = 32 * 1024 * 1024;
-  assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  assoc->id = id_code;
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 
-	dev_vga_init(machine, mem, assoc->allocated_space,
-	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
+	dev_86mc64_init(machine, mem, assoc->allocated_space,
+               pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
+}
+
+#define PCI_VENDOR_WD                   0x101c
+#define PCI_PRODUCT_WD90C00            0xc24a
+
+PCIINIT(wd90c00)
+{
+  auto id_code = PCI_ID_CODE(PCI_VENDOR_WD, PCI_PRODUCT_WD90C00);
+  PCI_SET_DATA(PCI_ID_REG, id_code);
+
+	PCI_SET_DATA(PCI_CLASS_REG,
+               PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
+                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
+
+  PCI_SET_DATA(PCI_MAPREG_START, 0x00f00000);
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
+
+	pd->cfg_reg_write = s3_virge_cfg_reg_write;
+
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 0;
+  assoc->size = 0x100000;
+  assoc->id = id_code;
+  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+
+	dev_wd90c00_init(machine, mem, assoc->allocated_space,
+               pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
 #define PCI_VENDOR_NCR 0x1000
@@ -559,7 +592,7 @@ int lsi53c895a_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     return 1;
   case 0x3c: // Max lat, Min gnt, Int pin, Int Line
     fprintf(stderr, "lsi: set INT# %08x\n", value);
-    // PCI_SET_DATA(reg, (value);
+    PCI_SET_DATA(reg, 0x100 | (value & 0xff));
     return 1;
   default:
     return 0;
@@ -583,12 +616,13 @@ PCIINIT(lsi53c895a)
       PCI_SUBCLASS_MASS_STORAGE_SCSI,
       0) | 0x26);
 
-  PCI_SET_DATA(4, 7);
+	PCI_SET_DATA(PCI_COMMAND_STATUS_REG,
+               PCI_COMMAND_IO_ENABLE | PCI_COMMAND_MEM_ENABLE);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x20000001);
   PCI_SET_DATA(PCI_MAPREG_START + 4, 0x8000);
 
-	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x0808010d);	/*  interrupt pin D  */
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x08080100);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
 
@@ -598,7 +632,7 @@ PCIINIT(lsi53c895a)
   auto first_alloc = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 1;
-  assoc->size = 0x80;
+  assoc->size = 0x100;
   assoc->id = PCI_ID_CODE(PCI_VENDOR_NCR, PCI_PRODUCT_NCR_53C810);
   assoc->allocated_space = first_alloc;
   assoc = &pci_io_allocation[pci_io_target++];
@@ -929,6 +963,35 @@ PCIINIT(piix4_isa)
 
 int i82378zb_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
   switch (reg) {
+  // XXX These accesses are early ram bank detection.  I hadn't previously understood them.
+  case 0x04:
+    eagle_comm.pci_status &= ~(value >> 16);
+    eagle_comm.pci_command = value;
+    PCI_SET_DATA(reg, ((uint32_t)eagle_comm.pci_status) << 16 | eagle_comm.pci_command);
+    return 1;
+
+  case 0xc0:
+    eagle_comm.error_detection_1 &= ~(value >> 8);
+    eagle_comm.error_enabling_1 = value;
+    eagle_comm.bus_status_60x = value >> 24;
+    PCI_SET_DATA(reg, (eagle_comm.bus_status_60x << 24) | (eagle_comm.error_detection_1 << 8) | eagle_comm.error_enabling_1);
+    return 1;
+
+  case 0x70:
+  case 0x90:
+  case 0x94:
+  case 0xa0:
+  case 0xa4:
+  case 0xa8:
+  case 0xac:
+  case 0xb8:
+  case 0xf0:
+  case 0xf4:
+  case 0xf8:
+  case 0xfc:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
   case 0x10:
     fprintf(stderr, "isa: set BAR0 %08x\n", (unsigned int)value);
     PCI_SET_DATA(0x10, value & ~0xffff);

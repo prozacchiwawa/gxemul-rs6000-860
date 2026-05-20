@@ -321,7 +321,8 @@ struct machine {
 /*  PReP:  */
 #define	MACHINE_PREP_IBM6050		1
 #define	MACHINE_PREP_MVME2400		2
-#define MACHINE_PREP_IBM860         3
+#define MACHINE_PREP_IBM850     3
+#define MACHINE_PREP_IBM860     4
 
 /*  MacPPC:  TODO: Real model names  */
 #define	MACHINE_MACPPC_G3		1

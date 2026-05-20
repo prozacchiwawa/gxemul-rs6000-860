@@ -2,6 +2,7 @@ bus_isa.cc  Generic ISA bus framework
 bus_pci.cc  Generic PCI bus framework
 dev_8253.cc  Intel 8253/8254 Programmable Interval Timer
 dev_8259.cc  Intel 8259 Programmable Interrupt Controller
+dev_86mc65.cc  VGA framebuffer device (charcell and graphics modes)
 dev_adb.cc  Apple Desktop Bus (ADB) controller
 dev_ahc.cc  Adaptec AHC SCSI controller
 dev_algor.cc  Algor P5064 misc. stuff
@@ -96,6 +97,7 @@ dev_v3.cc  V3 Semiconductor PCI controller
 dev_vga.cc  VGA framebuffer device (charcell and graphics modes)
 dev_vme.cc  VME bus
 dev_vr41xx.cc  VR41xx (VR4122 and VR4131) misc functions
+dev_wd90c00.cc  VGA framebuffer device (charcell and graphics modes)
 dev_wdc.cc  Standard "wdc" IDE controller
 dev_z8530.cc  Zilog Z8530 "zs" serial controller
 dev_zero.cc  A simple device which returns zero for reads, discards all writes

@@ -65,10 +65,14 @@ MACHINE_SETUP(prep)
 
 	switch (machine->machine_subtype) {
 
-    case MACHINE_PREP_IBM860:
-        machine->machine_name =
-            strdup("RS/6000 Model 860\n");
-        model_name = "IBM PPS Model 7249 (E)";
+  case MACHINE_PREP_IBM850:
+  case MACHINE_PREP_IBM860:
+    machine->machine_name =
+      strdup
+      (machine->machine_subtype == MACHINE_PREP_IBM860 ?
+       "RS/6000 Model 860\n" :
+       "RS/6000 Model 850\n");
+    model_name = "IBM PPS Model 7249 (E)";
 
 		if (machine->emulated_hz == 0)
 			machine->emulated_hz = 20000000;
@@ -91,34 +95,38 @@ MACHINE_SETUP(prep)
 		bus_pci_add(machine, pci_data, machine->memory, 0, 13, 0, "lsi53c895a");
 
 		if (machine->x11_md.in_use) {
-			bus_pci_add(machine, pci_data, machine->memory,
-			    0, 14, 0, "s3_virge");
+      bus_pci_add
+        (machine, pci_data, machine->memory,
+         0, 14, 0,
+         machine->machine_subtype == MACHINE_PREP_IBM860 ?
+         "s3_virge" :
+         "wd90c00");
 		}
 
-        bus_pci_add(machine, pci_data, machine->memory,
-            0, 15, 0, "ibm_isa");
+    bus_pci_add(machine, pci_data, machine->memory,
+                0, 15, 0, "ibm_isa");
 
-        // Locate rom image and load it.
-        rom_image = find_rom_disk(machine);
-        if (rom_image != NULL) {
-            uint64_t address = 0xfff00000;
-            uint64_t offset = 0;
-            size_t len = rom_image->total_size;
-            dev_ram_init(machine, 0xfff00000, 0x100000, DEV_RAM_RAM, 0, "ROM");
-            unsigned char *copy_buf = (unsigned char *)malloc(len);
-            diskimage__internal_access
-                (rom_image, false, 0, copy_buf, len);
-            while (offset < 0x100000) {
-                uint64_t end_max = std::min(offset + len, uint64_t(0x100000));
-                size_t len_max = end_max - offset;
-                store_buf
-                    (cpu, address + offset, (const char *)copy_buf, len_max);
-                offset += len_max;
-            }
-            free(copy_buf);
-            cpu->pc = 0xfff00100;
-        }
-        break;
+    // Locate rom image and load it.
+    rom_image = find_rom_disk(machine);
+    if (rom_image != NULL) {
+      uint64_t address = 0xfff00000;
+      uint64_t offset = 0;
+      size_t len = rom_image->total_size;
+      dev_ram_init(machine, 0xfff00000, 0x100000, DEV_RAM_RAM, 0, "ROM");
+      unsigned char *copy_buf = (unsigned char *)malloc(len);
+      diskimage__internal_access
+        (rom_image, false, 0, copy_buf, len);
+      while (offset < 0x100000) {
+        uint64_t end_max = std::min(offset + len, uint64_t(0x100000));
+        size_t len_max = end_max - offset;
+        store_buf
+          (cpu, address + offset, (const char *)copy_buf, len_max);
+        offset += len_max;
+      }
+      free(copy_buf);
+      cpu->pc = 0xfff00100;
+    }
+    break;
 
 	case MACHINE_PREP_IBM6050:
 		machine->machine_name =
@@ -221,9 +229,10 @@ MACHINE_SETUP(prep)
 MACHINE_DEFAULT_CPU(prep)
 {
 	switch (machine->machine_subtype) {
-    case MACHINE_PREP_IBM860:
+  case MACHINE_PREP_IBM850:
+  case MACHINE_PREP_IBM860:
 		machine->cpu_name = strdup("PPC604");
-        break;
+    break;
 
 	case MACHINE_PREP_IBM6050:
 		machine->cpu_name = strdup("PPC604");
@@ -253,8 +262,13 @@ MACHINE_REGISTER(prep)
 	machine_entry_add_alias(me, "prep");
 	me->set_default_ram = machine_default_ram_prep;
 
-    machine_entry_add_subtype(me, "IBM 860", MACHINE_PREP_IBM860,
-        "ibm860", NULL);
+  machine_entry_add_subtype
+    (me, "IBM 850", MACHINE_PREP_IBM850,
+     "ibm850", NULL);
+
+  machine_entry_add_subtype
+    (me, "IBM 860", MACHINE_PREP_IBM860,
+     "ibm860", NULL);
 
 	machine_entry_add_subtype(me, "IBM 6050/6070", MACHINE_PREP_IBM6050,
 	    "ibm6050", "ibm6070", NULL);

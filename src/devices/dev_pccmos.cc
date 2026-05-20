@@ -247,7 +247,8 @@ DEVINIT(pccmos)
 	case MACHINE_QEMU_MIPS:
 	case MACHINE_COBALT:
 	case MACHINE_PREP:
-        if (devinit->machine->machine_subtype == MACHINE_PREP_IBM860) {
+        if (devinit->machine->machine_subtype == MACHINE_PREP_IBM860 ||
+            devinit->machine->machine_subtype == MACHINE_PREP_IBM850) {
             type = MC146818_SGI;
             len = DEV_PCCMOS_IBM_LENGTH;
             d->extended_size = DEV_PCCMOS_IBM_NVRAM_LENGTH;

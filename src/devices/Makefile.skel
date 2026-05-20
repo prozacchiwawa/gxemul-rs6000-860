@@ -24,7 +24,7 @@ OBJS=device.o bus_isa.o bus_pci.o lk201.o \
 	dev_scc.o dev_sfb.o dev_sgi_gbe.o dev_sgi_ip19.o dev_sgi_ip20.o \
 	dev_sgi_ip22.o dev_sgi_ip30.o dev_sgi_ip32.o dev_sgi_mardigras.o \
 	dev_sh4.o dev_sii.o dev_sn.o dev_ssc.o dev_turbochannel.o \
-	dev_uninorth.o dev_unreadable.o dev_v3.o dev_vga.o dev_vme.o \
+	dev_uninorth.o dev_unreadable.o dev_v3.o dev_vga.o dev_86mc65.o dev_wd90c00.o dev_vme.o \
 	dev_vr41xx.o dev_wdc.o dev_z8530.o dev_zero.o dev_ibm_isa.o
 
 all: fonts_done

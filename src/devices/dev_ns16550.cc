@@ -144,7 +144,7 @@ DEVICE_ACCESS(ns16550)
     fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
   }
 
-#if 0
+#if 1
 	/*  The NS16550 should be accessed using byte read/writes:  */
 	if (len != 1)
 		fatal("[ ns16550 (%s): len=%i, idata=0x%16llx! ]\n",
@@ -371,6 +371,9 @@ DEVINIT(ns16550)
 	d->console_handle =
 	    console_start_slave(devinit->machine, devinit->name2 != NULL?
 	    devinit->name2 : devinit->name, d->in_use);
+
+  // THR empty
+  d->reg[com_lsr] = 0x60;
 
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 

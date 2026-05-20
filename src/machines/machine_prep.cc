@@ -229,9 +229,10 @@ MACHINE_SETUP(prep)
 MACHINE_DEFAULT_CPU(prep)
 {
 	switch (machine->machine_subtype) {
-    case MACHINE_PREP_IBM860:
+  case MACHINE_PREP_IBM850:
+  case MACHINE_PREP_IBM860:
 		machine->cpu_name = strdup("PPC604");
-        break;
+    break;
 
 	case MACHINE_PREP_IBM6050:
 		machine->cpu_name = strdup("PPC604");
@@ -262,7 +263,7 @@ MACHINE_REGISTER(prep)
 	me->set_default_ram = machine_default_ram_prep;
 
   machine_entry_add_subtype
-    (me, "IBM 850", MACHINE_PREP_IBM860,
+    (me, "IBM 850", MACHINE_PREP_IBM850,
      "ibm850", NULL);
 
   machine_entry_add_subtype

@@ -370,6 +370,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
   }
 
   if (cpu->cd.ppc.msr & PPC_MSR_IP &&
+      cpu->machine->machine_subtype != MACHINE_PREP_IBM850 &&
       cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
     fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");

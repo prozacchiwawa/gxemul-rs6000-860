@@ -1393,6 +1393,8 @@ static struct register_name_table_t r_name_table[] = {
 
 #define S3_PIO_SEQ_LEN 11
 
+const char wd90c_rev[16] = "WD90C24AREV";
+
 struct vga_data {
 	uint64_t	videomem_base;
 	uint64_t	control_base;
@@ -2308,6 +2310,7 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 		break;
 	case 0xff:
 		grayscale = 0;
+    /*
 		switch (d->crtc_reg[0xff]) {
 		case 0x00:
 			grayscale = 1;
@@ -2382,18 +2385,23 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 			    d->crtc_reg[0xff]);
 			exit(1);
 		}
+    */
 
 		if (d->cur_mode == MODE_CHARCELL) {
+      /*
 			dev_fb_resize(d->fb, d->max_x * d->font_width *
 			    d->pixel_repx, d->max_y * d->font_height *
 			    d->pixel_repy);
 			d->fb_size = d->max_x * d->pixel_repx * d->font_width *
 			     d->max_y * d->pixel_repy * d->font_height * 3;
+      */
 		} else {
+      /*
 			dev_fb_resize(d->fb, d->max_x * d->pixel_repx,
 			    d->max_y * d->pixel_repy);
 			d->fb_size = d->max_x * d->pixel_repx *
 			     d->max_y * d->pixel_repy * 3;
+      */
 		}
 
 		for (i=0; i<machine->ncpus; i++)
@@ -2664,11 +2672,6 @@ DEVICE_ACCESS(wd_ctrl)
 			}
 			break;
 
-    case VGA_FEATURE_CONTROL:
-      d->retrace = !d->retrace;
-      odata = d->retrace ? 8 : 0;
-      break;
-
 		case VGA_MISC_OUTPUT_R:
 			odata = d->misc_output_reg;
 			break;
@@ -2699,13 +2702,15 @@ DEVICE_ACCESS(wd_ctrl)
 			break;
 		case VGA_CRTC_DATA:			/*  0x15  */
 			if (writeflag == MEM_READ) {
-				odata = d->crtc_reg[d->crtc_reg_select];
-        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) ]\n",
-              d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr));
-      } else {
-        if (d->crtc_reg_select != 0x30) {
-          d->crtc_reg[d->crtc_reg_select] = idata;
+        if ((d->crtc_reg[0x29] & 7) == 5) {
+          odata = wd90c_rev[(d->crtc_reg_select + 15) & 15];
+        } else {
+          odata = d->crtc_reg[d->crtc_reg_select];
         }
+        fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) 29 = %02x ]\n",
+              d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr), d->crtc_reg[0x29]);
+      } else {
+        d->crtc_reg[d->crtc_reg_select] = idata;
 				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
 			}
@@ -2733,8 +2738,10 @@ DEVICE_ACCESS(wd_ctrl)
 			}
 			/*  These need to go on and off, to fake the
 			    real vertical and horizontal retrace info.  */
-			if (d->current_retrace_line < 20*8)
+      d->retrace = !d->retrace;
+			if (d->retrace) {
 				odata |= VGA_IS1_DISPLAY_VRETRACE;
+      }
 			else {
 				if ((d->current_retrace_line & 7) == 0)
 					odata = VGA_IS1_DISPLAY_VRETRACE | VGA_IS1_DISPLAY_DISPLAY_DISABLE;
@@ -2803,10 +2810,9 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
-	d->max_x          = 100;
-	d->max_y          = 38;
+	d->max_x          = 800;
+	d->max_y          = 600;
 	d->cur_mode       = MODE_CHARCELL;
-	d->crtc_reg[0xff] = 0x03;
 	d->charcells_size = 0x8000;
 	d->gfx_mem_size   = 64;	/*  Nothing, as we start in text mode,
 			but size large enough to make gfx_mem aligned.  */
@@ -2833,10 +2839,12 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
 
 	d->fb_max_x = d->pixel_repx * d->max_x;
 	d->fb_max_y = d->pixel_repy * d->max_y;
+  /*
 	if (d->cur_mode == MODE_CHARCELL) {
 		d->fb_max_x *= d->font_width;
 		d->fb_max_y *= d->font_height;
 	}
+  */
 
 	/*
 	memory_device_register(mem, "vga_charcells", videomem_base + 0x18000,
@@ -2851,9 +2859,9 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
 	memory_device_register(mem, "wd_ctrl", control_base,
 	    32, dev_wd_ctrl_access, d, DM_DEFAULT, NULL);
 
+	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
 	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "WD VGA");
-	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 
 	reset_palette(d, 0);
 

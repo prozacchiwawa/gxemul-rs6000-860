@@ -126,6 +126,8 @@ void dev_fb_resize(struct vfb_data *d, int new_xsize, int new_ysize)
 	int y, new_bytes_per_line;
 	size_t size;
 
+  fprintf(stderr, "fb_init: %dx%d\n", new_xsize, new_ysize);
+
 	if (d == NULL) {
 		fatal("dev_fb_resize(): d == NULL\n");
 		return;
@@ -878,6 +880,7 @@ struct vfb_data *dev_fb_init(struct machine *machine, struct memory *mem,
 	/*  Defaults:  */
 	d->xsize = xsize;  d->visible_xsize = visible_xsize;
 	d->ysize = ysize;  d->visible_ysize = visible_ysize;
+  fprintf(stderr, "fb_init: %dx%d\n", d->xsize, d->ysize);
 
 	d->bit_depth = bit_depth;
 

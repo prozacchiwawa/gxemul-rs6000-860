@@ -27,3 +27,4 @@ unittest_h.h
 components.h
 components_h.h
 doxygen
+src/include/make_ppc_spr_strings

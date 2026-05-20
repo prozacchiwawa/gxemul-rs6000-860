@@ -79,6 +79,10 @@ DEVICE_ACCESS(eagle)
       uint32_t mask = (1 << (len * 8)) - 1;
       idata = (prev_value & ~(mask << shift)) | ((idata & mask) << shift);
       fprintf(stderr, "[ dev_eagle: small pci write: len %d relative_addr %d, original write %08x, prev value %08x, write value %08x ]\n", len, relative_addr, (unsigned int)odata, (unsigned int)prev_value, (unsigned int)idata);
+      if (odata == 1 && relative_addr == 6 && len == 1) {
+        fprintf(stderr, "[ dev_eagle: quirky enable discontig? ]\n");
+        d->discontiguous = 1;
+      }
     }
     bus_pci_data_access(cpu, d->pci_data, writeflag == MEM_READ?
                         &odata : &idata, len > 4 ? len : 4, writeflag == MEM_WRITE);

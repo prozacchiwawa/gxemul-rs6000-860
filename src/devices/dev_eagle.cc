@@ -193,10 +193,10 @@ DEVICE_ACCESS(eagle_8mb)
 	uint64_t real_addr = relative_addr, idata = 0xffffff00;
 
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
-    relative_addr &= 0xffffff;
-    uint64_t page = relative_addr >> 12;
+    uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
+    fprintf(stderr, "[ eagle: non contig %" PRIx64 "x ]\n", real_addr);
   } else {
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }

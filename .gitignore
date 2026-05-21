@@ -28,3 +28,8 @@ components.h
 components_h.h
 doxygen
 src/include/make_ppc_spr_strings
+.vscode
+*.dd
+font8x8.cc
+font8x10.cc
+font8x16.cc

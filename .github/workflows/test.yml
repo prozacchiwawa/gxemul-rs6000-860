@@ -27,7 +27,6 @@ jobs:
           cd gxemul-rs6000-860-test
           gunzip hd.img.gz
           export SDL_RENDER_DRIVER=software
-          export SDL_VIDEODRIVER=dummy
           xvfb-run -a ./nt40.sh 2>&1
 
           # fail if we didn't reach shutdown

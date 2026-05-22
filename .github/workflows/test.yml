@@ -13,7 +13,7 @@ jobs:
       - run: |
           # prerequisites
           sudo apt-get update 
-          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb script
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb
 
           # finish clone
           git submodule update --init

@@ -31,7 +31,7 @@ jobs:
           # gxemul wants to see a selectable stdin.  xterm will provide it.
           export SDL_RENDER_DRIVER=software
           export SDL_VIDEO_DRIVER=x11
-          (. ../venv/bin/activate && 'xvfb-run -a xterm -e ./perform-tests.sh ; echo $? > /tmp/exitcode' ; exit `cat /tmp/exitcode`)
+          (. ../venv/bin/activate && xvfb-run -a xterm -e /bin/sh -c "./perform-tests.sh ; echo $? > /tmp/exitcode" ; exit `cat /tmp/exitcode`)
 
       - uses: actions/upload-artifact@v7
         with:

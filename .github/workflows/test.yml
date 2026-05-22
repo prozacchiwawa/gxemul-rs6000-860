@@ -12,7 +12,7 @@ jobs:
       - run: |
           # prerequisites
           sudo apt-get update 
-          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb
 
           # finish clone
           git submodule update --init
@@ -27,7 +27,7 @@ jobs:
           gunzip hd.img.gz
           export SDL_RENDER_DRIVER=software
           export SDL_VIDEODRIVER=dummy
-          ./nt40.sh
+          xvfb-run -a ./nt40.sh
 
           # fail if we didn't reach shutdown
           python3 check-nt-shutdown.py

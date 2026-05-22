@@ -36,6 +36,7 @@ jobs:
           (. ../venv/bin/activate && python3 check-nt-shutdown.py)
 
       - uses: actions/upload-artifact@v7
-        name: down.png
-        path: gxemul-rs6000-860-test/down.png
-        overwrite: true
+        with:
+          name: down.png
+          path: gxemul-rs6000-860-test/down.png
+          overwrite: true

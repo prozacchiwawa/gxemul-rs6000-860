@@ -27,12 +27,11 @@ jobs:
           # test proper
           git clone https://github.com/prozacchiwawa/gxemul-rs6000-860-test
           cd gxemul-rs6000-860-test
-          gunzip hd.img.gz
-          export SDL_RENDER_DRIVER=software
-          # gxemul wants to see a selectable stdin.  script will provide it
 
-          # fail if we didn't reach shutdown
-          (. ../venv/bin/activate && script -c 'xvfb-run -a ./perform-tests.sh')
+          # gxemul wants to see a selectable stdin.  xterm will provide it.
+          export SDL_RENDER_DRIVER=software
+          export SDL_VIDEO_DRIVER=x11
+          (. ../venv/bin/activate && 'xvfb-run -a xterm -e ./perform-tests.sh')
 
       - uses: actions/upload-artifact@v7
         with:

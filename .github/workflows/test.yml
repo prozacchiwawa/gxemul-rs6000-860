@@ -13,7 +13,7 @@ jobs:
       - run: |
           # prerequisites
           sudo apt-get update 
-          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb script
 
           # finish clone
           git submodule update --init
@@ -27,7 +27,8 @@ jobs:
           cd gxemul-rs6000-860-test
           gunzip hd.img.gz
           export SDL_RENDER_DRIVER=software
-          xvfb-run -a ./nt40.sh 2>&1
+          # gxemul wants to see a selectable stdin.  script will provide it
+          script -c 'xvfb-run -a ./nt40.sh' </dev/null
 
           # fail if we didn't reach shutdown
           python3 check-nt-shutdown.py

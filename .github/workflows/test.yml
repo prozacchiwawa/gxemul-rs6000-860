@@ -26,7 +26,7 @@ jobs:
 
           # test proper
           git clone --depth 1 https://github.com/prozacchiwawa/gxemul-rs6000-860-test
-          export TEST_REV=a73879e6fdad5007c352b5980db663e3b75aaffc
+          export TEST_REV=90cc6f20c9f86df26022aeb5f79f16db32ead553
           cd gxemul-rs6000-860-test && git fetch --depth 1 origin ${TEST_REV} && git checkout ${TEST_REV}
 
           # gxemul wants to see a selectable stdin.  xterm will provide it.
@@ -36,6 +36,6 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: down.png
-          path: gxemul-rs6000-860-test/down.png
+          name: screen-captures
+          path: gxemul-rs6000-860-test/captures
           overwrite: true

@@ -4,6 +4,7 @@ on: [push]
 jobs:
   test-winnt:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -27,7 +28,7 @@ jobs:
           gunzip hd.img.gz
           export SDL_RENDER_DRIVER=software
           export SDL_VIDEODRIVER=dummy
-          xvfb-run -a ./nt40.sh
+          xvfb-run -a ./nt40.sh 2>&1
 
           # fail if we didn't reach shutdown
           python3 check-nt-shutdown.py

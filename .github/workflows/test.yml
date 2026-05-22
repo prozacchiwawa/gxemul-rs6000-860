@@ -30,7 +30,7 @@ jobs:
           gunzip hd.img.gz
           export SDL_RENDER_DRIVER=software
           # gxemul wants to see a selectable stdin.  script will provide it
-          script -c 'xvfb-run -a ./nt40.sh' </dev/null
+          script -c 'xvfb-run -a ./nt40.sh 2>/dev/null' </dev/null
 
           # fail if we didn't reach shutdown
           (. ./venv/bin/activate && python3 check-nt-shutdown.py)

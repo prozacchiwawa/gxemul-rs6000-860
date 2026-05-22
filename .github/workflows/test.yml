@@ -12,7 +12,7 @@ jobs:
       - run: |
           # prerequisites
           sudo apt-get update 
-          sudo apt-get install -y libpng-dev libboost-all-dev build-essentials gcc-13
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13
 
           # finish clone
           git submodule update --init

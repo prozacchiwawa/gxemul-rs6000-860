@@ -599,12 +599,12 @@ void* operator new[](size_t size, const char* file, int line)
     return pointer;
 }
 
-void* operator new(size_t size) throw(std::bad_alloc)
+void* operator new(size_t size)
 {
     return operator new(size, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
 }
 
-void* operator new[](size_t size) throw(std::bad_alloc)
+void* operator new[](size_t size)
 {
     return operator new[](size, (char*)_DEBUG_NEW_CALLER_ADDRESS, 0);
 }

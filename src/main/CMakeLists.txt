@@ -1,3 +1,15 @@
+add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h
+                   COMMAND "$<TARGET_FILE:generate_components> src/include/components/ ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h"
+                   VERBATIM)
+add_executable(generate_components ${CMAKE_SOURCE_DIR}/generate_components.cc)
+
+
+add_executable(generate_commands ${CMAKE_SOURCE_DIR}/generate_commands.cc)
+
+add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h
+                   COMMAND "$<TARGET_FILE:generate_commands> src/main/commands/ ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h"
+                   VERBATIM)
+
 add_library(main
     ComponentFactory.cc
     fileloaders/FileLoader_ELF.cc
@@ -13,7 +25,6 @@ add_library(main
     FileLoader.cc
     debug_new.cc
     CommandInterpreter.cc
-    UnitTest.cc
     Checksum.cc
     SymbolRegistry.cc
     commands/MoveComponentCommand.cc
@@ -35,3 +46,5 @@ add_library(main
     commands/BackwardStepCommand.cc
     commands/QuitCommand.cc
 )
+
+add_dependencies(main generate_components generate_commands)

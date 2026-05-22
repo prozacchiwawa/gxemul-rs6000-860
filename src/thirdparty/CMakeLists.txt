@@ -352,3 +352,5 @@ softfloat/source/ui64_to_f16.c
 softfloat/source/ui64_to_f32.c
 softfloat/source/ui64_to_f64.c
 )
+
+target_include_directories(softfloat PRIVATE softfloat/build/Linux-x86_64-GCC/ softfloat/source/include/ softfloat/source/8086/)

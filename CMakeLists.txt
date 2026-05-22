@@ -8,14 +8,7 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/)
 
-add_executable(generate_commands generate_commands.cc)
-add_executable(generate_components generate_components.cc)
-add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/components_h.h ${CMAKE_CURRENT_SOURCE_DIR}/components.h
-                   COMMAND "$<TARGET_FILE:generate_components> src/include/components/ ${CMAKE_CURRENT_SOURCE_DIR}/components_h.h ${CMAKE_CURRENT_SOURCE_DIR}/components.h"
-                   VERBATIM)
-add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/commands_h.h ${CMAKE_CURRENT_SOURCE_DIR}/commands.h
-                   COMMAND "$<TARGET_FILE:generate_commands> src/main/commands/ ${CMAKE_CURRENT_SOURCE_DIR}/commands_h.h ${CMAKE_CURRENT_SOURCE_DIR}/commands.h"
-                   VERBATIM)
+add_compile_definitions(-DNDEBUG)
 
 add_executable(gxemul src/main/GXemul.cc)
 add_dependencies(gxemul generate_commands)

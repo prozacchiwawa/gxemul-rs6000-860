@@ -417,7 +417,7 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 			msopts = 1;
 			break;
 		case 'c':
-      script_queue.push_back(std::string(optarg));
+			script_queue.push_back(std::string(optarg));
 			break;
 		case 'D':
 			skip_srandom_call = 1;

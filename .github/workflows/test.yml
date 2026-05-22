@@ -1,0 +1,30 @@
+name: test winnt
+run-name: winnt smoke test on rs/6000 model 860
+on: [push]
+jobs:
+  test-winnt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.12
+      - run: |
+          # prerequisites
+          apt-get install libpng-dev libboost-all-dev build-essentials gcc-13
+
+          # finish clone
+          git submodule update --init
+
+          # build
+          ./configure
+          make
+
+          # test proper
+          git clone https://github.com/prozacchiwawa/gxemul-rs6000-860-test
+          cd gxemul-rs6000-860-test
+          gunzip hd.img.gz
+          ./nt40.sh
+
+          # fail if we didn't reach shutdown
+          python3 check-nt-shutdown.py

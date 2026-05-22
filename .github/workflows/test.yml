@@ -11,7 +11,7 @@ jobs:
           python-version: 3.12
       - run: |
           # prerequisites
-          apt-get install libpng-dev libboost-all-dev build-essentials gcc-13
+          sudo apt-get install libpng-dev libboost-all-dev build-essentials gcc-13
 
           # finish clone
           git submodule update --init

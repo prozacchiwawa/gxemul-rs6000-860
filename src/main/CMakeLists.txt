@@ -1,0 +1,37 @@
+add_library(main
+    ComponentFactory.cc
+    fileloaders/FileLoader_ELF.cc
+    fileloaders/FileLoader_aout.cc
+    fileloaders/FileLoader_raw.cc
+    MemoryPassthrough.cc
+    GXemul.cc
+    StateVariable.cc
+    Component.cc
+    Command.cc
+    StringHelper.cc
+    EscapedString.cc
+    FileLoader.cc
+    debug_new.cc
+    CommandInterpreter.cc
+    UnitTest.cc
+    Checksum.cc
+    SymbolRegistry.cc
+    commands/MoveComponentCommand.cc
+    commands/PauseCommand.cc
+    commands/CopyComponentCommand.cc
+    commands/VersionCommand.cc
+    commands/RemoveComponentCommand.cc
+    commands/ResetCommand.cc
+    commands/LoadCommand.cc
+    commands/StepCommand.cc
+    commands/HelpCommand.cc
+    commands/ListComponentsCommand.cc
+    commands/ContinueCommand.cc
+    commands/ContinueBackwardsCommand.cc
+    commands/AddComponentCommand.cc
+    commands/SaveCommand.cc
+    commands/CloseCommand.cc
+    commands/StatusCommand.cc
+    commands/BackwardStepCommand.cc
+    commands/QuitCommand.cc
+)

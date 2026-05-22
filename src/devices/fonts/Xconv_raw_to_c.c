@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	f = fopen(argv[1], "r");
+	f = fopen(argv[1], "rb");
 	printf("unsigned char %s[] = {", argv[2]);
 	len = fread(&buf, 1, sizeof(buf), f);
 

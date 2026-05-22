@@ -2323,83 +2323,24 @@ int do_color_mix(struct vga_data *d, int src_bits, int op_bits, int cpu, int bit
   }
 
   int output = 0;
-  switch (op_bits) {
-  case 0:
-    output = ~bitmap;
-    break;
-
-  case 1:
-    output = 0;
-    break;
-
-  case 2:
-    output = ~0;
-    break;
-
-  case 3:
-    output = bitmap;
-    break;
-
-  case 4:
-    output = ~src_color_1;
-    break;
-
-  case 5:
-    output = src_color_1 ^ bitmap;
-    break;
-
-  case 6:
-    output = ~(src_color_1 ^ bitmap);
-    break;
-
-  case 7:
-    output = src_color_1;
-    break;
-
-  case 8:
-    output = ~src_color_1 | ~bitmap;
-    break;
-
-  case 9:
-    output = bitmap | ~src_color_1;
-    break;
-
-  case 10:
-    output = ~bitmap | src_color_1;
-    break;
-
-  case 11:
-    output = bitmap | src_color_1;
-    break;
-
-  case 12:
-    output = bitmap & src_color_1;
-    break;
-
-  case 13:
-    output = ~bitmap & src_color_1;
-    break;
-
-  case 14:
-    output = bitmap & ~src_color_1;
-    break;
-
-  case 15:
-    output = ~bitmap & ~src_color_1;
-    break;
-  }
-
-  if (d->bee8_regs[0xe] & 0x100) {
-    auto src_ne = d->bee8_regs[0xe] & 0x80;
-    if (!src_ne) {
-      if (output == d->s3_color_compare) {
-        output = bitmap;
-      }
-    } else {
-      if (output != d->s3_color_compare) {
-        output = bitmap;
-      }
-    }
+  switch (op_bits)
+  {
+    case 0x00: output = ~bitmap; break;
+    case 0x01: output = 0; break;
+    case 0x02: output = ~0; break;
+    case 0x03: output = bitmap; break;
+    case 0x04: output = ~src_color_1; break;
+    case 0x05: output = src_color_1 ^ bitmap; break;
+    case 0x06: output = ~(src_color_1 ^ bitmap); break;
+    case 0x07: output = src_color_1; break;
+    case 0x08: output = ~src_color_1 | ~bitmap; break;
+    case 0x09: output = bitmap | ~src_color_1; break;
+    case 0x0a: output = ~bitmap | src_color_1; break;
+    case 0x0b: output = bitmap | src_color_1; break;
+    case 0x0c: output = bitmap & src_color_1; break;
+    case 0x0d: output = ~bitmap & src_color_1; break;
+    case 0x0e: output = bitmap & ~src_color_1; break;
+    case 0x0f: output = ~bitmap & ~src_color_1; break;
   }
 
   return output;
@@ -2452,12 +2393,10 @@ int color_mix_function(struct vga_data *d, int mask_override, int cpu, int bitma
 }
 
 
-void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t *pixel_p, int write_len) {
-  uint64_t target = 0;
-  int prev_pixel;
-  int nowrite;
-  uint8_t pixel = 0;
+void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t *pixel_p, int write_len)
+{
   int pix;
+  int nowrite;
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
@@ -2477,24 +2416,42 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   }
 
   for (pix = 0; pix < write_len; pix++) {
-    target = (d->s3_pix_y * logical_width) + d->s3_pix_x;
+    uint32_t mix_mask = across_the_plane ? pixel_p[pix] : -1;
+    uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
+    uint32_t src_dat = (!across_the_plane) ? pixel_p[pix] : (pixel_p[pix] ? d->s3_fg_color : d->s3_bg_color);
 
-    nowrite =
-      ((d->s3_pix_y < d->bee8_regs[1]) &&
-       (d->s3_pix_y > d->bee8_regs[3]) &&
-       (d->s3_pix_x < d->bee8_regs[2]) &&
-       (d->s3_pix_x > d->bee8_regs[4])) ||
-      (target >= d->gfx_mem_size);
+    // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
+    nowrite = ((d->s3_pix_y < d->bee8_regs[1]) &&
+              (d->s3_pix_y > d->bee8_regs[3]) &&
+              (d->s3_pix_x < d->bee8_regs[2]) &&
+              (d->s3_pix_x > d->bee8_regs[4]));
 
-    d->s3_pix_x += d->s3_h_dir;
+    // Step 2: Select source color and mix mode 
 
-    prev_pixel = d->gfx_mem[target];
-    pixel = color_mix_function(d, across_the_plane ? pixel_p[pix] : -1, (!across_the_plane) ? pixel_p[pix] : (pixel_p[pix] ? d->s3_fg_color : d->s3_bg_color), prev_pixel);
+    // Step 3: Read destination 
+    uint8_t dst_dat = d->gfx_mem[target];
 
-    if (!nowrite) {
-      d->gfx_mem[target] = pixel;
+    // Step 4: Color Compare gate
+    if (d->bee8_regs[0xe] & 0x100)
+    {
+      auto src_ne = d->bee8_regs[0xe] & 0x80;
+      bool match = (src_dat == d->s3_color_compare);
+      // SRC NE = 0: write only when source != compare (skip when match)
+      // SRC NE = 1: write only when source == compare (skip when no match)
+      if (src_ne ? !match : match) nowrite = 1; // color compare rejects this pixel
     }
 
+    // Step 5: Apply MIX
+    uint8_t pixel = color_mix_function(d, mix_mask, src_dat, dst_dat);
+
+    // Step 6: Write Mask merge
+    uint32_t wrt_mask = d->plane_write_mask;
+    pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
+
+    // Step 7: Write to VRAM
+    if (!nowrite) d->gfx_mem[target] = pixel;
+
+    d->s3_pix_x += d->s3_h_dir;
     // G(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix, d->s3_bg_color_mix));
   }
 

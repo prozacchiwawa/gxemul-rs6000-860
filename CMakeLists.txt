@@ -14,7 +14,7 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/ ${CMAKE_CURRENT_BINARY_DIR})
 
-add_compile_definitions(-DNDEBUG)
+# add_compile_definitions(-DNDEBUG)
 find_package(PNG REQUIRED)
 
 add_executable(gxemul src/main/GXemul.cc)

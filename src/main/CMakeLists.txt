@@ -25,7 +25,6 @@ add_library(main
     StringHelper.cc
     EscapedString.cc
     FileLoader.cc
-    debug_new.cc
     CommandInterpreter.cc
     Checksum.cc
     SymbolRegistry.cc

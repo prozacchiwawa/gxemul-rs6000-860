@@ -78,10 +78,6 @@ using std::ostream;
 using std::cout;
 using std::cerr;
 
-#ifndef NDEBUG
-#include "thirdparty/debug_new.h"
-#endif
-
 #include "refcount_ptr.h"
 
 

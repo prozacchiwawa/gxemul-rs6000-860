@@ -1,0 +1,41 @@
+name: test winnt
+run-name: winnt smoke test on rs/6000 model 860
+on: [push]
+jobs:
+  test-winnt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.12
+      - run: |
+          # prerequisites
+          sudo apt-get update 
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb python3-venv xterm
+          python3 -m venv venv
+          (. ./venv/bin/activate && python3 -m pip install pillow)
+
+          # finish clone
+          git submodule update --init
+
+          # build
+          ./configure
+          make
+
+          # test proper
+          git clone --depth 1 https://github.com/prozacchiwawa/gxemul-rs6000-860-test
+          export TEST_REV=90cc6f20c9f86df26022aeb5f79f16db32ead553
+          cd gxemul-rs6000-860-test && git fetch --depth 1 origin ${TEST_REV} && git checkout ${TEST_REV}
+
+          # gxemul wants to see a selectable stdin.  xterm will provide it.
+          export SDL_RENDER_DRIVER=software
+          export SDL_VIDEO_DRIVER=x11
+          (. ../venv/bin/activate && xvfb-run -a xterm -e /bin/sh -c "./perform-tests.sh ; echo $? > /tmp/exitcode" ; exit `cat /tmp/exitcode`)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screen-captures
+          path: gxemul-rs6000-860-test/captures
+          overwrite: true

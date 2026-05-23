@@ -211,17 +211,11 @@ add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_sh_tail.cc"
 add_library(cpus OBJECT
   cpu.cc
   cpu_alpha.cc
-  cpu_alpha_instr.cc
   cpu_arm.cc
-  cpu_arm_instr.cc
   cpu_m88k.cc
-  cpu_m88k_instr.cc
   cpu_mips.cc
-  cpu_mips_instr.cc
   cpu_ppc.cc
-  cpu_ppc_instr.cc
   cpu_sh.cc
-  cpu_sh_instr.cc
   cpu_dyntrans.cc
   memory_m88k.cc
   memory_sh.cc

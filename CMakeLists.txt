@@ -8,7 +8,7 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/)
 
-add_compile_definitions(-DNDEBUG)
+add_compile_definitions(-DNDEBUG -DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32)
 
 add_executable(gxemul src/main/GXemul.cc)
 add_dependencies(gxemul generate_commands)

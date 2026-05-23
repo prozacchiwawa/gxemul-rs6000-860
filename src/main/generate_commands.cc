@@ -18,18 +18,12 @@ int main(int argc, char** argv)
         try
         {
             for (const std::filesystem::directory_entry& dir_entry : std::filesystem::directory_iterator(argv[1])) {
-                if (!dir_entry.is_directory()) {
-                    std::fstream in(dir_entry.path(), std::ios_base::in);
-                    if (in.is_open()) {
-                        for (std::string line; std::getline(in, line, '\n');)
-                        {
-                            std::size_t pos;
-                            {
-                                std::string component_cls(dir_entry.path().stem());
-                                outstream << "#include \"commands/" << component_cls << ".h\"\n";
-                                outstream2 << "\tAddCommand(new " << component_cls << ")\n";
-                            }
-                        }
+                if (!dir_entry.is_directory() && dir_entry.path().extension() == ".cc") {
+                    std::size_t pos;
+                    {
+                        std::string component_cls(dir_entry.path().stem());
+                        outstream << "#include \"commands/" << component_cls << ".h\"\n";
+                        outstream2 << "\tAddCommand(new " << component_cls << ");\n";
                     }
                 }
             }

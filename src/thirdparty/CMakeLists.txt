@@ -1,356 +1,322 @@
 add_library(softfloat OBJECT
-softfloat/source/bf16_isSignalingNaN.c
-softfloat/source/bf16_to_f32.c
-softfloat/source/extF80M_add.c
-softfloat/source/extF80M_div.c
-softfloat/source/extF80M_eq.c
-softfloat/source/extF80M_eq_signaling.c
-softfloat/source/extF80M_le.c
-softfloat/source/extF80M_le_quiet.c
-softfloat/source/extF80M_lt.c
-softfloat/source/extF80M_lt_quiet.c
-softfloat/source/extF80M_mul.c
-softfloat/source/extF80M_rem.c
-softfloat/source/extF80M_roundToInt.c
-softfloat/source/extF80M_sqrt.c
-softfloat/source/extF80M_sub.c
-softfloat/source/extF80M_to_f128M.c
-softfloat/source/extF80M_to_f16.c
-softfloat/source/extF80M_to_f32.c
-softfloat/source/extF80M_to_f64.c
-softfloat/source/extF80M_to_i32.c
-softfloat/source/extF80M_to_i32_r_minMag.c
-softfloat/source/extF80M_to_i64.c
-softfloat/source/extF80M_to_i64_r_minMag.c
-softfloat/source/extF80M_to_ui32.c
-softfloat/source/extF80M_to_ui32_r_minMag.c
-softfloat/source/extF80M_to_ui64.c
-softfloat/source/extF80M_to_ui64_r_minMag.c
-softfloat/source/extF80_add.c
-softfloat/source/extF80_div.c
-softfloat/source/extF80_eq.c
-softfloat/source/extF80_eq_signaling.c
-softfloat/source/extF80_isSignalingNaN.c
-softfloat/source/extF80_le.c
-softfloat/source/extF80_le_quiet.c
-softfloat/source/extF80_lt.c
-softfloat/source/extF80_lt_quiet.c
-softfloat/source/extF80_mul.c
-softfloat/source/extF80_rem.c
-softfloat/source/extF80_roundToInt.c
-softfloat/source/extF80_sqrt.c
-softfloat/source/extF80_sub.c
-softfloat/source/extF80_to_f128.c
-softfloat/source/extF80_to_f16.c
-softfloat/source/extF80_to_f32.c
-softfloat/source/extF80_to_f64.c
-softfloat/source/extF80_to_i32.c
-softfloat/source/extF80_to_i32_r_minMag.c
-softfloat/source/extF80_to_i64.c
-softfloat/source/extF80_to_i64_r_minMag.c
-softfloat/source/extF80_to_ui32.c
-softfloat/source/extF80_to_ui32_r_minMag.c
-softfloat/source/extF80_to_ui64.c
-softfloat/source/extF80_to_ui64_r_minMag.c
-softfloat/source/f128M_add.c
-softfloat/source/f128M_div.c
-softfloat/source/f128M_eq.c
-softfloat/source/f128M_eq_signaling.c
-softfloat/source/f128M_le.c
-softfloat/source/f128M_le_quiet.c
-softfloat/source/f128M_lt.c
-softfloat/source/f128M_lt_quiet.c
-softfloat/source/f128M_mul.c
-softfloat/source/f128M_mulAdd.c
-softfloat/source/f128M_rem.c
-softfloat/source/f128M_roundToInt.c
-softfloat/source/f128M_sqrt.c
-softfloat/source/f128M_sub.c
-softfloat/source/f128M_to_extF80M.c
-softfloat/source/f128M_to_f16.c
-softfloat/source/f128M_to_f32.c
-softfloat/source/f128M_to_f64.c
-softfloat/source/f128M_to_i32.c
-softfloat/source/f128M_to_i32_r_minMag.c
-softfloat/source/f128M_to_i64.c
-softfloat/source/f128M_to_i64_r_minMag.c
-softfloat/source/f128M_to_ui32.c
-softfloat/source/f128M_to_ui32_r_minMag.c
-softfloat/source/f128M_to_ui64.c
-softfloat/source/f128M_to_ui64_r_minMag.c
-softfloat/source/f128_add.c
-softfloat/source/f128_div.c
-softfloat/source/f128_eq.c
-softfloat/source/f128_eq_signaling.c
-softfloat/source/f128_isSignalingNaN.c
-softfloat/source/f128_le.c
-softfloat/source/f128_le_quiet.c
-softfloat/source/f128_lt.c
-softfloat/source/f128_lt_quiet.c
-softfloat/source/f128_mul.c
-softfloat/source/f128_mulAdd.c
-softfloat/source/f128_rem.c
-softfloat/source/f128_roundToInt.c
-softfloat/source/f128_sqrt.c
-softfloat/source/f128_sub.c
-softfloat/source/f128_to_extF80.c
-softfloat/source/f128_to_f16.c
-softfloat/source/f128_to_f32.c
-softfloat/source/f128_to_f64.c
-softfloat/source/f128_to_i32.c
-softfloat/source/f128_to_i32_r_minMag.c
-softfloat/source/f128_to_i64.c
-softfloat/source/f128_to_i64_r_minMag.c
-softfloat/source/f128_to_ui32.c
-softfloat/source/f128_to_ui32_r_minMag.c
-softfloat/source/f128_to_ui64.c
-softfloat/source/f128_to_ui64_r_minMag.c
-softfloat/source/f16_add.c
-softfloat/source/f16_div.c
-softfloat/source/f16_eq.c
-softfloat/source/f16_eq_signaling.c
-softfloat/source/f16_isSignalingNaN.c
-softfloat/source/f16_le.c
-softfloat/source/f16_le_quiet.c
-softfloat/source/f16_lt.c
-softfloat/source/f16_lt_quiet.c
-softfloat/source/f16_mul.c
-softfloat/source/f16_mulAdd.c
-softfloat/source/f16_rem.c
-softfloat/source/f16_roundToInt.c
-softfloat/source/f16_sqrt.c
-softfloat/source/f16_sub.c
-softfloat/source/f16_to_extF80.c
-softfloat/source/f16_to_extF80M.c
-softfloat/source/f16_to_f128.c
-softfloat/source/f16_to_f128M.c
-softfloat/source/f16_to_f32.c
-softfloat/source/f16_to_f64.c
-softfloat/source/f16_to_i32.c
-softfloat/source/f16_to_i32_r_minMag.c
-softfloat/source/f16_to_i64.c
-softfloat/source/f16_to_i64_r_minMag.c
-softfloat/source/f16_to_ui32.c
-softfloat/source/f16_to_ui32_r_minMag.c
-softfloat/source/f16_to_ui64.c
-softfloat/source/f16_to_ui64_r_minMag.c
-softfloat/source/f32_add.c
-softfloat/source/f32_div.c
-softfloat/source/f32_eq.c
-softfloat/source/f32_eq_signaling.c
-softfloat/source/f32_isSignalingNaN.c
-softfloat/source/f32_le.c
-softfloat/source/f32_le_quiet.c
-softfloat/source/f32_lt.c
-softfloat/source/f32_lt_quiet.c
-softfloat/source/f32_mul.c
-softfloat/source/f32_mulAdd.c
-softfloat/source/f32_rem.c
-softfloat/source/f32_roundToInt.c
-softfloat/source/f32_sqrt.c
-softfloat/source/f32_sub.c
-softfloat/source/f32_to_bf16.c
-softfloat/source/f32_to_extF80.c
-softfloat/source/f32_to_extF80M.c
-softfloat/source/f32_to_f128.c
-softfloat/source/f32_to_f128M.c
-softfloat/source/f32_to_f16.c
-softfloat/source/f32_to_f64.c
-softfloat/source/f32_to_i32.c
-softfloat/source/f32_to_i32_r_minMag.c
-softfloat/source/f32_to_i64.c
-softfloat/source/f32_to_i64_r_minMag.c
-softfloat/source/f32_to_ui32.c
-softfloat/source/f32_to_ui32_r_minMag.c
-softfloat/source/f32_to_ui64.c
-softfloat/source/f32_to_ui64_r_minMag.c
-softfloat/source/f64_add.c
-softfloat/source/f64_div.c
-softfloat/source/f64_eq.c
-softfloat/source/f64_eq_signaling.c
-softfloat/source/f64_isSignalingNaN.c
-softfloat/source/f64_le.c
-softfloat/source/f64_le_quiet.c
-softfloat/source/f64_lt.c
-softfloat/source/f64_lt_quiet.c
-softfloat/source/f64_mul.c
-softfloat/source/f64_mulAdd.c
-softfloat/source/f64_rem.c
-softfloat/source/f64_roundToInt.c
-softfloat/source/f64_sqrt.c
-softfloat/source/f64_sub.c
-softfloat/source/f64_to_extF80.c
-softfloat/source/f64_to_extF80M.c
-softfloat/source/f64_to_f128.c
-softfloat/source/f64_to_f128M.c
-softfloat/source/f64_to_f16.c
-softfloat/source/f64_to_f32.c
-softfloat/source/f64_to_i32.c
-softfloat/source/f64_to_i32_r_minMag.c
-softfloat/source/f64_to_i64.c
-softfloat/source/f64_to_i64_r_minMag.c
-softfloat/source/f64_to_ui32.c
-softfloat/source/f64_to_ui32_r_minMag.c
-softfloat/source/f64_to_ui64.c
-softfloat/source/f64_to_ui64_r_minMag.c
-softfloat/source/i32_to_extF80.c
-softfloat/source/i32_to_extF80M.c
-softfloat/source/i32_to_f128.c
-softfloat/source/i32_to_f128M.c
-softfloat/source/i32_to_f16.c
-softfloat/source/i32_to_f32.c
-softfloat/source/i32_to_f64.c
-softfloat/source/i64_to_extF80.c
-softfloat/source/i64_to_extF80M.c
-softfloat/source/i64_to_f128.c
-softfloat/source/i64_to_f128M.c
-softfloat/source/i64_to_f16.c
-softfloat/source/i64_to_f32.c
-softfloat/source/i64_to_f64.c
+  softfloat/source/s_eq128.c
+  softfloat/source/s_le128.c
+  softfloat/source/s_lt128.c
+  softfloat/source/s_shortShiftLeft128.c
+  softfloat/source/s_shortShiftRight128.c
+  softfloat/source/s_shortShiftRightJam64.c
+  softfloat/source/s_shortShiftRightJam64Extra.c
+  softfloat/source/s_shortShiftRightJam128.c
+  softfloat/source/s_shortShiftRightJam128Extra.c
+  softfloat/source/s_shiftRightJam32.c
+  softfloat/source/s_shiftRightJam64.c
+  softfloat/source/s_shiftRightJam64Extra.c
+  softfloat/source/s_shiftRightJam128.c
+  softfloat/source/s_shiftRightJam128Extra.c
+  softfloat/source/s_shiftRightJam256M.c
+  softfloat/source/s_countLeadingZeros8.c
+  softfloat/source/s_countLeadingZeros16.c
+  softfloat/source/s_countLeadingZeros32.c
+  softfloat/source/s_countLeadingZeros64.c
+  softfloat/source/s_add128.c
+  softfloat/source/s_add256M.c
+  softfloat/source/s_sub128.c
+  softfloat/source/s_sub256M.c
+  softfloat/source/s_mul64ByShifted32To128.c
+  softfloat/source/s_mul64To128.c
+  softfloat/source/s_mul128By32.c
+  softfloat/source/s_mul128To256M.c
+  softfloat/source/s_approxRecip_1Ks.c
+  softfloat/source/s_approxRecip32_1.c
+  softfloat/source/s_approxRecipSqrt_1Ks.c
+  softfloat/source/s_approxRecipSqrt32_1.c
 
-softfloat/source/8086/extF80M_isSignalingNaN.c
-softfloat/source/8086/f128M_isSignalingNaN.c
-softfloat/source/8086/s_commonNaNToExtF80M.c
-softfloat/source/8086/s_commonNaNToExtF80UI.c
-softfloat/source/8086/s_commonNaNToF128M.c
-softfloat/source/8086/s_commonNaNToF128UI.c
-softfloat/source/8086/s_commonNaNToF16UI.c
-softfloat/source/8086/s_commonNaNToF32UI.c
-softfloat/source/8086/s_commonNaNToF64UI.c
-softfloat/source/8086/s_extF80MToCommonNaN.c
-softfloat/source/8086/s_extF80UIToCommonNaN.c
-softfloat/source/8086/s_f128MToCommonNaN.c
-softfloat/source/8086/s_f128UIToCommonNaN.c
-softfloat/source/8086/s_f16UIToCommonNaN.c
-softfloat/source/8086/s_f32UIToCommonNaN.c
-softfloat/source/8086/s_f64UIToCommonNaN.c
-softfloat/source/8086/s_propagateNaNExtF80M.c
-softfloat/source/8086/s_propagateNaNExtF80UI.c
-softfloat/source/8086/s_propagateNaNF128M.c
-softfloat/source/8086/s_propagateNaNF128UI.c
-softfloat/source/8086/s_propagateNaNF16UI.c
-softfloat/source/8086/s_propagateNaNF32UI.c
-softfloat/source/8086/s_propagateNaNF64UI.c
-softfloat/source/8086/softfloat_raiseFlags.c
+  softfloat/source/8086-SSE/softfloat_raiseFlags.c
+  softfloat/source/8086-SSE/s_f16UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToF16UI.c
+  softfloat/source/8086-SSE/s_propagateNaNF16UI.c
+  softfloat/source/8086-SSE/s_bf16UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToBF16UI.c
+  softfloat/source/8086-SSE/s_f32UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToF32UI.c
+  softfloat/source/8086-SSE/s_propagateNaNF32UI.c
+  softfloat/source/8086-SSE/s_f64UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToF64UI.c
+  softfloat/source/8086-SSE/s_propagateNaNF64UI.c
+  softfloat/source/8086-SSE/extF80M_isSignalingNaN.c
+  softfloat/source/8086-SSE/s_extF80UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToExtF80UI.c
+  softfloat/source/8086-SSE/s_propagateNaNExtF80UI.c
+  softfloat/source/8086-SSE/f128M_isSignalingNaN.c
+  softfloat/source/8086-SSE/s_f128UIToCommonNaN.c
+  softfloat/source/8086-SSE/s_commonNaNToF128UI.c
+  softfloat/source/8086-SSE/s_propagateNaNF128UI.c
 
-softfloat/source/s_add128.c
-softfloat/source/s_add256M.c
-softfloat/source/s_addCarryM.c
-softfloat/source/s_addComplCarryM.c
-softfloat/source/s_addExtF80M.c
-softfloat/source/s_addF128M.c
-softfloat/source/s_addM.c
-softfloat/source/s_addMagsExtF80.c
-softfloat/source/s_addMagsF128.c
-softfloat/source/s_addMagsF16.c
-softfloat/source/s_addMagsF32.c
-softfloat/source/s_addMagsF64.c
-softfloat/source/s_approxRecip32_1.c
-softfloat/source/s_approxRecipSqrt32_1.c
-softfloat/source/s_approxRecipSqrt_1Ks.c
-softfloat/source/s_approxRecip_1Ks.c
-softfloat/source/s_compare128M.c
-softfloat/source/s_compare96M.c
-softfloat/source/s_compareNonnormExtF80M.c
-softfloat/source/s_countLeadingZeros16.c
-softfloat/source/s_countLeadingZeros32.c
-softfloat/source/s_countLeadingZeros64.c
-softfloat/source/s_countLeadingZeros8.c
-softfloat/source/s_eq128.c
-softfloat/source/s_invalidExtF80M.c
-softfloat/source/s_invalidF128M.c
-softfloat/source/s_isNaNF128M.c
-softfloat/source/s_le128.c
-softfloat/source/s_lt128.c
-softfloat/source/s_mul128By32.c
-softfloat/source/s_mul128MTo256M.c
-softfloat/source/s_mul128To256M.c
-softfloat/source/s_mul64ByShifted32To128.c
-softfloat/source/s_mul64To128.c
-softfloat/source/s_mul64To128M.c
-softfloat/source/s_mulAddF128.c
-softfloat/source/s_mulAddF128M.c
-softfloat/source/s_mulAddF16.c
-softfloat/source/s_mulAddF32.c
-softfloat/source/s_mulAddF64.c
-softfloat/source/s_negXM.c
-softfloat/source/s_normExtF80SigM.c
-softfloat/source/s_normRoundPackMToExtF80M.c
-softfloat/source/s_normRoundPackMToF128M.c
-softfloat/source/s_normRoundPackToExtF80.c
-softfloat/source/s_normRoundPackToF128.c
-softfloat/source/s_normRoundPackToF16.c
-softfloat/source/s_normRoundPackToF32.c
-softfloat/source/s_normRoundPackToF64.c
-softfloat/source/s_normSubnormalBF16Sig.c
-softfloat/source/s_normSubnormalExtF80Sig.c
-softfloat/source/s_normSubnormalF128Sig.c
-softfloat/source/s_normSubnormalF128SigM.c
-softfloat/source/s_normSubnormalF16Sig.c
-softfloat/source/s_normSubnormalF32Sig.c
-softfloat/source/s_normSubnormalF64Sig.c
-softfloat/source/s_remStepMBy32.c
-softfloat/source/s_roundMToI64.c
-softfloat/source/s_roundMToUI64.c
-softfloat/source/s_roundPackMToExtF80M.c
-softfloat/source/s_roundPackMToF128M.c
-softfloat/source/s_roundPackToBF16.c
-softfloat/source/s_roundPackToExtF80.c
-softfloat/source/s_roundPackToF128.c
-softfloat/source/s_roundPackToF16.c
-softfloat/source/s_roundPackToF32.c
-softfloat/source/s_roundPackToF64.c
-softfloat/source/s_roundToI32.c
-softfloat/source/s_roundToI64.c
-softfloat/source/s_roundToUI32.c
-softfloat/source/s_roundToUI64.c
-softfloat/source/s_shiftLeftM.c
-softfloat/source/s_shiftNormSigF128M.c
-softfloat/source/s_shiftRightJam128.c
-softfloat/source/s_shiftRightJam128Extra.c
-softfloat/source/s_shiftRightJam256M.c
-softfloat/source/s_shiftRightJam32.c
-softfloat/source/s_shiftRightJam64.c
-softfloat/source/s_shiftRightJam64Extra.c
-softfloat/source/s_shiftRightJamM.c
-softfloat/source/s_shiftRightM.c
-softfloat/source/s_shortShiftLeft128.c
-softfloat/source/s_shortShiftLeft64To96M.c
-softfloat/source/s_shortShiftLeftM.c
-softfloat/source/s_shortShiftRight128.c
-softfloat/source/s_shortShiftRightExtendM.c
-softfloat/source/s_shortShiftRightJam128.c
-softfloat/source/s_shortShiftRightJam128Extra.c
-softfloat/source/s_shortShiftRightJam64.c
-softfloat/source/s_shortShiftRightJam64Extra.c
-softfloat/source/s_shortShiftRightJamM.c
-softfloat/source/s_shortShiftRightM.c
-softfloat/source/s_sub128.c
-softfloat/source/s_sub1XM.c
-softfloat/source/s_sub256M.c
-softfloat/source/s_subM.c
-softfloat/source/s_subMagsExtF80.c
-softfloat/source/s_subMagsF128.c
-softfloat/source/s_subMagsF16.c
-softfloat/source/s_subMagsF32.c
-softfloat/source/s_subMagsF64.c
-softfloat/source/s_tryPropagateNaNExtF80M.c
-softfloat/source/s_tryPropagateNaNF128M.c
-softfloat/source/softfloat_state.c
-softfloat/source/ui32_to_extF80.c
-softfloat/source/ui32_to_extF80M.c
-softfloat/source/ui32_to_f128.c
-softfloat/source/ui32_to_f128M.c
-softfloat/source/ui32_to_f16.c
-softfloat/source/ui32_to_f32.c
-softfloat/source/ui32_to_f64.c
-softfloat/source/ui64_to_extF80.c
-softfloat/source/ui64_to_extF80M.c
-softfloat/source/ui64_to_f128.c
-softfloat/source/ui64_to_f128M.c
-softfloat/source/ui64_to_f16.c
-softfloat/source/ui64_to_f32.c
-softfloat/source/ui64_to_f64.c
+  softfloat/source/s_roundToUI32.c
+  softfloat/source/s_roundToUI64.c
+  softfloat/source/s_roundToI32.c
+  softfloat/source/s_roundToI64.c
+  softfloat/source/s_normSubnormalBF16Sig.c
+  softfloat/source/s_roundPackToBF16.c
+  softfloat/source/s_normSubnormalF16Sig.c
+  softfloat/source/s_roundPackToF16.c
+  softfloat/source/s_normRoundPackToF16.c
+  softfloat/source/s_addMagsF16.c
+  softfloat/source/s_subMagsF16.c
+  softfloat/source/s_mulAddF16.c
+  softfloat/source/s_normSubnormalF32Sig.c
+  softfloat/source/s_roundPackToF32.c
+  softfloat/source/s_normRoundPackToF32.c
+  softfloat/source/s_addMagsF32.c
+  softfloat/source/s_subMagsF32.c
+  softfloat/source/s_mulAddF32.c
+  softfloat/source/s_normSubnormalF64Sig.c
+  softfloat/source/s_roundPackToF64.c
+  softfloat/source/s_normRoundPackToF64.c
+  softfloat/source/s_addMagsF64.c
+  softfloat/source/s_subMagsF64.c
+  softfloat/source/s_mulAddF64.c
+  softfloat/source/s_normSubnormalExtF80Sig.c
+  softfloat/source/s_roundPackToExtF80.c
+  softfloat/source/s_normRoundPackToExtF80.c
+  softfloat/source/s_addMagsExtF80.c
+  softfloat/source/s_subMagsExtF80.c
+  softfloat/source/s_normSubnormalF128Sig.c
+  softfloat/source/s_roundPackToF128.c
+  softfloat/source/s_normRoundPackToF128.c
+  softfloat/source/s_addMagsF128.c
+  softfloat/source/s_subMagsF128.c
+  softfloat/source/s_mulAddF128.c
+  softfloat/source/softfloat_state.c
+  softfloat/source/ui32_to_f16.c
+  softfloat/source/ui32_to_f32.c
+  softfloat/source/ui32_to_f64.c
+  softfloat/source/ui32_to_extF80.c
+  softfloat/source/ui32_to_extF80M.c
+  softfloat/source/ui32_to_f128.c
+  softfloat/source/ui32_to_f128M.c
+  softfloat/source/ui64_to_f16.c
+  softfloat/source/ui64_to_f32.c
+  softfloat/source/ui64_to_f64.c
+  softfloat/source/ui64_to_extF80.c
+  softfloat/source/ui64_to_extF80M.c
+  softfloat/source/ui64_to_f128.c
+  softfloat/source/ui64_to_f128M.c
+  softfloat/source/i32_to_f16.c
+  softfloat/source/i32_to_f32.c
+  softfloat/source/i32_to_f64.c
+  softfloat/source/i32_to_extF80.c
+  softfloat/source/i32_to_extF80M.c
+  softfloat/source/i32_to_f128.c
+  softfloat/source/i32_to_f128M.c
+  softfloat/source/i64_to_f16.c
+  softfloat/source/i64_to_f32.c
+  softfloat/source/i64_to_f64.c
+  softfloat/source/i64_to_extF80.c
+  softfloat/source/i64_to_extF80M.c
+  softfloat/source/i64_to_f128.c
+  softfloat/source/i64_to_f128M.c
+  softfloat/source/bf16_isSignalingNaN.c
+  softfloat/source/bf16_to_f32.c
+  softfloat/source/f16_to_ui32.c
+  softfloat/source/f16_to_ui64.c
+  softfloat/source/f16_to_i32.c
+  softfloat/source/f16_to_i64.c
+  softfloat/source/f16_to_ui32_r_minMag.c
+  softfloat/source/f16_to_ui64_r_minMag.c
+  softfloat/source/f16_to_i32_r_minMag.c
+  softfloat/source/f16_to_i64_r_minMag.c
+  softfloat/source/f16_to_f32.c
+  softfloat/source/f16_to_f64.c
+  softfloat/source/f16_to_extF80.c
+  softfloat/source/f16_to_extF80M.c
+  softfloat/source/f16_to_f128.c
+  softfloat/source/f16_to_f128M.c
+  softfloat/source/f16_roundToInt.c
+  softfloat/source/f16_add.c
+  softfloat/source/f16_sub.c
+  softfloat/source/f16_mul.c
+  softfloat/source/f16_mulAdd.c
+  softfloat/source/f16_div.c
+  softfloat/source/f16_rem.c
+  softfloat/source/f16_sqrt.c
+  softfloat/source/f16_eq.c
+  softfloat/source/f16_le.c
+  softfloat/source/f16_lt.c
+  softfloat/source/f16_eq_signaling.c
+  softfloat/source/f16_le_quiet.c
+  softfloat/source/f16_lt_quiet.c
+  softfloat/source/f16_isSignalingNaN.c
+  softfloat/source/f32_to_ui32.c
+  softfloat/source/f32_to_ui64.c
+  softfloat/source/f32_to_i32.c
+  softfloat/source/f32_to_i64.c
+  softfloat/source/f32_to_ui32_r_minMag.c
+  softfloat/source/f32_to_ui64_r_minMag.c
+  softfloat/source/f32_to_i32_r_minMag.c
+  softfloat/source/f32_to_i64_r_minMag.c
+  softfloat/source/f32_to_bf16.c
+  softfloat/source/f32_to_f16.c
+  softfloat/source/f32_to_f64.c
+  softfloat/source/f32_to_extF80.c
+  softfloat/source/f32_to_extF80M.c
+  softfloat/source/f32_to_f128.c
+  softfloat/source/f32_to_f128M.c
+  softfloat/source/f32_roundToInt.c
+  softfloat/source/f32_add.c
+  softfloat/source/f32_sub.c
+  softfloat/source/f32_mul.c
+  softfloat/source/f32_mulAdd.c
+  softfloat/source/f32_div.c
+  softfloat/source/f32_rem.c
+  softfloat/source/f32_sqrt.c
+  softfloat/source/f32_eq.c
+  softfloat/source/f32_le.c
+  softfloat/source/f32_lt.c
+  softfloat/source/f32_eq_signaling.c
+  softfloat/source/f32_le_quiet.c
+  softfloat/source/f32_lt_quiet.c
+  softfloat/source/f32_isSignalingNaN.c
+  softfloat/source/f64_to_ui32.c
+  softfloat/source/f64_to_ui64.c
+  softfloat/source/f64_to_i32.c
+  softfloat/source/f64_to_i64.c
+  softfloat/source/f64_to_ui32_r_minMag.c
+  softfloat/source/f64_to_ui64_r_minMag.c
+  softfloat/source/f64_to_i32_r_minMag.c
+  softfloat/source/f64_to_i64_r_minMag.c
+  softfloat/source/f64_to_f16.c
+  softfloat/source/f64_to_f32.c
+  softfloat/source/f64_to_extF80.c
+  softfloat/source/f64_to_extF80M.c
+  softfloat/source/f64_to_f128.c
+  softfloat/source/f64_to_f128M.c
+  softfloat/source/f64_roundToInt.c
+  softfloat/source/f64_add.c
+  softfloat/source/f64_sub.c
+  softfloat/source/f64_mul.c
+  softfloat/source/f64_mulAdd.c
+  softfloat/source/f64_div.c
+  softfloat/source/f64_rem.c
+  softfloat/source/f64_sqrt.c
+  softfloat/source/f64_eq.c
+  softfloat/source/f64_le.c
+  softfloat/source/f64_lt.c
+  softfloat/source/f64_eq_signaling.c
+  softfloat/source/f64_le_quiet.c
+  softfloat/source/f64_lt_quiet.c
+  softfloat/source/f64_isSignalingNaN.c
+  softfloat/source/extF80_to_ui32.c
+  softfloat/source/extF80_to_ui64.c
+  softfloat/source/extF80_to_i32.c
+  softfloat/source/extF80_to_i64.c
+  softfloat/source/extF80_to_ui32_r_minMag.c
+  softfloat/source/extF80_to_ui64_r_minMag.c
+  softfloat/source/extF80_to_i32_r_minMag.c
+  softfloat/source/extF80_to_i64_r_minMag.c
+  softfloat/source/extF80_to_f16.c
+  softfloat/source/extF80_to_f32.c
+  softfloat/source/extF80_to_f64.c
+  softfloat/source/extF80_to_f128.c
+  softfloat/source/extF80_roundToInt.c
+  softfloat/source/extF80_add.c
+  softfloat/source/extF80_sub.c
+  softfloat/source/extF80_mul.c
+  softfloat/source/extF80_div.c
+  softfloat/source/extF80_rem.c
+  softfloat/source/extF80_sqrt.c
+  softfloat/source/extF80_eq.c
+  softfloat/source/extF80_le.c
+  softfloat/source/extF80_lt.c
+  softfloat/source/extF80_eq_signaling.c
+  softfloat/source/extF80_le_quiet.c
+  softfloat/source/extF80_lt_quiet.c
+  softfloat/source/extF80_isSignalingNaN.c
+  softfloat/source/extF80M_to_ui32.c
+  softfloat/source/extF80M_to_ui64.c
+  softfloat/source/extF80M_to_i32.c
+  softfloat/source/extF80M_to_i64.c
+  softfloat/source/extF80M_to_ui32_r_minMag.c
+  softfloat/source/extF80M_to_ui64_r_minMag.c
+  softfloat/source/extF80M_to_i32_r_minMag.c
+  softfloat/source/extF80M_to_i64_r_minMag.c
+  softfloat/source/extF80M_to_f16.c
+  softfloat/source/extF80M_to_f32.c
+  softfloat/source/extF80M_to_f64.c
+  softfloat/source/extF80M_to_f128M.c
+  softfloat/source/extF80M_roundToInt.c
+  softfloat/source/extF80M_add.c
+  softfloat/source/extF80M_sub.c
+  softfloat/source/extF80M_mul.c
+  softfloat/source/extF80M_div.c
+  softfloat/source/extF80M_rem.c
+  softfloat/source/extF80M_sqrt.c
+  softfloat/source/extF80M_eq.c
+  softfloat/source/extF80M_le.c
+  softfloat/source/extF80M_lt.c
+  softfloat/source/extF80M_eq_signaling.c
+  softfloat/source/extF80M_le_quiet.c
+  softfloat/source/extF80M_lt_quiet.c
+  softfloat/source/f128_to_ui32.c
+  softfloat/source/f128_to_ui64.c
+  softfloat/source/f128_to_i32.c
+  softfloat/source/f128_to_i64.c
+  softfloat/source/f128_to_ui32_r_minMag.c
+  softfloat/source/f128_to_ui64_r_minMag.c
+  softfloat/source/f128_to_i32_r_minMag.c
+  softfloat/source/f128_to_i64_r_minMag.c
+  softfloat/source/f128_to_f16.c
+  softfloat/source/f128_to_f32.c
+  softfloat/source/f128_to_extF80.c
+  softfloat/source/f128_to_f64.c
+  softfloat/source/f128_roundToInt.c
+  softfloat/source/f128_add.c
+  softfloat/source/f128_sub.c
+  softfloat/source/f128_mul.c
+  softfloat/source/f128_mulAdd.c
+  softfloat/source/f128_div.c
+  softfloat/source/f128_rem.c
+  softfloat/source/f128_sqrt.c
+  softfloat/source/f128_eq.c
+  softfloat/source/f128_le.c
+  softfloat/source/f128_lt.c
+  softfloat/source/f128_eq_signaling.c
+  softfloat/source/f128_le_quiet.c
+  softfloat/source/f128_lt_quiet.c
+  softfloat/source/f128_isSignalingNaN.c
+  softfloat/source/f128M_to_ui32.c
+  softfloat/source/f128M_to_ui64.c
+  softfloat/source/f128M_to_i32.c
+  softfloat/source/f128M_to_i64.c
+  softfloat/source/f128M_to_ui32_r_minMag.c
+  softfloat/source/f128M_to_ui64_r_minMag.c
+  softfloat/source/f128M_to_i32_r_minMag.c
+  softfloat/source/f128M_to_i64_r_minMag.c
+  softfloat/source/f128M_to_f16.c
+  softfloat/source/f128M_to_f32.c
+  softfloat/source/f128M_to_extF80M.c
+  softfloat/source/f128M_to_f64.c
+  softfloat/source/f128M_roundToInt.c
+  softfloat/source/f128M_add.c
+  softfloat/source/f128M_sub.c
+  softfloat/source/f128M_mul.c
+  softfloat/source/f128M_mulAdd.c
+  softfloat/source/f128M_div.c
+  softfloat/source/f128M_rem.c
+  softfloat/source/f128M_sqrt.c
+  softfloat/source/f128M_eq.c
+  softfloat/source/f128M_le.c
+  softfloat/source/f128M_lt.c
+  softfloat/source/f128M_eq_signaling.c
+  softfloat/source/f128M_le_quiet.c
+  softfloat/source/f128M_lt_quiet.c
+  platform.h
 )
 
-target_include_directories(softfloat PRIVATE softfloat/build/Linux-x86_64-GCC/ softfloat/source/include/ softfloat/source/8086/)
+target_include_directories(softfloat PUBLIC softfloat/source/include/ softfloat/source/8086-SSE/ ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(softfloat PUBLIC SOFTFLOAT_ROUND_ODD
+  INLINE_LEVEL=5
+  SOFTFLOAT_FAST_DIV32TO16
+  SOFTFLOAT_FAST_DIV64TO32
+  SOFTFLOAT_FAST_INT64
+  )

@@ -7,6 +7,10 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
 
 add_library(devices
     OBJECT
+    bus_isa.cc
+    bus_pci.cc
+    device.cc
+    lk201.cc
     dev_8253.cc            dev_dc7085.cc           dev_fdc.cc           dev_lca.cc         dev_pccmos.cc     dev_rs5c313.cc        dev_ssc.cc
     dev_8259.cc            dev_dec21030.cc         dev_footbridge.cc    dev_le.cc          dev_pcic.cc       dev_rtc.cc            dev_turbochannel.cc
     dev_86mc65.cc          dev_dec21143.cc         dev_gc.cc            dev_lpt.cc         dev_pckbc.cc      dev_rtl8139c.cc       dev_uninorth.cc

@@ -1,22 +1,24 @@
+
+add_executable(generate_components generate_components.cc)
+add_executable(generate_commands generate_commands.cc)
+
 add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h
-                   COMMAND "$<TARGET_FILE:generate_components> src/include/components/ ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h"
+                   COMMAND $<TARGET_FILE:generate_components> ${CMAKE_SOURCE_DIR}/src/include/components/ ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h
+                   DEPENDS generate_components
                    VERBATIM)
-add_executable(generate_components ${CMAKE_SOURCE_DIR}/generate_components.cc)
-
-
-add_executable(generate_commands ${CMAKE_SOURCE_DIR}/generate_commands.cc)
 
 add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h
-                   COMMAND "$<TARGET_FILE:generate_commands> src/main/commands/ ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h"
+                   COMMAND $<TARGET_FILE:generate_commands> ${CMAKE_SOURCE_DIR}/src/main/commands/ ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h
+                   DEPENDS generate_commands
                    VERBATIM)
 
 add_library(main
+    OBJECT
     ComponentFactory.cc
     fileloaders/FileLoader_ELF.cc
     fileloaders/FileLoader_aout.cc
     fileloaders/FileLoader_raw.cc
     MemoryPassthrough.cc
-    GXemul.cc
     StateVariable.cc
     Component.cc
     Command.cc
@@ -45,6 +47,6 @@ add_library(main
     commands/StatusCommand.cc
     commands/BackwardStepCommand.cc
     commands/QuitCommand.cc
+    ${CMAKE_SOURCE_DIR}/components_h.h ${CMAKE_SOURCE_DIR}/components.h
+    ${CMAKE_SOURCE_DIR}/commands_h.h ${CMAKE_SOURCE_DIR}/commands.h
 )
-
-add_dependencies(main generate_components generate_commands)

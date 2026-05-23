@@ -8,15 +8,15 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/)
 
-add_compile_definitions(-DNDEBUG -DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32)
+add_compile_definitions(-DNDEBUG)
+find_package(PNG REQUIRED)
 
 add_executable(gxemul src/main/GXemul.cc)
-add_dependencies(gxemul generate_commands)
-add_dependencies(gxemul generate_components)
-target_link_libraries(gxemul PRIVATE SDL2::SDL2)
+target_link_libraries(gxemul PRIVATE SDL2::SDL2 PNG::PNG)
 
 add_subdirectory(src/components)
 add_subdirectory(src/console)
+add_subdirectory(src/thirdparty)
 add_subdirectory(src/cpus)
 add_subdirectory(src/debugger)
 add_subdirectory(src/devices)
@@ -28,7 +28,6 @@ add_subdirectory(src/net)
 add_subdirectory(src/old_main)
 add_subdirectory(src/promemul)
 add_subdirectory(src/symbol)
-add_subdirectory(src/thirdparty)
 add_subdirectory(src/ui)
 
-target_link_libraries(gxemul PRIVATE components cpus debugger devices disk file machines main net old_main promemul symbol softfloat ui)
+target_link_libraries(gxemul PRIVATE components console cpus debugger devices disk file machines main net old_main promemul symbol softfloat ui)

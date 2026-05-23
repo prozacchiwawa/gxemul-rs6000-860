@@ -123,9 +123,11 @@ add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u1_w1.cc"
   generate_arm_loadstore "1 1 1" cpu_arm_instr_loadstore.cc)
 
 file(STRINGS "cpu_arm_multi.txt" arm_multi)
+string(REPLACE ";" " " arm_multi_new "${arm_multi}")
+message("${arm_multi_new}")
 
 add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_multi.cc"
-  generate_arm_multi " ${arm_multi}" cpu_arm_multi.txt)
+  generate_arm_multi " ${arm_multi_new}" cpu_arm_multi.txt)
 
 add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_dpi.cc"
   generate_arm_dpi "" cpu_arm_instr_dpi.cc)
@@ -222,27 +224,54 @@ add_custom_command(
 add_library(cpus OBJECT
   cpu.cc
   cpu_alpha.cc
+  cpu_alpha_palcode.cc
   cpu_arm.cc
+  cpu_arm_coproc.cc
   cpu_m88k.cc
   cpu_mips.cc
+  cpu_mips_coproc.cc
+  cpu_mips_instr_unaligned.cc
   cpu_ppc.cc
   cpu_sh.cc
+  memory_arm.cc
   memory_m88k.cc
   memory_sh.cc
   memory_alpha.cc
+
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p0_u0_w0.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p0_u0_w1.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p0_u1_w0.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p0_u1_w1.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u0_w0.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u0_w1.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u1_w0.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u1_w1.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_multi.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_dpi.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r0.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r1.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r2.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r3.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r4.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r5.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r6.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r7.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r8.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r9.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_ra.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_rb.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_rc.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_rd.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_re.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_rf.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_r.cc
 )
 
 set_source_files_properties(${GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
 
 target_include_directories(cpus PRIVATE
   ${SOFTFLOAT_INCLUDE_DIR}
-)
-
-target_compile_definitions(cpus PRIVATE
-  SOFTFLOAT_ROUND_ODD
-  INLINE_LEVEL=5
-  SOFTFLOAT_FAST_DIV32TO16
-  SOFTFLOAT_FAST_DIV64TO32
 )
 
 add_custom_target(cpus_generated_sources DEPENDS ${GENERATED_SOURCES})

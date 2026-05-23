@@ -21,7 +21,7 @@ jobs:
           git submodule update --init
 
           # build
-          cmake -G "Unix Makefiles" .
+          cmake -G "Unix Makefiles" -DCMAKE_CXX_FLAGS="-O3" .
           make
 
           # test proper

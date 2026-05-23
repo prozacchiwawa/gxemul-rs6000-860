@@ -3,6 +3,12 @@ served as a very good base for experimenting and learning.
 
 [http://gavare.se/gxemul/](GXemul)
 
+To Build
+===
+
+    cmake -G "Unix Makefiles" -DCMAKE_CXX_FLAGS="-O3" .
+    make
+
 My focus was to be able to run the native firmware of the quirky
 RS/6000 model 860 and the operating systems released for it.  It's
 still got a ways to go.

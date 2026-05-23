@@ -1,7 +1,7 @@
 add_executable(makeautodev makeautodev.cc)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
-                    COMMAND "$<TARGET_FILE:makeautodev> ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bus_pci.cc ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc"
+                    COMMAND $<TARGET_FILE:makeautodev> ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bus_pci.cc ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
                     DEPENDS makeautodev
                     VERBATIM)
 

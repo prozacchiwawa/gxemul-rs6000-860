@@ -12,6 +12,7 @@ add_executable(generate_m88k_loadstore generate_m88k_loadstore.c)
 add_executable(generate_mips_loadstore generate_mips_loadstore.c)
 add_executable(generate_mips_loadstore_multi generate_mips_loadstore_multi.c)
 add_executable(generate_ppc_loadstore generate_ppc_loadstore.c)
+add_executable(make_ppc_spr_strings ${CMAKE_SOURCE_DIR}/src/include/make_ppc_spr_strings_new.cc)
 
 set(CPU_TOOLS
 generate_alpha_misc
@@ -23,7 +24,8 @@ generate_m88k_bcnd
 generate_m88k_loadstore
 generate_mips_loadstore
 generate_mips_loadstore
-generate_ppc_loadstore)
+generate_ppc_loadstore
+make_ppc_spr_strings)
 
 function(add_generated_cc output generator args deps)
   separate_arguments(sep_args UNIX_COMMAND "${args}")
@@ -88,6 +90,7 @@ set(GENERATED_SOURCES
 
   ${CMAKE_CURRENT_BINARY_DIR}/tmp_sh_head.cc
   ${CMAKE_CURRENT_BINARY_DIR}/tmp_sh_tail.cc
+  ${CMAKE_CURRENT_BINARY_DIR}/ppc_spr_strings.h
 )
 
 add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_alpha_misc.cc"
@@ -208,6 +211,14 @@ add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_sh_head.cc"
 add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_sh_tail.cc"
   generate_tail "sh SH" "")
 
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ppc_spr_strings.h"
+    COMMAND $<TARGET_FILE:make_ppc_spr_strings> "${CMAKE_SOURCE_DIR}/src/include/thirdparty/ppc_spr.h" "${CMAKE_CURRENT_BINARY_DIR}/ppc_spr_strings.h"
+    DEPENDS make_ppc_spr_strings ${CMAKE_SOURCE_DIR}/src/include/thirdparty/ppc_spr.h
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+ 
 add_library(cpus OBJECT
   cpu.cc
   cpu_alpha.cc
@@ -216,11 +227,9 @@ add_library(cpus OBJECT
   cpu_mips.cc
   cpu_ppc.cc
   cpu_sh.cc
-  cpu_dyntrans.cc
   memory_m88k.cc
   memory_sh.cc
   memory_alpha.cc
-  ${GENERATED_SOURCES}
 )
 
 set_source_files_properties(${GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
@@ -244,4 +253,4 @@ add_dependencies(cpus_generated_sources cpus_tools)
 
 set_property(TARGET cpus APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "${GENERATED_SOURCES}")
 
-target_include_directories(cpus PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(cpus PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/src/thirdparty/softfloat/source/include/")

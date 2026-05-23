@@ -1,7 +1,7 @@
 add_executable(makeautomachine makeautomachine.cc)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/automachine.cc
-                    COMMAND "$<TARGET_FILE:makeautomachine> ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/automachine.cc"
+                    COMMAND $<TARGET_FILE:makeautomachine> ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/automachine.cc
                     DEPENDS makeautomachine
                     VERBATIM)
 

@@ -2302,48 +2302,28 @@ void s3_hack_start(struct vga_data *d) {
 }
 
 
-int do_color_mix(struct vga_data *d, int src_bits, int op_bits, int cpu, int bitmap) {
-  int src_color_1 = 0;
-  switch (src_bits) {
-  case 0:
-    src_color_1 = d->s3_bg_color;
-    break;
-
-  case 1:
-    src_color_1 = d->s3_fg_color;
-    break;
-
-  case 2:
-    src_color_1 = cpu;
-    break;
-
-  case 3:
-    src_color_1 = bitmap;
-    break;
-  }
-
-  int output = 0;
-  switch (op_bits)
+uint32_t do_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
+{
+  switch (mix_mode)
   {
-    case 0x00: output = ~bitmap; break;
-    case 0x01: output = 0; break;
-    case 0x02: output = ~0; break;
-    case 0x03: output = bitmap; break;
-    case 0x04: output = ~src_color_1; break;
-    case 0x05: output = src_color_1 ^ bitmap; break;
-    case 0x06: output = ~(src_color_1 ^ bitmap); break;
-    case 0x07: output = src_color_1; break;
-    case 0x08: output = ~src_color_1 | ~bitmap; break;
-    case 0x09: output = bitmap | ~src_color_1; break;
-    case 0x0a: output = ~bitmap | src_color_1; break;
-    case 0x0b: output = bitmap | src_color_1; break;
-    case 0x0c: output = bitmap & src_color_1; break;
-    case 0x0d: output = ~bitmap & src_color_1; break;
-    case 0x0e: output = bitmap & ~src_color_1; break;
-    case 0x0f: output = ~bitmap & ~src_color_1; break;
+    case 0x00: return ~dst;
+    case 0x01: return 0;
+    case 0x02: return ~0;
+    case 0x03: return dst;
+    case 0x04: return ~src;
+    case 0x05: return src ^ dst;
+    case 0x06: return ~(src ^ dst);
+    case 0x07: return src;
+    case 0x08: return ~(src & dst);
+    case 0x09: return (~src) | dst;
+    case 0x0a: return src | (~dst);
+    case 0x0b: return src | dst;
+    case 0x0c: return src & dst;
+    case 0x0d: return src & (~dst);
+    case 0x0e: return (~src) & dst;
+    case 0x0f: return ~(src | dst);
+    default:   return src;            // shouldn't reach here
   }
-
-  return output;
 }
 
 int color_mix_function(struct vga_data *d, int mask_override, int cpu, int bitmap) {
@@ -2369,27 +2349,7 @@ int color_mix_function(struct vga_data *d, int mask_override, int cpu, int bitma
       break;
     }
   }
-
-  int use_mix = mask_bit ? d->s3_fg_color_mix : d->s3_bg_color_mix;
-  int res = do_color_mix(d, (use_mix >> 5) & 3, use_mix & 15, cpu, bitmap);
-#if 0
-  fprintf
-    (stderr, "[ vga: color mix choice %d %x compare %x cpu %x bitmap %x (M %d) fg %x bg %x => %x %02x %02x ]\n",
-     d->bee8_regs[0x0a] >> 6,
-     use_mix,
-     d->s3_color_compare,
-     cpu,
-     bitmap,
-     mask_bit,
-     d->s3_fg_color,
-     d->s3_bg_color,
-     res,
-     d->s3_fg_color_mix,
-     d->s3_bg_color_mix
-     );
-#endif
-  
-  return res;
+  return mask_bit;
 }
 
 
@@ -2397,6 +2357,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
 {
   int pix;
   int nowrite;
+  int use_fgmix;
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
@@ -2426,9 +2387,29 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
               (d->s3_pix_x < d->bee8_regs[2]) &&
               (d->s3_pix_x > d->bee8_regs[4]));
 
-    // Step 2: Select source color and mix mode 
+    // Step 2: Select source color and mix mode
+    use_fgmix = color_mix_function(d, mix_mask, src_dat, d->gfx_mem[target]);
+    uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
+    uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
+    uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
 
-    // Step 3: Read destination 
+    switch (sel) 
+    {
+      case 0: // Background Color register
+        src_dat = d->s3_bg_color;
+        break;
+      case 1: // Foreground Color register
+        src_dat = d->s3_fg_color;
+        break;
+      case 2: // CPU data (pixel transfer register)
+        src_dat = pixel_p[pix];
+        break;
+      case 3: // Display memory (VRAM at source coords)
+        src_dat = d->gfx_mem[target];
+        break;
+    }
+
+    // Step 3: Read destination
     uint8_t dst_dat = d->gfx_mem[target];
 
     // Step 4: Color Compare gate
@@ -2442,7 +2423,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     }
 
     // Step 5: Apply MIX
-    uint8_t pixel = color_mix_function(d, mix_mask, src_dat, dst_dat);
+    uint8_t pixel = do_color_mix(mix_mode, src_dat, dst_dat);
 
     // Step 6: Write Mask merge
     uint32_t wrt_mask = d->plane_write_mask;
@@ -2451,8 +2432,8 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     // Step 7: Write to VRAM
     if (!nowrite) d->gfx_mem[target] = pixel;
 
+    // Switch to next scanline
     d->s3_pix_x += d->s3_h_dir;
-    // G(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix, d->s3_bg_color_mix));
   }
 
   if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {

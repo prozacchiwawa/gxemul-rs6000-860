@@ -39,7 +39,7 @@
 #include <functional>
 
 /*  This is needed for undefining 'mips', 'ppc' etc. on weird systems:  */
-#include "../../config.h"
+#include "config.h"
 
 #include "timer.h"
 #include "cpu_traits.h"

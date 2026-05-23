@@ -124,7 +124,6 @@ add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_loadstore_p1_u1_w1.cc"
 
 file(STRINGS "cpu_arm_multi.txt" arm_multi)
 string(REPLACE ";" " " arm_multi_new "${arm_multi}")
-message("${arm_multi_new}")
 
 add_generated_cc("${CMAKE_CURRENT_BINARY_DIR}/tmp_arm_multi.cc"
   generate_arm_multi " ${arm_multi_new}" cpu_arm_multi.txt)

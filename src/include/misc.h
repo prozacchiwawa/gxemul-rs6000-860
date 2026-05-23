@@ -41,7 +41,7 @@
  *  need them.
  */
 
-#include "../../config.h"
+#include "config.h"
 
 #define	COPYRIGHT_MSG	"Copyright (C) 2003-2014  Anders Gavare"
 

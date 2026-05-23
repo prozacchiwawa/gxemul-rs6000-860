@@ -3,10 +3,16 @@ project(gxemul)
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(VERSION "rs6000-860")
+set(UNSTABLE_DEVEL 1)
+set(WITH_X11 1)
+set(HOST_LITTLE_ENDIAN 1)
+configure_file("config.h.cmake" "${CMAKE_CURRENT_BINARY_DIR}/config.h")
+
 find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIRS})
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/ ${CMAKE_CURRENT_BINARY_DIR})
 
 add_compile_definitions(-DNDEBUG)
 find_package(PNG REQUIRED)

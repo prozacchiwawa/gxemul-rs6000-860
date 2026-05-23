@@ -1,9 +1,27 @@
 add_executable(makeautodev makeautodev.cc)
+add_executable(Xconv_raw_to_c fonts/Xconv_raw_to_c.c)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x8.cc
+                   COMMAND $<TARGET_FILE:Xconv_raw_to_c> ${CMAKE_CURRENT_SOURCE_DIR}/fonts/vt220l.808 font8x8 > ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x8.cc
+                   DEPENDS Xconv_raw_to_c fonts/vt220l.808
+                   VERBATIM)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x10.cc
+                   COMMAND $<TARGET_FILE:Xconv_raw_to_c> ${CMAKE_CURRENT_SOURCE_DIR}/fonts/vt220l.810 font8x10 > ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x10.cc
+                   DEPENDS Xconv_raw_to_c fonts/vt220l.810
+                   VERBATIM)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x16.cc
+                   COMMAND $<TARGET_FILE:Xconv_raw_to_c> ${CMAKE_CURRENT_SOURCE_DIR}/fonts/vt220l.816 font8x16 > ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x16.cc
+                   DEPENDS Xconv_raw_to_c fonts/vt220l.816
+                   VERBATIM)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
                     COMMAND $<TARGET_FILE:makeautodev> ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/bus_pci.cc ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
                     DEPENDS makeautodev
                     VERBATIM)
+
+add_custom_target(fonts DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x8.cc ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x10.cc ${CMAKE_CURRENT_SOURCE_DIR}/fonts/font8x16.cc)
 
 add_library(devices
     OBJECT
@@ -27,3 +45,5 @@ add_library(devices
     dev_cons.cc            dev_fb.cc               dev_kn220.cc         dev_osiop.cc       dev_ram.cc        dev_sii.cc
     dev_cpc700.cc          dev_fbctrl.cc           dev_kn230.cc         dev_pcc2.cc        dev_random.cc     dev_sn.cc ${CMAKE_CURRENT_BINARY_DIR}/autodev.cc
 )
+
+add_dependencies(devices fonts)

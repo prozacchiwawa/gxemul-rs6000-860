@@ -273,7 +273,26 @@ target_include_directories(cpus PRIVATE
   ${SOFTFLOAT_INCLUDE_DIR}
 )
 
-add_custom_target(cpus_generated_sources DEPENDS ${GENERATED_SOURCES})
+add_custom_target(cpus_generated_sources DEPENDS ${GENERATED_SOURCES}
+  cpu_dyntrans.cc
+  memory_mips.cc
+  memory_ppc.cc
+  memory_rw.cc
+  memory_sh.cc
+  cpu_alpha_instr_alu.cc
+  cpu_alpha_instr_loadstore.cc
+  cpu_alpha_instr.cc
+  cpu_arm_instr_dpi.cc
+  cpu_arm_instr_loadstore.cc
+  cpu_arm_instr_misc.cc
+  cpu_arm_instr.cc
+  cpu_m88k_instr_loadstore.cc
+  cpu_m88k_instr.cc
+  cpu_mips_instr_loadstore.cc
+  cpu_ppc_instr_loadstore.cc
+  cpu_ppc_instr.cc
+  cpu_sh_instr.cc)
+
 add_custom_target(cpus_tools DEPENDS generate_head generate_tail ${CPU_TOOLS})
 
 add_dependencies(cpus cpus_generated_sources)

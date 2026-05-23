@@ -13,7 +13,7 @@ jobs:
       - run: |
           # prerequisites
           sudo apt-get update 
-          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb python3-venv xterm
+          sudo apt-get install -y libpng-dev libboost-all-dev build-essential gcc-13 libsdl2-dev xvfb python3-venv xterm cmake
           python3 -m venv venv
           (. ./venv/bin/activate && python3 -m pip install pillow)
 
@@ -21,7 +21,7 @@ jobs:
           git submodule update --init
 
           # build
-          ./configure
+          cmake -G "Unix Makefiles" .
           make
 
           # test proper

@@ -317,6 +317,8 @@ enum {
 
 typedef struct interrupt qemu_irq;
 
+#define QTAILQ_EMPTY(HEAD) ((HEAD)->prev == (HEAD) || (HEAD)->next == (HEAD))
+
 #define QTAILQ_INIT(HEAD) \
     do {                  \
         (HEAD)->prev = (HEAD); \
@@ -1090,7 +1092,8 @@ static void lsi_soft_reset(LSIState *s)
     s->csbc = 0;
     s->sbr = 0;
     s->scid = 0;
-    assert(!s->queue);
+    // Queue is now owned and is a complex type.
+    // assert(!s->queue);
     assert(!s->current);
 }
 

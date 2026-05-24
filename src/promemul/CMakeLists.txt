@@ -1,0 +1,12 @@
+add_library(promemul
+    OBJECT
+    arcbios.cc
+    dec_prom.cc
+    dreamcast.cc
+    dreamcast_scramble.cc
+    mvmeprom.cc
+    of.cc
+    ps2_bios.cc
+    sh_ipl_g.cc
+    yamon.cc
+)

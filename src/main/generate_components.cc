@@ -26,7 +26,7 @@ int main(int argc, char** argv)
                             std::size_t pos;
                             if ((pos = line.find("COMPONENT(")) != std::string::npos) {
                                 std::string component_name(line.begin() + pos + 10, line.begin() + line.rfind(')'));
-                                std::string component_cls(dir_entry.path().stem());
+                                std::string component_cls(dir_entry.path().stem().string());
                                 outstream << "#include \"components/" << component_cls << ".h\"\n";
                                 outstream2 << "\t{ \"" << component_name << "\", "
                                             << component_cls << "::Create, "

@@ -38,19 +38,19 @@
 #include "exec_ecoff_mips.h"
 
 struct ecoff_filehdr {
-	uint16_t f_magic;	/* magic number */			/*  u_short  */
-	uint16_t f_nscns;	/* # of sections */			/*  u_short  */
+	uint16_t f_magic;	/* magic number */			/*  uint16_t  */
+	uint16_t f_nscns;	/* # of sections */			/*  uint16_t  */
 	uint32_t f_timdat;	/* time and date stamp */		/*  u_int  */
 	uint32_t f_symptr;	/* file offset of symbol table */	/*  u_long  */
 	uint32_t f_nsyms;	/* # of symbol table entries */		/*  u_int  */
-	uint16_t f_opthdr;	/* sizeof the optional header */	/*  u_short  */
-	uint16_t f_flags;	/* flags??? */				/*  u_short  */
+	uint16_t f_opthdr;	/* sizeof the optional header */	/*  uint16_t  */
+	uint16_t f_flags;	/* flags??? */				/*  uint16_t  */
 };
 						/*  original netbsd types ----^  */
 
 struct ecoff_aouthdr {
-	u_short magic;		/*  u_short  */
-	u_short vstamp;		/*  u_short  */
+	uint16_t magic;		/*  uint16_t  */
+	uint16_t vstamp;		/*  uint16_t  */
 	ECOFF_PAD
 	uint32_t tsize;		/*  u_long  */
 	uint32_t dsize;		/*  u_long  */
@@ -70,8 +70,8 @@ struct ecoff_scnhdr {		/* needed for size info */
 	uint32_t s_scnptr;	/* file offset of raw data */		/*  u_long  */
 	uint32_t s_relptr;	/* file offset of reloc data */		/*  u_long  */
 	uint32_t s_lnnoptr;	/* file offset of line data */		/*  u_long  */
-	uint16_t s_nreloc;	/* # of relocation entries */		/*  u_short  */
-	uint16_t s_nlnno;	/* # of line entries */			/*  u_short  */
+	uint16_t s_nreloc;	/* # of relocation entries */		/*  uint16_t  */
+	uint16_t s_nlnno;	/* # of line entries */			/*  uint16_t  */
 	uint32_t s_flags;	/* flags */				/*  u_int  */
 };
 

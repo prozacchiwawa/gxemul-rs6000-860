@@ -65,8 +65,8 @@
  */
 #ifdef notdef
 struct biiregs {
-	u_short	bi_dtype;	/* device type */
-	u_short	bi_revs;	/* revisions */
+	uint16_t	bi_dtype;	/* device type */
+	uint16_t	bi_revs;	/* revisions */
 	u_long	bi_csr;		/* control and status register */
 	u_long	bi_ber;		/* bus error register */
 	u_long	bi_eintrcsr;	/* error interrupt control register */

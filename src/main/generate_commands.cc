@@ -21,7 +21,7 @@ int main(int argc, char** argv)
                 if (!dir_entry.is_directory() && dir_entry.path().extension() == ".cc") {
                     std::size_t pos;
                     {
-                        std::string component_cls(dir_entry.path().stem());
+                        std::string component_cls(dir_entry.path().stem().string());
                         outstream << "#include \"commands/" << component_cls << ".h\"\n";
                         outstream2 << "\tAddCommand(new " << component_cls << ");\n";
                     }

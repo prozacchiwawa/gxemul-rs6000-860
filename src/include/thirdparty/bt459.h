@@ -161,7 +161,7 @@ void	bt459PosCursor __P((struct fbinfo *, int, int));
 void	bt459InitColorMap __P((struct fbinfo *));
 int	bt459LoadColorMap __P((struct fbinfo *, const u_char *, int, int));
 int	bt459GetColorMap __P((struct fbinfo *, u_char *, int, int));
-void	bt459LoadCursor __P((struct fbinfo *, u_short *));
+void	bt459LoadCursor __P((struct fbinfo *, uint16_t *));
 int	bt459_video_on __P((struct fbinfo *));
 int	bt459_video_off __P((struct fbinfo *));
 #endif /* _KERNEL */

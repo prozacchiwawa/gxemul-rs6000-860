@@ -55,7 +55,7 @@ static void file_load_srec(struct machine *m, struct memory *mem,
 	int warning_len = 0;
 	int total_bytes_loaded = 0;
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (f == NULL) {
 		perror(filename);
 		exit(1);

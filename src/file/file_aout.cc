@@ -72,7 +72,7 @@ static void file_load_aout(struct machine *m, struct memory *mem,
 	if (m->cpus[0]->byte_order == EMUL_BIG_ENDIAN)
 		encoding = ELFDATA2MSB;
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (f == NULL) {
 		perror(filename);
 		exit(1);

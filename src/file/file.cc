@@ -155,7 +155,7 @@ void file_load(struct machine *machine, struct memory *mem,
 	if (verbose < 2)
 		quiet_mode = 1;
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (f == NULL) {
 		file_load_raw(machine, mem, filename, entrypointp);
 		goto ret;

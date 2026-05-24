@@ -100,7 +100,7 @@ static void file_load_elf(struct machine *m, struct memory *mem,
 	Elf32_Sym *symbols_sym32 = NULL;
 	Elf64_Sym *symbols_sym64 = NULL;
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (f == NULL) {
 		perror(filename);
 		exit(1);

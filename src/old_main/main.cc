@@ -754,6 +754,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
  */
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+	_set_fmode(O_BINARY);
+#endif
 	/*  Setting constants:  */
 	int constant_yes = 1;
 	int constant_true = 1;

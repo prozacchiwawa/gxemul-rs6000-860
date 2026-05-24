@@ -33,3 +33,4 @@ src/include/make_ppc_spr_strings
 font8x8.cc
 font8x10.cc
 font8x16.cc
+build

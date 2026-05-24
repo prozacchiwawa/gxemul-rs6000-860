@@ -41,7 +41,7 @@
  *  need them.
  */
 
-#include "../../config.h"
+#include "config.h"
 
 #define	COPYRIGHT_MSG	"Copyright (C) 2003-2014  Anders Gavare"
 
@@ -77,10 +77,6 @@ using std::ostream;
 #include <iostream>
 using std::cout;
 using std::cerr;
-
-#ifndef NDEBUG
-#include "thirdparty/debug_new.h"
-#endif
 
 #include "refcount_ptr.h"
 
@@ -211,29 +207,14 @@ enum Endianness
 #define	DEBUG_BUFSIZE		1024
 #define	DEBUG_INDENTATION	4
 
-
-#ifdef HAVE___FUNCTION__
-
 #define	FAILURE(error_msg)					{	\
 		char where_msg[400];					\
 		snprintf(where_msg, sizeof(where_msg),			\
 		    "%s, line %i, function %s().\n",			\
-		    __FILE__, __LINE__, __FUNCTION__);			\
+		    __FILE__, __LINE__, __func__);			\
         	fprintf(stderr, "\n%s, in %s\n", error_msg, where_msg);	\
 		exit(1);						\
 	}
-
-#else
-
-#define	FAILURE(error_msg)					{	\
-		char where_msg[400];					\
-		snprintf(where_msg, sizeof(where_msg),			\
-		    "%s, line %i\n", __FILE__, __LINE__);		\
-        	fprintf(stderr, "\n%s, in %s.\n", error_msg, where_msg);\
-		exit(1);						\
-	}
-
-#endif	/*  !HAVE___FUNCTION__  */
 
 
 #define	CHECK_ALLOCATION(ptr)					{	\

@@ -1,0 +1,12 @@
+add_library(old_main
+    OBJECT
+    float_emul.cc
+    interrupt.cc
+    emul.cc
+    misc.cc
+    settings.cc
+    memory.cc
+    emul_parse.cc
+    timer.cc
+    main.cc
+)

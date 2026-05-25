@@ -550,6 +550,8 @@ static int d_avail(HANDLE d)
 		if (res) {
 			return bytesavailable;
 		}
+	} else {
+		fprintf(stderr, "Unknown file type 0x%04X\n", ftype);
 	}
 	return 0;
 }
@@ -1123,6 +1125,8 @@ void console_init_main(struct emul *emul)
 	console_stdout_pending = 1;
 	console_handles[MAIN_CONSOLE].fifo_head = 0;
 	console_handles[MAIN_CONSOLE].fifo_tail = 0;
+	console_handles[MAIN_CONSOLE].w_descriptor = GetStdHandle(STD_OUTPUT_HANDLE);
+	console_handles[MAIN_CONSOLE].r_descriptor = GetStdHandle(STD_INPUT_HANDLE);
 
 	console_mouse_x = 0;
 	console_mouse_y = 0;

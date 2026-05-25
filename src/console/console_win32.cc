@@ -550,7 +550,7 @@ static int d_avail(HANDLE d)
 		if (res) {
 			return bytesavailable;
 		}
-	} else {
+	} else if (d) {
 		fprintf(stderr, "Unknown file type 0x%04X\n", ftype);
 	}
 	return 0;

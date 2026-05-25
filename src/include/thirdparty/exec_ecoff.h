@@ -40,9 +40,9 @@
 struct ecoff_filehdr {
 	uint16_t f_magic;	/* magic number */			/*  uint16_t  */
 	uint16_t f_nscns;	/* # of sections */			/*  uint16_t  */
-	uint32_t f_timdat;	/* time and date stamp */		/*  u_int  */
-	uint32_t f_symptr;	/* file offset of symbol table */	/*  u_long  */
-	uint32_t f_nsyms;	/* # of symbol table entries */		/*  u_int  */
+	uint32_t f_timdat;	/* time and date stamp */		/*  unsigned int  */
+	uint32_t f_symptr;	/* file offset of symbol table */	/*  uint64_t  */
+	uint32_t f_nsyms;	/* # of symbol table entries */		/*  unsigned int  */
 	uint16_t f_opthdr;	/* sizeof the optional header */	/*  uint16_t  */
 	uint16_t f_flags;	/* flags??? */				/*  uint16_t  */
 };
@@ -52,27 +52,27 @@ struct ecoff_aouthdr {
 	uint16_t magic;		/*  uint16_t  */
 	uint16_t vstamp;		/*  uint16_t  */
 	ECOFF_PAD
-	uint32_t tsize;		/*  u_long  */
-	uint32_t dsize;		/*  u_long  */
-	uint32_t bsize;		/*  u_long  */
-	uint32_t entry;		/*  u_long  */
-	uint32_t text_start;	/*  u_long  */
-	uint32_t data_start;	/*  u_long  */
-	uint32_t bss_start;	/*  u_long  */
+	uint32_t tsize;		/*  uint64_t  */
+	uint32_t dsize;		/*  uint64_t  */
+	uint32_t bsize;		/*  uint64_t  */
+	uint32_t entry;		/*  uint64_t  */
+	uint32_t text_start;	/*  uint64_t  */
+	uint32_t data_start;	/*  uint64_t  */
+	uint32_t bss_start;	/*  uint64_t  */
 	ECOFF_MACHDEP;
 };
 
 struct ecoff_scnhdr {		/* needed for size info */
 	char	 s_name[8];	/* name */
-	uint32_t s_paddr;	/* physical addr? for ROMing?*/		/*  u_long  */
-	uint32_t s_vaddr;	/* virtual addr? */			/*  u_long  */
-	uint32_t s_size;		/* size */				/*  u_long  */
-	uint32_t s_scnptr;	/* file offset of raw data */		/*  u_long  */
-	uint32_t s_relptr;	/* file offset of reloc data */		/*  u_long  */
-	uint32_t s_lnnoptr;	/* file offset of line data */		/*  u_long  */
+	uint32_t s_paddr;	/* physical addr? for ROMing?*/		/*  uint64_t  */
+	uint32_t s_vaddr;	/* virtual addr? */			/*  uint64_t  */
+	uint32_t s_size;		/* size */				/*  uint64_t  */
+	uint32_t s_scnptr;	/* file offset of raw data */		/*  uint64_t  */
+	uint32_t s_relptr;	/* file offset of reloc data */		/*  uint64_t  */
+	uint32_t s_lnnoptr;	/* file offset of line data */		/*  uint64_t  */
 	uint16_t s_nreloc;	/* # of relocation entries */		/*  uint16_t  */
 	uint16_t s_nlnno;	/* # of line entries */			/*  uint16_t  */
-	uint32_t s_flags;	/* flags */				/*  u_int  */
+	uint32_t s_flags;	/* flags */				/*  unsigned int  */
 };
 
 struct ecoff_exechdr {
@@ -110,7 +110,7 @@ int	exec_ecoff_makecmds __P((struct proc *, struct exec_package *));
 int	exec_ecoff_setup_stack __P((struct proc *, struct exec_package *));
 int	cpu_exec_ecoff_probe __P((struct proc *, struct exec_package *));
 void	cpu_exec_ecoff_setregs __P((struct proc *, struct exec_package *,
-	    u_long));
+	    uint64_t));
 
 int	exec_ecoff_prep_omagic __P((struct proc *, struct exec_package *,
 	    struct ecoff_exechdr *, struct vnode *));

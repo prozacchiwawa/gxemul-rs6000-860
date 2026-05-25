@@ -196,7 +196,7 @@ void dev_turbochannel_init(struct machine *machine, struct memory *mem,
 	d->baseaddr = baseaddr;
 	d->endaddr  = endaddr;
 
-	strlcpy(d->device_name, device_name, DEVICE_MAX_NAMELEN);
+	strncpy(d->device_name, device_name, DEVICE_MAX_NAMELEN);
 
 	strncpy(d->card_firmware_version, "V5.3a   ", CARD_NAME_BUFLEN);
 	strncpy(d->card_vendor_name,      "DEC     ", CARD_NAME_BUFLEN);

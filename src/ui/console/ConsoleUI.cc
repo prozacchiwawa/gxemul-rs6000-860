@@ -26,7 +26,9 @@
  */
 
 #include <signal.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <iostream>
 
 #include "misc.h"
@@ -45,13 +47,21 @@ ConsoleUI::~ConsoleUI()
 {
 	// Restore the terminal mode:
 	if (m_consoleIsInitialized)
+#ifdef _WIN32
+		SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), m_oldConsoleMode);
+#else
 		tcsetattr(STDIN_FILENO, TCSANOW, &m_oldTermios);
+#endif
 }
 
 
 // Note: Use of global GXemul pointer!
 static GXemul* g_GXemul;
+#ifdef _WIN32
+static DWORD g_curConsoleMode;
+#else
 static struct termios g_curTermios;
+#endif
 
 static void ReshowCurrentCommandBuffer()
 {
@@ -80,6 +90,7 @@ extern "C" void ConsoleUI_SIGINT_Handler(int n)
 	signal(SIGINT, ConsoleUI_SIGINT_Handler);
 }
 
+#ifndef _WIN32
 /**
  * \brief Restore terminal settings after a CTRL-Z.
  *
@@ -93,13 +104,21 @@ extern "C" void ConsoleUI_SIGCONT_Handler(int n)
 	ReshowCurrentCommandBuffer();
 	signal(SIGCONT, ConsoleUI_SIGCONT_Handler);
 }
-
+#endif
 
 void ConsoleUI::Initialize()
 {
 	if (m_consoleIsInitialized)
 		return;
 
+#ifdef _WIN32
+	GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &m_oldConsoleMode);
+	m_currentConsoleMode = m_oldConsoleMode;
+	m_currentConsoleMode &= ~(ENABLE_LINE_INPUT);
+	m_currentConsoleMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), m_currentConsoleMode);
+	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT);
+#else
 	tcgetattr(STDIN_FILENO, &m_oldTermios);
 	m_currentTermios = m_oldTermios;
 
@@ -110,13 +129,18 @@ void ConsoleUI::Initialize()
 	m_currentTermios.c_lflag &= ~ECHO;
 
 	tcsetattr(STDIN_FILENO, TCSANOW, &m_currentTermios);
+#endif
 
 	// Signal handlers for CTRL-C and CTRL-Z.
 	// Note: Using a global GXemul instance pointer!
 	g_GXemul = m_gxemul;
+#ifndef _WIN32
 	g_curTermios = m_currentTermios;
-	signal(SIGINT, ConsoleUI_SIGINT_Handler);
 	signal(SIGCONT, ConsoleUI_SIGCONT_Handler);
+#else
+	g_curConsoleMode = m_currentConsoleMode;
+#endif
+	signal(SIGINT, ConsoleUI_SIGINT_Handler);
 
 	m_consoleIsInitialized = true;
 }

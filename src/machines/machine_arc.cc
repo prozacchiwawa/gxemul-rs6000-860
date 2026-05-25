@@ -113,11 +113,11 @@ MACHINE_SETUP(arc)
 
 		switch (machine->machine_subtype) {
 		case MACHINE_ARC_JAZZ_PICA:
-			strlcat(machineName, " (Microsoft Jazz, Acer PICA-61)",
+			strncat(machineName, " (Microsoft Jazz, Acer PICA-61)",
 			    MACHINE_NAME_MAXBUF);
 			break;
 		case MACHINE_ARC_JAZZ_MAGNUM:
-			strlcat(machineName, " (Microsoft Jazz, MIPS Magnum)",
+			strncat(machineName, " (Microsoft Jazz, MIPS Magnum)",
 			    MACHINE_NAME_MAXBUF);
 			break;
 		default:

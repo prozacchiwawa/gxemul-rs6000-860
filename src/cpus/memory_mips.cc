@@ -29,8 +29,7 @@
  */
 
 #include <sys/types.h>
-#include <sys/mman.h>
-
+#include <stdint.h>
 
 /*
  *  memory_cache_R3000():

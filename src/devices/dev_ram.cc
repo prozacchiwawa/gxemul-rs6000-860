@@ -34,7 +34,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 
 #include "cpu.h"
 #include "devices.h"
@@ -182,14 +181,8 @@ void dev_ram_init(struct machine *machine, uint64_t baseaddr, uint64_t length,
 		break;
 
 	case DEV_RAM_RAM:
-		/*
-		 *  Allocate zero-filled RAM using mmap(). If mmap() failed,
-		 *  try malloc(), but then memset() must also be called, which
-		 *  can be slow for large chunks of memory.
-		 */
 		d->length = length;
-		d->data = (unsigned char *) mmap(NULL, length,
-		    PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+		d->data = (unsigned char *) calloc(1, length);
 		if (d->data == NULL) {
 			CHECK_ALLOCATION(d->data = (unsigned char *) malloc(length));
 			memset(d->data, 0, length);

@@ -134,7 +134,7 @@ DEVICE_ACCESS(sgi_ip22_imc)
 			debug("[ sgi_ip22_imc: write to IMC_EEPROM, data="
 			    "0x%08x ]\n", (int)idata);
 		} else {
-			odata = random() & 0x1e;
+			odata = rand() & 0x1e;
 			debug("[ sgi_ip22_imc: read from IMC_WDOG, "
 			    "data=0x%08x ]\n", (int)odata);
 		}
@@ -381,12 +381,12 @@ abort();
 		}
 		break;
 	case 0x3b:	/*  ?  */
-		odata = random();
+		odata = rand();
 		break;
 	case 0x3c:	/*  timer control  */
 		break;
 	case 0x3f:	/*  ?  */
-		odata = random();
+		odata = rand();
 		break;
 	default:
 		if (writeflag == MEM_WRITE) {

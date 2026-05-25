@@ -34,6 +34,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "ComponentFactory.h"
 #include "console.h"
@@ -755,7 +756,7 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 int main(int argc, char *argv[])
 {
 #ifdef _WIN32
-	_set_fmode(O_BINARY);
+	_set_fmode(_O_BINARY);
 #endif
 	/*  Setting constants:  */
 	int constant_yes = 1;
@@ -823,7 +824,7 @@ int main(int argc, char *argv[])
 	if (!skip_srandom_call) {
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		srandom(tv.tv_sec ^ getpid() ^ tv.tv_usec);
+		srand(tv.tv_sec ^ getpid() ^ tv.tv_usec);
 	}
 
 	/*  Print startup message:  */

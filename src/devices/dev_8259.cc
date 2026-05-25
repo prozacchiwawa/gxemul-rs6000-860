@@ -404,7 +404,7 @@ DEVINIT(8259)
 	CHECK_ALLOCATION(name2 = (char *) malloc(nlen));
 	snprintf(name2, nlen, "%s", devinit->name);
 	if ((devinit->addr & 0xfff) == 0xa0) {
-		strlcat(name2, " [secondary]", nlen);
+		strncat(name2, " [secondary]", nlen);
 		d->irq_base = 8;
 	}
 

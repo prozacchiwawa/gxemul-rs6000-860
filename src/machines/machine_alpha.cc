@@ -103,14 +103,14 @@ MACHINE_SETUP(alpha)
 	memset(&rpb, 0, sizeof(struct rpb));
 	store_64bit_word_in_host(cpu, (unsigned char *)
 	    &(rpb.rpb_phys), 0x14000);
-	strlcpy((char *)&(rpb.rpb_magic), "HWRPB", 8);
+	strncpy((char *)&(rpb.rpb_magic), "HWRPB", 8);
 	store_64bit_word_in_host(cpu, (unsigned char *)
 	    &(rpb.rpb_version), HWRPB_DSRDB_MINVERS);
 	store_64bit_word_in_host(cpu, (unsigned char *)
 	    &(rpb.rpb_size), sizeof(struct rpb));
 	store_64bit_word_in_host(cpu, (unsigned char *)
 	    &(rpb.rpb_page_size), 8192);
-	strlcpy((char *)&(rpb.rpb_ssn), "123456789", 10);
+	strncpy((char *)&(rpb.rpb_ssn), "123456789", 10);
 	store_64bit_word_in_host(cpu, (unsigned char *)
 	    &(rpb.rpb_type), machine->machine_subtype);
 	store_64bit_word_in_host(cpu, (unsigned char *)

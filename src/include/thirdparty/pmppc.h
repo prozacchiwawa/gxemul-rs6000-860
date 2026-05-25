@@ -89,17 +89,17 @@ struct a_config {
 #define A_BOOT_ROM 0
 #define A_BOOT_FLASH 1
 	int a_has_ecc;
-	uint a_mem_size;		/* in bytes */
-	uint a_l2_cache;
+	unsigned int a_mem_size;		/* in bytes */
+	unsigned int a_l2_cache;
 #define A_CACHE_PARITY 0
 #define A_CACHE_NO_PARITY 1
 #define A_CACHE_NONE 3
-	uint a_bus_freq;		/* in hz */
+	unsigned int a_bus_freq;		/* in hz */
 	int a_is_monarch;
 	int a_has_eth;
 	int a_has_rtc;
-	uint a_flash_size;		/* in bytes */
-	uint a_flash_width;		/* in bits */
+	unsigned int a_flash_size;		/* in bytes */
+	unsigned int a_flash_width;		/* in bits */
 };
 
 extern struct a_config a_config;

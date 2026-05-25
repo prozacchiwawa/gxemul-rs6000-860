@@ -1027,7 +1027,7 @@ DEVICE_ACCESS(pckbc)
 
 	case PS2 + PS2_TXBUF:
 		if (writeflag==MEM_READ) {
-			odata = random() & 0xff;
+			odata = rand() & 0xff;
 			debug("[ pckbc: read from port %i, PS2_TXBUF: "
 			    "0x%x ]\n", port_nr, (int)odata);
 		} else {
@@ -1044,7 +1044,7 @@ DEVICE_ACCESS(pckbc)
 		if (writeflag==MEM_READ) {
 			/*  TODO: What should be returned if no data 
 			    is available?  */
-			odata = random() & 0xff;
+			odata = rand() & 0xff;
 			if (d->head[port_nr] != d->tail[port_nr])
 				odata = pckbc_get_code(d, port_nr);
 			debug("[ pckbc: read from port %i, PS2_RXBUF: "

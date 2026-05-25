@@ -115,7 +115,7 @@ static void dreamcast_romfont_init(struct machine *machine)
 			if (y <= 1 || y >= 22)
 				v = 0;
 			else
-				v = random();
+				v = rand();
 			store_byte(cpu, d++, v & 0x3f);
 			store_byte(cpu, d++, v & 0xc3);
 			store_byte(cpu, d++, v & 0xfc);
@@ -182,7 +182,7 @@ static void dreamcast_romfont_init(struct machine *machine)
 			if (y <= 1 || y >= 30)
 				v = 0;
 			else
-				v = random();
+				v = rand();
 			store_byte(cpu, d++, v & 0x3f);
 			store_byte(cpu, d++, v);
 			store_byte(cpu, d++, v);

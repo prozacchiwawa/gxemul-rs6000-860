@@ -34,7 +34,11 @@
 
 #include <sys/types.h>
 #include <inttypes.h>
+#ifndef _WIN32
 #include <sys/time.h>
+#else
+#include "time_win32.h"
+#endif
 #include <assert.h>
 #include <functional>
 

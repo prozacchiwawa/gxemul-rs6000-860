@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 
 #include "cpu.h"
 #include "machine.h"
@@ -117,22 +116,11 @@ void memory_writemax64(struct cpu *cpu, unsigned char *buf, int len,
  */
 void *zeroed_alloc(size_t s)
 {
-	void *p = mmap(NULL, s, PROT_READ | PROT_WRITE,
-	    MAP_ANON | MAP_PRIVATE, -1, 0);
-
-	if (p == NULL) {
-#if 1
-		fprintf(stderr, "zeroed_alloc(): mmap() failed. This should"
-		    " not usually happen. If you can reproduce this, then"
-		    " please contact me with details about your run-time"
-		    " environment.\n");
+	auto p = calloc(1, s);
+	if (!p) {
+		fatal("zeroed_alloc: Out of memory!\n");
 		exit(1);
-#else
-		CHECK_ALLOCATION(p = malloc(s));
-		memset(p, 0, s);
-#endif
 	}
-
 	return p;
 }
 
@@ -167,12 +155,7 @@ struct memory *memory_new(uint64_t physical_max, int arch)
 
 	s = entries_per_pagetable * sizeof(void *);
 
-	mem->pagetable = (unsigned char *) mmap(NULL, s,
-	    PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
-	if (mem->pagetable == NULL) {
-		CHECK_ALLOCATION(mem->pagetable = malloc(s));
-		memset(mem->pagetable, 0, s);
-	}
+	mem->pagetable = (unsigned char *) calloc(1, s);
 
 	mem->mmap_dev_minaddr = 0xffffffffffffffffULL;
 	mem->mmap_dev_maxaddr = 0;
@@ -541,8 +524,7 @@ unsigned char *memory_paddr_to_hostaddr(struct memory *mem,
 
 		/*  Anonymous mmap() should return zero-filled memory,
 		    try malloc + memset if mmap failed.  */
-		table[entry] = (void *) mmap(NULL, alloclen,
-		    PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+		table[entry] = (void *) calloc(alloclen, 1);
 		if (table[entry] == NULL) {
 			CHECK_ALLOCATION(table[entry] = malloc(alloclen));
 			memset(table[entry], 0, alloclen);

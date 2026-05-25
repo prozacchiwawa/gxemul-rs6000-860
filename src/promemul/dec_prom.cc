@@ -35,8 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#ifndef _WIN32
 #include <sys/time.h>
-#include <sys/resource.h>
+#else
+#include "time_win32.h"
+#endif
 
 #include "console.h"
 #include "cpu.h"
@@ -356,7 +359,7 @@ int decstation_prom_emul(struct cpu *cpu)
 
 				switch (ch) {
 				case '%':
-					strlcpy(printfbuf, "%%",
+					strncpy(printfbuf, "%%",
 					    sizeof(printfbuf));
 					break;
 				case 'c':
@@ -369,7 +372,7 @@ int decstation_prom_emul(struct cpu *cpu)
 						/*  Linux booters seem to go
 						    over the edge sometimes: */
 						ch = '\0';
-						strlcpy(printfbuf, "[...]\n",
+						strncpy(printfbuf, "[...]\n",
 						    sizeof(printfbuf));
 #else
 						printf("[ decstation_prom_emul"

@@ -67,24 +67,24 @@
 struct biiregs {
 	uint16_t	bi_dtype;	/* device type */
 	uint16_t	bi_revs;	/* revisions */
-	u_long	bi_csr;		/* control and status register */
-	u_long	bi_ber;		/* bus error register */
-	u_long	bi_eintrcsr;	/* error interrupt control register */
-	u_long	bi_intrdes;	/* interrupt destination register */
+	uint64_t	bi_csr;		/* control and status register */
+	uint64_t	bi_ber;		/* bus error register */
+	uint64_t	bi_eintrcsr;	/* error interrupt control register */
+	uint64_t	bi_intrdes;	/* interrupt destination register */
 				/* the rest are not required for all nodes */
-	u_long	bi_ipintrmsk;	/* IP interrupt mask register */
-	u_long	bi_fipsdes;	/* Force-Bit IPINTR/STOP destination reg */
-	u_long	bi_ipintrsrc;	/* IPINTR source register */
-	u_long	bi_sadr;	/* starting address register */
-	u_long	bi_eadr;	/* ending address register */
-	u_long	bi_bcicsr;	/* BCI control and status register */
-	u_long	bi_wstat;	/* write status register */
-	u_long	bi_fipscmd;	/* Force-Bit IPINTR/STOP command reg */
-	u_long	bi_xxx1[3];	/* unused */
-	u_long	bi_uintrcsr;	/* user interface interrupt control reg */
-	u_long	bi_xxx2[43];	/* unused */
+	uint64_t	bi_ipintrmsk;	/* IP interrupt mask register */
+	uint64_t	bi_fipsdes;	/* Force-Bit IPINTR/STOP destination reg */
+	uint64_t	bi_ipintrsrc;	/* IPINTR source register */
+	uint64_t	bi_sadr;	/* starting address register */
+	uint64_t	bi_eadr;	/* ending address register */
+	uint64_t	bi_bcicsr;	/* BCI control and status register */
+	uint64_t	bi_wstat;	/* write status register */
+	uint64_t	bi_fipscmd;	/* Force-Bit IPINTR/STOP command reg */
+	uint64_t	bi_xxx1[3];	/* unused */
+	uint64_t	bi_uintrcsr;	/* user interface interrupt control reg */
+	uint64_t	bi_xxx2[43];	/* unused */
 /* although these are on the BIIC, their interpretation varies */
-/*	u_long	bi_gpr[4]; */	/* general purpose registers */
+/*	uint64_t	bi_gpr[4]; */	/* general purpose registers */
 };
 
 /*
@@ -92,7 +92,7 @@ struct biiregs {
  */
 struct bi_node {
 	struct	biiregs biic;	/* interface */
-	u_long	bi_xxx[1988];	/* pad to 8K */
+	uint64_t	bi_xxx[1988];	/* pad to 8K */
 };
 
 /*
@@ -100,10 +100,10 @@ struct bi_node {
  */
 struct bi_cpu {
 	struct	biiregs biic;	/* interface chip */
-	u_long	bi_gpr[4];	/* gprs (unused) */
-	u_long	bi_sosr;	/* slave only status register */
-	u_long	bi_xxx[63];	/* pad */
-	u_long	bi_rxcd;	/* receive console data register */
+	uint64_t	bi_gpr[4];	/* gprs (unused) */
+	uint64_t	bi_sosr;	/* slave only status register */
+	uint64_t	bi_xxx[63];	/* pad */
+	uint64_t	bi_rxcd;	/* receive console data register */
 };
 #endif
 
@@ -146,8 +146,8 @@ struct bi_cpu {
 
 
 /* bits in bi_csr */
-#define	BICSR_IREV(x)	((u_char)((x) >> 24))	/* VAXBI interface rev */
-#define	BICSR_TYPE(x)	((u_char)((x) >> 16))	/* BIIC type */
+#define	BICSR_IREV(x)	((uint8_t)((x) >> 24))	/* VAXBI interface rev */
+#define	BICSR_TYPE(x)	((uint8_t)((x) >> 16))	/* BIIC type */
 #define	BICSR_HES	0x8000		/* hard error summary */
 #define	BICSR_SES	0x4000		/* soft error summary */
 #define	BICSR_INIT	0x2000		/* initialise node */

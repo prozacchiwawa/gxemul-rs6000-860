@@ -77,9 +77,9 @@ typedef struct scc_regmap {
     /* Channel B is first, then A */
     struct {
 	char		scc_pad0;
-	volatile u_char	scc_command;	/* reg select */
+	volatile uint8_t	scc_command;	/* reg select */
 	char		scc_pad1[3];
-	volatile u_char	scc_data;	/* Rx/Tx buffer */
+	volatile uint8_t	scc_data;	/* Rx/Tx buffer */
 	char		scc_pad3[2];
     } scc_channel[2];
 } scc_regmap_t;

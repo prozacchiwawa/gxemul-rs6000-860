@@ -400,7 +400,7 @@ DEVICE_ACCESS(pvr_dma)
 		} else {
 			/*  0x20 means G2 DMA in progress?  */
 			/*  0x11 = mask which has to do with AICA  */
-			odata = 0x11 * (random() & 1);
+			odata = 0x11 * (rand() & 1);
 		}
 		break;
 
@@ -2051,7 +2051,7 @@ DEVICE_ACCESS(pvr)
 
 	case PVRREG_SYNC_STAT:
 		/*  TODO. Ugly hack, but it works:  */
-		odata = random();
+		odata = rand();
 		break;
 
 	case PVRREG_MAGIC_110:

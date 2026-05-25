@@ -43,7 +43,7 @@ DEVICE_ACCESS(random)
 	if (writeflag == MEM_READ) {
 		size_t i;
 		for (i=0; i<len; i++)
-			data[i] = random();
+			data[i] = rand();
 	}
 
 	return 1;

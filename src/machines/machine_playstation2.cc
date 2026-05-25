@@ -125,7 +125,7 @@ MACHINE_SETUP(playstation2)
 	store_32bit_word(cpu, 0xa0000000 + machine->physical_ram_in_mb
 	    * 1048576 - 0x1000 + 0x4, PLAYSTATION2_OPTARGS);
 
-	strlcpy(tmp, "root=/dev/hda1 crtmode=vesa0,60", tmplen);
+	strncpy(tmp, "root=/dev/hda1 crtmode=vesa0,60", tmplen);
 
 	if (machine->boot_string_argument[0])
 		snprintf(tmp+strlen(tmp), tmplen-strlen(tmp),

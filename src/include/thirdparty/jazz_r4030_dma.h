@@ -97,7 +97,7 @@ typedef struct dma_softc {
 	void (*enintr)(struct dma_softc *);	/* Int enab routine pointer */
 	void (*map)(struct dma_softc *, char *, size_t, int);
 						/* Map a dma viritual area */
-	void (*start)(struct dma_softc *, caddr_t, size_t, int);
+	void (*start)(struct dma_softc *, uint8_t*, size_t, int);
 						/* Start routine pointer */
 	int (*isintr)(struct dma_softc *);	/* Int check routine pointer */
 	int (*intr)(struct dma_softc *);	/* Interrupt routine pointer */

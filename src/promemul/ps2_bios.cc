@@ -32,8 +32,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#ifndef _WIN32
 #include <sys/time.h>
-#include <sys/resource.h>
+#else
+#include "time_win32.h"
+#endif
 
 #include "console.h"
 #include "cpu.h"
@@ -170,7 +173,7 @@ int playstation2_sifbios_emul(struct cpu *cpu)
 		 *  Linux uses this to allocate "heap" for the OHCI USB
 		 *  controller.
 		 *
-		 *  TODO:  This naïve implementation does not allow for a
+		 *  TODO:  This naï¿½ve implementation does not allow for a
 		 *  "free iop heap" function: :-/
 		 */
 

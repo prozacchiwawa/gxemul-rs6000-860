@@ -420,7 +420,7 @@ void emul_machine_setup(struct machine *m, int n_load, char **load_names,
 	debug("\n");
 
 	if (m->use_random_bootstrap_cpu)
-		m->bootstrap_cpu = random() % m->ncpus;
+		m->bootstrap_cpu = rand() % m->ncpus;
 	else
 		m->bootstrap_cpu = 0;
 
@@ -435,7 +435,7 @@ void emul_machine_setup(struct machine *m, int n_load, char **load_names,
 			unsigned char data[256];
 			unsigned int j;
 			for (j=0; j<sizeof(data); j++)
-				data[j] = random() & 255;
+				data[j] = rand() & 255;
 			cpu->memory_rw(cpu, m->memory, i, data, sizeof(data),
 			    MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS | PHYSICAL);
 		}
@@ -821,7 +821,9 @@ void emul_run(struct emul *emul)
 	console_init_main(emul);
 
 	signal(SIGINT, debugger_activate);
+#ifndef _WIN32
 	signal(SIGCONT, console_sigcont);
+#endif
 
 	/*  Not in verbose mode? Then set quiet_mode.  */
 	if (!verbose) {

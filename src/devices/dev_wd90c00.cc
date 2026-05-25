@@ -2177,7 +2177,7 @@ DEVICE_ACCESS(wd_graphics)
 			fatal("TODO: 4 bit graphics read, mask=0x%02x\n",
 			    d->sequencer_reg[VGA_SEQ_MAP_MASK]);
 			for (i=0; i<len; i++)
-				data[i] = random();
+				data[i] = rand();
 		}
 		break;
 	default:fatal("dev_vga: Unimplemented graphics mode %i\n",

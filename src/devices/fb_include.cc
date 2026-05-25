@@ -142,7 +142,7 @@ void REDRAW(struct vfb_data *d, int addr, int len, void *pixels, int pitch)
 				b *= 8;
 				break;
 			default:
-				r = g = b = random() & 255;
+				r = g = b = rand() & 255;
 			}
 
 			macro_put_pixel;
@@ -299,7 +299,7 @@ void REDRAW(struct vfb_data *d, int addr, int len, void *pixels, int pitch)
 					b *= 8;
 					break;
 				default:
-					r = g = b = random() & 255;
+					r = g = b = rand() & 255;
 				}
 				color_r += r;
 				color_g += g;

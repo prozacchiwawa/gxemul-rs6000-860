@@ -496,7 +496,7 @@ void arm_cpu_register_dump(struct cpu *cpu, int gprs, int coprocs)
 		debug("cpu%i:  ttb = 0x%08x  dacr = 0x%08x\n", x,
 		    cpu->cd.arm.ttb, cpu->cd.arm.dacr);
 		debug("cpu%i:  fsr = 0x%08x  far = 0x%08x\n", x,
-		    cpu->cd.arm.fsr, cpu->cd.arm.far);
+		    cpu->cd.arm.fsr, cpu->cd.arm.far_);
 	}
 }
 
@@ -633,7 +633,7 @@ void arm_exception(struct cpu *cpu, int exception_nr)
 			break;
 		case ARM_EXCEPTION_DATA_ABT:
 			debug("DATA ABORT, far=0x%08x fsr=0x%02x",
-			    cpu->cd.arm.far, cpu->cd.arm.fsr);
+			    cpu->cd.arm.far_, cpu->cd.arm.fsr);
 			break;
 		}
 		debug(" ]\n");

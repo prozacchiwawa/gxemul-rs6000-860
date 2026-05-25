@@ -59,7 +59,7 @@ struct bootconfig {
 	Xu_int magic;
 	Xu_int version;			/* version 2+ */
 
-	u_char machine_id[4];		/* unique machine Id */
+	uint8_t machine_id[4];		/* unique machine Id */
 	char kernelname[80];
 	char args[512];			/* 512 bytes is better than 4096 */
 

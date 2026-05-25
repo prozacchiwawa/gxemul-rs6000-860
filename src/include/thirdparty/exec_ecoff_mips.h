@@ -46,7 +46,7 @@
 
 #define ECOFF_PAD
 
-/*  gxemul NOTE: Original types in NetBSD were 'u_long', not uint32_t  */
+/*  gxemul NOTE: Original types in NetBSD were 'uint64_t', not uint32_t  */
 
 #define ECOFF_MACHDEP \
         uint32_t gprmask; \
@@ -86,7 +86,7 @@
 #ifdef _KERNEL
 struct proc;
 struct exec_package;
-void	cpu_exec_ecoff_setregs(struct proc *, struct exec_package *, u_long);
+void	cpu_exec_ecoff_setregs(struct proc *, struct exec_package *, uint64_t);
 #endif	/* _KERNEL */
 
 

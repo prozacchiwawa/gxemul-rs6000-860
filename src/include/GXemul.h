@@ -30,7 +30,13 @@
 
 #include "misc.h"
 
+#ifndef _WIN32
+#ifndef _WIN32
 #include <sys/time.h>
+#else
+#include "time_win32.h"
+#endif
+#endif
 
 #include "CommandInterpreter.h"
 #include "Component.h"

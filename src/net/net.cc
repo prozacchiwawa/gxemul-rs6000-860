@@ -42,10 +42,15 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#define HAVE_INET_PTON 1
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#endif
 #include <fcntl.h>
 #include <signal.h>
 
@@ -266,7 +271,7 @@ int net_ethernet_rx_avail(struct net *net, void *extra)
 		unsigned char buf[60000];
 
 		do {
-			res = recvfrom(net->local_port_socket, buf,
+			res = recvfrom(net->local_port_socket, (char*)buf,
 			    sizeof(buf), 0, (struct sockaddr *)&si, &si_len);
 
 			if (res != -1) {
@@ -779,8 +784,13 @@ struct net *net_init(struct emul *emul, int init_flags,
 		}
 
 		/*  Set the socket to non-blocking:  */
+#ifdef _WIN32
+		u_long nonblock = 1;
+		res = ioctlsocket(net->local_port_socket, FIONBIO, &nonblock);
+#else
 		res = fcntl(net->local_port_socket, F_GETFL);
 		fcntl(net->local_port_socket, F_SETFL, res | O_NONBLOCK);
+#endif
 	}
 	if (n_remote != 0) {
 		struct remote_net *rnp;
@@ -824,8 +834,10 @@ struct net *net_init(struct emul *emul, int init_flags,
 
 	net_dumpinfo(net);
 
+#ifndef _WIN32
 	/*  This is necessary when using the real network:  */
 	signal(SIGPIPE, SIG_IGN);
+#endif
 
 	return net;
 }

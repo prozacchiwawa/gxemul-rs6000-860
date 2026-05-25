@@ -138,7 +138,7 @@ DEVICE_TICK(footbridge)
 	for (i=0; i<N_FOOTBRIDGE_TIMERS; i++) {
 		if (d->timer_control[i] & TIMER_ENABLE) {
 			if (d->pending_timer_interrupts[i] > 0) {
-				d->timer_value[i] = random() % d->timer_load[i];
+				d->timer_value[i] = rand() % d->timer_load[i];
 				INTERRUPT_ASSERT(d->timer_irq[i]);
 			}
 		}

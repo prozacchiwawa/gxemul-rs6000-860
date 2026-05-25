@@ -118,7 +118,7 @@ int mymkstemp(char *templ)
 
 	while (*p) {
 		if (*p == 'X')
-			*p = 48 + random() % 10;
+			*p = 48 + rand() % 10;
 		p++;
 	}
 
@@ -131,7 +131,7 @@ int mymkstemp(char *templ)
 /*
  *  mystrlcpy():
  *
- *  Quick hack strlcpy() replacement for systems that lack that function.
+ *  Quick hack strncpy() replacement for systems that lack that function.
  *  NOTE: No length checking is done.
  */
 size_t mystrlcpy(char *dst, const char *src, size_t size)
@@ -144,7 +144,7 @@ size_t mystrlcpy(char *dst, const char *src, size_t size)
 /*
  *  mystrlcat():
  *
- *  Quick hack strlcat() replacement for systems that lack that function.
+ *  Quick hack strncat() replacement for systems that lack that function.
  *  NOTE: No length checking is done.
  */
 size_t mystrlcat(char *dst, const char *src, size_t size)

@@ -31,7 +31,9 @@
 #include "devices.h"
 #include <unistd.h>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <sys/mman.h>
+#endif
 #include <png.h>
 #include <map>
 
@@ -322,7 +324,7 @@ static void debugger_cmd_dump(struct machine *m, char *cmd_line)
 
 	last_dump_addr = addr_end;
 
-	strlcpy(repeat_cmd, "dump", MAX_CMD_BUFLEN);
+	strncpy(repeat_cmd, "dump", MAX_CMD_BUFLEN);
 }
 
 
@@ -896,6 +898,7 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
   if (!strcmp(cmd_line, "+")) {
     m->register_dump = true;
     return;
+#ifndef _WIN32
   } else if (!strcmp(cmd_line, "-")) {
     m->register_dump = false;
     if (ppc_recording) {
@@ -906,7 +909,7 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
     }
     return;
   } else if (!strcmp(cmd_line, "record")) {
-    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR, 0644);
+    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR | O_BINARY, 0644);
     if (ppc_recording_fd == -1) {
       fprintf(stderr, "failed to open recording file\n");
       return;
@@ -926,6 +929,7 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
     }
 
     ppc_recording_offset = 0;
+#endif
   }
 
 	/*  [cpuid][,c]  */
@@ -1033,7 +1037,7 @@ static void debugger_cmd_step(struct machine *m, char *cmd_line)
 
   debugger_step(m, n);
 
-	strlcpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
+	strncpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
 }
 
 
@@ -1236,7 +1240,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 	last_unasm_addr = addr;
 
-	strlcpy(repeat_cmd, "unassemble", MAX_CMD_BUFLEN);
+	strncpy(repeat_cmd, "unassemble", MAX_CMD_BUFLEN);
 }
 
 

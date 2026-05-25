@@ -194,7 +194,7 @@
  * CMMU kernel information
  */
 struct m8820x_cmmu {
-	volatile u_int32_t *cmmu_regs;	/* CMMU "base" area */
+	volatile uint32_t *cmmu_regs;	/* CMMU "base" area */
 #ifdef M88200_HAS_SPLIT_ADDRESS
 	vaddr_t		cmmu_addr;	/* address range */
 	vaddr_t		cmmu_addr_mask;	/* address mask */
@@ -202,8 +202,8 @@ struct m8820x_cmmu {
 };
 
 extern struct m8820x_cmmu m8820x_cmmu[MAX_CMMUS];
-extern u_int cmmu_shift;
-extern u_int max_cmmus;
+extern unsigned int cmmu_shift;
+extern unsigned int max_cmmus;
 
 void	m8820x_setup_board_config(void);
 cpuid_t	m8820x_cpu_number(void);

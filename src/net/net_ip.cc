@@ -32,8 +32,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <immintrin.h>
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
+#endif
+#ifndef _WIN32
 #include <sys/time.h>
+#else
+#include "time_win32.h"
+#endif
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -559,9 +568,14 @@ static void net_ip_tcp(struct net *net, void *extra,
 		net->tcp_connections[con_id].in_use = 1;
 
 		/*  Set the socket to non-blocking:  */
+#ifdef _WIN32
+		u_long nonblock = 1;
+		res = ioctlsocket(net->tcp_connections[con_id].socket, FIONBIO, &nonblock);
+#else
 		res = fcntl(net->tcp_connections[con_id].socket, F_GETFL);
 		fcntl(net->tcp_connections[con_id].socket, F_SETFL,
 		    res | O_NONBLOCK);
+#endif
 
 		remote_ip.sin_family = AF_INET;
 		memcpy((unsigned char *)&remote_ip.sin_addr,
@@ -580,7 +594,7 @@ static void net_ip_tcp(struct net *net, void *extra,
 
 		net->tcp_connections[con_id].outside_acknr = 0;
 		net->tcp_connections[con_id].outside_seqnr =
-		    ((random() & 0xffff) << 16) + (random() & 0xffff);
+		    ((rand() & 0xffff) << 16) + (rand() & 0xffff);
 	}
 
 	if (rst) {
@@ -836,9 +850,14 @@ static void net_ip_udp(struct net *net, void *extra,
 		net->udp_connections[con_id].in_use = 1;
 
 		/*  Set the socket to non-blocking:  */
+#ifdef _WIN32
+		u_long nonblock = 1;
+		res = ioctlsocket(net->udp_connections[con_id].socket, FIONBIO, &nonblock);
+#else
 		res = fcntl(net->udp_connections[con_id].socket, F_GETFL);
 		fcntl(net->udp_connections[con_id].socket, F_SETFL,
 		    res | O_NONBLOCK);
+#endif
 	}
 
 	debug(", connection id %i\n", con_id);
@@ -866,7 +885,7 @@ static void net_ip_udp(struct net *net, void *extra,
 	remote_ip.sin_port = htons(
 	    net->udp_connections[con_id].outside_udp_port);
 
-	res = sendto(net->udp_connections[con_id].socket, packet + 42,
+	res = sendto(net->udp_connections[con_id].socket, (char*)packet + 42,
 	    len - 42, 0, (const struct sockaddr *)&remote_ip,
 	    sizeof(remote_ip));
 
@@ -1253,7 +1272,7 @@ void net_udp_rx_avail(struct net *net, void *extra)
 			continue;
 		}
 
-		res = recvfrom(net->udp_connections[con_id].socket, buf,
+		res = recvfrom(net->udp_connections[con_id].socket, (char*)buf,
 		    sizeof(buf), 0, (struct sockaddr *)&from, &from_len);
 
 		/*  No more incoming UDP on this connection?  */

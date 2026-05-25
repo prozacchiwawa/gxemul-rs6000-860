@@ -909,7 +909,7 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
     }
     return;
   } else if (!strcmp(cmd_line, "record")) {
-    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR | O_BINARY, 0644);
+    ppc_recording_fd = open("recording.bin", O_CREAT | O_TRUNC | O_RDWR, 0644);
     if (ppc_recording_fd == -1) {
       fprintf(stderr, "failed to open recording file\n");
       return;

@@ -630,8 +630,8 @@ struct rl_stats {
 	    sizeof(struct rl_desc),		\
 	    (ops))
 
-#define RL_ADDR_LO(y)	((u_int64_t) (y) & 0xFFFFFFFF)
-#define RL_ADDR_HI(y)	((u_int64_t) (y) >> 32)
+#define RL_ADDR_LO(y)	((uint64_t) (y) & 0xFFFFFFFF)
+#define RL_ADDR_HI(y)	((uint64_t) (y) >> 32)
 
 /* see comment in dev/ic/re.c */
 #define RL_JUMBO_FRAMELEN	7440

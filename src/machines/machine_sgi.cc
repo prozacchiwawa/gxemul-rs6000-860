@@ -104,12 +104,12 @@ MACHINE_SETUP(sgi)
 	switch (machine->machine_subtype) {
 
 	case 10:
-		strncat(machineName, " (4D/25)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (4D/25)", MACHINE_NAME_MAXBUF);
 		/*  TODO  */
 		break;
 
 	case 12:
-		strncat(machineName, " (Iris Indigo IP12)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (Iris Indigo IP12)", MACHINE_NAME_MAXBUF);
 
 		/*  TODO  */
 		/*  33 MHz R3000, according to http://www.irisindigo.com/  */
@@ -118,7 +118,7 @@ MACHINE_SETUP(sgi)
 		break;
 
 	case 19:
-		strncat(machineName,
+		strlcat(machineName,
 		    " (Everest IP19)", MACHINE_NAME_MAXBUF);
 		machine->main_console_handle = (size_t)device_add(machine,
 		    "z8530 addr=0x1fbd9830 irq=0 addr_mult=4");
@@ -142,7 +142,7 @@ MACHINE_SETUP(sgi)
 		break;
 
 	case 20:
-		strncat(machineName, " (Indigo)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (Indigo)", MACHINE_NAME_MAXBUF);
 
 		/*
 		 *  Guesses based on NetBSD 2.0 beta, 20040606.
@@ -199,7 +199,7 @@ abort();
 		break;
 
 	case 21:
-		strncat(machineName,	/*  TODO  */
+		strlcat(machineName,	/*  TODO  */
 		    " (uknown SGI-IP21 ?)", MACHINE_NAME_MAXBUF);
 		/*  NOTE:  Special case for arc_wordlen:  */
 		arc_wordlen = sizeof(uint64_t);
@@ -211,7 +211,7 @@ abort();
 	case 22:
 	case 24:
 		if (machine->machine_subtype == 22) {
-			strncat(machineName,
+			strlcat(machineName,
 			    " (Indy, Indigo2, Challenge S; Full-house)",
 			    MACHINE_NAME_MAXBUF);
 fatal("TODO: SGI legacy interrupt system rewrite!\n");
@@ -219,7 +219,7 @@ abort();
 //			machine->md_int.sgi_ip22_data =
 //			    dev_sgi_ip22_init(machine, mem, 0x1fbd9000, 0);
 		} else {
-			strncat(machineName,
+			strlcat(machineName,
 			    " (Indy, Indigo2, Challenge S; Guiness)",
 			    MACHINE_NAME_MAXBUF);
 fatal("TODO: SGI legacy interrupt system rewrite!\n");
@@ -305,7 +305,7 @@ j = 0;
 	case 25:
 		/*  NOTE:  Special case for arc_wordlen:  */
 		arc_wordlen = sizeof(uint64_t);
-		strncat(machineName, " (Everest IP25)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (Everest IP25)", MACHINE_NAME_MAXBUF);
 
 		 /*  serial? irix?  */
 		dev_scc_init(machine, mem,
@@ -327,14 +327,14 @@ j = 0;
 	case 26:
 		/*  NOTE:  Special case for arc_wordlen:  */
 		arc_wordlen = sizeof(uint64_t);
-		strncat(machineName, " (uknown SGI-IP26 ?)",
+		strlcat(machineName, " (uknown SGI-IP26 ?)",
 		    MACHINE_NAME_MAXBUF);	/*  TODO  */
 		machine->main_console_handle = (size_t)device_add(machine,
 		    "z8530 addr=0x1fbd9830 irq=0 addr_mult=4");
 		break;
 
 	case 27:
-		strncat(machineName, " (Origin 200/2000, Onyx2)",
+		strlcat(machineName, " (Origin 200/2000, Onyx2)",
 		    MACHINE_NAME_MAXBUF);
 		arc_wordlen = sizeof(uint64_t);
 		/*  2 cpus per node  */
@@ -346,7 +346,7 @@ j = 0;
 	case 28:
 		/*  NOTE:  Special case for arc_wordlen:  */
 		arc_wordlen = sizeof(uint64_t);
-		strncat(machineName, " (Impact Indigo2 ?)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (Impact Indigo2 ?)", MACHINE_NAME_MAXBUF);
 
 		device_add(machine, "random addr=0x1fbe0000, len=1");
 
@@ -357,7 +357,7 @@ j = 0;
 	case 30:
 		/*  NOTE:  Special case for arc_wordlen:  */
 		arc_wordlen = sizeof(uint64_t);
-		strncat(machineName, " (Octane)",
+		strlcat(machineName, " (Octane)",
 		    MACHINE_NAME_MAXBUF);
 
 fatal("TODO: SGI legacy interrupt system rewrite!\n");
@@ -407,7 +407,7 @@ abort();
 		break;
 
 	case 32:
-		strncat(machineName, " (O2)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (O2)", MACHINE_NAME_MAXBUF);
 
 		/*  TODO: Find out where the phys ram is actually located.  */
 		dev_ram_init(machine, 0x07ffff00ULL,           256,
@@ -569,7 +569,7 @@ abort();
 		break;
 
 	case 35:
-		strncat(machineName, " (Origin 3000)", MACHINE_NAME_MAXBUF);
+		strlcat(machineName, " (Origin 3000)", MACHINE_NAME_MAXBUF);
 		/*  4 cpus per node  */
 
 		machine->main_console_handle = (size_t)device_add(machine,
@@ -577,7 +577,7 @@ abort();
 		break;
 
 	case 53:
-		strncat(machineName, " (Origin 350)",
+		strlcat(machineName, " (Origin 350)",
 		    MACHINE_NAME_MAXBUF);
 
 		/*

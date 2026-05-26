@@ -2202,10 +2202,10 @@ static void arc_environment_setup(struct machine *machine, int is64bit,
 		/*  TODO: Make this nicer.  */
 		if (machine->machine_type == MACHINE_SGI) {
 			if (machine->machine_subtype == 30)
-				strncat(init_bootpath, "xio(0)pci(15)",
+				strlcat(init_bootpath, "xio(0)pci(15)",
 				    bootpath_len);
 			if (machine->machine_subtype == 32)
-				strncat(init_bootpath, "pci(0)",
+				strlcat(init_bootpath, "pci(0)",
 				    bootpath_len);
 		}
 
@@ -2222,12 +2222,12 @@ static void arc_environment_setup(struct machine *machine, int is64bit,
 	}
 
 	if (machine->machine_type == MACHINE_ARC)
-		strncat(init_bootpath, "\\", bootpath_len);
+		strlcat(init_bootpath, "\\", bootpath_len);
 
 	CHECK_ALLOCATION(machine->bootstr = (char *) malloc(ARC_BOOTSTR_BUFLEN));
 
-	strncpy(machine->bootstr, init_bootpath, ARC_BOOTSTR_BUFLEN);
-	strncat(machine->bootstr, machine->boot_kernel_filename, ARC_BOOTSTR_BUFLEN);
+	strlcpy(machine->bootstr, init_bootpath, ARC_BOOTSTR_BUFLEN);
+	strlcat(machine->bootstr, machine->boot_kernel_filename, ARC_BOOTSTR_BUFLEN);
 
 	/*  Boot args., eg "-a"  */
 	machine->bootarg = machine->boot_string_argument;
@@ -2630,8 +2630,8 @@ void arcbios_init(struct machine *machine, int is64bit, uint64_t sgi_ram_offset,
 			if (arc_cpu_name[jj] >= 'a' && arc_cpu_name[jj] <= 'z')
 				arc_cpu_name[jj] += ('A' - 'a');
 
-		strncpy(arc_fpc_name, arc_cpu_name, sizeof(arc_fpc_name));
-		strncat(arc_fpc_name, "FPC", sizeof(arc_fpc_name));
+		strlcpy(arc_fpc_name, arc_cpu_name, sizeof(arc_fpc_name));
+		strlcat(arc_fpc_name, "FPC", sizeof(arc_fpc_name));
 
 		cpuaddr = arcbios_addchild_manual(cpu,
 		    COMPONENT_CLASS_ProcessorClass, COMPONENT_TYPE_CPU,

@@ -62,7 +62,7 @@ static void gather_statistics(struct cpu *cpu)
 
 // 	while ((ch = cpu->machine->statistics.fields[i]) != '\0') {
 // 		if (i != 0)
-// 			strncat(buf, " ", sizeof(buf));
+// 			strlcat(buf, " ", sizeof(buf));
 
 // 		switch (ch) {
 // 		case 'i':

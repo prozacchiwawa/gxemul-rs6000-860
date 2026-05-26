@@ -324,7 +324,7 @@ static void debugger_cmd_dump(struct machine *m, char *cmd_line)
 
 	last_dump_addr = addr_end;
 
-	strncpy(repeat_cmd, "dump", MAX_CMD_BUFLEN);
+	strlcpy(repeat_cmd, "dump", MAX_CMD_BUFLEN);
 }
 
 
@@ -639,7 +639,7 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 	uint64_t addr, data;
 	unsigned char a_byte;
 
-	strncpy(copy, cmd_line, sizeof(copy));
+	strlcpy(copy, cmd_line, sizeof(copy));
 	copy[sizeof(copy)-1] = '\0';
 
 	/*  syntax: put [b|h|w|d|q] addr, data  */
@@ -1037,7 +1037,7 @@ static void debugger_cmd_step(struct machine *m, char *cmd_line)
 
   debugger_step(m, n);
 
-	strncpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
+	strlcpy(repeat_cmd, "step", MAX_CMD_BUFLEN);
 }
 
 
@@ -1240,7 +1240,7 @@ static void debugger_cmd_unassemble(struct machine *m, char *cmd_line)
 
 	last_unasm_addr = addr;
 
-	strncpy(repeat_cmd, "unassemble", MAX_CMD_BUFLEN);
+	strlcpy(repeat_cmd, "unassemble", MAX_CMD_BUFLEN);
 }
 
 

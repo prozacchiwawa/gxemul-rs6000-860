@@ -786,14 +786,14 @@ abort();
 		char bootpath[200];
 #if 0
 		if (machine->machine_subtype == MACHINE_DEC_PMAX_3100)
-			strncpy(bootpath, "rz(0,0,0)", sizeof(bootpath));
+			strlcpy(bootpath, "rz(0,0,0)", sizeof(bootpath));
 		else
 #endif
-			strncpy(bootpath, "5/rz1/", sizeof(bootpath));
+			strlcpy(bootpath, "5/rz1/", sizeof(bootpath));
 
 		if (machine->bootdev_id < 0 || machine->force_netboot) {
 			/*  tftp boot:  */
-			strncpy(bootpath, "5/tftp/", sizeof(bootpath));
+			strlcpy(bootpath, "5/tftp/", sizeof(bootpath));
 			bootpath[0] = '0' + boot_net_boardnumber;
 		} else {
 			/*  disk boot:  */
@@ -808,8 +808,8 @@ abort();
 	}
 
 	CHECK_ALLOCATION(machine->bootarg = (char *) malloc(BOOTARG_BUFLEN));
-	strncpy(machine->bootarg, init_bootpath, BOOTARG_BUFLEN);
-	strncat(machine->bootarg, machine->boot_kernel_filename,
+	strlcpy(machine->bootarg, init_bootpath, BOOTARG_BUFLEN);
+	strlcat(machine->bootarg, machine->boot_kernel_filename,
 	    BOOTARG_BUFLEN);
 
 	machine->bootstr = strdup("boot");
@@ -825,8 +825,8 @@ abort();
 		cpu->cd.mips.gpr[MIPS_GPR_A0] --;
 
 	if (machine->boot_string_argument[0] != '\0') {
-		strncat(machine->bootarg, " ", BOOTARG_BUFLEN);
-		strncat(machine->bootarg, machine->boot_string_argument,
+		strlcat(machine->bootarg, " ", BOOTARG_BUFLEN);
+		strlcat(machine->bootarg, machine->boot_string_argument,
 		    BOOTARG_BUFLEN);
 	}
 
@@ -836,7 +836,7 @@ abort();
 
 	xx.b.common.next = (char *)&xx.c - (char *)&xx.b;
 	xx.b.common.type = BTINFO_BOOTPATH;
-	strncpy(xx.b.bootpath, machine->bootstr, sizeof(xx.b.bootpath));
+	strlcpy(xx.b.bootpath, machine->bootstr, sizeof(xx.b.bootpath));
 
 	xx.c.common.next = 0;
 	xx.c.common.type = BTINFO_SYMTAB;

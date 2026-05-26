@@ -359,7 +359,7 @@ int decstation_prom_emul(struct cpu *cpu)
 
 				switch (ch) {
 				case '%':
-					strncpy(printfbuf, "%%",
+					strlcpy(printfbuf, "%%",
 					    sizeof(printfbuf));
 					break;
 				case 'c':
@@ -372,7 +372,7 @@ int decstation_prom_emul(struct cpu *cpu)
 						/*  Linux booters seem to go
 						    over the edge sometimes: */
 						ch = '\0';
-						strncpy(printfbuf, "[...]\n",
+						strlcpy(printfbuf, "[...]\n",
 						    sizeof(printfbuf));
 #else
 						printf("[ decstation_prom_emul"

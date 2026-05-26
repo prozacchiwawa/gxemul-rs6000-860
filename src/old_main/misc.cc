@@ -131,7 +131,7 @@ int mymkstemp(char *templ)
 /*
  *  mystrlcpy():
  *
- *  Quick hack strncpy() replacement for systems that lack that function.
+ *  Quick hack strlcpy() replacement for systems that lack that function.
  *  NOTE: No length checking is done.
  */
 size_t mystrlcpy(char *dst, const char *src, size_t size)
@@ -144,7 +144,7 @@ size_t mystrlcpy(char *dst, const char *src, size_t size)
 /*
  *  mystrlcat():
  *
- *  Quick hack strncat() replacement for systems that lack that function.
+ *  Quick hack strlcat() replacement for systems that lack that function.
  *  NOTE: No length checking is done.
  */
 size_t mystrlcat(char *dst, const char *src, size_t size)

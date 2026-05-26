@@ -190,7 +190,7 @@ void add_symbol_name(struct symbol_context *sc,
 			n_args = 2;
 		if (strcmp(name, "strcpy") == 0)
 			n_args = 2;
-		if (strcmp(name, "strncpy") == 0)
+		if (strcmp(name, "strlcpy") == 0)
 			n_args = 3;
 		if (strcmp(name, "strlcpy") == 0)
 			n_args = 3;
@@ -262,8 +262,8 @@ void symbol_readfile(struct symbol_context *sc, char *fname)
 		if (fscanf(f, "%s %s\n", b1,b2) != 2)
 			fprintf(stderr, "warning: symbol file parse error\n");
 		if (strlen(b2) < 2 && !(b2[0]>='0' && b2[0]<='9')) {
-			strncpy(b3, b2, sizeof(b3));
-			strncpy(b2, "0", sizeof(b2));
+			strlcpy(b3, b2, sizeof(b3));
+			strlcpy(b2, "0", sizeof(b2));
 			if (fscanf(f, "%s\n", b4) != 1)
 				fprintf(stderr, "warning: symbol file parse error\n");
 		} else {

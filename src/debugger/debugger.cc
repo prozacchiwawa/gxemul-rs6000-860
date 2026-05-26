@@ -149,7 +149,7 @@ void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int name
   int i = m->breakpoints.n;
 
   CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)malloc(namelen+1));
-  strncpy(m->breakpoints.string[i], name, namelen);
+  strlcpy(m->breakpoints.string[i], name, namelen);
   m->breakpoints.addr[i] = addr;
 
   m->breakpoints.n ++;
@@ -328,7 +328,7 @@ void debugger_assignment(struct machine *m, char *cmd)
 	uint64_t old_pc = m->cpus[0]->pc;	/*  TODO: multiple cpus?  */
 
 	CHECK_ALLOCATION(left = (char *) malloc(MAX_CMD_BUFLEN));
-	strncpy(left, cmd, MAX_CMD_BUFLEN);
+	strlcpy(left, cmd, MAX_CMD_BUFLEN);
 	right = strchr(left, '=');
 	if (right == NULL) {
 		fprintf(stderr, "internal error in the debugger\n");
@@ -586,7 +586,7 @@ static char *debugger_readline(void)
 						printf(" ");
 					for (i=cmd_len-1; i>=0; i--)
 						printf("\b \b");
-					strncpy(cmd,
+					strlcpy(cmd,
 					    last_cmd[read_from_index],
 					    MAX_CMD_BUFLEN);
 					cmd_len = strlen(cmd);
@@ -815,7 +815,7 @@ void debugger(void)
 		if (cmd_len == 0) {
 			/*  Special case for repeated commands:  */
 			if (repeat_cmd[0] != '\0')
-				strncpy(cmd, repeat_cmd, MAX_CMD_BUFLEN);
+				strlcpy(cmd, repeat_cmd, MAX_CMD_BUFLEN);
 			else
 				continue;
 		} else {

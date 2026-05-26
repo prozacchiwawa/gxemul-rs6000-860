@@ -39,11 +39,7 @@
 #else
 #include <sys/socket.h>
 #endif
-#ifndef _WIN32
 #include <sys/time.h>
-#else
-#include "time_win32.h"
-#endif
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>

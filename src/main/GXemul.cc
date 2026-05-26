@@ -166,11 +166,7 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h>
-#ifndef _WIN32
 #include <sys/time.h>
-#else
-#include "time_win32.h"
-#endif
 #include <cmath>
 #include <fstream>
 #include <iostream>

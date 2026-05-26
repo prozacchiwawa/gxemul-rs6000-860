@@ -1,11 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#ifndef _WIN32
 #include <sys/time.h>
-#else
-#include "time_win32.h"
-#endif
 
 
 /*  #define	N_CALLS_PER_PAGE	1024  */

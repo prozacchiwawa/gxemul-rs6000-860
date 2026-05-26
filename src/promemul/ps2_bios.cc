@@ -32,11 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#ifndef _WIN32
 #include <sys/time.h>
-#else
-#include "time_win32.h"
-#endif
 
 #include "console.h"
 #include "cpu.h"

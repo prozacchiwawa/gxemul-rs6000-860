@@ -159,7 +159,7 @@ static int translate_via_mmu(struct cpu *cpu, uint32_t vaddr,
 		 *  UTLB, then copy it to a random place in the ITLB.
 		 */
 		if (i >= 0 && !(flags & FLAG_NOEXCEPTIONS)) {
-			int r = rand() % SH_N_ITLB_ENTRIES;
+			int r = random() % SH_N_ITLB_ENTRIES;
 
 			/*  NOTE: Make sure that the old mapping for
 			    that itlb entry is invalidated:  */

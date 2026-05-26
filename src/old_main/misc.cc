@@ -118,7 +118,7 @@ int mymkstemp(char *templ)
 
 	while (*p) {
 		if (*p == 'X')
-			*p = 48 + rand() % 10;
+			*p = 48 + random() % 10;
 		p++;
 	}
 

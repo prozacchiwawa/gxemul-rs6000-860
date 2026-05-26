@@ -109,6 +109,9 @@ strlcat(char *dst, const char *src, size_t dsize)
 	return(dlen + (src - osrc));	/* count does not include NUL */
 }
 
+#define random rand
+#define srandom srand
+
 #endif
 
 #include <string>

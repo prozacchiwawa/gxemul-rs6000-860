@@ -591,7 +591,7 @@ static void net_ip_tcp(struct net *net, void *extra,
 
 		net->tcp_connections[con_id].outside_acknr = 0;
 		net->tcp_connections[con_id].outside_seqnr =
-		    ((rand() & 0xffff) << 16) + (rand() & 0xffff);
+		    ((random() & 0xffff) << 16) + (random() & 0xffff);
 	}
 
 	if (rst) {

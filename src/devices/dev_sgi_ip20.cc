@@ -62,12 +62,12 @@ DEVICE_ACCESS(sgi_ip20)
 			 *
 			 *  I haven't had time to figure out what values should
 			 *  be returned by this device.  Simple bit patterns
-			 *  don't seem to be enough, but using rand() is
+			 *  don't seem to be enough, but using random() is
 			 *  obviously pretty bad.  This must be fixed some day.
 			 */
 
 			/*  instruction_trace = 1;  quiet_mode = 0;  */
-			odata = rand() & 0xff;
+			odata = random() & 0xff;
 
 			debug("[ sgi_ip20: read from address 0x%x: 0x%x ]\n",
 			    (int)relative_addr, (int)odata);

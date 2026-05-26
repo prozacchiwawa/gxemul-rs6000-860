@@ -1604,7 +1604,7 @@ void coproc_tlbwri(struct cpu *cpu, int randomflag)
 				index = cp->nr_of_tlbs - 1;
 			cp->reg[COP0_RANDOM] = index << R2K3K_RANDOM_SHIFT;
 		} else {
-			cp->reg[COP0_RANDOM] = cp->reg[COP0_WIRED] + (rand()
+			cp->reg[COP0_RANDOM] = cp->reg[COP0_WIRED] + (random()
 			    % (cp->nr_of_tlbs - cp->reg[COP0_WIRED]));
 			index = cp->reg[COP0_RANDOM] & RANDOM_MASK;
 		}

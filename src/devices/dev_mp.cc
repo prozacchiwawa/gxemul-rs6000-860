@@ -150,12 +150,12 @@ DEVICE_ACCESS(mp)
 		/*
 		 *  Return (up to) 64 bits of "hardware random":
 		 *
-		 *  NOTE: Remember that rand() is (usually) 31 bits of
+		 *  NOTE: Remember that random() is (usually) 31 bits of
 		 *        random data, _NOT_ 32, hence this construction.
 		 */
-		odata = rand();
-		odata = (odata << 31) ^ rand();
-		odata = (odata << 31) ^ rand();
+		odata = random();
+		odata = (odata << 31) ^ random();
+		odata = (odata << 31) ^ random();
 		break;
 
 	case DEV_MP_MEMORY:

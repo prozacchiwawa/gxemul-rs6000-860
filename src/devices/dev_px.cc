@@ -683,7 +683,7 @@ DEVICE_ACCESS(px)
 			odata = d->intr;
 
 /*  TODO:  how do interrupts work on the pixelstamp boards?  */
-odata = rand();
+odata = random();
 
 			debug("[ px: read from ipdvint: 0x%08llx ]\n",
 			    (long long)odata);

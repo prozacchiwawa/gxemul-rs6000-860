@@ -176,7 +176,7 @@ tweaked = 0;
 {
 int i;
 for (i=0; i<pixels_per_line * d->bitdepth / 8; i++)
-	buf[i] ^= (rand() & 0x20);
+	buf[i] ^= (random() & 0x20);
 }
 #endif
 				dev_fb_access(cpu, cpu->mem, ((ybase + y) *
@@ -264,10 +264,10 @@ DEVICE_ACCESS(sgi_gbe)
 			d->freeze = idata & ((uint32_t)1<<31)? 1 : 0;
 		else {
 			/*  bit 31 = freeze, 23..12 = cury, 11.0 = curx  */
-			odata = ((rand() % (d->yres + 10)) << 12)
-			    + (rand() % (d->xres + 10)) +
+			odata = ((random() % (d->yres + 10)) << 12)
+			    + (random() % (d->xres + 10)) +
 			    (d->freeze? ((uint32_t)1 << 31) : 0);
-odata = rand();	/*  testhack for the ip32 prom  */
+odata = random();	/*  testhack for the ip32 prom  */
 		}
 		break;
 
@@ -287,9 +287,9 @@ odata = rand();	/*  testhack for the ip32 prom  */
 		break;
 
 	case 0x20004:
-		odata = rand();	/*  IP32 prom test hack. TODO  */
+		odata = random();	/*  IP32 prom test hack. TODO  */
 		/*  IRIX wants 0x20, it seems.  */
-		if (rand() & 1)
+		if (random() & 1)
 			odata = 0x20;
 		break;
 
@@ -309,9 +309,9 @@ odata = rand();	/*  testhack for the ip32 prom  */
 		break;
 
 	case 0x30008:	/*  normal plane ctrl 2  */
-		odata = rand();	/*  IP32 prom test hack. TODO  */
+		odata = random();	/*  IP32 prom test hack. TODO  */
 		/*  IRIX wants 0x20, it seems.  */
-		if (rand() & 1)
+		if (random() & 1)
 			odata = 0x20;
 		break;
 
@@ -333,9 +333,9 @@ odata = rand();	/*  testhack for the ip32 prom  */
 		break;
 
 	case 0x40000:
-		odata = rand();	/*  IP32 prom test hack. TODO  */
+		odata = random();	/*  IP32 prom test hack. TODO  */
 		/*  IRIX wants 0x20, it seems.  */
-		if (rand() & 1)
+		if (random() & 1)
 			odata = 0x20;
 		break;
 

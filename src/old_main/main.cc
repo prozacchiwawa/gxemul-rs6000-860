@@ -824,7 +824,7 @@ int main(int argc, char *argv[])
 	if (!skip_srandom_call) {
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		srand(tv.tv_sec ^ getpid() ^ tv.tv_usec);
+		srandom(tv.tv_sec ^ getpid() ^ tv.tv_usec);
 	}
 
 	/*  Print startup message:  */

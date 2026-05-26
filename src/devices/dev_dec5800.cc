@@ -141,7 +141,7 @@ DEVICE_ACCESS(dec5800)
 	case 0x0000:	/*  csr  */
 		if (writeflag == MEM_READ) {
 			odata = d->csr;
-			odata ^= rand() & 0x10000;
+			odata ^= random() & 0x10000;
 			debug("[ dec5800: read from csr: 0x%08x ]\n",
 			    (int)odata);
 		} else {

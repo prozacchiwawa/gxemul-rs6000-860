@@ -891,6 +891,8 @@ void console_slave(const char *arg)
 	const char *p = 0;
 	char buf[16384] = { 0 };
 
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_VIRTUAL_TERMINAL_INPUT);
+	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT);
 	/*  arg = '3,6' or similar, input and output descriptors  */
 	/*  printf("console_slave(): arg = '%s'\n", arg);  */
 

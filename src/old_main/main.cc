@@ -104,7 +104,7 @@ static void va_debug(va_list argp, const char *fmt)
 				printf(" ");
 		}
 
-		printf("%c", *s);
+		fprintf(stderr, "%c", *s);
 
 		debug_currently_at_start_of_line = 0;
 		if (*s == '\n' || *s == '\r')

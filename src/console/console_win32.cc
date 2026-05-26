@@ -1119,7 +1119,7 @@ void console_init_main(struct emul *emul)
 	GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &console_oldmode_in);
 	GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &console_oldmode_out);
 
-	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_VIRTUAL_TERMINAL_INPUT);
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), (console_oldmode_in & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT)) | ENABLE_VIRTUAL_TERMINAL_INPUT);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
 	console_stdout_pending = 1;

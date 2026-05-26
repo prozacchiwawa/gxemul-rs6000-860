@@ -45,6 +45,7 @@
 #ifdef _WIN32
 #define HAVE_INET_PTON 1
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>

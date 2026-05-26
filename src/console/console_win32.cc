@@ -528,6 +528,16 @@ static void start_xterm(int handle)
 
 	console_handles[handle].w_descriptor = pipehandles[1];
 	console_handles[handle].r_descriptor = pipehandlesB[0];
+	{
+		char buf[1];
+		DWORD bytesread = 0;
+		ReadFile(pipehandlesB[0], &buf[0], 1, &bytesread, NULL);
+		if (bytesread) {
+			int i = 0;
+			int make_available(int handle, const unsigned char *ch, int len, int *i);
+			make_available(handle, (unsigned char*)&buf[0], 1, &i);
+		}
+	}
 }
 
 /*
@@ -537,6 +547,7 @@ static void start_xterm(int handle)
  */
 static int d_avail(HANDLE d)
 {
+	if (!d) return 0;
 	auto ftype = GetFileType(d);
 	if (ftype == FILE_TYPE_CHAR) {
 		auto res = WaitForSingleObject(d, 0);

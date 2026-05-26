@@ -87,6 +87,7 @@
 #include <ctype.h>
 #ifdef _WIN32
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <sys/socket.h>
 #include <sys/poll.h>
@@ -189,7 +190,7 @@ int rdy(struct cpu *cpu, int wait)
     // Try to accept if needed.
     if (pfd_read[0].revents & POLLIN) {
         struct sockaddr_in sa = { };
-        int len = sizeof(sa);
+        socklen_t len = sizeof(sa);
         gdbstub_socket = accept(gdbstub_listen, (struct sockaddr *)&sa, &len);
     }
 

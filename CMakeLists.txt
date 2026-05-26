@@ -17,6 +17,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/include/ ${CMAKE_CURRENT_BIN
 find_package(PNG REQUIRED)
 
 add_executable(gxemul src/main/GXemul.cc)
+add_compile_definitions(_FILE_OFFSET_BITS=64 _LARGEFILE_SOURCE=1 _LARGEFILE64_SOURCE=1)
 if (WIN32)
     target_link_libraries(gxemul PRIVATE ws2_32)
 endif()

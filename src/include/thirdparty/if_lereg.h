@@ -56,9 +56,9 @@
  * LANCE registers.
  */
 struct lereg1 {
-	u_short	ler1_rdp;	/* data port */
+	uint16_t	ler1_rdp;	/* data port */
 	short	pad0;
-	u_short	ler1_rap;	/* register select port */
+	uint16_t	ler1_rap;	/* register select port */
 	short	pad1;
 };
 
@@ -71,55 +71,55 @@ struct lereg1 {
  * option densely packed.
  */
 struct	lermd {			/* +0x0020 */
-	u_short	rmd0;
-	u_short	rmd1;
+	uint16_t	rmd0;
+	uint16_t	rmd1;
 	short	rmd2;
-	u_short	rmd3;
+	uint16_t	rmd3;
 };
 
 struct	letmd {			/* +0x0058 */
-	u_short	tmd0;
-	u_short	tmd1;
+	uint16_t	tmd0;
+	uint16_t	tmd1;
 	short	tmd2;
-	u_short	tmd3;
+	uint16_t	tmd3;
 };
 
 struct	lermdpad {			/* +0x0020 */
-	u_short	rmd0;
+	uint16_t	rmd0;
 	short	pad0;
-	u_short	rmd1;
+	uint16_t	rmd1;
 	short	pad1;
 	short	rmd2;
 	short	pad2;
-	u_short	rmd3;
+	uint16_t	rmd3;
 	short	pad3;
 };
 
 struct	letmdpad {			/* +0x0058 */
-	u_short	tmd0;
+	uint16_t	tmd0;
 	short	pad0;
-	u_short	tmd1;
+	uint16_t	tmd1;
 	short	pad1;
 	short	tmd2;
 	short	pad2;
-	u_short	tmd3;
+	uint16_t	tmd3;
 	short	pad3;
 };
 
 struct lereg2 {
 	/* init block */		/* CHIP address */
-	u_short	ler2_mode;		/* +0x0000 */
-	u_short	ler2_padr0;		/* +0x0002 */
-	u_short	ler2_padr1;		/* +0x0004 */
-	u_short	ler2_padr2;		/* +0x0006 */
-	u_short	ler2_ladrf0;		/* +0x0008 */
-	u_short	ler2_ladrf1;		/* +0x000A */
-	u_short	ler2_ladrf2;		/* +0x000C */
-	u_short	ler2_ladrf3;		/* +0x000E */
-	u_short	ler2_rdra;		/* +0x0010 */
-	u_short	ler2_rlen;		/* +0x0012 */
-	u_short	ler2_tdra;		/* +0x0014 */
-	u_short	ler2_tlen;		/* +0x0016 */
+	uint16_t	ler2_mode;		/* +0x0000 */
+	uint16_t	ler2_padr0;		/* +0x0002 */
+	uint16_t	ler2_padr1;		/* +0x0004 */
+	uint16_t	ler2_padr2;		/* +0x0006 */
+	uint16_t	ler2_ladrf0;		/* +0x0008 */
+	uint16_t	ler2_ladrf1;		/* +0x000A */
+	uint16_t	ler2_ladrf2;		/* +0x000C */
+	uint16_t	ler2_ladrf3;		/* +0x000E */
+	uint16_t	ler2_rdra;		/* +0x0010 */
+	uint16_t	ler2_rlen;		/* +0x0012 */
+	uint16_t	ler2_tdra;		/* +0x0014 */
+	uint16_t	ler2_tlen;		/* +0x0016 */
 	short	pad0[4];		/* Pad to 16 shorts */
 	/* receive message descriptors */
 	struct lermd ler2_rmd[LERBUF];
@@ -131,29 +131,29 @@ struct lereg2 {
 
 struct lereg2pad {
 	/* init block */		/* CHIP address */
-	u_short	ler2_mode;		/* +0x0000 */
+	uint16_t	ler2_mode;		/* +0x0000 */
 	short	pad0;
-	u_short	ler2_padr0;		/* +0x0002 */
+	uint16_t	ler2_padr0;		/* +0x0002 */
 	short	pad1;
-	u_short	ler2_padr1;		/* +0x0004 */
+	uint16_t	ler2_padr1;		/* +0x0004 */
 	short	pad2;
-	u_short	ler2_padr2;		/* +0x0006 */
+	uint16_t	ler2_padr2;		/* +0x0006 */
 	short	pad3;
-	u_short	ler2_ladrf0;		/* +0x0008 */
+	uint16_t	ler2_ladrf0;		/* +0x0008 */
 	short	pad4;
-	u_short	ler2_ladrf1;		/* +0x000A */
+	uint16_t	ler2_ladrf1;		/* +0x000A */
 	short	pad5;
-	u_short	ler2_ladrf2;		/* +0x000C */
+	uint16_t	ler2_ladrf2;		/* +0x000C */
 	short	pad6;
-	u_short	ler2_ladrf3;		/* +0x000E */
+	uint16_t	ler2_ladrf3;		/* +0x000E */
 	short	pad7;
-	u_short	ler2_rdra;		/* +0x0010 */
+	uint16_t	ler2_rdra;		/* +0x0010 */
 	short	pad8;
-	u_short	ler2_rlen;		/* +0x0012 */
+	uint16_t	ler2_rlen;		/* +0x0012 */
 	short	pad9;
-	u_short	ler2_tdra;		/* +0x0014 */
+	uint16_t	ler2_tdra;		/* +0x0014 */
 	short	pad10;
-	u_short	ler2_tlen;		/* +0x0016 */
+	uint16_t	ler2_tlen;		/* +0x0016 */
 	short	pad11[9];		/* Pad to 32 shorts */
 	/* receive message descriptors */
 	struct lermdpad ler2_rmd[LERBUF];

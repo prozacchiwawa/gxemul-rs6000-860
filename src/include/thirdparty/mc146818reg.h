@@ -154,13 +154,13 @@
  * RTC register/NVRAM read and write functions -- machine-dependent.
  * Appropriately manipulate RTC registers to get/put data values.
  */
-u_int mc146818_read __P((void *sc, u_int reg));
-void mc146818_write __P((void *sc, u_int reg, u_int datum));
+unsigned int mc146818_read __P((void *sc, unsigned int reg));
+void mc146818_write __P((void *sc, unsigned int reg, unsigned int datum));
 
 /*
  * A collection of TOD/Alarm registers.
  */
-typedef u_int mc_todregs[MC_NTODREGS];
+typedef unsigned int mc_todregs[MC_NTODREGS];
 
 /*
  * Get all of the TOD/Alarm registers

@@ -86,8 +86,8 @@
 /*
  * Vaddrs for interrupt mask and pri registers
  */
-extern u_int8_t *volatile pcc2intr_mask;
-extern u_int8_t *volatile pcc2intr_ipl;
+extern uint8_t *volatile pcc2intr_mask;
+extern uint8_t *volatile pcc2intr_ipl;
 #endif
 
 /*

@@ -332,22 +332,22 @@ struct stic_regs {
  */
 
 #if 0
-static __inline__ u_long px_sys2stic __P((void *));
-static __inline__ u_long px_sys2dma __P((void *));
-static __inline__ volatile int32_t *px_poll_addr __P((caddr_t, void *));
+static __inline__ uint64_t px_sys2stic __P((void *));
+static __inline__ uint64_t px_sys2dma __P((void *));
+static __inline__ volatile int32_t *px_poll_addr __P((uint8_t*, void *));
 
-static __inline__ u_long
+static __inline__ uint64_t
 px_sys2stic(addr)
 	void *addr;
 {
-	u_long	v;
+	uint64_t	v;
 
-	v = (u_long)addr;
+	v = (uint64_t)addr;
 	v = ((v & ~0x7fff) << 3) | (v & 0x7fff);
 	return (v & 0x1ffff800);
 }
 
-static __inline__ u_long
+static __inline__ uint64_t
 px_sys2dma(addr)
 	void *addr;
 {
@@ -361,7 +361,7 @@ px_sys2dma(addr)
  */
 static __inline__ volatile int32_t *
 px_poll_addr(slotbase, addr)
-	caddr_t slotbase;
+	uint8_t* slotbase;
 	void *addr;
 {
 

@@ -111,7 +111,7 @@ struct bootinfo_kernel {
  * Lookup table entry for Alpha system variations.
  */
 struct alpha_variation_table {
-	u_int64_t	avt_variation;	/* variation, from HWRPB */
+	uint64_t	avt_variation;	/* variation, from HWRPB */
 	const char	*avt_model;	/* model string */
 };
 
@@ -119,7 +119,7 @@ struct alpha_variation_table {
 extern struct bootdev_data *bootdev_data;
 extern struct bootinfo_kernel bootinfo;
 
-const char *alpha_variation_name(u_int64_t,
+const char *alpha_variation_name(uint64_t,
     const struct alpha_variation_table *);
 const char *alpha_unknown_sysname(void);
 #endif /* _KERNEL */

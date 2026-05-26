@@ -132,7 +132,7 @@ typedef enum arc_cm_resource_type {
 	arc_CmResourceTypeSerialNumber
 } arc_cm_resource_type_t;
 
-/* do not use u_int64_t to avoid alignment problem */
+/* do not use uint64_t to avoid alignment problem */
 typedef struct {
 	uint32_t	loword;
 	uint32_t	hiword;

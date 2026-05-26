@@ -639,7 +639,7 @@ static void debugger_cmd_put(struct machine *m, char *cmd_line)
 	uint64_t addr, data;
 	unsigned char a_byte;
 
-	strlcpy(copy, cmd_line, sizeof(copy));
+	strncpy(copy, cmd_line, sizeof(copy));
 	copy[sizeof(copy)-1] = '\0';
 
 	/*  syntax: put [b|h|w|d|q] addr, data  */

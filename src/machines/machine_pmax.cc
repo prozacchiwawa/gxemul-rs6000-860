@@ -809,8 +809,11 @@ abort();
 
 	CHECK_ALLOCATION(machine->bootarg = (char *) malloc(BOOTARG_BUFLEN));
 	strlcpy(machine->bootarg, init_bootpath, BOOTARG_BUFLEN);
-	strlcat(machine->bootarg, machine->boot_kernel_filename,
-	    BOOTARG_BUFLEN);
+	if (strlcat(machine->bootarg, machine->boot_kernel_filename,
+	    BOOTARG_BUFLEN) > BOOTARG_BUFLEN) {
+		fprintf(stderr, "bootarg truncated?\n");
+		exit(1);
+	}
 
 	machine->bootstr = strdup("boot");
 
@@ -826,8 +829,11 @@ abort();
 
 	if (machine->boot_string_argument[0] != '\0') {
 		strlcat(machine->bootarg, " ", BOOTARG_BUFLEN);
-		strlcat(machine->bootarg, machine->boot_string_argument,
-		    BOOTARG_BUFLEN);
+		if (strlcat(machine->bootarg, machine->boot_string_argument,
+		    BOOTARG_BUFLEN) >= BOOTARG_BUFLEN) {
+			fprintf(stderr, "bootstr truncated?\n");
+			exit(1);
+		}
 	}
 
 	xx.a.common.next = (char *)&xx.b - (char *)&xx;

@@ -198,9 +198,9 @@ void dev_turbochannel_init(struct machine *machine, struct memory *mem,
 
 	strlcpy(d->device_name, device_name, DEVICE_MAX_NAMELEN);
 
-	strlcpy(d->card_firmware_version, "V5.3a   ", CARD_NAME_BUFLEN);
-	strlcpy(d->card_vendor_name,      "DEC     ", CARD_NAME_BUFLEN);
-	strlcpy(d->card_firmware_type,    "TCF0", CARD_FIRMWARE_BUFLEN);
+	strncpy(d->card_firmware_version, "V5.3a   ", CARD_NAME_BUFLEN);
+	strncpy(d->card_vendor_name,      "DEC     ", CARD_NAME_BUFLEN);
+	strncpy(d->card_firmware_type,    "TCF0", CARD_FIRMWARE_BUFLEN);
 
 	memset(d->card_module_name, ' ', 8);
 	memcpy(d->card_module_name, device_name, strlen(device_name));

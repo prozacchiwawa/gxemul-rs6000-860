@@ -114,8 +114,8 @@ struct callback {
 	int	(*_strcmp) __P((char *s1, char *s2));			/* 0c */
 	char	*(*_strcpy) __P((char *s1, char *s2));			/* 10 */
 	int	(*_strlen) __P((char *s1));				/* 14 */
-	char	*(*_strlcat) __P((char *s1, char *s2, int n));		/* 18 */
-	char	*(*_strlcpy) __P((char *s1, char *s2, int n));		/* 1c */
+	char	*(*_strncat) __P((char *s1, char *s2, int n));		/* 18 */
+	char	*(*_strncpy) __P((char *s1, char *s2, int n));		/* 1c */
 	int	(*_strncmp) __P((char *s1, char *s2, int n));		/* 20 */
 	int	(*_getchar) __P((void));				/* 24 */
 	char	*(*_gets) __P((char *s));				/* 28 */
@@ -165,8 +165,8 @@ extern const struct callback callvec;
 #define strcmp (*callv -> _strcmp)
 #define strcpy (*callv -> _strcpy)
 #define strlen (*callv -> _strlen)
-#define strlcat (*callv -> _strlcat)
-#define strlcpy (*callv -> _strlcpy)
+#define strncat (*callv -> _strncat)
+#define strncpy (*callv -> _strncpy)
 #define strncmp (*callv -> _strncmp)
 #define getchar (*callv -> _getchar)
 #define gets (*callv -> _gets)

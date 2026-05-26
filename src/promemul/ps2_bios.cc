@@ -173,7 +173,7 @@ int playstation2_sifbios_emul(struct cpu *cpu)
 		 *  Linux uses this to allocate "heap" for the OHCI USB
 		 *  controller.
 		 *
-		 *  TODO:  This na�ve implementation does not allow for a
+		 *  TODO:  This naïve implementation does not allow for a
 		 *  "free iop heap" function: :-/
 		 */
 

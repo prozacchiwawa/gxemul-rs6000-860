@@ -190,7 +190,7 @@ void add_symbol_name(struct symbol_context *sc,
 			n_args = 2;
 		if (strcmp(name, "strcpy") == 0)
 			n_args = 2;
-		if (strcmp(name, "strlcpy") == 0)
+		if (strcmp(name, "strncpy") == 0)
 			n_args = 3;
 		if (strcmp(name, "strlcpy") == 0)
 			n_args = 3;

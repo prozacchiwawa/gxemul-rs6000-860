@@ -114,7 +114,7 @@ void ConsoleUI::Initialize()
 #ifdef _WIN32
 	GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &m_oldConsoleMode);
 	m_currentConsoleMode = m_oldConsoleMode;
-	m_currentConsoleMode &= ~(ENABLE_LINE_INPUT);
+	m_currentConsoleMode &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
 	m_currentConsoleMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), m_currentConsoleMode);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT);

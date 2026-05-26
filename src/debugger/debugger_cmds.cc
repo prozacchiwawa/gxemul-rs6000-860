@@ -36,6 +36,38 @@
 #endif
 #include <png.h>
 #include <map>
+#include <utility>
+
+#ifdef _WIN32
+std::map<void*, HANDLE> map_files;
+
+void* map_file(int fd)
+{
+	HANDLE filehandle = (HANDLE)_get_osfhandle(fd);
+	if (filehandle != INVALID_HANDLE_VALUE) {
+		HANDLE filemaphandle = CreateFileMappingA(filehandle, NULL, PAGE_READWRITE, 0, 0, NULL);
+		if (filemaphandle) {
+			void* ret = MapViewOfFile(filemaphandle, FILE_MAP_ALL_ACCESS, 0, 0, -1);
+			if (ret) {
+				map_files[ret] = filemaphandle;
+				return ret;
+			}
+		}
+		CloseHandle(filemaphandle);
+	}
+	return NULL;
+}
+
+void unmap_file(void* addr)
+{
+	if (map_files.count(addr)) {
+		UnmapViewOfFile(addr);
+		CloseHandle(map_files[addr]);
+		map_files.erase(addr);
+	}
+}
+
+#endif
 
 /*
  *  debugger_cmd_allsettings():
@@ -898,12 +930,15 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
   if (!strcmp(cmd_line, "+")) {
     m->register_dump = true;
     return;
-#ifndef _WIN32
   } else if (!strcmp(cmd_line, "-")) {
     m->register_dump = false;
     if (ppc_recording) {
+#ifdef _WIN32
+	  unmap_file((void*)ppc_recording);
+#else
       munmap(ppc_recording, file_length);
-      close(ppc_recording_fd);
+#endif
+	  close(ppc_recording_fd);
       ppc_recording = nullptr;
       ppc_recording_fd = -1;
     }
@@ -919,8 +954,13 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
       fprintf(stderr, "failed to set recording size\n");
       return;
     }
+#ifdef _WIN32
+	ppc_recording = (struct ppc_record_buf *)map_file(ppc_recording_fd);
+	if (ppc_recording == NULL) {
+#else
     ppc_recording = (struct ppc_record_buf *)mmap(nullptr, file_length, PROT_READ | PROT_WRITE, MAP_SHARED, ppc_recording_fd, 0);
     if (ppc_recording == MAP_FAILED) {
+#endif
       ppc_recording = nullptr;
       fprintf(stderr, "failed to map recording space\n");
       close(ppc_recording_fd);
@@ -929,7 +969,6 @@ static void debugger_cmd_reg(struct machine *m, char *cmd_line)
     }
 
     ppc_recording_offset = 0;
-#endif
   }
 
 	/*  [cpuid][,c]  */

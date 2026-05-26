@@ -69,7 +69,7 @@
 #include <time.h>
 #include <assert.h>
 
-#define NOMINMAX
+#define NOMINMAX 1
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

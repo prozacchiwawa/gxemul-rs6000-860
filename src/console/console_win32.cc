@@ -511,7 +511,7 @@ static void start_xterm(int handle)
 		fprintf(stderr, "Failed to update thread attributes\n");
 	}
 	PROCESS_INFORMATION info;
-	BOOL res = CreateProcessW(modulefile, cmdline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &startInfo.StartupInfo, &info);
+	BOOL res = CreateProcessW(modulefile, cmdline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | CREATE_NEW_CONSOLE, NULL, NULL, &startInfo.StartupInfo, &info);
 	if (!res) 
 	{
 		fprintf(stderr, "Failed to create slave terminals\n");

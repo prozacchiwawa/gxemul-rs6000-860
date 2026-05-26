@@ -671,11 +671,11 @@ DEVICE_ACCESS(eagle_880)
         break;
 
     case 8:
-        odata = 0xff;
+        odata = 0xc2;
         break;
 
     case 0xc:
-        odata = 0xff;
+        odata = 0xc2;
         break;
     }
 

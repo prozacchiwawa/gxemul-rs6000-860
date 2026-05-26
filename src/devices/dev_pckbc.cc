@@ -72,6 +72,14 @@ std::deque<keyboard_event_t> keyboard_debug_events;
 
 #define	PCKBC_TICKSHIFT		11
 
+static inline bool port_enabled(int port, int cmdbyte) {
+  if (port) {
+    return !(cmdbyte & KC8_MDISABLE) && (cmdbyte & KC8_MENABLE);
+  } else {
+    return !(cmdbyte & KC8_KDISABLE) && (cmdbyte & KC8_KENABLE);
+  }
+}
+
 struct pckbc_data {
 	int		console_handle;
 	int		in_use;
@@ -429,7 +437,7 @@ void pckbc_add_code(struct pckbc_data *d, int code, int port)
 		fatal("[ pckbc: queue overrun, port %i! ]\n", port);
 
 	d->key_queue[port][d->head[port]] = code;
-  if (!d->currently_asserted[port]) {
+  if (port_enabled(port, d->cmdbyte) && !d->currently_asserted[port]) {
     fprintf(stderr, "[ pckbc: interrupt port %d ]\n", port);
     if (port == 0) {
       INTERRUPT_ASSERT(d->irq_keyboard);
@@ -459,7 +467,7 @@ int pckbc_get_code(struct pckbc_data *d, int port)
       INTERRUPT_DEASSERT(d->irq_keyboard);
     }
     d->currently_asserted[port] = false;
-  } else {
+  } else if (port_enabled(port, d->cmdbyte)) {
     if (port) {
       INTERRUPT_ASSERT(d->irq_mouse);
     } else {
@@ -562,7 +570,7 @@ DEVICE_TICK(pckbc)
   }
 
   for (int port = 0; port < 2; port++) {
-    if (d->head[port] != d->tail[port]) {
+    if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port == 0) {
         INTERRUPT_ASSERT(d->irq_keyboard);

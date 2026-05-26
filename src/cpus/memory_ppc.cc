@@ -33,16 +33,32 @@ uint32_t **stwbrx_cache[1024];
 
 extern int trace_mapping;
 
+int access_result[16] = {
+  1, 1, 1, 1, 0, 1, 1, 1,
+  2, 2, 2, 0, 0, 0, 2, 0
+};
+
+/*
+ * Check access for all PPC BAT and segment based accesses.
+ *
+ * Based on the diagram 6.10 in the 601 manual.
+ *
+ * Return 1 for read access, 2 for write access, 0 for not allowed.
+ */
+static inline int check_access(bool msr_pr, int vs_vp, int pp, bool write) {
+  bool key = (!msr_pr && (vs_vp & 2)) || (msr_pr && (vs_vp & 1));
+  return access_result[(write << 3) | (key << 2) | pp];
+}
+
 /*
  *  ppc_bat():
  *
  *  BAT translation. Returns -1 if there was no BAT hit, >= 0 for a hit.
  *  (0 for access denied, 1 for read-only, and 2 for read-write access allowed.)
  */
-int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
-	int user)
+int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags)
 {
-	int i, istart = 0, iend = 8, pp;
+	int i, istart = 0, iend = 8;
 
 	if (flags & FLAG_INSTR)
 		iend = 4;
@@ -65,6 +81,7 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
 		uint32_t lower = cpu->cd.ppc.spr[regnr + 1];
 		uint32_t phys = lower & BAT_RPN, ebs = upper & BAT_EPI;
 		uint32_t mask = ((upper & BAT_BL) << 15) | 0x1ffff;
+    bool user = cpu->cd.ppc.msr & PPC_MSR_PR;
 
 		/*  Not valid in either supervisor or user mode?  */
 		if (user && !(upper & BAT_Vu))
@@ -78,16 +95,10 @@ int ppc_bat(struct cpu *cpu, uint64_t vaddr, uint64_t *return_paddr, int flags,
 
 		*return_paddr = (vaddr & mask) | (phys & ~mask);
 
-		pp = lower & BAT_PP;
-		switch (pp) {
-		case BAT_PP_NONE:
-			return 0;
-		case BAT_PP_RO_S:
-		case BAT_PP_RO:
-			return (flags & FLAG_WRITEFLAG)? 0 : 1;
-		default:/*  BAT_PP_RW:  */
-			return 2;
-		}
+    int vs_vp = upper & 3;
+		int pp = lower & BAT_PP;
+
+    return check_access(user, vs_vp, pp, flags & FLAG_WRITEFLAG);
 	}
 
 	return -1;
@@ -140,7 +151,6 @@ static int get_pte_low
 	return 0;
 }
 
-
 /*
  *  ppc_vtp32():
  *
@@ -155,7 +165,7 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
                      int *resp, uint64_t msr, bool writeflag, bool instr, bool host)
 {
 	int srn = (vaddr >> 28) & 15, api = (vaddr >> 22) & PTE_API;
-	int access, key, match, swizzle;
+	int match, swizzle;
   uint8_t *entry_ptr = nullptr;
 	uint32_t vsid = cpu->cd.ppc.sr[srn] & 0x00ffffff;
 	uint64_t sdr1 = cpu->cd.ppc.spr[SPR_SDR1], htaborg;
@@ -198,38 +208,23 @@ static int ppc_vtp32(struct cpu *cpu, uint32_t vaddr, uint64_t *return_paddr,
 	if (instr && lower_pte & PTE_G)
 		return 1;
 
-	access = lower_pte & PTE_PP;
 	*return_paddr = (lower_pte & PTE_RPGN) | (vaddr & ~PTE_RPGN);
 
-	key = (cpu->cd.ppc.sr[srn] & SR_PRKEY && msr & PPC_MSR_PR) ||
-	    (cpu->cd.ppc.sr[srn] & SR_SUKEY && !(msr & PPC_MSR_PR));
+	int pp = lower_pte & PTE_PP;
+  int vs_vp = cpu->cd.ppc.sr[srn] >> 29;
 
-	if (key) {
-		switch (access) {
-		case 1:
-		case 3:	*resp = writeflag? 0 : 1;
-			break;
-		case 2:	*resp = 2;
-			break;
-		}
-	} else {
-		switch (access) {
-		case 3:	*resp = writeflag? 0 : 1;
-			break;
-		default:*resp = 2;
-		}
-	}
+  *resp = check_access(cpu->cd.ppc.msr & PPC_MSR_PR, vs_vp, pp, writeflag);
 
   if (!host && (*resp == 2 || (*resp > 0 && !writeflag))) {
     auto ent_ptr_c = &entry_ptr[7 ^ swizzle];
-    // auto old_ent_c = *ent_ptr_c;
+    auto old_ent_c = *ent_ptr_c;
     auto ent_ptr_r = &entry_ptr[6 ^ swizzle];
-    // auto old_ent_r = *ent_ptr_r;
+    auto old_ent_r = *ent_ptr_r;
     *ent_ptr_r |= PTE_REF >> 8;
     *ent_ptr_c |= writeflag ? PTE_CHG : 0;
-    // if (*ent_ptr_c != old_ent_c || *ent_ptr_r != old_ent_r) {
-    // fprintf(stderr, "[ ppc_pte: %08x set to R%c page %08x ]\n", (unsigned int)vaddr, (*ent_ptr_c & PTE_CHG) ? 'C' : 'c', (unsigned int)lower_pte);
-    // }
+    if ((*ent_ptr_c != old_ent_c) || (*ent_ptr_r != old_ent_r)) {
+      fprintf(stderr, "[ ppc_pte: %08x set to R%c page %08x ]\n", (unsigned int)vaddr, (*ent_ptr_c & PTE_CHG) ? 'C' : 'c', (unsigned int)lower_pte);
+    }
   }
 
   return 1;
@@ -257,7 +252,6 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
   int srr1_extra = 0;
 
 	reg_access_msr(cpu, &msr, 0, nullptr, 0);
-	user = msr & PPC_MSR_PR? 1 : 0;
 
 	if (cpu->cd.ppc.bits == 32)
 		vaddr &= 0xffffffff;
@@ -274,7 +268,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 
 	/*  Try the BATs first:  */
 	if (cpu->cd.ppc.bits == 32) {
-		res = ppc_bat(cpu, vaddr, return_paddr, flags, user);
+		res = ppc_bat(cpu, vaddr, return_paddr, flags);
 		if (res > 0) {
 			return res | 4;
     }
@@ -311,7 +305,7 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	if (!quiet_mode)
 		fatal("[ memory_ppc: exception! vaddr=0x%" PRIx64" pc=0x%" PRIx64
 		    " instr=%i user=%i wf=%i ]\n", (uint64_t) vaddr,
-		    (uint64_t) cpu->pc, instr, user, writeflag);
+          (uint64_t) cpu->pc, instr, !!(cpu->cd.ppc.msr & PPC_MSR_PR), writeflag);
 
 	if (cpu->cd.ppc.cpu_type.flags & PPC_603) {
 		cpu->cd.ppc.spr[instr? SPR_IMISS : SPR_DMISS] = vaddr;

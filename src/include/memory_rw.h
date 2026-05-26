@@ -129,6 +129,10 @@ int gen_memory_rw(struct cpu *cpu, struct memory *mem, uint64_t vaddr,
 
   if (mapping.early_success) {
     if (writeflag) {
+      if (is_ppc<TcPhyspage>() && cpu->cd.ppc.ll_bit && ((mapping.host_pages.physaddr | mapping.offset) == cpu->cd.ppc.ll_addr)) {
+        cpu->cd.ppc.ll_bit = 0;
+        cpu->cd.ppc.ll_addr = 0;
+      }
       memcpy(mapping.host_pages.host_load + mapping.offset, data, len);
     } else {
       memcpy(data, mapping.host_pages.host_load + mapping.offset, len);

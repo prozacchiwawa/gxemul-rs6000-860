@@ -303,7 +303,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	uint64_t offset;
 
   auto pc = cpu->pc;
-  if (pc == 0x97f04 || pc == 0x9b00 || (pc >= 0x150000 && pc < 0x160000) || (trace_low != trace_high && pc < trace_low || pc >= trace_high)) {
+  if ((trace_low != trace_high) && (pc < trace_low || pc >= trace_high)) {
     return;
   }
 
@@ -328,10 +328,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 
 	symbol = get_symbol_name_and_n_args(cpu, &cpu->machine->symbol_context,
 	    f, &offset, &n_args);
-
-        if (pc == 0x97f04 || pc == 0x9b00 || (pc >= 0x150000 && pc < 0x160000) || ((symbol && strchr(symbol, '+')) && (trace_low != trace_high && pc < trace_low || pc >= trace_high))) {
-          return;
-        }
 
   auto matched = try_match_function(cpu, f, symbol);
   if (matched) {
@@ -441,7 +437,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
  */
 void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *return_reg)
 {
-  if (pc == 0x10934 || pc == 0xf3bc || pc == 0xf3b4 || pc == 0xf3cc || pc == 0x9b14 || (pc >= 0x150000 && pc < 0x160000) || (trace_low != trace_high && cpu->pc < trace_low || cpu->pc >= trace_high)) {
+  if ((trace_low != trace_high) && (cpu->pc < trace_low || cpu->pc >= trace_high)) {
     return;
   }
 

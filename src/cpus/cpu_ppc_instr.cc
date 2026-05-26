@@ -159,12 +159,9 @@ X(addic)
 {
 	/*  TODO/NOTE: Only for 32-bit mode, so far!  */
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	tmp2 += (uint32_t)ic->arg[1];
-	if ((tmp2 >> 32) != (tmp >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = (uint32_t)tmp2;
+	tmp += (uint32_t)ic->arg[1];
+  update_xer_arith<true, false>(cpu, tmp, false);
+	reg(ic->arg[2]) = (uint32_t)tmp;
 }
 
 
@@ -177,13 +174,9 @@ X(addic)
  */
 X(subfic)
 {
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   tmp += (ssize_t)ic->arg[1] + 1;
-  if (tmp >> 32) {
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-  }
-  // fprintf(stderr, "subfic (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+  update_xer_arith<true, false>(cpu, tmp, false);
 	reg(ic->arg[2]) = tmp;
 }
 
@@ -199,15 +192,11 @@ X(addic_dot)
 {
 	/*  TODO/NOTE: Only for 32-bit mode, so far!  */
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	tmp2 += (uint32_t)ic->arg[1];
-	if ((tmp2 >> 32) != (tmp >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-	reg(ic->arg[2]) = (uint32_t)tmp2;
-	update_cr0(cpu, (uint32_t)tmp2);
+	tmp += (uint32_t)ic->arg[1];
+  update_xer_arith<true, false>(cpu, tmp, false);
+	update_cr0(cpu, (uint32_t)tmp);
+	reg(ic->arg[2]) = (uint32_t)tmp;
 }
-
 
 /*
  *  bclr:  Branch Conditional to Link Register
@@ -1323,7 +1312,9 @@ X(llsc)
     		// fprintf(stderr, "lwarx %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt], (unsigned int)cpu->pc);
 	} else {
 		uint32_t old_so = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_SO;
-		if (!rc) {
+    auto ll_addr = cpu->cd.ppc.ll_addr;
+
+    if (!rc) {
 			fatal("sc: rc-bit not set?\n");
 			exit(1);
 		}
@@ -1341,19 +1332,14 @@ X(llsc)
       new_cr |= 0x10000000;
     }
 
-		if (!ll_bit) {
+		if (!ll_bit || (ll_addr != final_addr)) {
+      fprintf(stderr, "stwcx. different reserve addr %08x vs %08x\n", (unsigned int)ll_addr, (unsigned int)final_addr);
 			cpu->cd.ppc.cr = new_cr;
 			// fprintf(stderr, "stwcx. %08x /!\\ %08x ll %d %08x @ %08x\n", (unsigned int)addr, (unsigned int)value, ll_bit, (unsigned int)cpu->cd.ppc.ll_addr, (unsigned int)cpu->pc);
 			return;
 		}
 
 		// fprintf(stderr, "stwcx. %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)value, (unsigned int)cpu->pc);
-
-		/*  Clear _all_ CPUs' ll_bits:  */
-		for (i=0; i<cpu->machine->ncpus; i++) {
-			cpu->machine->cpus[i]->cd.ppc.ll_addr = 0;
-			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
-    }
 
     // Like in cpu_ppc_instr_loadstore.
     if (len == 8) {
@@ -1376,6 +1362,12 @@ X(llsc)
     if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, d, len, MEM_WRITE, CACHE_DATA)) {
 			fatal("sc: error: TODO\n");
       return;
+    }
+
+		/*  Clear _all_ CPUs' ll_bits:  */
+		for (i=0; i<cpu->machine->ncpus; i++) {
+			cpu->machine->cpus[i]->cd.ppc.ll_addr = 0;
+			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
     }
 
     // fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
@@ -1844,6 +1836,9 @@ X(mtspr) {
   }
   reg(ic->arg[1]) = reg(ic->arg[0]);
 }
+X(mtxer) {
+  reg(ic->arg[1]) = reg(ic->arg[0]) & 0xe000007f;
+}
 X(mtspr_sprg2) {
 	reg(ic->arg[1]) = reg(ic->arg[0]);
 }
@@ -2099,7 +2094,7 @@ X(stmw) {
  *  arg[0] = rs   (well, rt for lswi)
  *  arg[1] = ptr to ra (or ptr to zero)
  * if the 15th bit of arg[2] is 1,
- *  arg[2] = nb << 1 | 1
+ *  nb = arg[2] & 63
  * else
  *  arg[2] = ptr to rb
  *  nb is XER[25-31]
@@ -2118,7 +2113,7 @@ X(lswi)
 
   if (ic->arg[2] & 0x8000) {
     nb = ic->arg[2] & 63;
-    ix = 'i';
+    // ix = 'i';
     // fprintf(stderr, "lswi: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   } else {
     rb = ic->arg[2] & 31;
@@ -2390,7 +2385,8 @@ DOT2(divwu)
  *  arg[1] = pointer to source register rb
  *  arg[2] = pointer to destination register rt
  */
-X(add)     {
+X(add)
+{
   reg(ic->arg[2]) = reg(ic->arg[0]) + reg(ic->arg[1]);
 }
 DOT2(add)
@@ -2407,14 +2403,24 @@ X(addc)
 {
 	/*  TODO: this only works in 32-bit mode  */
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	tmp += (uint32_t)reg(ic->arg[1]);
-	if ((tmp >> 32) != (tmp2 >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
+  uint64_t tm2 = (uint32_t)reg(ic->arg[1]);
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
 	reg(ic->arg[2]) = (uint32_t)tmp;
 }
 DOT2(addc)
+X(addco)
+{
+	/*  TODO: this only works in 32-bit mode  */
+	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
+  uint64_t tm2 = (uint32_t)reg(ic->arg[1]);
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+	reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(addco)
 
 /*
  *  adde:  Add extended, etc.
@@ -2428,45 +2434,73 @@ X(adde)
 	/*  TODO: this only works in 32-bit mode  */
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	tmp += (uint32_t)reg(ic->arg[1]);
-	if (old_ca)
-		tmp ++;
-	if ((tmp >> 32) != (tmp2 >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
+  uint64_t tm2 = (uint32_t)reg(ic->arg[1]) + (old_ca ? 1 : 0);
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
 	reg(ic->arg[2]) = (uint32_t)tmp;
 }
 DOT2(adde)
+X(addeo)
+{
+	/*  TODO: this only works in 32-bit mode  */
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
+	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
+  uint64_t tm2 = (uint32_t)reg(ic->arg[1]) + (old_ca ? 1 : 0);
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+	reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(addeo)
 X(addme)
 {
 	/*  TODO: this only works in 32-bit mode  */
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (old_ca)
-		tmp ++;
-	tmp += 0xffffffffULL;
-	if ((tmp >> 32) != (tmp2 >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
+  uint64_t tm2 = old_ca ? 0 : 0xffffffffull;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+	tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
 	reg(ic->arg[2]) = (uint32_t)tmp;
 }
 DOT2(addme)
+X(addmeo)
+{
+	/*  TODO: this only works in 32-bit mode  */
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
+	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
+  uint64_t tm2 = old_ca ? 0 : 0xffffffffull;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+	tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+	reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(addmeo)
 X(addze)
 {
 	/*  TODO: this only works in 32-bit mode  */
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
 	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
-	uint64_t tmp2 = tmp;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
-	if (old_ca)
-		tmp ++;
-	if ((tmp >> 32) != (tmp2 >> 32))
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
+  uint64_t tm2 = old_ca ? 1 : 0;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
 	reg(ic->arg[2]) = (uint32_t)tmp;
 }
 DOT2(addze)
+X(addzeo)
+{
+	/*  TODO: this only works in 32-bit mode  */
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA;
+	uint64_t tmp = (uint32_t)reg(ic->arg[0]);
+  uint64_t tm2 = old_ca ? 1 : 0;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+	reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(addzeo)
 
 
 /*
@@ -2481,58 +2515,101 @@ X(subf)
 	reg(ic->arg[2]) = ~reg(ic->arg[0]) + reg(ic->arg[1]) + 1;
 }
 DOT2(subf)
+X(subfo)
+{
+  uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tm2 = reg(ic->arg[1]) + 1;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<false, true>(cpu, tmp, c6);
+  reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(subfo)
 X(subfc)
 {
-	// int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
-  tmp += reg(ic->arg[1]) + 1;
-  if (tmp >> 32) {
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-  }
-  // fprintf(stderr, "subfc (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
-	reg(ic->arg[2]) = tmp;
+  uint64_t tm2 = reg(ic->arg[1]) + 1;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
+  reg(ic->arg[2]) = (uint32_t)tmp;
 }
 DOT2(subfc)
+X(subfco)
+{
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  uint64_t tm2 = reg(ic->arg[1]) + 1;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+  reg(ic->arg[2]) = (uint32_t)tmp;
+}
+DOT2(subfco)
 X(subfe)
 {
 	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
-  tmp += reg(ic->arg[1]) + old_ca;
-  if (tmp >> 32) {
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-  }
-  // fprintf(stderr, "subfe (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', reg(ic->arg[1]), reg(ic->arg[0]), tmp);
+  uint64_t tm2 = reg(ic->arg[1]) + old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
 	reg(ic->arg[2]) = tmp;
 }
 DOT2(subfe)
+X(subfeo)
+{
+	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  uint64_t tm2 = old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+	reg(ic->arg[2]) = tmp;
+}
+DOT2(subfeo)
 X(subfme)
 {
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
 	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
-  tmp += 0xffffffffULL + old_ca;
-  if (tmp >> 32) {
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-  }
-  fprintf(stderr, "subfme (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', 0xffffffffull, reg(ic->arg[0]), tmp);
+  uint64_t tm2 = 0xffffffffULL + old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, false>(cpu, tmp, c6);
   reg(ic->arg[2]) = tmp;
 }
 DOT2(subfme)
+X(subfmeo)
+{
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  uint64_t tm2 = 0xffffffffULL + old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+  reg(ic->arg[2]) = tmp;
+}
+DOT2(subfmeo)
 X(subfze)
 {
 	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	cpu->cd.ppc.spr[SPR_XER] &= ~PPC_XER_CA;
 	uint64_t tmp = ~reg(ic->arg[0]);
-  tmp += old_ca;
-  if (tmp >> 32) {
-		cpu->cd.ppc.spr[SPR_XER] |= PPC_XER_CA;
-  }
-  fprintf(stderr, "subfze (%c->%c): %" PRIx64 " - %" PRIx64 " = %" PRIx64 "\n", old_ca ? 'C' : 'c', (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA) ? 'C' : 'c', 0ull, reg(ic->arg[0]), tmp);
+  uint64_t tm2 = old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  update_xer_arith<true, false>(cpu, tmp, c6);
   reg(ic->arg[2]) = tmp;
 }
 DOT2(subfze)
+X(subfzeo)
+{
+	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+	uint64_t tmp = ~reg(ic->arg[0]);
+  uint64_t tm2 = old_ca;
+  bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
+  tmp += tm2;
+  update_xer_arith<true, true>(cpu, tmp, c6);
+  reg(ic->arg[2]) = tmp;
+}
+DOT2(subfzeo)
 
 
 /*
@@ -3722,6 +3799,9 @@ X(to_be_translated)
       case SPR_TBL:
         ic->f = instr(mttbl);
         break;
+      case SPR_XER:
+        ic->f = instr(mtxer);
+        break;
       case TBR_TBU:
         ic->f = instr(mttbu);
         break;
@@ -4131,24 +4211,27 @@ X(to_be_translated)
 		case PPC_31_DIVWU:
 		case PPC_31_ADD:
 		case PPC_31_ADDC:
+    case PPC_31_ADDCO:
 		case PPC_31_ADDE:
+		case PPC_31_ADDEO:
 		case PPC_31_ADDME:
+		case PPC_31_ADDMEO:
 		case PPC_31_ADDZE:
+		case PPC_31_ADDZEO:
 		case PPC_31_SUBF:
+    case PPC_31_SUBFO:
 		case PPC_31_SUBFC:
+		case PPC_31_SUBFCO:
 		case PPC_31_SUBFE:
+		case PPC_31_SUBFEO:
 		case PPC_31_SUBFME:
+		case PPC_31_SUBFMEO:
 		case PPC_31_SUBFZE:
+		case PPC_31_SUBFZEO:
 			rt = (iword >> 21) & 31;
 			ra = (iword >> 16) & 31;
 			rb = (iword >> 11) & 31;
-			oe_bit = (iword >> 10) & 1;
 			rc = iword & 1;
-			if (oe_bit) {
-				if (!cpu->translation_readahead)
-					fatal("oe_bit not yet implemented\n");
-				goto bad;
-			}
 			switch (xo) {
 			case PPC_31_MULLW:  ic->f = instr(mullw); break;
 			case PPC_31_MULHW:  ic->f = instr(mulhw); break;
@@ -4157,14 +4240,23 @@ X(to_be_translated)
 			case PPC_31_DIVWU:  ic->f = instr(divwu); n64=1; break;
 			case PPC_31_ADD:    ic->f = instr(add); break;
 			case PPC_31_ADDC:   ic->f = instr(addc); n64=1; break;
+			case PPC_31_ADDCO:  ic->f = instr(addco); n64=1; break;
 			case PPC_31_ADDE:   ic->f = instr(adde); n64=1; break;
+			case PPC_31_ADDEO:  ic->f = instr(addeo); n64=1; break;
 			case PPC_31_ADDME:  ic->f = instr(addme); n64=1; break;
+			case PPC_31_ADDMEO: ic->f = instr(addmeo); n64=1; break;
 			case PPC_31_ADDZE:  ic->f = instr(addze); n64=1; break;
+			case PPC_31_ADDZEO: ic->f = instr(addzeo); n64=1; break;
 			case PPC_31_SUBF:   ic->f = instr(subf); break;
+			case PPC_31_SUBFO:  ic->f = instr(subfo); break;
 			case PPC_31_SUBFC:  ic->f = instr(subfc); break;
+			case PPC_31_SUBFCO: ic->f = instr(subfco); break;
 			case PPC_31_SUBFE:  ic->f = instr(subfe); n64=1; break;
+			case PPC_31_SUBFEO: ic->f = instr(subfeo); n64=1; break;
 			case PPC_31_SUBFME: ic->f = instr(subfme); n64=1; break;
+			case PPC_31_SUBFMEO:ic->f = instr(subfmeo); n64=1; break;
 			case PPC_31_SUBFZE: ic->f = instr(subfze); n64=1;break;
+			case PPC_31_SUBFZEO:ic->f = instr(subfzeo); n64=1;break;
 			}
 			if (rc) {
 				switch (xo) {
@@ -4172,12 +4264,20 @@ X(to_be_translated)
 					ic->f = instr(add_dot); break;
 				case PPC_31_ADDC:
 					ic->f = instr(addc_dot); break;
+				case PPC_31_ADDCO:
+					ic->f = instr(addco_dot); break;
 				case PPC_31_ADDE:
 					ic->f = instr(adde_dot); break;
+				case PPC_31_ADDEO:
+					ic->f = instr(addeo_dot); break;
 				case PPC_31_ADDME:
 					ic->f = instr(addme_dot); break;
+				case PPC_31_ADDMEO:
+					ic->f = instr(addmeo_dot); break;
 				case PPC_31_ADDZE:
 					ic->f = instr(addze_dot); break;
+				case PPC_31_ADDZEO:
+					ic->f = instr(addzeo_dot); break;
 				case PPC_31_DIVW:
 					ic->f = instr(divw_dot); break;
 				case PPC_31_DIVWU:
@@ -4190,14 +4290,24 @@ X(to_be_translated)
 					ic->f = instr(mulhwu_dot); break;
 				case PPC_31_SUBF:
 					ic->f = instr(subf_dot); break;
+				case PPC_31_SUBFO:
+					ic->f = instr(subfo_dot); break;
 				case PPC_31_SUBFC:
 					ic->f = instr(subfc_dot); break;
+				case PPC_31_SUBFCO:
+					ic->f = instr(subfco_dot); break;
 				case PPC_31_SUBFE:
 					ic->f = instr(subfe_dot); break;
+				case PPC_31_SUBFEO:
+					ic->f = instr(subfeo_dot); break;
 				case PPC_31_SUBFME:
 					ic->f = instr(subfme_dot); break;
+				case PPC_31_SUBFMEO:
+					ic->f = instr(subfmeo_dot); break;
 				case PPC_31_SUBFZE:
 					ic->f = instr(subfze_dot); break;
+				case PPC_31_SUBFZEO:
+					ic->f = instr(subfzeo_dot); break;
 				default:if (!cpu->translation_readahead)
 						fatal("RC bit not yet "
 						    "implemented\n");

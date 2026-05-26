@@ -1133,6 +1133,10 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			debug("mtmsr\tr%i", rs);
 			if (l_bit)
 				debug(",%i", l_bit);
+      if (!running) {
+        break;
+      }
+      debug("\t(%08x)", cpu->cd.ppc.gpr[rs]);
 			break;
 		case PPC_31_TW:
 		case PPC_31_TD:
@@ -2444,6 +2448,25 @@ template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr)
     return 2;
   } else {
     return 0;
+  }
+}
+
+template<bool Carry, bool Overflow>
+void update_xer_arith(struct cpu *cpu, uint64_t raw_result, bool c6) {
+  auto xer_ref = &cpu->cd.ppc.spr[SPR_XER];
+  uint32_t result_high = raw_result >> 32;
+  bool c7 = !!result_high;
+  if (Carry) {
+    *xer_ref &= ~PPC_XER_CA;
+    if (c7) {
+      *xer_ref |= PPC_XER_CA;
+    }
+  }
+  if (Overflow) {
+    *xer_ref &= ~PPC_XER_OV;
+    if (c6 ^ c7) {
+      *xer_ref |= PPC_XER_OV | PPC_XER_SO;
+    }
   }
 }
 

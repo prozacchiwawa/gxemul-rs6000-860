@@ -1615,11 +1615,11 @@ PCIINIT(eagle)
   // Cache line size
   PCI_SET_DATA(0x0c, 8);
   // Memory Starting address 1 (MB)
-  PCI_SET_DATA(0x80, 0x1000);
+  PCI_SET_DATA(0x80, 0x2000);
   // Memory Starting address 2 (MB)
   PCI_SET_DATA(0x84, 0);
   // Memory ending address 1 0x90 (MB)
-  PCI_SET_DATA(0x90, 0x2010);
+  PCI_SET_DATA(0x90, 0x4000);
   // Memory ending address 2 0x94 (MB)
   PCI_SET_DATA(0x94, 0);
   // Memory bank enable.

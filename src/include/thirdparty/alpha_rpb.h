@@ -57,8 +57,8 @@ struct rpb {
 	u_int64_t	rpb_size;		/*  18: HWRPB size in bytes */
 	u_int64_t	rpb_primary_cpu_id;	/*  20 */
 	u_int64_t	rpb_page_size;		/*  28: (8192) */
-	u_int32_t	rpb_phys_addr_size;	/*  30: physical address size */
-	u_int32_t	rpb_extended_va_size;	/*  34: extended VA size (4L) */
+	uint32_t	rpb_phys_addr_size;	/*  30: physical address size */
+	uint32_t	rpb_extended_va_size;	/*  34: extended VA size (4L) */
 	u_int64_t	rpb_max_asn;		/*  38:   (16) */
 	char		rpb_ssn[16];		/*  40: only first 10 valid */
 
@@ -231,7 +231,7 @@ struct rpb {
  * PCS: Per-CPU information.
  */
 struct pcs {
-	u_int8_t	pcs_hwpcb[128];		/*   0: PAL dependent */
+	uint8_t	pcs_hwpcb[128];		/*   0: PAL dependent */
 
 #define	PCS_BIP			0x000001	/* boot in progress */
 #define	PCS_RC			0x000002	/* restart possible */
@@ -334,8 +334,8 @@ struct pcs {
 	u_int64_t	pcs_reserved_soft;	/* 120: preserved software */
 
 	struct {				/* 128: inter-console buffers */
-		u_int	iccb_rxlen;
-		u_int	iccb_txlen;
+		unsigned int	iccb_rxlen;
+		unsigned int	iccb_txlen;
 		char	iccb_rxbuf[80];
 		char	iccb_txbuf[80];
 	} pcs_iccb;
@@ -393,7 +393,7 @@ struct ctb {
 	u_int64_t	ctb_turboslot;		/* 248: TURBOchannel slot # */
 	u_int64_t	ctb_server_off;		/* 256: offset to server info */
 	u_int64_t	ctb_line_off;		/* 264: line parameter offset */
-	u_int8_t	ctb_csd;		/* 272: console specific data */
+	uint8_t	ctb_csd;		/* 272: console specific data */
 };
 
 struct ctb_tt {

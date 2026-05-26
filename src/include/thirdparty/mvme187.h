@@ -64,7 +64,7 @@
 #define MVME187_MEM_CTLR	0xfff43000	/* MEMC040 mem controller */
 
 #if defined(_KERNEL) && !defined(_LOCORE)
-extern u_int32_t pfsr_save_187[];
+extern uint32_t pfsr_save_187[];
 #endif
 
 #endif	/* __MACHINE_MVME187_H__ */

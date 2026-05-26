@@ -151,7 +151,7 @@ extern void	maple_command(struct device *, struct maple_unit *,
 extern uint32_t	maple_get_function_data(struct maple_devinfo *, int);
 extern void	maple_run_polling(struct device *);
 extern int	maple_unit_ioctl(struct device *, struct maple_unit *,
-		    u_long, caddr_t, int, struct lwp *);
+		    uint64_t, uint8_t*, int, struct lwp *);
 
 #endif
 

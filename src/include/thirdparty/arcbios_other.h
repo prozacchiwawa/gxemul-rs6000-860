@@ -108,15 +108,15 @@ typedef struct arc_sid
 /* Wonder how this is aligned... */
 typedef struct arc_config
 {
-	u_int32_t		cclass;		// class
-	u_int32_t		type;
-	u_int32_t		flags;
-	u_int16_t		version;
-	u_int16_t		revision;
-	u_int32_t		key;
-	u_int32_t		affinity_mask;
-	u_int32_t		config_data_len;
-	u_int32_t		id_len;
+	uint32_t		cclass;		// class
+	uint32_t		type;
+	uint32_t		flags;
+	uint16_t		version;
+	uint16_t		revision;
+	uint32_t		key;
+	uint32_t		affinity_mask;
+	uint32_t		config_data_len;
+	uint32_t		id_len;
 	char 			*id;
 } arc_config_t;
 
@@ -134,56 +134,56 @@ typedef enum arc_cm_resource_type {
 
 /* do not use u_int64_t to avoid alignment problem */
 typedef struct {
-	u_int32_t	loword;
-	u_int32_t	hiword;
+	uint32_t	loword;
+	uint32_t	hiword;
 } arc_paddr_t;
 
 typedef struct arc_cm_partial_resource {
-	u_int8_t	type;
-	u_int8_t	share_disposition;
-	u_int16_t	flags;
+	uint8_t	type;
+	uint8_t	share_disposition;
+	uint16_t	flags;
 
 	union {
 		struct {
 			arc_paddr_t	start;
-			u_int32_t	length;
+			uint32_t	length;
 		} port;
 		struct {
-			u_int32_t	level;
-			u_int32_t	vector;
-			u_int32_t	reserved1;
+			uint32_t	level;
+			uint32_t	vector;
+			uint32_t	reserved1;
 		} interrupt;
 		struct {
 			arc_paddr_t	start;
-			u_int32_t	length;
+			uint32_t	length;
 		} memory;
 		struct {
-			u_int32_t	channel;
-			u_int32_t	port;
-			u_int32_t	reserved1;
+			uint32_t	channel;
+			uint32_t	port;
+			uint32_t	reserved1;
 		} dma;
 		struct {
-			u_int8_t	vendor[12];
+			uint8_t	vendor[12];
 		} vendor;
 		struct {
-			u_int8_t	product_name[12];
+			uint8_t	product_name[12];
 		} product_name;
 		struct {
-			u_int8_t	serial_number[12];
+			uint8_t	serial_number[12];
 		} serial_number;
 		struct {
-			u_int32_t	data_size;
-			u_int32_t	reserved1;
-			u_int32_t	reserved2;
+			uint32_t	data_size;
+			uint32_t	reserved1;
+			uint32_t	reserved2;
 			/* the data is followed */
 		} device_specific_data;
 	} u;
 } arc_cm_partial_resource_t;
 
 typedef struct arc_cm_partial_resource_list {
-	u_int16_t	version;
-	u_int16_t	revision;
-	u_int32_t	count;
+	uint16_t	version;
+	uint16_t	revision;
+	uint32_t	count;
 	arc_cm_partial_resource_t partial_descriptors[1];
 } arc_cm_partial_resource_list_t;
 
@@ -252,27 +252,27 @@ typedef enum {
 
 typedef struct arc_mem {
 	arc_mem_type_t	Type;		/* Memory chunk type */
-	u_int32_t	BasePage;	/* Page no, first page */
-	u_int32_t	PageCount;	/* Number of pages */
+	uint32_t	BasePage;	/* Page no, first page */
+	uint32_t	PageCount;	/* Number of pages */
 } arc_mem_t;
 
-typedef caddr_t arc_time_t; /* XXX */
+typedef uint8_t* arc_time_t; /* XXX */
 
 typedef struct arc_dsp_stat {
-	u_int16_t	CursorXPosition;
-	u_int16_t	CursorYPosition;
-	u_int16_t	CursorMaxXPosition;
-	u_int16_t	CursorMaxYPosition;
-	u_int8_t	ForegroundColor;
-	u_int8_t	BackgroundColor;
-	u_int8_t	HighIntensity;
-	u_int8_t	Underscored;
-	u_int8_t	ReverseVideo;
+	uint16_t	CursorXPosition;
+	uint16_t	CursorYPosition;
+	uint16_t	CursorMaxXPosition;
+	uint16_t	CursorMaxYPosition;
+	uint8_t	ForegroundColor;
+	uint8_t	BackgroundColor;
+	uint8_t	HighIntensity;
+	uint8_t	Underscored;
+	uint8_t	ReverseVideo;
 } arc_dsp_stat_t;
 
-typedef caddr_t arc_dirent_t; /* XXX */
-typedef u_int32_t arc_seek_mode_t; /* XXX */
-typedef u_int32_t arc_mount_t; /* XXX */
+typedef uint8_t* arc_dirent_t; /* XXX */
+typedef uint32_t arc_seek_mode_t; /* XXX */
+typedef uint32_t arc_mount_t; /* XXX */
 
 typedef enum arc_open_mode {
 	arc_OpenReadOnly,
@@ -290,20 +290,20 @@ typedef struct arc_calls
 {
 	arc_status_t (*load)(		/* Load 1 */
 		char *,			/* Image to load */
-		u_int32_t,		/* top address */
-		u_int32_t *,		/* Entry address */
-		u_int32_t *);		/* Low address */
+		uint32_t,		/* top address */
+		uint32_t *,		/* Entry address */
+		uint32_t *);		/* Low address */
 
 	arc_status_t (*invoke)(		/* Invoke 2 */
-		u_int32_t,		/* Entry Address */
-		u_int32_t,		/* Stack Address */
-		u_int32_t,		/* Argc */
+		uint32_t,		/* Entry Address */
+		uint32_t,		/* Stack Address */
+		uint32_t,		/* Argc */
 		char **,		/* argv */
 		char **);		/* envp */
 
 	arc_status_t (*execute)(	/* Execute 3 */
 		char *,			/* Image path */
-		u_int32_t,		/* Argc */
+		uint32_t,		/* Argc */
 		char **,		/* argv */
 		char **);		/* envp */
 
@@ -329,7 +329,7 @@ typedef struct arc_calls
 		arc_config_t *);	/* Component */
 
 	arc_status_t (*get_config_data)( /* GetConfigurationData 13 */
-		caddr_t,		/* Configuration Data */
+		uint8_t*,		/* Configuration Data */
 		arc_config_t *);	/* Component */
 
 	arc_config_t *(*add_child)(	/* AddChild 14 */
@@ -350,44 +350,44 @@ typedef struct arc_calls
 		arc_mem_t *);		/* MemoryDescriptor */
 
 	void (*signal)(			/* Signal 20 */
-		u_int32_t,		/* Signal number */
-/**/		caddr_t);		/* Handler */
+		uint32_t,		/* Signal number */
+/**/		uint8_t*);		/* Handler */
 
 	arc_time_t *(*get_time)(void);	/* GetTime 21 */
 
-	u_int32_t (*get_relative_time)(void); /* GetRelativeTime 22 */
+	uint32_t (*get_relative_time)(void); /* GetRelativeTime 22 */
 
 	arc_status_t (*get_dir_entry)(	/* GetDirectoryEntry 23 */
-		u_int32_t,		/* FileId */
+		uint32_t,		/* FileId */
 		arc_dirent_t *,		/* Directory entry */
-		u_int32_t,		/* Length */
-		u_int32_t *);		/* Count */
+		uint32_t,		/* Length */
+		uint32_t *);		/* Count */
 
 	arc_status_t (*open)(		/* Open 24 */
 		char *,			/* Path */
 		arc_open_mode_t,	/* Open mode */
-		u_int32_t *);		/* FileId */
+		uint32_t *);		/* FileId */
 
 	arc_status_t (*close)(		/* Close 25 */
-		u_int32_t);		/* FileId */
+		uint32_t);		/* FileId */
 
 	arc_status_t (*read)(		/* Read 26 */
-		u_int32_t,		/* FileId */
-		caddr_t,		/* Buffer */
-		u_int32_t,		/* Length */
-		u_int32_t *);		/* Count */
+		uint32_t,		/* FileId */
+		uint8_t*,		/* Buffer */
+		uint32_t,		/* Length */
+		uint32_t *);		/* Count */
 
 	arc_status_t (*get_read_status)( /* GetReadStatus 27 */
-		u_int32_t);		/* FileId */
+		uint32_t);		/* FileId */
 
 	arc_status_t (*write)(		/* Write 28 */
-		u_int32_t,		/* FileId */
-		caddr_t,		/* Buffer */
-		u_int32_t,		/* Length */
-		u_int32_t *);		/* Count */
+		uint32_t,		/* FileId */
+		uint8_t*,		/* Buffer */
+		uint32_t,		/* Length */
+		uint32_t *);		/* Count */
 
 	arc_status_t (*seek)(		/* Seek 29 */
-		u_int32_t,		/* FileId */
+		uint32_t,		/* FileId */
 		int64_t *,		/* Offset */
 		arc_seek_mode_t); 	/* Mode */
 
@@ -409,11 +409,11 @@ typedef struct arc_calls
 	void (*flush_all_caches)(void);	/* FlushAllCaches 35 */
 
 	arc_status_t (*test_unicode)(	/* TestUnicodeCharacter 36 */
-		u_int32_t,		/* FileId */
-		u_int16_t);		/* UnicodeCharacter */
+		uint32_t,		/* FileId */
+		uint16_t);		/* UnicodeCharacter */
 
 	arc_dsp_stat_t *(*get_display_status)( /* GetDisplayStatus 37 */
-		u_int32_t);		/* FileId */
+		uint32_t);		/* FileId */
 } arc_calls_t;
 
 #define ARC_PARAM_BLK_MAGIC	0x53435241	/* "ARCS" in little endian */
@@ -421,23 +421,23 @@ typedef struct arc_calls
 
 typedef struct arc_param_blk 
 {
-	u_int32_t	magic;		/* Magic Number */
-	u_int32_t	length;		/* Length of parameter block */
-	u_int16_t	version;	/* ?? */
-	u_int16_t	revision;	/* ?? */
-/**/	caddr_t		restart_block;	/* ?? */
-/**/	caddr_t		debug_block;	/* Debugging info -- unused */
-/**/	caddr_t		general_exp_vect; /* ?? */
-/**/	caddr_t		tlb_miss_exp_vect; /* ?? */
-	u_int32_t	firmware_length; /* Size of Firmware jumptable in bytes */
+	uint32_t	magic;		/* Magic Number */
+	uint32_t	length;		/* Length of parameter block */
+	uint16_t	version;	/* ?? */
+	uint16_t	revision;	/* ?? */
+/**/	uint8_t*		restart_block;	/* ?? */
+/**/	uint8_t*		debug_block;	/* Debugging info -- unused */
+/**/	uint8_t*		general_exp_vect; /* ?? */
+/**/	uint8_t*		tlb_miss_exp_vect; /* ?? */
+	uint32_t	firmware_length; /* Size of Firmware jumptable in bytes */
 	arc_calls_t	*firmware_vect;	/* Firmware jumptable */
-	u_int32_t	vendor_length;	/* Size of Vendor specific jumptable */
-/**/	caddr_t		vendor_vect;	/* Vendor specific jumptable */
-	u_int32_t	adapter_count;	/* ?? */
+	uint32_t	vendor_length;	/* Size of Vendor specific jumptable */
+/**/	uint8_t*		vendor_vect;	/* Vendor specific jumptable */
+	uint32_t	adapter_count;	/* ?? */
 	struct arc_adapter_param {
-		u_int32_t	adapter_type;	/* ?? */
-		u_int32_t	adapter_length; /* ?? */
-/**/		caddr_t		adapter_vect;	/* ?? */
+		uint32_t	adapter_type;	/* ?? */
+		uint32_t	adapter_length; /* ?? */
+/**/		uint8_t*		adapter_vect;	/* ?? */
 	} adapters[1];
 } arc_param_blk_t;
 
@@ -447,8 +447,8 @@ typedef struct arc_param_blk
 #if 0
 arc_status_t Bios_Read __P((int, void *, int, int *));
 arc_status_t Bios_Write __P((int, void *, int, int *));
-arc_status_t Bios_Open __P((char *, int, u_int *));
-arc_status_t Bios_Close __P((u_int));
+arc_status_t Bios_Open __P((char *, int, unsigned int *));
+arc_status_t Bios_Close __P((unsigned int));
 arc_mem_t *Bios_GetMemoryDescriptor __P((arc_mem_t *));
 arc_sid_t *Bios_GetSystemId __P((void));
 arc_config_t *Bios_GetChild __P((arc_config_t *));

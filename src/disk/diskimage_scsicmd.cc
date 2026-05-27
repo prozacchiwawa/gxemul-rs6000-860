@@ -183,7 +183,7 @@ static void diskimage__switch_tape(struct diskimage *d)
 	if (d->f != NULL)
 		fclose(d->f);
 
-	d->f = fopen(tmpfname, d->writable? "r+" : "r");
+	d->f = fopen(tmpfname, d->writable? "rb+" : "rb");
 	if (d->f == NULL) {
 		fprintf(stderr, "[ diskimage__switch_tape(): could not "
 		    "(re)open '%s' ]\n", tmpfname);
@@ -888,7 +888,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		if (d->f != NULL)
 			fclose(d->f);
 
-		d->f = fopen(d->fname, d->writable? "r+" : "r");
+		d->f = fopen(d->fname, d->writable? "rb+" : "rb");
 		if (d->f == NULL) {
 			fprintf(stderr, "[ diskimage: could not (re)open "
 			    "'%s' ]\n", d->fname);

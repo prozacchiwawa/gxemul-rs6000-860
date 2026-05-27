@@ -698,7 +698,7 @@ static void parse__machine(struct emul *e, FILE *f, int *in_emul, int *line,
  */
 void emul_parse_config(struct emul *e, char *fname)
 {
-	FILE *f = fopen(fname, "rt");
+	FILE *f = fopen(fname, "r");
 	char word[MAX_WORD_LEN];
 	int in_emul = 0;
 	int line = 1;

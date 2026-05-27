@@ -248,7 +248,7 @@ void symbol_readfile(struct symbol_context *sc, char *fname)
 	char b4[1024];
 	int cur_n_symbols = sc->symbols->size();
 
-	f = fopen(fname, "r");
+	f = fopen(fname, "rb");
 	if (f == NULL) {
 		perror(fname);
 		exit(1);

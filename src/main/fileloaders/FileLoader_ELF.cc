@@ -115,7 +115,7 @@ bool FileLoader_ELF::LoadIntoComponent(refcount_ptr<Component> component, ostrea
 		return false;
 	}
 
-	ifstream file(Filename().c_str());
+	ifstream file(Filename().c_str(), std::ios::binary | std::ios::in);
 	if (!file.is_open()) {
 		messages << "Unable to read file.\n";
 		return false;

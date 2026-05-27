@@ -1022,7 +1022,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICDROM_READ_DISCINFO:
-		/*  (Patch from H�vard Eidnes.)  */
+		/*  (Patch from Håvard Eidnes.)  */
 		debug("CDROM_READ_DISCINFO, cmd[1]=0x%02x", xferp->cmd[1]);
 		retlen = 34;
 		scsi_transfer_allocbuf(&xferp->data_in_len,
@@ -1050,7 +1050,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICDROM_READ_TRACKINFO:
-		/*  (Patch from H�vard Eidnes.)  */
+		/*  (Patch from Håvard Eidnes.)  */
 		debug("CDROM_READ_TRACKINFO");
 		retlen = 36;
 		scsi_transfer_allocbuf(&xferp->data_in_len,

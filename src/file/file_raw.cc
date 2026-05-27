@@ -85,7 +85,7 @@ static void file_load_raw(struct machine *m, struct memory *mem,
 		skip = (int64_t)(int32_t)skip;
 	}
 
-	f = fopen(strrchr(filename, ':')+1, "r");
+	f = fopen(strrchr(filename, ':')+1, "rb");
 	if (f == NULL) {
 		perror(p);
 		exit(1);

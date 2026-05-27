@@ -2223,7 +2223,11 @@ static void arc_environment_setup(struct machine *machine, int is64bit,
 	CHECK_ALLOCATION(machine->bootstr = (char *) malloc(ARC_BOOTSTR_BUFLEN));
 
 	strlcpy(machine->bootstr, init_bootpath, ARC_BOOTSTR_BUFLEN);
-	strlcat(machine->bootstr, machine->boot_kernel_filename, ARC_BOOTSTR_BUFLEN);
+	if (strlcat(machine->bootstr, machine->boot_kernel_filename,
+	    ARC_BOOTSTR_BUFLEN) >= ARC_BOOTSTR_BUFLEN) {
+		fprintf(stderr, "boot string too long?\n");
+		exit(1);
+	}
 
 	/*  Boot args., eg "-a"  */
 	machine->bootarg = machine->boot_string_argument;

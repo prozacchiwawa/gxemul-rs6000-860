@@ -184,7 +184,7 @@ static int settings_read(struct settings *settings, int i, uint64_t *valuep)
 		*valuep = *((int64_t *) settings->ptr[i]);
 		break;
 	case SETTINGS_TYPE_UINT:
-		*valuep = *((uint *) settings->ptr[i]);
+		*valuep = *((unsigned int *) settings->ptr[i]);
 		break;
 	case SETTINGS_TYPE_UINT8:
 		*valuep = *((uint8_t *) settings->ptr[i]);

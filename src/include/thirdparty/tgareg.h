@@ -57,7 +57,7 @@
  * TGA Core Space register numbers and contents.
  */
 
-typedef u_int32_t tga_reg_t;
+typedef uint32_t tga_reg_t;
 
 #define	TGA_REG_GCBR0	0x000		/* Copy buffer 0 */
 #define	TGA_REG_GCBR1	0x001		/* Copy buffer 1 */

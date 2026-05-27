@@ -87,7 +87,7 @@
 
 /* typedef */ struct dec_memmap {
 	uint32_t	pagesize;	/* system page size */		/*  was type int in netbsd  */
-	u_char		bitmap[15360];	/* bit for each page indicating safe to use */
+	uint8_t		bitmap[15360];	/* bit for each page indicating safe to use */
 } /*  memmap  */;
 
 typedef struct {
@@ -135,7 +135,7 @@ struct callback {
 	int	(*_setenv) __P((char *name, char *value));		/* 60 */
 	char	*(*_getenv) __P((char *name));				/* 64 */
 	int	(*_unsetenv) __P((char *name));				/* 68 */
-	u_long	(*_slot_address) __P((int sn));				/* 6c */
+	uint64_t	(*_slot_address) __P((int sn));				/* 6c */
 	void	(*_wbflush) __P((void));				/* 70 */
 	void	(*_msdelay) __P((int delay));				/* 74 */
 	void	(*_leds) __P((int value));				/* 78 */

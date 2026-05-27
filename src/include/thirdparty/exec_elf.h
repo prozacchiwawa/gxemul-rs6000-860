@@ -586,9 +586,9 @@ typedef struct {
 #define	ELF_NOTE_GNU_NAME		"GNU\0"
 
 /* GNU-specific OS/version value stuff */
-#define	ELF_NOTE_GNU_OSMASK		(u_int32_t)0xff000000
-#define	ELF_NOTE_GNU_OSLINUX		(u_int32_t)0x01000000
-#define	ELF_NOTE_GNU_OSMACH		(u_int32_t)0x00000000
+#define	ELF_NOTE_GNU_OSMASK		(uint32_t)0xff000000
+#define	ELF_NOTE_GNU_OSLINUX		(uint32_t)0x01000000
+#define	ELF_NOTE_GNU_OSMACH		(uint32_t)0x00000000
 
 #if defined(ELFSIZE)
 #define	CONCAT(x,y)	__CONCAT(x,y)
@@ -676,16 +676,16 @@ struct elf_args {
 
 #ifdef EXEC_ELF32
 int	exec_elf32_makecmds __P((struct proc *, struct exec_package *));
-int	elf32_read_from __P((struct proc *, struct vnode *, u_long,
-	    caddr_t, int));
+int	elf32_read_from __P((struct proc *, struct vnode *, uint64_t,
+	    uint8_t*, int));
 void	*elf32_copyargs __P((struct exec_package *, struct ps_strings *,
 	    void *, void *));
 #endif
 
 #ifdef EXEC_ELF64
 int	exec_elf64_makecmds __P((struct proc *, struct exec_package *));
-int	elf64_read_from __P((struct proc *, struct vnode *, u_long,
-	    caddr_t, int));
+int	elf64_read_from __P((struct proc *, struct vnode *, uint64_t,
+	    uint8_t*, int));
 void	*elf64_copyargs __P((struct exec_package *, struct ps_strings *,
 	    void *, void *));
 #endif

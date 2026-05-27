@@ -47,20 +47,20 @@
  */
 
 struct ebsaboot {
-	u_int32_t	bt_magic;	/* boot info magic number */
-	u_int32_t	bt_vargp;	/* virtual addr of arg page */
-	u_int32_t	bt_pargp;	/* physical addr of arg page */
-	u_int32_t	bt_args;	/* kernel args string pointer */
+	uint32_t	bt_magic;	/* boot info magic number */
+	uint32_t	bt_vargp;	/* virtual addr of arg page */
+	uint32_t	bt_pargp;	/* physical addr of arg page */
+	uint32_t	bt_args;	/* kernel args string pointer */
 		/*  was: const char *  */
 	uint32_t	bt_l1;		/* active L1 page table */
 		/*  was: pd_entry_t *  */
-	u_int32_t	bt_memstart;	/* start of physical memory */
-	u_int32_t	bt_memend;	/* end of physical memory */
-	u_int32_t	bt_memavail;	/* start of avail phys memory */
-	u_int32_t	bt_fclk;	/* fclk frequency */
-	u_int32_t	bt_pciclk;	/* PCI bus frequency */
-	u_int32_t	bt_vers;	/* structure version (CATS) */
-	u_int32_t	bt_features;	/* feature mask (CATS) */
+	uint32_t	bt_memstart;	/* start of physical memory */
+	uint32_t	bt_memend;	/* end of physical memory */
+	uint32_t	bt_memavail;	/* start of avail phys memory */
+	uint32_t	bt_fclk;	/* fclk frequency */
+	uint32_t	bt_pciclk;	/* PCI bus frequency */
+	uint32_t	bt_vers;	/* structure version (CATS) */
+	uint32_t	bt_features;	/* feature mask (CATS) */
 };
 
 #define BT_MAGIC_NUMBER_EBSA	0x45425341

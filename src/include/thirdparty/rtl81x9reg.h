@@ -460,15 +460,15 @@
 
 #if 0
 struct rl_chain_data {
-	u_int16_t		cur_rx;
-	caddr_t			rl_rx_buf;
-	caddr_t			rl_rx_buf_ptr;
+	uint16_t		cur_rx;
+	uint8_t*			rl_rx_buf;
+	uint8_t*			rl_rx_buf_ptr;
 	bus_addr_t		rl_rx_buf_pa;
 
 	struct mbuf		*rl_tx_chain[RL_TX_LIST_CNT];
 	bus_dmamap_t		rl_tx_dmamap[RL_TX_LIST_CNT];
-	u_int8_t		last_tx;
-	u_int8_t		cur_tx;
+	uint8_t		last_tx;
+	uint8_t		cur_tx;
 };
 #endif
 
@@ -488,10 +488,10 @@ struct rl_chain_data {
  */
 
 struct rl_desc {
-	volatile u_int32_t	rl_cmdstat;
-	volatile u_int32_t	rl_vlanctl;
-	volatile u_int32_t	rl_bufaddr_lo;
-	volatile u_int32_t	rl_bufaddr_hi;
+	volatile uint32_t	rl_cmdstat;
+	volatile uint32_t	rl_vlanctl;
+	volatile uint32_t	rl_bufaddr_lo;
+	volatile uint32_t	rl_bufaddr_hi;
 };
 
 #define RL_TDESC_CMD_FRAGLEN	0x0000FFFF
@@ -569,22 +569,22 @@ struct rl_desc {
  * Statistics counter structure (8139C+ and 8169 only)
  */
 struct rl_stats {
-	u_int32_t		rl_tx_pkts_lo;
-	u_int32_t		rl_tx_pkts_hi;
-	u_int32_t		rl_tx_errs_lo;
-	u_int32_t		rl_tx_errs_hi;
-	u_int32_t		rl_tx_errs;
-	u_int16_t		rl_missed_pkts;
-	u_int16_t		rl_rx_framealign_errs;
-	u_int32_t		rl_tx_onecoll;
-	u_int32_t		rl_tx_multicolls;
-	u_int32_t		rl_rx_ucasts_hi;
-	u_int32_t		rl_rx_ucasts_lo;
-	u_int32_t		rl_rx_bcasts_lo;
-	u_int32_t		rl_rx_bcasts_hi;
-	u_int32_t		rl_rx_mcasts;
-	u_int16_t		rl_tx_aborts;
-	u_int16_t		rl_rx_underruns;
+	uint32_t		rl_tx_pkts_lo;
+	uint32_t		rl_tx_pkts_hi;
+	uint32_t		rl_tx_errs_lo;
+	uint32_t		rl_tx_errs_hi;
+	uint32_t		rl_tx_errs;
+	uint16_t		rl_missed_pkts;
+	uint16_t		rl_rx_framealign_errs;
+	uint32_t		rl_tx_onecoll;
+	uint32_t		rl_tx_multicolls;
+	uint32_t		rl_rx_ucasts_hi;
+	uint32_t		rl_rx_ucasts_lo;
+	uint32_t		rl_rx_bcasts_lo;
+	uint32_t		rl_rx_bcasts_hi;
+	uint32_t		rl_rx_mcasts;
+	uint16_t		rl_tx_aborts;
+	uint16_t		rl_rx_underruns;
 };
 
 #define RL_RX_DESC_CNT		64
@@ -630,8 +630,8 @@ struct rl_stats {
 	    sizeof(struct rl_desc),		\
 	    (ops))
 
-#define RL_ADDR_LO(y)	((u_int64_t) (y) & 0xFFFFFFFF)
-#define RL_ADDR_HI(y)	((u_int64_t) (y) >> 32)
+#define RL_ADDR_LO(y)	((uint64_t) (y) & 0xFFFFFFFF)
+#define RL_ADDR_HI(y)	((uint64_t) (y) >> 32)
 
 /* see comment in dev/ic/re.c */
 #define RL_JUMBO_FRAMELEN	7440
@@ -650,17 +650,17 @@ struct rl_stats {
 #define RL_LAST_TXMAP(x)	(x->rl_cdata.rl_tx_dmamap[x->rl_cdata.last_tx])
 
 struct rl_type {
-	u_int16_t		rl_vid;
-	u_int16_t		rl_did;
+	uint16_t		rl_vid;
+	uint16_t		rl_did;
 };
 
 struct rl_mii_frame {
-	u_int8_t		mii_stdelim;
-	u_int8_t		mii_opcode;
-	u_int8_t		mii_phyaddr;
-	u_int8_t		mii_regaddr;
-	u_int8_t		mii_turnaround;
-	u_int16_t		mii_data;
+	uint8_t		mii_stdelim;
+	uint8_t		mii_opcode;
+	uint8_t		mii_phyaddr;
+	uint8_t		mii_regaddr;
+	uint8_t		mii_turnaround;
+	uint16_t		mii_data;
 };
 
 /*
@@ -724,7 +724,7 @@ struct rl_softc {
 	bus_dmamap_t		sc_rx_dmamap;
 	struct arpcom		sc_arpcom;	/* interface info */
 	struct mii_data		sc_mii;		/* MII information */
-	u_int8_t		rl_type;
+	uint8_t		rl_type;
 	int			rl_eecmd_read;
 	int			rl_eewidth;
 	void			*sc_sdhook;	/* shutdownhook */
@@ -738,7 +738,7 @@ struct rl_softc {
 	struct rl_list_data	rl_ldata;
 	struct mbuf		*rl_head;
 	struct mbuf		*rl_tail;
-	u_int32_t		rl_rxlenmask;
+	uint32_t		rl_rxlenmask;
 	int			rl_testmode;
 	struct timeout		timer_handle;
 

@@ -155,7 +155,7 @@ extern void lkdivert __P ((int (*getc_fn)(dev_t dev), dev_t dev));
 /*
  * Keyboard to ASCII, unshifted.
  */
-static u_char unshiftedAscii[] = {
+static uint8_t unshiftedAscii[] = {
 /*  0 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,
 /*  4 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,
 /*  8 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,
@@ -225,7 +225,7 @@ static u_char unshiftedAscii[] = {
 /*
  * Keyboard to Ascii, shifted.
  */
-static u_char shiftedAscii[] = {
+static uint8_t shiftedAscii[] = {
 /*  0 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,
 /*  4 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,
 /*  8 */ KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,	KBD_NOKEY,

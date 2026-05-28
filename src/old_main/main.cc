@@ -97,20 +97,25 @@ static void va_debug(va_list argp, const char *fmt)
 	buf[0] = buf[DEBUG_BUFSIZE] = 0;
 	vsnprintf(buf, DEBUG_BUFSIZE, fmt, argp);
 
+	std::string printbuf;
+	printbuf.reserve(DEBUG_BUFSIZE * 2);
+
 	s = buf;
 	while (*s) {
 		if (debug_currently_at_start_of_line) {
 			for (i=0; i<debug_indent; i++)
-				printf(" ");
+				printbuf += ' ';
 		}
 
-		fprintf(stderr, "%c", *s);
+		//fprintf(stderr, "%c", *s);
+		printbuf += *s;
 
 		debug_currently_at_start_of_line = 0;
 		if (*s == '\n' || *s == '\r')
 			debug_currently_at_start_of_line = 1;
 		s++;
 	}
+	fprintf(stderr, "%s", buf);
 }
 
 

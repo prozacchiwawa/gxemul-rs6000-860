@@ -501,9 +501,6 @@ static void start_xterm(int handle)
 	//HANDLE inheritableHandles[2] = { pipehandles[0], pipehandlesB[1] };
 	inheritableHandles[0] = pipehandles[0];
 	inheritableHandles[1] = pipehandlesB[1];
-	startInfo.StartupInfo.dwFlags |= STARTF_USECOUNTCHARS;
-	startInfo.StartupInfo.dwXCountChars = 80;
-	startInfo.StartupInfo.dwYCountChars = 25;
 	startInfo.StartupInfo.lpTitle = title;
 	startInfo.lpAttributeList = thrdList;
 
@@ -528,16 +525,6 @@ static void start_xterm(int handle)
 
 	console_handles[handle].w_descriptor = pipehandles[1];
 	console_handles[handle].r_descriptor = pipehandlesB[0];
-	{
-		char buf[1];
-		DWORD bytesread = 0;
-		ReadFile(pipehandlesB[0], &buf[0], 1, &bytesread, NULL);
-		if (bytesread) {
-			int i = 0;
-			int make_available(int handle, const unsigned char *ch, int len, int *i);
-			make_available(handle, (unsigned char*)&buf[0], 1, &i);
-		}
-	}
 }
 
 /*

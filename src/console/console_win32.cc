@@ -632,12 +632,6 @@ int make_available(int handle, const unsigned char *ch, int len, int *i) {
     }
   }
 
-  if (*here == 3 && handle == MAIN_CONSOLE) {
-    raise(SIGINT);
-    (*i) += 1;
-    return 0;	
-  }
-
   for (int c = 0; ansi_to_keyboard[c].sequence; c++) {
     auto atc = ansi_to_keyboard[c];
     auto seqlen = std::min(strlen(atc.sequence), (size_t)(end - here));
@@ -1138,7 +1132,7 @@ void console_init_main(struct emul *emul)
 	GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &console_oldmode_in);
 	GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &console_oldmode_out);
 
-	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), (console_oldmode_in & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT)) | ENABLE_VIRTUAL_TERMINAL_INPUT);
+	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), (console_oldmode_in & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT)) | ENABLE_VIRTUAL_TERMINAL_INPUT);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
 	console_stdout_pending = 1;

@@ -328,6 +328,9 @@ struct console_handle {
 	unsigned int	fifo[CONSOLE_FIFO_LEN];
 	int		fifo_head;
 	int		fifo_tail;
+
+	PROCESS_INFORMATION proc_info;
+	bool                is_proc_info_valid;
 };
 
 #define	NOT_USING_XTERM				0
@@ -508,7 +511,7 @@ static void start_xterm(int handle)
 		fprintf(stderr, "Failed to update thread attributes\n");
 	}
 	PROCESS_INFORMATION info;
-	BOOL res = CreateProcessW(modulefile, cmdline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | CREATE_NEW_CONSOLE, NULL, NULL, &startInfo.StartupInfo, &info);
+	BOOL res = CreateProcessW(modulefile, cmdline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | CREATE_NEW_CONSOLE, NULL, NULL, &startInfo.StartupInfo, &console_handles[handle].proc_info);
 	if (!res) 
 	{
 		fprintf(stderr, "Failed to create slave terminals\n");
@@ -525,6 +528,7 @@ static void start_xterm(int handle)
 
 	console_handles[handle].w_descriptor = pipehandles[1];
 	console_handles[handle].r_descriptor = pipehandlesB[0];
+	console_handles[handle].is_proc_info_valid = true;
 }
 
 /*
@@ -1278,6 +1282,15 @@ void console_init(void)
 	}
 
 	chp->in_use_for_input = 1;
+	atexit([] {
+		for (int i = 0; i < n_console_handles; i++) {
+			if (console_handles[i].is_proc_info_valid) {
+				CloseHandle(console_handles[i].proc_info.hThread);
+				TerminateProcess(console_handles[i].proc_info.hProcess, 0);
+				console_handles[i].is_proc_info_valid = 0;
+			}
+		}
+	});
 }
 
 

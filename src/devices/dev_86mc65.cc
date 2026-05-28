@@ -2362,13 +2362,6 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  /* Compute write target */
-  d->update_x1 = d->s3_pix_x;
-  d->update_x2 = d->s3_pix_x + write_len;
-  d->update_y1 = d->s3_pix_y;
-  d->update_y2 = d->s3_pix_y + write_len;
-  d->modified = 1;
-
   if (d->s3_rem_height == 0) {
     G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
     return;
@@ -2447,8 +2440,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     d->s3_rem_height -= 1;
   }
 
-  vga_update_graphics(cpu->machine, d, d->update_x1,
-                      d->update_y1, d->update_x2, d->update_y2);
+  d->modified = 1;
 }
 
 
@@ -2475,6 +2467,9 @@ void bitblt(cpu *cpu, struct vga_data *d) {
     d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
     pixel_transfer(cpu, d, false, transfer_color, d->s3_draw_width);
   }
+
+  vga_update_graphics(cpu->machine, d, 
+    clipping_left, clipping_top, clipping_right, clipping_bottom);
 }
 
 
@@ -2527,10 +2522,8 @@ void patblt(cpu *cpu, struct vga_data *d) {
 
 void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
   uint8_t transfer_color[2]; // unused for fillrect
-  int color_source = (d->s3_fg_color_mix >> 5) & 3;
-  int mix_op = d->s3_fg_color_mix & 0xf;
+  int height = d->s3_rem_height;
   int width = d->s3_draw_width;
-  int lines_written = 0;
 
   if (command & 0x10) {
     // Actually draw
@@ -2542,6 +2535,9 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     while (d->s3_rem_height > 0) {
       pixel_transfer(cpu, d, false, transfer_color, width);
     }
+
+    vga_update_graphics(cpu->machine, d, 
+      start_x, start_y, start_x + width, start_y + height);
 
     d->s3_cur_x = start_x;
     d->s3_cur_y = start_y;
@@ -2838,6 +2834,8 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
     }
 
     int pxcount = std::max(8 + (8 * d->s3_cmd_bus_size), (int)(8 * len));
+    auto start_x = d->s3_pix_x;
+    auto start_y = d->s3_pix_y;
     uint8_t pixels[32];
 
     if (d->s3_cmd_mx) {
@@ -2850,9 +2848,13 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
       }
       L(fprintf(stderr, " ]\n"));
       pixel_transfer(cpu, d, true, pixels, pxcount);
+      vga_update_graphics(cpu->machine, d, 
+        start_x, start_y, start_x + pxcount, start_y);
     } else {
       G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
       pixel_transfer(cpu, d, false, to_write, 1 + d->s3_cmd_bus_size);
+      vga_update_graphics(cpu->machine, d, 
+        start_x, start_y, start_x + d->s3_cmd_bus_size + 1, start_y);
     }
   }
 

@@ -490,7 +490,7 @@ void emul_machine_setup(struct machine *m, int n_load, char **load_names,
 		 *  gzipped files are automagically gunzipped:
 		 *  NOTE/TODO: This isn't secure. system() is used.
 		 */
-		tmp_f = fopen(name_to_load, "r");
+		tmp_f = fopen(name_to_load, "rb");
 		if (tmp_f != NULL) {
 			unsigned char buf[2];		/*  gzip header  */
 			size_t res;

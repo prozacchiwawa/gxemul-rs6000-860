@@ -31,7 +31,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <sys/mman.h>
 #include <string.h>
 
 #include "cpu.h"
@@ -148,9 +147,7 @@ void cpu_destroy(struct cpu *cpu)
 	if (cpu->path != NULL)
 		free(cpu->path);
 
-	/*  TODO: This assumes that zeroed_alloc() actually succeeded
-	    with using mmap(), and not malloc()!  */
-	munmap((void *)cpu, sizeof(struct cpu));
+	free(cpu);
 }
 
 

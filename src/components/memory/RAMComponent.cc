@@ -27,7 +27,6 @@
 
 #include <iomanip>
 #include <assert.h>
-#include <sys/mman.h>
 
 #include "components/RAMComponent.h"
 #include "GXemul.h"
@@ -60,7 +59,7 @@ void RAMComponent::ReleaseAllBlocks()
 {
 	for (size_t i=0; i<m_memoryBlocks.size(); ++i) {
 		if (m_memoryBlocks[i] != NULL) {
-			munmap(m_memoryBlocks[i], m_blockSize);
+			free(m_memoryBlocks[i]);
 			m_memoryBlocks[i] = NULL;
 		}
 	}
@@ -220,10 +219,9 @@ void RAMComponent::AddressSelect(uint64_t address)
 
 void* RAMComponent::AllocateBlock()
 {
-	void * p = mmap(NULL, m_blockSize, PROT_WRITE | PROT_READ,
-	    MAP_ANON | MAP_PRIVATE, -1, 0);
+	void * p = calloc(m_blockSize, 1);
 
-	if (p == MAP_FAILED || p == NULL) {
+	if (p == NULL) {
 		std::cerr << "RAMComponent::AllocateBlock: Could not allocate "
 		    << m_blockSize << " bytes. Aborting.\n";
 		throw std::exception();

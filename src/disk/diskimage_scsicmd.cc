@@ -183,7 +183,7 @@ static void diskimage__switch_tape(struct diskimage *d)
 	if (d->f != NULL)
 		fclose(d->f);
 
-	d->f = fopen(tmpfname, d->writable? "r+" : "r");
+	d->f = fopen(tmpfname, d->writable? "rb+" : "rb");
 	if (d->f == NULL) {
 		fprintf(stderr, "[ diskimage__switch_tape(): could not "
 		    "(re)open '%s' ]\n", tmpfname);
@@ -887,7 +887,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		if (d->f != NULL)
 			fclose(d->f);
 
-		d->f = fopen(d->fname, d->writable? "r+" : "r");
+		d->f = fopen(d->fname, d->writable? "rb+" : "rb");
 		if (d->f == NULL) {
 			fprintf(stderr, "[ diskimage: could not (re)open "
 			    "'%s' ]\n", d->fname);
@@ -1022,7 +1022,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICDROM_READ_DISCINFO:
-		/*  (Patch from Håvard Eidnes.)  */
+		/*  (Patch from HÃ¥vard Eidnes.)  */
 		debug("CDROM_READ_DISCINFO, cmd[1]=0x%02x", xferp->cmd[1]);
 		retlen = 34;
 		scsi_transfer_allocbuf(&xferp->data_in_len,
@@ -1050,7 +1050,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		break;
 
 	case SCSICDROM_READ_TRACKINFO:
-		/*  (Patch from Håvard Eidnes.)  */
+		/*  (Patch from HÃ¥vard Eidnes.)  */
 		debug("CDROM_READ_TRACKINFO");
 		retlen = 36;
 		scsi_transfer_allocbuf(&xferp->data_in_len,

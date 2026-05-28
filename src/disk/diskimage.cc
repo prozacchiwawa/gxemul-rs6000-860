@@ -132,13 +132,13 @@ void diskimage_add_overlay(struct diskimage *d, char *overlay_basename)
 	snprintf(bitmap_name, bitmap_name_len, "%s.map", overlay_basename);
 
 	CHECK_ALLOCATION(overlay.overlay_basename = strdup(overlay_basename));
-	overlay.f_data = fopen(overlay_basename, d->writable? "r+" : "r");
+	overlay.f_data = fopen(overlay_basename, d->writable? "rb+" : "rb");
 	if (overlay.f_data == NULL) {
 		perror(overlay_basename);
 		exit(1);
 	}
 
-	overlay.f_bitmap = fopen(bitmap_name, d->writable? "r+" : "r");
+	overlay.f_bitmap = fopen(bitmap_name, d->writable? "rb+" : "rb");
 	if (overlay.f_bitmap == NULL) {
 		perror(bitmap_name);
 		fprintf(stderr, "Please create the map file first.\n");
@@ -940,7 +940,7 @@ int diskimage_add(struct machine *machine, char *fname)
 	if (d->is_a_cdrom || prefix_r)
 		d->writable = 0;
 
-	d->f = fopen(fname, d->writable? "r+" : "r");
+	d->f = fopen(fname, d->writable? "rb+" : "rb");
 	if (d->f == NULL) {
 		char *errmsg = (char *) malloc(200 + strlen(fname));
 		snprintf(errmsg, 200+strlen(fname),

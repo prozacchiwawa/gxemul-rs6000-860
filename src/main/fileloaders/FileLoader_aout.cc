@@ -119,7 +119,7 @@ bool FileLoader_aout::LoadIntoComponent(refcount_ptr<Component> component, ostre
 		return false;
 	}
 
-	ifstream file(Filename().c_str());
+	ifstream file(Filename().c_str(), std::ios::binary | std::ios::in);
 	if (!file.is_open()) {
 		messages << "Unable to read file.\n";
 		return false;

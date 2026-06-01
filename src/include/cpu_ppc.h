@@ -243,6 +243,9 @@ struct ppc_record_buf {
 #define	PPC_EXCEPTION_DEC	0x9	/*  Decrementer  */
 #define	PPC_EXCEPTION_SC	0xc	/*  Syscall  */
 
+#define PPC_MSR_SRR1_MASK 0x781f0000
+#define PPC_MSR_SRR1_FAULT_BITS 0x8c
+
 /*  XER bits:  */
 #define	PPC_XER_SO	(1UL << 31)	/*  Summary Overflow  */
 #define	PPC_XER_OV	(1 << 30)	/*  Overflow  */

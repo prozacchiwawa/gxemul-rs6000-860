@@ -352,12 +352,84 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
     }
   }
 
-  if (write && (addr >= 0xfe050000) && (addr <= 0xfe080000)) {
-    fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
-    for (int i = 0; i < size; i++) {
-      fprintf(stderr, " %02x", ((uint8_t *)data)[i]);
+  if (write) {
+    if (addr == 0xb69c8038) {
+      fprintf(stderr, "[ %08x: minimum free = ", (unsigned int)cpu->pc);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, "%02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, " ]\n");
+    } else if (addr == 0xb69c8028) {
+      fprintf(stderr, "[ %08x: space defined = ", (unsigned int)cpu->pc);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, "%02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, " ]\n");
+    } else if (addr == 0xb69c8010) {
+      fprintf(stderr, "[ %08x: page outs? = ", (unsigned int)cpu->pc);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, "%02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, " ]\n");
+    } else if ((addr >= 0x8a578) && (addr <= 0x8a620)) {
+      static const char *vmker_names[] = {
+        "vmker__vmmsrval",
+        "vmker__ptasrval",
+        "vmker__dmapsrval",
+        "vmker__ramdsrval",
+        "vmker__kexsrval",
+        "vmker__iplcbptr",
+        "vmker__hashbits",
+        "vmker__stoibits",
+        "vmker__psrsvdblks",
+        "vmker__nrpages",
+        "vmker__badpages",
+        "vmker__numfrb",
+        "vmker__maxperm",
+        "vmker__numperm",
+        "vmker__numpsblks",
+        "vmker__psfreeblks",
+        "vmker__bconfsrval",
+        "vmker__pfrsvdblks",
+        "vmker__nofetchprot",
+        "vmker__ukernsrval",
+        "vmker__numclient",
+        "vmker__maxclient",
+        "vmker__kernsrval",
+        "vmker__stoimask",
+        "vmker__stoinio",
+        "vmker__maxpout",
+        "vmker__minpout",
+        "vmker__rptsize",
+        "vmker__rptfree",
+        "vmker__rpdecay",
+        "vmker__sysrepage",
+        "vmker__swhashmask",
+        "vmker_hashmask",
+        "vmker__cachealign",
+        "vmker__overflows",
+        "vmker__reloads",
+        "vmker__pmap_lock_addr",
+        "vmker__numcompress",
+        "vmker__noflush",
+        "vmker__iplcbxptr",
+        "vmker__ahashmask",
+        "vmker__vmkerlock",
+        "<too far>",
+        0
+      };
+      fprintf(stderr, "[ %08x: vmker write: %s = ", (unsigned int)cpu->pc, vmker_names[(addr - 0x8a578) / 4]);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, "%02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, " ]\n");
+    } else if ((addr >= 0xfe050000) && (addr <= 0xfe080000)) {
+      fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, " %02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, "\n");
     }
-    fprintf(stderr, "\n");
   }
 }
 

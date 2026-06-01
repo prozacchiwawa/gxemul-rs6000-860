@@ -219,7 +219,31 @@ X(bclr)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (ctr_ok && cond_ok) {
-		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, DoReturn(), addr);
+    if ((cpu->pc | 0xf) == 0xa4f4f) {
+      uint8_t struct_timeval[8];
+      if (cpu->memory_rw(cpu, cpu->mem, timer_target_addr, struct_timeval, 8, MEM_READ, NO_EXCEPTIONS | HOST_ACCESS)) {
+        static const uint8_t want_state[] = { 0, 0, 1, 1, 0x29 };
+        static bool interrupted = false;
+        if (!interrupted && !memcmp(want_state, struct_timeval, sizeof(want_state))) {
+          interrupted = true;
+          single_step = (cpu->ninstrs | (INSTRUCTION_STRIDE - 1)) ^ (INSTRUCTION_STRIDE - 1);
+        }
+        fprintf
+          (stderr, "%08x: curtime_ppc(%08x): tv_sec = %02x%02x%02x%02x, tv_usec = %02x%02x%02x%02x\n",
+           (unsigned int)cpu->pc,
+           (unsigned int)timer_target_addr,
+           struct_timeval[0],
+           struct_timeval[1],
+           struct_timeval[2],
+           struct_timeval[3],
+           struct_timeval[4],
+           struct_timeval[5],
+           struct_timeval[6],
+           struct_timeval[7]
+           );
+      }
+    }
+    instr(update_pc_for_branch)(cpu, cpu->cd.ppc, DoReturn(), addr);
 	}
 }
 /*
@@ -787,8 +811,16 @@ X(dcbz)
 X(mtfsf)
 {
 	CHECK_FOR_FPU_EXCEPTION;
-	cpu->cd.ppc.fpscr &= ~ic->arg[1];
-	cpu->cd.ppc.fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
+  uint64_t old_fpscr = cpu->cd.ppc.fpscr;
+  uint64_t new_fpscr = old_fpscr;
+	new_fpscr &= ~ic->arg[1];
+	new_fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
+  if (ic->arg[1] != 0) {
+    // FX is altered only if crf = 0
+    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
+  }
+  fpu_bit_ladder(cpu, cpu->cd.ppc.fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  cpu->cd.ppc.fpscr = new_fpscr;
 }
 X(mtfsf_dot)
 {
@@ -806,8 +838,16 @@ X(mtfsf_dot)
 X(mtfsfi)
 {
 	CHECK_FOR_FPU_EXCEPTION;
-	cpu->cd.ppc.fpscr &= ~(15 << (ic->arg[1] * 4));
-	cpu->cd.ppc.fpscr |= ic->arg[2] << (ic->arg[1] * 4);
+  uint64_t old_fpscr = cpu->cd.ppc.fpscr;
+  uint64_t new_fpscr = old_fpscr;
+	new_fpscr &= ~(15 << (ic->arg[1] * 4));
+	new_fpscr |= ic->arg[2] << (ic->arg[1] * 4);
+  if (ic->arg[1] != 0) {
+    // FX is altered only if crf = 0
+    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
+  }
+  fpu_bit_ladder(cpu, old_fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  cpu->cd.ppc.fpscr = new_fpscr;
 }
 X(mtfsfi_dot)
 {
@@ -1309,7 +1349,9 @@ X(llsc)
 
 		cpu->cd.ppc.ll_addr = final_addr;
 		cpu->cd.ppc.ll_bit = 1;
-    		// fprintf(stderr, "lwarx %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt], (unsigned int)cpu->pc);
+    if (cpu->pc > 0xb800 && cpu->pc < 0xc000) {
+      fprintf(stderr, "lwarx %08x = %08x @ %08x\n", (unsigned int)addr, (unsigned int)cpu->cd.ppc.gpr[rt], (unsigned int)cpu->pc);
+    }
 	} else {
 		uint32_t old_so = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_SO;
     auto ll_addr = cpu->cd.ppc.ll_addr;
@@ -1370,7 +1412,9 @@ X(llsc)
 			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
     }
 
-    // fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x\n", len, d[0], d[1], d[2], d[3]);
+    if (cpu->pc >= 0xb800 && cpu->pc < 0xc000) {
+      fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x @ %08x\n", len, d[0], d[1], d[2], d[3], (unsigned int)cpu->pc);
+    }
     // Clear the reserve bit.
 		cpu->cd.ppc.cr = new_cr | 0x20000000;	/*  success!  */
 	}
@@ -1850,9 +1894,11 @@ X(mtctr) {
 }
 X(mttbu) {
   cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU] = reg(ic->arg[0]);
+  fprintf(stderr, "%08x: mttbu: %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.spr[TBR_TBU]);
 }
 X(mttbl) {
   cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL] = reg(ic->arg[0]);
+  fprintf(stderr, "%08x: mttbl: %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.spr[TBR_TBL]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
@@ -2052,6 +2098,10 @@ X(stmw) {
   cpu_ppc_swizzle_offset(cpu, 4, 0, &swizzle, &offset);
 
   sync_pc(cpu, ic);
+
+  if (cpu->pc == 0xa4e88) {
+    timer_target_addr = cpu->cd.ppc.gpr[3];
+  }
 
   auto test_addr = addr;
   for (auto test_rs = rs; test_rs <= 31; test_rs++) {
@@ -2388,6 +2438,9 @@ DOT2(divwu)
 X(add)
 {
   reg(ic->arg[2]) = reg(ic->arg[0]) + reg(ic->arg[1]);
+  if (cpu->pc >= 0xb800 && cpu->pc < 0x3000) {
+    fprintf(stderr, "add %08x + %08x -> %08x @ %08x\n", (unsigned int)reg(ic->arg[0]), (unsigned int)reg(ic->arg[1]), (unsigned int)reg(ic->arg[2]), (unsigned int)cpu->pc);
+  }
 }
 DOT2(add)
 
@@ -4094,7 +4147,6 @@ X(to_be_translated)
 			switch (xo) {
 			case PPC_31_LBZX:  load = 1; break;
 			case PPC_31_LBZUX: load=update=1; break;
-			case PPC_31_LHAX:  size=1; load=1; zero=0; break;
 			case PPC_31_LHZX:  size=1; load=1; break;
 			case PPC_31_LHZUX: size=1; load=update = 1; break;
 			case PPC_31_LWZX:  size=2; load=1; break;
@@ -4618,6 +4670,10 @@ X(to_be_translated)
         }
         ic->arg[0] = 31 - ((iword >> 21) & 31);
         ic->arg[1] = xo == PPC_63_MTFSB0x;
+        /* Note: Bits 1 and 2 (FEX and VX) cannot be explicitly set (also cleared). */
+        if (ic->arg[0] == 30 || ic->arg[0] == 29) {
+          ic->f = instr(nop);
+        }
         break;
         
 			default:{

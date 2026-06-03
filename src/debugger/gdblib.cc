@@ -92,6 +92,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #endif
 #include <stddef.h>
 #include <stdlib.h>

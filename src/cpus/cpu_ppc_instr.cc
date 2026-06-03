@@ -1606,7 +1606,7 @@ X(icbi)
 {
   sync_pc(cpu, ic);
   auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  fprintf(stderr, "[ %08x: icbi %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
+  fprintf(stderr, "[ %08x: icbi %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)ea, cpu->ninstrs);
   auto old_msr = cpu->cd.ppc.msr;
   auto dr = !!(old_msr & PPC_MSR_DR);
   cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
@@ -2859,7 +2859,7 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  fprintf(stderr, "[ %08x: tlbie %08x %" PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;

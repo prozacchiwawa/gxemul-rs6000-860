@@ -87,6 +87,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>

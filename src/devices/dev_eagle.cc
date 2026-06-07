@@ -533,6 +533,38 @@ struct register_name_t register_830_names[] = {
   { 0 }
 };
 
+DEVICE_ACCESS(eagle_200)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  }
+
+  switch (relative_addr) {
+  case 0:
+    if (writeflag == MEM_WRITE) {
+      d->game_timer = true;
+    }
+    if (d->game_timer) {
+      d->game_timer = false;
+      idata = 15;
+    }
+    break;
+
+  default:
+    if (writeflag != MEM_WRITE) {
+      idata = 0;
+    }
+    break;
+  }
+
+  fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
+
+  return 1;
+}
+
 DEVICE_ACCESS(eagle_830)
 {
   struct eagle_data *d = (struct eagle_data *) extra;
@@ -886,6 +918,10 @@ DEVINIT(eagle)
         isa_portbase + 0x398, 8, dev_eagle_398_access, d,
         DM_DEFAULT, NULL);
 
+    memory_device_register(devinit->machine->memory, "200",
+                           isa_portable + 0x200, 16, dev_gameport_access, d,
+                           DM_DEFAULT, NULL);
+    
     memory_device_register(devinit->machine->memory, "830",
         isa_portbase + 0x830, 16, dev_eagle_830_access, d,
         DM_DEFAULT, NULL);

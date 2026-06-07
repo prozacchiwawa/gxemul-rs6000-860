@@ -219,30 +219,6 @@ X(bclr)
 	cond_ok = (bo >> 4) & 1;
 	cond_ok |= ( ((bo >> 3) & 1) == ((cpu->cd.ppc.cr >> bi31m) & 1) );
 	if (ctr_ok && cond_ok) {
-    if ((cpu->pc | 0xf) == 0xa4f4f) {
-      uint8_t struct_timeval[8];
-      if (cpu->memory_rw(cpu, cpu->mem, timer_target_addr, struct_timeval, 8, MEM_READ, NO_EXCEPTIONS | HOST_ACCESS)) {
-        static const uint8_t want_state[] = { 0, 0, 1, 1, 0x29 };
-        static bool interrupted = false;
-        if (!interrupted && !memcmp(want_state, struct_timeval, sizeof(want_state))) {
-          interrupted = true;
-          single_step = (cpu->ninstrs | (INSTRUCTION_STRIDE - 1)) ^ (INSTRUCTION_STRIDE - 1);
-        }
-        fprintf
-          (stderr, "%08x: curtime_ppc(%08x): tv_sec = %02x%02x%02x%02x, tv_usec = %02x%02x%02x%02x\n",
-           (unsigned int)cpu->pc,
-           (unsigned int)timer_target_addr,
-           struct_timeval[0],
-           struct_timeval[1],
-           struct_timeval[2],
-           struct_timeval[3],
-           struct_timeval[4],
-           struct_timeval[5],
-           struct_timeval[6],
-           struct_timeval[7]
-           );
-      }
-    }
     instr(update_pc_for_branch)(cpu, cpu->cd.ppc, DoReturn(), addr);
 	}
 }
@@ -482,6 +458,8 @@ X(bla)
 }
 
 
+extern bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result);
+
 /*
  *  bl:  Branch and Link (to a different translated page)  (with trace)
  *
@@ -501,6 +479,21 @@ X(bl)
 
 	/*  Find the new physical page and update the translation pointers:  */
 	quick_pc_to_pointers(cpu);
+
+  /*
+  if (cpu->pc == 0xd2b38) {
+    uint32_t uio_addr;
+    uint32_t uio_count;
+    fprintf(stderr, "vnop_rdwr - %s\n", cpu->cd.ppc.gpr[4] ? "write" : "read");
+    if (cpu->cd.ppc.gpr[4]) {
+      if (load_uint32(cpu, cpu->cd.ppc.gpr[6], uio_addr)) {
+        if (load_uint32(cpu, cpu->cd.ppc.gpr[6] + 4, uio_count)) {
+          debug_mem_hexdump(cpu, cpu->mem, uio_addr, uio_addr + uio_count);
+        }
+      }
+    }
+  }
+  */
 }
 
 
@@ -1069,21 +1062,17 @@ X(fctiwz_dot)
 X(fmul)
 {
 	CHECK_FOR_FPU_EXCEPTION;
-  fprintf(stderr, "fmul: f%d x f%d -> f%d\n", (uint64_t *)ic->arg[1] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[2] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[0] - cpu->cd.ppc.fpr);
 	base_fmul(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 }
 X(fmul_dot)
 {
 	CHECK_FOR_FPU_EXCEPTION;
-  fprintf(stderr, "fmul: f%d x f%d -> f%d\n", (uint64_t *)ic->arg[1] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[2] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[0] - cpu->cd.ppc.fpr);
 	base_fmul(cpu, ic, (uint64_t *)ic->arg[0], (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 	fpu_update_cr1(cpu);
 }
 
 X(fmuls)
 {
-	/*  TODO  */
-  fprintf(stderr, "fmuls: f%d x f%d -> f%d\n", (uint64_t *)ic->arg[1] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[2] - cpu->cd.ppc.fpr, (uint64_t *)ic->arg[0] - cpu->cd.ppc.fpr);
 	instr(fmul)(cpu, ic);
 }
 X(fmuls_dot)
@@ -1118,8 +1107,6 @@ X(fmadd)
   float64_t mul_result;
   base_fmul(cpu, ic, &mul_result.v, &fra.v, &frc.v);
   base_fadd(cpu, ic, &result.v, &mul_result.v, &frb.v);
-  auto fa = format_float(fra.v), fb = format_float(frb.v), fc = format_float(frc.v), fr = format_float(result.v);
-  fprintf(stderr, "fmadd %s * %s + %s = %s\n", fa.c_str(), fc.c_str(), fb.c_str(), fr.c_str());
 
 	(*(uint64_t *)ic->arg[0]) = result.v;
 }
@@ -1162,8 +1149,6 @@ X(fmsub)
       float64_t zero = { 0 };
       result = f64_sub(zero, result);
     }
-    auto fa = format_float(fra.v), fb = format_float(frb.v), fc = format_float(frc.v), fr = format_float(result.v);
-    fprintf(stderr, "f%smsub %s * %s - %s = %s\n", fnm ? "n" : "", fa.c_str(), fc.c_str(), fb.c_str(), fr.c_str());
   }
 
   if (nan) {
@@ -1375,7 +1360,6 @@ X(llsc)
     }
 
 		if (!ll_bit || (ll_addr != final_addr)) {
-      fprintf(stderr, "stwcx. different reserve addr %08x vs %08x\n", (unsigned int)ll_addr, (unsigned int)final_addr);
 			cpu->cd.ppc.cr = new_cr;
 			// fprintf(stderr, "stwcx. %08x /!\\ %08x ll %d %08x @ %08x\n", (unsigned int)addr, (unsigned int)value, ll_bit, (unsigned int)cpu->cd.ppc.ll_addr, (unsigned int)cpu->pc);
 			return;
@@ -1412,9 +1396,6 @@ X(llsc)
 			cpu->machine->cpus[i]->cd.ppc.ll_bit = 0;
     }
 
-    if (cpu->pc >= 0xb800 && cpu->pc < 0xc000) {
-      fprintf(stderr, "stwcx. len %d d %02x %02x %02x %02x @ %08x\n", len, d[0], d[1], d[2], d[3], (unsigned int)cpu->pc);
-    }
     // Clear the reserve bit.
 		cpu->cd.ppc.cr = new_cr | 0x20000000;	/*  success!  */
 	}
@@ -1894,11 +1875,9 @@ X(mtctr) {
 }
 X(mttbu) {
   cpu->cd.ppc.spr[TBR_TBU] = cpu->cd.ppc.spr[SPR_TBU] = reg(ic->arg[0]);
-  fprintf(stderr, "%08x: mttbu: %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.spr[TBR_TBU]);
 }
 X(mttbl) {
   cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL] = reg(ic->arg[0]);
-  fprintf(stderr, "%08x: mttbl: %08x\n", (unsigned int)cpu->pc, (unsigned int)cpu->cd.ppc.spr[TBR_TBL]);
 }
 // If software changes the high bit of dec from 0 to 1 then an interrupt becomes pending.
 X(mtdec) {
@@ -2438,9 +2417,6 @@ DOT2(divwu)
 X(add)
 {
   reg(ic->arg[2]) = reg(ic->arg[0]) + reg(ic->arg[1]);
-  if (cpu->pc >= 0xb800 && cpu->pc < 0x3000) {
-    fprintf(stderr, "add %08x + %08x -> %08x @ %08x\n", (unsigned int)reg(ic->arg[0]), (unsigned int)reg(ic->arg[1]), (unsigned int)reg(ic->arg[2]), (unsigned int)cpu->pc);
-  }
 }
 DOT2(add)
 

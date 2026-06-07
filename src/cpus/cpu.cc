@@ -61,6 +61,7 @@ constexpr int STORED_CALL_QUERY_VPD = 10;
 constexpr int STORED_CALL_ODM_GET_LIST = 11;
 constexpr int STORED_CALL_ODM_ADD_OBJ_PROXY = 12;
 constexpr int STORED_CALL_DEVWRITE = 13;
+constexpr int STORED_CALL_VNOP_RDWR = 14;
 // constexpr int STORED_SYSCALL_LOG_ERROR = 5;
 // constexpr int STORED_SYSCALL_LOG_MESSAGE = 6;
 // constexpr int STORED_CALL_DEVSWQRY = 7;
@@ -91,6 +92,7 @@ struct match_functions_t trace_functions[] = {
   { "odm_get_list_proxy", (1 << 4), 0xd00f8110, 0xd00f8114 },
   { "odm_add_obj_proxy", (1 << 5) },
   { "devwrite", (1 << 3) | (1 << 4) },
+  { "vnop_rdwr", (1 << 4) },
 //  { "devswqry", 1 << 4, 0x57a34, 0x57864 },
 //  { "devswadd", 1 << 4, 0xfbfbc },
 //   { "devswdel", 1 << 4, 0xfbdd8 },
@@ -279,7 +281,7 @@ struct match_functions_t *try_match_function(struct cpu *cpu, uint64_t f, const 
   return nullptr;
 }
 
-static bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result) {
+bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result) {
   uint8_t buf[sizeof(uint32_t)] = { };
   auto r = cpu->memory_rw(cpu, cpu->mem, addr, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
   if (r == MEMORY_ACCESS_FAILED) {
@@ -386,7 +388,8 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
       debug_mem_hexdump(cpu, cpu->mem, uio_addr, uio_addr + 0x100);
     }
     break;
-
+  }
+    
   case STORED_CALL_QUERY_VPD:
     fprintf(stderr, "r3\n");
     debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x200);
@@ -402,21 +405,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
     fprintf(stderr, "r4\n");
     debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x200);
     break;
-
-  case STORED_CALL_DEVWRITE:
-    fprintf(stderr, "r3\n");
-    
-  }
-
-    /*
-      case STORED_SYSCALL_LOG_ERROR:
-      case STORED_SYSCALL_LOG_MESSAGE:
-      for (int i = 4; i < 8; i++) {
-      fprintf(stderr, "r%d\n", i);
-      debug_mem_hexdump(cpu, cpu->mem, matched->stored[i - 3], matched->stored[i - 3] + 0x100);
-      }
-      break;
-    */
   }
 
 #ifdef PRINT_MEMORY_CHECKSUM

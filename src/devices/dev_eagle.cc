@@ -919,7 +919,7 @@ DEVINIT(eagle)
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "200",
-                           isa_portable + 0x200, 16, dev_gameport_access, d,
+                           isa_portbase + 0x200, 16, dev_eagle_200_access, d,
                            DM_DEFAULT, NULL);
     
     memory_device_register(devinit->machine->memory, "830",

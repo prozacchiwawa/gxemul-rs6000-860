@@ -65,6 +65,8 @@ host_load_store_t get_tlb_translation<ppc_tc_physpage>(struct cpu *cpu, uint64_t
 
 #define COUNT_DIV 2
 
+uint64_t timer_target_addr;
+
 /*
  *  ppc_cpu_new():
  *
@@ -357,7 +359,8 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-  cpu->cd.ppc.msr = *valuep;
+  // POW 0 ILE EE PR FP ME FE0 SE BE FE1 0 IP IR DR 0 0 RI LE
+  cpu->cd.ppc.msr = *valuep & 0x5ff73;
 
   /*  Switching between temporary and real gpr 0..3?  */
   if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
@@ -420,20 +423,11 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
  */
 void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 {
-  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] += 1000;
-  if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
-    cpu->cd.ppc.spr[SPR_TBU]++;
-  }
-
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
-  cpu->cd.ppc.spr[SPR_SRR1] &= ~0x3f0000;
-  if (exception_nr == 7) {
-    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
-  } else {
-    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xff73) | exn_extra;
-  }
+  // "Bits 1-4 and 10-15 of srr1 are loaded with exception specific information and bits
+  //  0, 5-9, and 16-31 of msr are placed into the corresponding bit positions of SRR1."
+  cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
 
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
@@ -1134,6 +1128,10 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			debug("mtmsr\tr%i", rs);
 			if (l_bit)
 				debug(",%i", l_bit);
+      if (!running) {
+        break;
+      }
+      debug("\t(%08x)", cpu->cd.ppc.gpr[rs]);
 			break;
 		case PPC_31_TW:
 		case PPC_31_TD:
@@ -2410,7 +2408,7 @@ void ppc_update_for_icount(struct cpu *cpu) {
   // Take care of timebase
   uint32_t tbl = cpu->cd.ppc.spr[SPR_TBL];
   cpu->cd.ppc.spr[SPR_TBL] += icount;
-  if ((tbl >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0) {
+  if ((tbl & 0x80000000) && !(cpu->cd.ppc.spr[SPR_TBL] & 0x80000000)) {
     cpu->cd.ppc.spr[SPR_TBU] ++;
   }
   cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL];
@@ -2445,6 +2443,25 @@ template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr)
     return 2;
   } else {
     return 0;
+  }
+}
+
+template<bool Carry, bool Overflow>
+void update_xer_arith(struct cpu *cpu, uint64_t raw_result, bool c6) {
+  auto xer_ref = &cpu->cd.ppc.spr[SPR_XER];
+  uint32_t result_high = raw_result >> 32;
+  bool c7 = !!result_high;
+  if (Carry) {
+    *xer_ref &= ~PPC_XER_CA;
+    if (c7) {
+      *xer_ref |= PPC_XER_CA;
+    }
+  }
+  if (Overflow) {
+    *xer_ref &= ~PPC_XER_OV;
+    if (c6 ^ c7) {
+      *xer_ref |= PPC_XER_OV | PPC_XER_SO;
+    }
   }
 }
 

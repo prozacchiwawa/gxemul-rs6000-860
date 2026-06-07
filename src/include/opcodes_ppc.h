@@ -91,6 +91,7 @@
 #define	  PPC_31_AND		  28
 #define	  PPC_31_CMPL		  32
 #define	  PPC_31_SUBF		  40
+#define   PPC_31_SUBFO    (40 | 512)
 #define	  PPC_31_DCBST		  54
 #define	  PPC_31_LWZUX		  55
 #define	  PPC_31_ANDC		  60
@@ -106,7 +107,9 @@
 #define	  PPC_31_LBZUX		  119
 #define	  PPC_31_NOR		  124
 #define	  PPC_31_SUBFE		  136
+#define	  PPC_31_SUBFEO		  (136 | 512)
 #define	  PPC_31_ADDE		  138
+#define   PPC_31_ADDEO    (138 | 512)
 #define	  PPC_31_MTCRF		  144
 #define	  PPC_31_MTMSR		  146
 #define	  PPC_31_STDX		  149

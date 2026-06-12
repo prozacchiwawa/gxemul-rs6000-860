@@ -822,6 +822,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
   case SCSICMD_WRITE_VERIFY_10:
 		debug("WRITE");
 
+		if (d->is_a_cdrom) {
+			return 0;
+		}
+
 		/*  TODO: tape  */
 
 		if (xferp->cmd[0] == SCSICMD_WRITE) {

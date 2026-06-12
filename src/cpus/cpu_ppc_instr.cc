@@ -1702,9 +1702,18 @@ X(icbi)
   auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
   auto old_msr = cpu->cd.ppc.msr;
   auto dr = !!(old_msr & PPC_MSR_DR);
+  auto instr = ic->arg[2] ? INVALIDATE_INSTR : 0;
   cpu->cd.ppc.msr = (cpu->cd.ppc.msr & ~PPC_MSR_IR) | (dr ? PPC_MSR_IR : 0);
-  cpu->invalidate_translation_caches(cpu, ea, INVALIDATE_VADDR);
+  cpu->invalidate_translation_caches(cpu, ea, INVALIDATE_VADDR | instr);
   cpu->cd.ppc.msr = old_msr;
+}
+
+X(dcbt)
+{
+  sync_pc(cpu, ic);
+  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
+  uint64_t dummy;
+  cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
 }
 
 /*
@@ -3931,14 +3940,25 @@ X(to_be_translated)
 				ic->f = instr(srawi);
 			break;
 
+		case PPC_31_DCBT:
+		case PPC_31_DCBST:
+		case PPC_31_DCBTST:
+      ra = (iword >> 16) & 31;
+      rb = (iword >> 11) & 31;
+      if (ra == 0) {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.zero);
+      } else {
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
+      }
+      ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->arg[2] = main_opcode;
+      ic->f = instr(dcbt);
+      break;
+
 		case PPC_31_SYNC:
 		case PPC_31_DSSALL:
 		case PPC_31_EIEIO:
-		case PPC_31_DCBST:
-		case PPC_31_DCBTST:
 		case PPC_31_DCBF:
-		case PPC_31_DCBT:
-    case PPC_31_DCBI:
 			ic->f = instr(nop);
 			break;
 
@@ -3951,6 +3971,7 @@ X(to_be_translated)
         ic->arg[0] = (size_t)(&cpu->cd.ppc.gpr[ra]);
       }
       ic->arg[1] = (size_t)(&cpu->cd.ppc.gpr[rb]);
+      ic->arg[2] = main_opcode == PPC_31_ICBI;
       ic->f = instr(icbi);
       break;
 

@@ -89,8 +89,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
-		fatal("%08x: PPC LOAD/STORE misalignment across page boundary: TODO"
-		    " (addr=0x%08x, LS_SIZE=%i)\n", (unsigned int)cpu->pc, (int)addr, LS_SIZE);
 		if (swizzle | offset) {
       fprintf(stderr, "misaligned LE without full translation\n");
       exit(1);
@@ -102,32 +100,48 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     auto first_span = second_page - addr;
 
 #ifdef LS_LOAD
-    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+    auto op_desc = "load";
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned load exception @ %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
       // Throw
       return;
     }
 
-    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned load exception @ %08x from %08x\n", (unsigned int)cpu->pc, (unsigned int)second_page, (unsigned int)addr);
       // Throw
       return;
     }
 
     load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
+    auto regval = reg(ic->arg[0]);
 #else
+    auto op_desc = "store";
+    auto regval = reg(ic->arg[0]);
     store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
-
-    if (second_span) {
-      if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span,
-                          MEM_WRITE, CACHE_DATA)) {
-        return;
-      }
-    }
 
     if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, first_span,
                         MEM_WRITE, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned store exception @ %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
+      return;
+    }
+
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span,
+                                               MEM_WRITE, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned store exception @ %08x from %08x\n", (unsigned int)cpu->pc, (unsigned int)second_page, (unsigned int)addr);
       return;
     }
 #endif
+
+		fprintf(stderr, "%08x: PPC %s misalignment across page boundary "
+          " (addr=0x%08x, LS_SIZE=%i, value %08x): ", (unsigned int)cpu->pc, op_desc, (int)addr, LS_SIZE, (unsigned int)regval);
+    for (int i = 0; i < first_span; i++) {
+      fprintf(stderr, " %02x", data[i]);
+    }
+    for (int i = first_span; i < LS_SIZE; i++) {
+      fprintf(stderr, ".%02x", data[i]);
+    }
+    fprintf(stderr, "\n");
 
 #ifdef LS_UPDATE
     reg(ic->arg[1]) = addr;

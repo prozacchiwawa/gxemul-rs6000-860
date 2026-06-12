@@ -296,8 +296,9 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 	 *  All others: cause a DSI or ISI.
 	 */
 
-	if (flags & FLAG_NOEXCEPTIONS)
+	if (flags & FLAG_NOEXCEPTIONS) {
 		return 0;
+  }
 
 	if (!quiet_mode)
 		fatal("[ memory_ppc: exception! vaddr=0x%" PRIx64" pc=0x%" PRIx64

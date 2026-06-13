@@ -198,6 +198,8 @@ struct eagle_data {
   uint8_t cs4231_index;
   uint8_t cs4231_status;
   uint8_t cs4231_registers[0x20];
+
+  bool game_timer;
 };
 
 struct eagle_glob {

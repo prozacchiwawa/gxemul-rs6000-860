@@ -57,6 +57,7 @@ typedef struct _keyboard_event_t {
 } keyboard_event_t;
 
 extern std::deque<keyboard_event_t> keyboard_debug_events;
+extern std::deque<uint8_t> debug_serial0_chars;
 
 struct dump_register_state_t {
   void *f;
@@ -68,6 +69,7 @@ struct dump_register_state_t {
 extern std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
 extern int ppc_recording_offset;
 extern struct ppc_record_buf *ppc_recording;
+extern volatile int ctrl_c;
 
 /*  single_step values:  */
 #define	NOT_SINGLE_STEPPING		0
@@ -91,7 +93,7 @@ extern int GdblibCheckWaiting(struct cpu *cpu);
 extern bool GdblibSerialInterrupt(struct cpu *cpu);
 
 extern void debugger_step(struct machine *m, int steps);
-extern void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen);
+extern void breakpoint_add(struct machine *m, uint64_t addr, uint32_t insn, const char *name, int namelen);
 extern void breakpoint_delete(struct machine *m, uint64_t addr);
 extern void breakpoint_show(struct machine *m);
 

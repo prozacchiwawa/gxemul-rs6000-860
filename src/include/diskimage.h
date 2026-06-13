@@ -89,7 +89,7 @@ struct diskimage {
 	int		filemark;
 
 	int		rpms;
-	int		ncyls;
+  int   native_sector_size;
 };
 
 
@@ -165,7 +165,10 @@ int diskimage_detect_floppy_change(struct machine *m);
 #define	SCSICMD_READ_10			0x28
 #define	SCSICMD_WRITE			0x0a
 #define	SCSICMD_WRITE_10		0x2a
+#define SCSICMD_WRITE_VERIFY_10 0x2e
 #define	SCSICMD_MODE_SELECT		0x15
+#define SCSICMD_RESERVE       0x16
+#define SCSICMD_RELEASE       0x17
 #define	SCSICMD_MODE_SENSE		0x1a
 #define	SCSICMD_START_STOP_UNIT		0x1b
 #define	SCSICMD_PREVENT_ALLOW_REMOVE	0x1e
@@ -181,6 +184,8 @@ int diskimage_detect_floppy_change(struct machine *m);
 #define	SCSICDROM_READ_TOC		0x43
 #define	SCSICDROM_READ_DISCINFO		0x51
 #define	SCSICDROM_READ_TRACKINFO	0x52
+#define SCSICMD_RESERVE_10       0x56
+#define SCSICMD_RELEASE_10       0x57
 
 /*  SCSI tape commands:  */
 #define	SCSICMD_REWIND			0x01

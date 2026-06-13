@@ -57,6 +57,7 @@
 #define DYNTRANS_DELAYSLOT
 #include "tmp_sh_head.cc"
 
+#include "memory_rw.h"
 
 extern int quiet_mode;
 
@@ -90,7 +91,7 @@ int sh_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (cpu_type_defs[i].name == NULL)
 		return 0;
 
-	cpu->memory_rw = sh_memory_rw;
+	cpu->memory_rw = memory_rw<sh_tc_physpage>;
 
 	cpu->cd.sh.cpu_type = cpu_type_defs[i];
 	cpu->byte_order = EMUL_LITTLE_ENDIAN;

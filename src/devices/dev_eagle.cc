@@ -123,12 +123,12 @@ int io_pass(struct cpu *cpu, struct eagle_data *d, int writeflag, bool io_space,
     data_buf[2] = idata >> 16;
     data_buf[3] = idata >> 24;
     if (target_addr) {
-      cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL);
+      cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     } else {
       fprintf(stderr, "[ eagle: PCI %s passthrough write %08x = %08x @ %08x ]\n", io_space ? "io" : "mem", real_addr, idata, (unsigned int)cpu->pc);
     }
 	} else {
-    cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, target_addr, data_buf, len, MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     odata = data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) | (data_buf[3] << 24);
     if (target_addr) {
       memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
@@ -192,21 +192,24 @@ DEVICE_ACCESS(eagle_8mb)
 	struct eagle_data *d = (struct eagle_data *) extra;
 	uint64_t real_addr = relative_addr, idata = 0xffffff00;
 
+  if (real_addr == 0x1f01d) {
+    d->discontiguous = 1;
+  }
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
-    fprintf(stderr, "[ eagle: non contig %" PRIx64 "x ]\n", real_addr);
+    fprintf(stderr, "[ eagle: non contig %" PRIx64 "x => %x ]\n", real_addr, (page << 5) | subaddr);
   } else {
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
 
   if (writeflag == MEM_READ) {
-    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
   } else {
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL);
+    cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
   }
 
   return 1;
@@ -532,6 +535,38 @@ struct register_name_t register_830_names[] = {
   { 0x800e, "Status Register (e?)" },
   { 0 }
 };
+
+DEVICE_ACCESS(eagle_200)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  }
+
+  switch (relative_addr) {
+  case 0:
+    if (writeflag == MEM_WRITE) {
+      d->game_timer = true;
+    }
+    if (d->game_timer) {
+      d->game_timer = false;
+      idata = 15;
+    }
+    break;
+
+  default:
+    if (writeflag != MEM_WRITE) {
+      idata = 0;
+    }
+    break;
+  }
+
+  fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
+
+  return 1;
+}
 
 DEVICE_ACCESS(eagle_830)
 {
@@ -886,6 +921,10 @@ DEVINIT(eagle)
         isa_portbase + 0x398, 8, dev_eagle_398_access, d,
         DM_DEFAULT, NULL);
 
+    memory_device_register(devinit->machine->memory, "200",
+                           isa_portbase + 0x200, 16, dev_eagle_200_access, d,
+                           DM_DEFAULT, NULL);
+    
     memory_device_register(devinit->machine->memory, "830",
         isa_portbase + 0x830, 16, dev_eagle_830_access, d,
         DM_DEFAULT, NULL);
@@ -911,7 +950,7 @@ DEVINIT(eagle)
 
 	case MACHINE_PREP:
         bus_pci_add(devinit->machine, d->pci_data,
-            devinit->machine->memory, 0, 11, 0, "i82378zb");
+            devinit->machine->memory, 0, 13, 0, "i82378zb");
         break;
 
 	case MACHINE_MVMEPPC:

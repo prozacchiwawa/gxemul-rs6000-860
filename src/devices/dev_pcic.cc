@@ -52,149 +52,100 @@
 
 #define	DEV_PCIC_LENGTH		4
 
-struct pcic_socket {
-  uint64_t writable;
-  uint8_t reg[0x40];
+/* One controller has 2 sockets */
+struct pcic_controller {
+	struct interrupt irq;
+	int regnr;
+	uint8_t regs[2][0x40];
 };
 
+/* The rs/6000 model 860 at least has 2 controllers. */
 struct pcic_data {
-	struct interrupt	irq[10];
-
-	int			regnr;
-
-  pcic_socket sockets[2];
+  struct pcic_controller controller[2];
 };
 
-
-DEVICE_ACCESS(pcic_cis)
+int pcic_controller_access
+(struct cpu *cpu, struct pcic_controller *d, int relative_addr, uint8_t *data, int len, int writeflag)
 {
-	/*  struct pcic_data *d = (struct pcic_data *) extra;  */
 	uint64_t idata = 0, odata = 0;
+	int socket_nr, regnr;
+  bool write_enable = false;
 
-	idata = memory_readmax64(cpu, data, len);
+	if (writeflag == MEM_WRITE) {
+		idata = memory_readmax64(cpu, data, len);
+  }
 
-{
-#if 0
-	/*  SMC, PCM Ethernet Adapter, CIS V1.05 (manufacturer 0x108, 
-	    product 0x105)  */
-	unsigned char x[] = {
-		PCMCIA_CISTPL_DEVICE, 3, PCMCIA_DTYPE_FUNCSPEC, 0xff,0xff,
-		PCMCIA_CISTPL_FUNCID, 2, 0x06, 0x00,
-		PCMCIA_CISTPL_MANFID, 4, 0x08, 0x01, 0x05, 0x01,
-		PCMCIA_CISTPL_VERS_1, 0x26,
-		0x04, 0x01, 0x53, 0x4d, 0x43, 0x00, 0x50, 0x43, 0x4d, 0x20,
-		0x45, 0x74, 0x68, 0x65, 0x72, 0x6e, 0x65, 0x74, 0x20, 0x41,
-		0x64, 0x61, 0x70, 0x74, 0x65, 0x72, 0x00, 0x43, 0x49, 0x53,
-		0x20, 0x56, 0x31, 0x2e, 0x30, 0x35, 0x00, 0xff,
-		PCMCIA_CISTPL_CONFIG, 0x0a,
-		0x02, 0x01, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0xff,
-		PCMCIA_CISTPL_CFTABLE_ENTRY, 0x0b,
-		0xc1, 0x01, 0x70, 0x50, 0xbc, 0x8e, 0x48, 0x40, 0x00,0x02,0xff,
-		/*  unhandled CISTPL 22  */
-		0x22, 0x02, 0x01, 0x02,
-		/*  unhandled CISTPL 22  */
-		0x22, 0x05, 0x02, 0x80, 0x96, 0x98, 0x00,
-		/*  unhandled CISTPL 22  */
-		0x22, 0x02, 0x03, 0x01,
-		/*  unhandled CISTPL 22  */
-		0x22, 0x08, 0x04, 0x06, 0x00, 0x00, 0xc0, 0x2f, 0x48, 0xd2,
-		/*  unhandled CISTPL 22  */
-		0x22, 0x02, 0x05, 0x01,
+	socket_nr = d->regnr & 0x40 ? 1 : 0;
+  regnr = d->regnr & 0x3f;
 
-		PCMCIA_CISTPL_END, 0
-	};
-#endif
+	switch (relative_addr) {
+	case 0:	/*  Register select:  */
+		if (writeflag == MEM_WRITE) {
+			d->regnr = idata;
+    } else {
+			odata = d->regnr;
+    }
+		break;
 
-	/*  From http://www.mail-archive.com/freebsd-current@freebsd.
-		org/msg32550.html  */
-	unsigned char x[] = {
-		PCMCIA_CISTPL_DEVICE, 3, 0xdc, 0x00, 0xff,
-		PCMCIA_CISTPL_VERS_1, 0x1a,
-		0x04,0x01,0x20,0x00,0x4e,0x69,0x6e,0x6a,0x61,0x41,0x54,0x41,
-		0x2d,0x00,0x56,0x31,0x2e,0x30,0x00,0x41,0x50,0x30,0x30,0x20,
-		0x00,0xff,
-		PCMCIA_CISTPL_CONFIG, 5,
-		0x01,0x23,0x00,0x02,0x03,
-		PCMCIA_CISTPL_CFTABLE_ENTRY, 0x15,
-		0xe1,0x01,0x3d,0x11,0x55,0x1e,0xfc,0x23,0xf0,0x61,0x80,0x01,
-		0x07,0x86,0x03,0x01,0x30,0x68,0xd0,0x10,0x00,
-#if 0
-		PCMCIA_CISTPL_CFTABLE_ENTRY, 0xf,
-		0x22,0x38,0xf0,0x61,0x90,0x01,0x07,0x96,0x03,0x01,0x30,0x68,
-		0xd0,0x10,0x00,
-		PCMCIA_CISTPL_CFTABLE_ENTRY, 0xf,
-		0x23,0x38,0xf0,0x61,0xa0,0x01,0x07,0xa6,0x03,0x01,0x30,0x68,
-		0xd0,0x10,0x00,
-#endif
-		PCMCIA_CISTPL_NO_LINK, 0,
+	case 1:	/*  Register access:  */
+		switch (regnr) {
+    case PCIC_PWRCTL:
+      write_enable = true;
+      break;
+    }
+    if (write_enable) {
+      d->regs[socket_nr][regnr] = idata;
+    }
+    break;
+  }
 
-		PCMCIA_CISTPL_END, 0
-	};
-
-	relative_addr /= 2;
-	if (relative_addr < sizeof(x))
-		odata = x[relative_addr];
-
-	debug("[ dev_pcic_cis_access: blah blah: addr=0x%x ]\n",
-	    (int)relative_addr);
-}
-
-	if (writeflag == MEM_READ)
+  if (writeflag == MEM_READ) {
 		memory_writemax64(cpu, data, len, odata);
+    fprintf
+      (stderr, "[ pcic: socket %c read %d (index %02x) = %02x ]\n",
+       socket_nr ? 'B' : 'A',
+       (int)relative_addr,
+       regnr,
+       (unsigned int)odata);
+  } else if (writeflag == MEM_WRITE) {
+    fprintf
+      (stderr, "[ pcic: socket %c write (%s) %d (index %02x) = %02x ]\n",
+       socket_nr ? 'B' : 'A',
+       write_enable ? "ENA" : "dis",
+       (int)relative_addr,
+       regnr,
+       (unsigned int)idata);
+    if (write_enable) {
+      d->regs[socket_nr][regnr] = idata;
+    }
+  }
 
 	return 1;
 }
-
 
 DEVICE_ACCESS(pcic)
 {
 	struct pcic_data *d = (struct pcic_data *) extra;
-  struct pcic_socket *s = &d->sockets[relative_addr > 0x40 ? 1 : 0];
-  auto device_reg = d->regnr & 0x3f;
-
-	uint64_t idata = 0, odata = 0;
-
-	if (writeflag == MEM_WRITE)
-		idata = memory_readmax64(cpu, data, len);
-
-	switch (relative_addr) {
-	case 0:	/*  Register select:  */
-		if (writeflag == MEM_WRITE)
-			d->regnr = idata;
-		else
-			odata = d->regnr;
-		break;
-
-	case 1:	/*  Register access:  */
-    if (writeflag == MEM_WRITE) {
-      debug("[ pcic: controller %i socket %c, regnr %i: "
-				    "data=0x%02x ]\n", 0,
-				    s == &d->sockets[0] ? 'A' : 'B',
-				    device_reg, (int)idata);
-      if ((s->writable >> device_reg) & 1) {
-        s->reg[device_reg] = idata;
-      }
-    } else {
-      odata = s->reg[device_reg];
-      debug("[ pcic: unimplemented read from "
-				    "controller %i socket %c, regnr %i -> %x ]\n",
-				    0, s == &d->sockets[0] ? 'A' : 'B',
-				    d->regnr & 0x3f, (unsigned int)odata);
-    }
-    break;
-
-  default:
-    odata = 0;
-    break;
-  }
-
-	if (writeflag == MEM_READ) {
-		memory_writemax64(cpu, data, len, odata);
-  }
-
-	return 1;
+  bool controller = !!(relative_addr & PCIC_IOSIZE);
+  return pcic_controller_access
+    (cpu, &d->controller[controller], relative_addr & (PCIC_IOSIZE - 1), data, len, writeflag);
 }
 
+// XXX not machine authentic.  an rs/6000 model 860 or 850 has memory cards in both sockets
+// in the first controller.
+// This should 
+void pcic_socket_setup(struct pcic_controller *d, bool socket) {
+  auto regs = &d->regs[socket][0];
+  regs[PCIC_IDENT] = 0x82; // Memory and IO, revision 0010
+  // Ready, CD0, CD1 (CD0 = CD1 = 0 means card detected), battery good.  Power on.
+  regs[PCIC_IF_STATUS] = 0x6f; 
+  regs[PCIC_PWRCTL] = 0;
+  regs[PCIC_INTR] = 0;
+  regs[PCIC_CSC] = 0; // Battery not dead, no warning, no ready changes.
+  regs[PCIC_CSC_INTR] = 0;
+  regs[PCIC_IOCTL] = 0;
+  regs[PCIC_ADDRWIN_ENABLE] = 0;
+}
 
 DEVINIT(pcic)
 {
@@ -204,41 +155,17 @@ DEVINIT(pcic)
 	CHECK_ALLOCATION(d = (struct pcic_data *) malloc(sizeof(struct pcic_data)));
 	memset(d, 0, sizeof(struct pcic_data));
 
-  for (int i = 0; i < 2; i++) {
-    auto s = &d->sockets[0];
-    s->writable = ~3ull;
-    s->reg[0] = 0x82;
-    s->reg[1] = 3;
-  }
+  pcic_socket_setup(&d->controller[0], false);
+  pcic_socket_setup(&d->controller[0], true);
+  pcic_socket_setup(&d->controller[1], false);
+  pcic_socket_setup(&d->controller[1], true);
 
-  int interrupts[] = { 3,4,5,7,9,10,11,12,14,15 };
-  for (int i = 0; i < sizeof(interrupts) / sizeof(interrupts[0]); i++) {
-    sprintf(tmpstr, "%s.isa.%i", devinit->interrupt_path, interrupts[i]);
-    INTERRUPT_CONNECT(devinit->interrupt_path, d->irq[i]);
-  }
+	INTERRUPT_CONNECT(devinit->interrupt_path, d->controller[0].irq);
 
-	memory_device_register(devinit->machine->memory, devinit->name,
-	    devinit->addr, DEV_PCIC_LENGTH,
-	    dev_pcic_access, (void *)d, DM_DEFAULT, NULL);
-
-    if (devinit->machine->machine_type != MACHINE_PREP)
-    {
-        /*  TODO: this shouldn't be hardcoded for hpcmips here!  */
-        memory_device_register(devinit->machine->memory, "pcic_cis",
-                               0x10070000, 0x1000, dev_pcic_cis_access, (void *)d,
-                               DM_DEFAULT, NULL);
-
-        /*  TODO: find out a good way to specify the address, and the IRQ!  */
-        snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x14000180 irq=%s.giu.9",
-                 devinit->interrupt_path);
-        device_add(devinit->machine, tmpstr);
-
-        /*  TODO: Linux/MobilePro looks at 0x14000170 and 0x1f0...  */
-        /*  Yuck. Now there are two. How should this be solved nicely?  */
-        snprintf(tmpstr, sizeof(tmpstr), "wdc addr=0x140001f0 irq=%s.giu.9",
-                 devinit->interrupt_path);
-        device_add(devinit->machine, tmpstr);
-    }
+	memory_device_register
+    (devinit->machine->memory, devinit->name,
+     devinit->addr, DEV_PCIC_LENGTH * 2,
+     dev_pcic_access, (void *)d, DM_DEFAULT, NULL);
 
 	return 1;
 }

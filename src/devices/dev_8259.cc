@@ -112,13 +112,13 @@ static void do_assert(struct pic8259_data *d) {
   }
 }
 
-static void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
+void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
   // isr frozen when poll_cmd.
   if (d->poll_cmd) {
     return;
   }
 
-  uint8_t unmasked = d->irr & ~d->ier;
+  uint8_t unmasked = d->irr & ~(d->ier | d->isr);
   int pri_enabled = get_best_interrupt(d->rotation_pri, unmasked);
 #ifdef DEV_8259_DEBUG
   fprintf(stderr, "8259(%d): new pri %d have irr %02x ier %02x isr %02x\n", d->irq_base, pri_enabled, d->irr, d->ier, d->isr);

@@ -248,7 +248,7 @@ struct cpu_family {
 #define	TO_BE_DELAYED			2
 #define	EXCEPTION_IN_DELAY_SLOT		8
 
-#define	N_SAFE_DYNTRANS_LIMIT_SHIFT	14
+#define	N_SAFE_DYNTRANS_LIMIT_SHIFT	10
 #define	N_SAFE_DYNTRANS_LIMIT	((1 << (N_SAFE_DYNTRANS_LIMIT_SHIFT - 1)) - 1)
 
 #define	MAX_DYNTRANS_READAHEAD		0
@@ -325,9 +325,9 @@ struct cpu {
 
 	int		(*run_instr)(struct cpu *cpu);
 	int		(*memory_rw)(struct cpu *cpu,
-			    struct memory *mem, uint64_t vaddr,
-			    unsigned char *data, size_t len,
-			    int writeflag, int cache_flags);
+                     struct memory *mem, uint64_t vaddr,
+                     unsigned char *data, size_t len,
+                     int writeflag, int cache_flags);
 	int		(*translate_v2p)(struct cpu *, uint64_t vaddr,
 			    uint64_t *return_paddr, int flags);
   std::function<void(struct cpu *, uint64_t vaddr_page, unsigned char *host_page, int writeflag, uint64_t paddr_page, bool instr)> update_translation_table;
@@ -338,7 +338,7 @@ struct cpu {
 			    unsigned char *ib);
 
   void (*functioncall_trace)(struct cpu *cpu, uint64_t pc);
-  void (*functioncall_end_trace)(struct cpu *cpu);
+  void (*functioncall_end_trace)(struct cpu *cpu, uint64_t target);
 
 	/*  The program counter. (For 32-bit modes, not all bits are used.)  */
 	uint64_t	pc;
@@ -418,7 +418,7 @@ int cpu_disassemble_instr(struct machine *m, struct cpu *cpu,
 	unsigned char *instr, int running, uint64_t addr);
 
 void cpu_functioncall_trace(struct cpu *cpu, uint64_t f);
-void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t *reg);
+void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *reg);
 
 void cpu_create_or_reset_tc(struct cpu *cpu);
 
@@ -468,5 +468,35 @@ void cpu_init(void);
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #endif
+
+class DoReturn {
+public:
+  void end_trace(struct cpu *cpu, uint64_t target) {
+    cpu->functioncall_end_trace(cpu, target);
+  }
+};
+
+class NotReturn {
+public:
+  void end_trace(struct cpu *cpu, uint64_t target) { }
+};
+
+extern void debug_mem_hexdump(struct cpu *c, struct memory *mem, uint64_t addr_start, uint64_t addr_end);
+
+struct ba_target_name {
+  uint32_t address;
+  const char *name;
+};
+
+extern struct ba_target_name ba_names[];
+
+template <class TcPhyspage>
+host_load_store_t get_tlb_translation(struct cpu *cpu, uint64_t vaddr, bool instr) {
+  return host_load_store_t { 0 };
+}
+
+template <>
+host_load_store_t get_tlb_translation<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool instr);
+
 
 #endif	/*  CPU_H  */

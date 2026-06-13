@@ -188,10 +188,13 @@ void diskimage_recalc_size(struct diskimage *d)
 		size = 762048000;
 
 	d->total_size = size;
-	d->ncyls = d->total_size / 1048576;
-
-	/*  TODO: There is a mismatch between d->ncyls and d->cylinders,
-	    SCSI-based stuff usually doesn't care.  TODO: Fix this.  */
+  if (!d->is_a_tape) {
+    d->cylinders = d->total_size / (d->sectors_per_track * d->heads * d->native_sector_size);
+  } else {
+    d->heads = 1;
+    d->cylinders = 1;
+    d->sectors_per_track = (d->total_size + d->native_sector_size - 1) / d->native_sector_size;
+  }
 }
 
 
@@ -724,9 +727,9 @@ int diskimage_add(struct machine *machine, char *fname)
 			case 'i':
 				prefix_i = 1;
 				break;
-            case 'n':
-                prefix_n = 1;
-                break;
+      case 'n':
+        prefix_n = 1;
+        break;
 			case 'o':
 				prefix_o = 1;
 				override_base_offset = atoi(fname);
@@ -744,9 +747,9 @@ int diskimage_add(struct machine *machine, char *fname)
 			case 'r':
 				prefix_r = 1;
 				break;
-            case 'R':
-                prefix_R = 1;
-                break;
+      case 'R':
+        prefix_R = 1;
+        break;
 			case 's':
 				prefix_s = 1;
 				break;
@@ -846,10 +849,15 @@ int diskimage_add(struct machine *machine, char *fname)
 
 	CHECK_ALLOCATION(d->fname = strdup(fname));
 
-  if (prefix_n) {
-    d->logical_block_size = 1;
+  if (prefix_n || prefix_R) {
+    d->native_sector_size = 1;
+    d->heads = 1;
+    d->sectors_per_track = 1;
   } else {
-    d->logical_block_size = 512;
+    // Defaults for LBA style.
+    d->native_sector_size = 512;
+    d->heads = 16;
+    d->sectors_per_track = 63;
   }
 
 	/*
@@ -860,7 +868,7 @@ int diskimage_add(struct machine *machine, char *fname)
 	 */
 	if (prefix_t) {
 		d->is_a_tape = 1;
-	} else {
+	} else {    
 		if (prefix_c ||
 		    ((strlen(d->fname) > 4 &&
 		    (strcasecmp(d->fname + strlen(d->fname) - 4, ".cdr") == 0 ||
@@ -883,52 +891,59 @@ int diskimage_add(struct machine *machine, char *fname)
 
 			if (machine->machine_type == MACHINE_PMAX || machine->machine_type == MACHINE_PREP) {
         if (prefix_c) {
-          d->logical_block_size = 2048;
-        } else {
-          d->logical_block_size = 512;
+          d->heads = 1;
+          d->sectors_per_track = 16;
+          d->native_sector_size = 2048;
         }
-      } else {
-        d->logical_block_size = 512;
       }
 		}
 	}
 
-	diskimage_recalc_size(d);
+  d->logical_block_size = d->native_sector_size;
 
-	if ((d->total_size == 720*1024 || d->total_size == 1474560
-	    || d->total_size == 2949120 || d->total_size == 1228800)
-	    && !prefix_i && !prefix_s && !prefix_R)
-		d->type = DISKIMAGE_FLOPPY;
+  if ((d->total_size == 720*1024 || d->total_size == 1474560
+    || d->total_size == 2949120 || d->total_size == 1228800)
+    && !prefix_i && !prefix_s && !prefix_R) {
+      d->type = DISKIMAGE_FLOPPY;
+      fprintf(stderr, "detected floppy %s: total_size %x\n", d->fname, (unsigned int)d->total_size);
+  }
 
+  fprintf(stderr, "disk type %d: %s\n", d->type, d->fname);
 	switch (d->type) {
 	case DISKIMAGE_FLOPPY:
+		diskimage_recalc_size(d);
 		if (d->total_size < 737280) {
 			fatal("\nTODO: small (non-80-cylinder) floppies?\n\n");
 			exit(1);
 		}
 		d->cylinders = 80;
 		d->heads = 2;
-		d->sectors_per_track = d->total_size / (d->cylinders *
-		    d->heads * 512);
+    d->native_sector_size = 0x200;
+		d->sectors_per_track = d->total_size / (d->cylinders * d->heads * d->native_sector_size);
 		break;
   case DISKIMAGE_NVRAM:
+  case DISKIMAGE_ROM:
+  case DISKIMAGE_VGA_ROM:
+    fprintf(stderr, "not getting here?\n");
     d->cylinders = 1;
     d->heads = 1;
-    d->sectors_per_track = d->total_size;
+    d->native_sector_size = 1;
+    d->sectors_per_track = 1;
     break;
 	default:/*  Non-floppies:  */
-		d->heads = 16;
-		d->sectors_per_track = 63;
 		if (prefix_g) {
 			d->chs_override = 1;
 			d->heads = override_heads;
 			d->sectors_per_track = override_spt;
 		}
-		bytespercyl = d->heads * d->sectors_per_track * 512;
+    
+		bytespercyl = d->heads * d->sectors_per_track * d->native_sector_size;
 		d->cylinders = d->total_size / bytespercyl;
 		if (d->cylinders * bytespercyl < d->total_size)
 			d->cylinders ++;
 	}
+
+	diskimage_recalc_size(d);
 
 	d->rpms = 3600;
 

@@ -36,8 +36,8 @@
 #include "misc.h"
 
 struct ieee_float_value {
-	double		f;
-	int		nan;
+  double		f;
+  int		nan;
 };
 
 #define	IEEE_FMT_S		1	/*  single, 32-bit float  */
@@ -46,7 +46,7 @@ struct ieee_float_value {
 #define	IEEE_FMT_L		4	/*  long, 64-bit integer  */
 
 void ieee_interpret_float_value(uint64_t x, struct ieee_float_value *fvp,
-	int fmt);
+  int fmt);
 uint64_t ieee_store_float_value(double nf, int fmt, int nan);
 
 #endif	/*  FLOAT_EMUL_H  */

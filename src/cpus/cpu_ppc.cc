@@ -53,10 +53,19 @@ extern "C" {
 #include "softfloat.h"
 }
 
+template<>
+host_load_store_t get_tlb_translation<ppc_tc_physpage>(struct cpu *cpu, uint64_t vaddr, bool instr) {
+  return cpu->cd.ppc.vph32.get_cached_tlb_pages(cpu, vaddr, instr);
+}
+
+#include "memory_rw.h"
+
 #define	DYNTRANS_DUALMODE_32
 #include "tmp_ppc_head.cc"
 
 #define COUNT_DIV 2
+
+uint64_t timer_target_addr;
 
 /*
  *  ppc_cpu_new():
@@ -86,7 +95,7 @@ int ppc_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (found == -1)
 		return 0;
 
-	cpu->memory_rw = ppc_memory_rw;
+	cpu->memory_rw = memory_rw<ppc_tc_physpage>;
 
 	cpu->cd.ppc.cpu_type = cpu_type_defs[found];
 	cpu->name            = strdup(cpu->cd.ppc.cpu_type.name);
@@ -350,7 +359,8 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
 	int old_le = cpu->cd.ppc.msr & PPC_MSR_LE;
   int old_map = (cpu->cd.ppc.msr >> 4) & 3;
 
-  cpu->cd.ppc.msr = *valuep;
+  // POW 0 ILE EE PR FP ME FE0 SE BE FE1 0 IP IR DR 0 0 RI LE
+  cpu->cd.ppc.msr = *valuep & 0x5ff73;
 
   /*  Switching between temporary and real gpr 0..3?  */
   if ((old & PPC_MSR_TGPR) != (cpu->cd.ppc.msr & PPC_MSR_TGPR)) {
@@ -413,20 +423,11 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
  */
 void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 {
-  auto prev_tb = cpu->cd.ppc.spr[SPR_TBL];
-  cpu->cd.ppc.spr[SPR_TBL] += 1000;
-  if (cpu->cd.ppc.spr[SPR_TBL] < prev_tb) {
-    cpu->cd.ppc.spr[SPR_TBU]++;
-  }
-
 	/*  Save PC and MSR:  */
 	cpu->cd.ppc.spr[SPR_SRR0] = cpu->pc;
-  cpu->cd.ppc.spr[SPR_SRR1] &= ~0x3f0000;
-  if (exception_nr == 7) {
-    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
-  } else {
-    cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xff73) | exn_extra;
-  }
+  // "Bits 1-4 and 10-15 of srr1 are loaded with exception specific information and bits
+  //  0, 5-9, and 16-31 of msr are placed into the corresponding bit positions of SRR1."
+  cpu->cd.ppc.spr[SPR_SRR1] = (cpu->cd.ppc.msr & 0xffff) | exn_extra;
 
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
@@ -1127,6 +1128,10 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			debug("mtmsr\tr%i", rs);
 			if (l_bit)
 				debug(",%i", l_bit);
+      if (!running) {
+        break;
+      }
+      debug("\t(%08x)", cpu->cd.ppc.gpr[rs]);
 			break;
 		case PPC_31_TW:
 		case PPC_31_TD:
@@ -1752,7 +1757,7 @@ int ppc_cpu_disassemble_instr(struct cpu *cpu, unsigned char *instr,
 			unsigned char tw[8];
 			uint64_t tdata = 0;
 			int i, res = cpu->memory_rw(cpu, cpu->mem, addr, tw,
-			    wlen, MEM_READ, NO_EXCEPTIONS);
+			    wlen, MEM_READ, NO_EXCEPTIONS | HOST_ACCESS);
 			if (res) {
 				if (cpu->byte_order == EMUL_LITTLE_ENDIAN)
 					for (i=0; i<wlen; i++) {
@@ -2068,6 +2073,10 @@ void cpu_ppc_swizzle_offset(struct cpu *cpu, int size, int code, int *swizzle, i
 #define EXP_MASK ((1 << EXP_BITS) - 1)
 #define MANTISSA_BITS 52
 #define MANTISSA_MASK ((1ull << MANTISSA_BITS) - 1)
+#define EXP32_BITS 7
+#define EXP32_MASK ((1 << EXP32_BITS) - 1)
+#define MANTI32A_BITS 23
+#define MANTI32A_MASK ((1ull << MANTI32A_BITS) - 1)
 
 float64_t pos_zero = { 0 };
 float64_t neg_zero = { 0x8000000000000000ull };
@@ -2106,6 +2115,18 @@ int f64_isnan(float64_t f) {
   uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
   uint64_t mantissa = f.v & MANTISSA_MASK;
   return exp == EXP_MASK && mantissa != 0;
+}
+
+int f32_isnan(float32_t f) {
+  uint64_t exp = (f.v >> MANTI32A_BITS) & EXP32_MASK;
+  uint64_t mantissa = f.v & MANTI32A_MASK;
+  return exp == EXP32_MASK && mantissa != 0;
+}
+
+int f64_isqnan(float64_t f) {
+  uint64_t exp = (f.v >> MANTISSA_BITS) & EXP_MASK;
+  uint64_t mantissa = f.v & MANTISSA_MASK;
+  return exp == EXP_MASK && (mantissa & ~(MANTISSA_MASK >> 1));
 }
 
 static inline uint64_t ppc_sync_low_pc(struct cpu *cpu, struct ppc_instr_call *ic) {
@@ -2154,6 +2175,31 @@ int fpu_vsoft(struct cpu *cpu) {
   return (cpu->cd.ppc.fpscr & PPC_FPSCR_VXSOFT);
 }
 
+static inline void fpu_bit_ladder(struct cpu *cpu, bool isnan,  uint64_t &fpscr) {
+  if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
+    fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
+  }
+
+  // Propogate exceptions to fex.
+  uint32_t o = (fpscr & PPC_FPSCR_OE) && (fpscr & PPC_FPSCR_OX);
+  uint32_t u = (fpscr & PPC_FPSCR_UE) && (fpscr & PPC_FPSCR_UX);
+  uint32_t v = (fpscr & PPC_FPSCR_VE) && (fpscr & PPC_FPSCR_VX);
+  uint32_t z = (fpscr & PPC_FPSCR_ZE) && (fpscr & PPC_FPSCR_ZX);
+  uint32_t x = (fpscr & PPC_FPSCR_XE) && (fpscr & PPC_FPSCR_XX);
+
+  fprintf(stderr, "o %x u %x v %x z %x x %x\n", o, u, v, z, x);
+  bool fex = o | u | v | z | x;
+  fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
+}
+
+std::string format_float(uint64_t fval) {
+  double f;
+  memcpy(&f, &fval, sizeof(f));
+  char buf[500];
+  sprintf(buf, "%f", f);
+  return std::string(buf);
+}
+
 void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
 
@@ -2178,20 +2224,7 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
   bool qnan = !f64_isSignalingNaN(*result) && isnan;
   fprintf(stderr, "isnan %d qnan %d\n", isnan, qnan);
 
-  if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
-    fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
-  }
-
-  // Propogate exceptions to fex.
-  uint32_t o = (fpscr & PPC_FPSCR_OE) && (fpscr & PPC_FPSCR_OX);
-  uint32_t u = (fpscr & PPC_FPSCR_UE) && (fpscr & PPC_FPSCR_UX);
-  uint32_t v = (fpscr & PPC_FPSCR_VE) && (fpscr & PPC_FPSCR_VX);
-  uint32_t z = (fpscr & PPC_FPSCR_ZE) && (fpscr & PPC_FPSCR_ZX);
-  uint32_t x = (fpscr & PPC_FPSCR_XE) && (fpscr & PPC_FPSCR_XX);
-
-  fprintf(stderr, "o %x u %x v %x z %x x %x\n", o, u, v, z, x);
-  bool fex = o | u | v | z | x;
-  fpscr |= fex ? (PPC_FPSCR_FEX | PPC_FPSCR_FX) : 0;
+  fpu_bit_ladder(cpu, isnan, fpscr);
 
   if (qnan || f64_denormalized(*result) || !memcmp(result, &neg_zero, sizeof(neg_zero))) {
     fpscr |= PPC_FPSCR_CLASS;
@@ -2211,7 +2244,8 @@ void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
     fpscr |= PPC_FPSCR_FE;
   }
 
-  fprintf(stderr, "final fpscr %08" PRIx64 "\n", fpscr);
+  auto formatted = format_float(result->v);
+  fprintf(stderr, "final fpscr %08" PRIx64 " value %s\n", fpscr, formatted.c_str());
   cpu->cd.ppc.fpscr = fpscr;
 }
 
@@ -2237,8 +2271,8 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   FPINST_PRELUDE();
 
   // Multiplying inf by 0 is an invalid multiplication.
-  if ((f64_isnan(fra) && f64_iszero(frc)) ||
-      (f64_iszero(fra) && f64_isnan(frc))) {
+  if ((f64_isnan(frc) && f64_iszero(frc)) ||
+      (f64_iszero(frc) && f64_isnan(frc))) {
     FP_SET_BIT(PPC_FPSCR_VXIMZ | PPC_FPSCR_VX);
     FPU_EXN;
   }
@@ -2250,6 +2284,10 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   extFloat80_t result;
   extF80M_mul(&efra, &efrc, &result);
   float64_t result_64 = extF80M_to_f64(&result);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
+  fprintf
+    (stderr, "fmul: %s * %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
   fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
@@ -2261,7 +2299,7 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   FPINST_PRELUDE();
 
   // Divide by zero.
-  if (f64_iszero(fra) && f64_iszero(frc)) {
+  if (f64_iszero(frc)) {
     FP_SET_BIT(PPC_FPSCR_VXZDZ);
     FPU_EXN;
   }
@@ -2271,22 +2309,19 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
     FPU_EXN;
   }
 
+  float64_t result_64 = f64_div(fra, frc);
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_div(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fdiv: %s / %s = %s\n", efra_str, efrc_str, result_str);
-  float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  result_64 = extF80M_to_f64(&result);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fdiv: %s / %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2304,16 +2339,12 @@ void base_fadd(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_add(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fadd: %s + %s = %s\n", efra_str, efrc_str, result_str);
   float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fadd: %s + %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2331,16 +2362,12 @@ void base_fsub(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   f64_to_extF80M(frc, &efrc);
   extFloat80_t result;
   extF80M_sub(&efra, &efrc, &result);
-  char efra_str[100], efrc_str[100], result_str[100];
-  float80_fmt(efra_str, &efra, sizeof(efra));
-  float80_fmt(efrc_str, &efrc, sizeof(efrc));
-  float80_fmt(result_str, &result, sizeof(result));
-  fprintf(stderr, "fsub: %s - %s = %s\n", efra_str, efrc_str, result_str);
   float64_t result_64 = extF80M_to_f64(&result);
-  fpu_epilog(cpu, &result, &result_64);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
   fprintf
-    (stderr, "fdiv: %" PRIx64 " / %" PRIx64 " = %" PRIx64 "\n",
-     fra.v, frc.v, result_64.v);
+    (stderr, "fsub: %s - %s -> %s\n",
+     fra_s.c_str(), frc_s.c_str(), result_s.c_str());
+  fpu_epilog(cpu, &result, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2350,11 +2377,6 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
 
   FPINST_PRELUDE();
 
-  if (f64_iszero(frc)) {
-    FP_SET_BIT(PPC_FPSCR_VX);
-    FPU_EXN;
-  }
-
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
@@ -2362,7 +2384,8 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
   extFloat80_t result;
   extF80M_sub(&efra, &efrc, &result);
   float64_t result_64 = extF80M_to_f64(&result);
-  fprintf(stderr, "fcmp %" PRIX64 " - %" PRIx64 " = %" PRIx64 "\n", fra.v, frc.v, result_64.v);
+  auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
+  fprintf(stderr, "fcmp %s - %s -> %s\n", fra_s.c_str(), frc_s.c_str(), result_s.c_str());
   fpu_epilog(cpu, &result, &result_64);
 }
 
@@ -2385,7 +2408,7 @@ void ppc_update_for_icount(struct cpu *cpu) {
   // Take care of timebase
   uint32_t tbl = cpu->cd.ppc.spr[SPR_TBL];
   cpu->cd.ppc.spr[SPR_TBL] += icount;
-  if ((tbl >> 31) == 1 && (cpu->cd.ppc.spr[SPR_TBL] >> 31) == 0) {
+  if ((tbl & 0x80000000) && !(cpu->cd.ppc.spr[SPR_TBL] & 0x80000000)) {
     cpu->cd.ppc.spr[SPR_TBU] ++;
   }
   cpu->cd.ppc.spr[TBR_TBL] = cpu->cd.ppc.spr[SPR_TBL];
@@ -2405,11 +2428,11 @@ void ppc_trace(struct cpu *cpu, uint64_t pc) {
   cpu_functioncall_trace(cpu, pc);
 }
 
-void ppc_no_end_trace(struct cpu *cpu) {
+void ppc_no_end_trace(struct cpu *cpu, uint64_t pc) {
 }
 
-void ppc_end_trace(struct cpu *cpu) {
-  cpu_functioncall_trace_return(cpu, &cpu->cd.ppc.gpr[3]);
+void ppc_end_trace(struct cpu *cpu, uint64_t pc) {
+  cpu_functioncall_trace_return(cpu, pc, &cpu->cd.ppc.gpr[3]);
 }
 
 template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr) {
@@ -2420,6 +2443,25 @@ template <> int cpu_get_addr_space<ppc_tc_physpage>(struct cpu *cpu, bool instr)
     return 2;
   } else {
     return 0;
+  }
+}
+
+template<bool Carry, bool Overflow>
+void update_xer_arith(struct cpu *cpu, uint64_t raw_result, bool c6) {
+  auto xer_ref = &cpu->cd.ppc.spr[SPR_XER];
+  uint32_t result_high = raw_result >> 32;
+  bool c7 = !!result_high;
+  if (Carry) {
+    *xer_ref &= ~PPC_XER_CA;
+    if (c7) {
+      *xer_ref |= PPC_XER_CA;
+    }
+  }
+  if (Overflow) {
+    *xer_ref &= ~PPC_XER_OV;
+    if (c6 ^ c7) {
+      *xer_ref |= PPC_XER_OV | PPC_XER_SO;
+    }
   }
 }
 

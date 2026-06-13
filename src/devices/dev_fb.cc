@@ -405,11 +405,14 @@ void (*redraw[2 * 4 * 2])(struct vfb_data *, int, int, void *, int) = {
 DEVICE_TICK(fb)
 {
 	struct vfb_data *d = (struct vfb_data *) extra;
-	void *pixels;
+	void *pixels = nullptr;
 	int pitch;
 
 #ifdef WITH_X11
 	SDL_LockTexture(d->fb_window->fb_data, nullptr, &pixels, &pitch);
+	if (!pixels) {
+          return;
+	}
 #endif
 
 #ifdef WITH_X11

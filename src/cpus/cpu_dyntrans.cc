@@ -328,16 +328,6 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 		if (enabled && mask)
 			mips_cpu_exception(cpu, EXCEPTION_INT, 0, 0, 0, 0, 0,0);
 #endif
-#ifdef DYNTRANS_PPC
-		if (cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
-			cpu->cd.ppc.dec_intr_pending = 0;
-			if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
-				ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
-      }
-		}
-		if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
-			ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
-#endif
 #ifdef DYNTRANS_SH
 		if (cpu->cd.sh.int_to_assert > 0 && !(cpu->cd.sh.sr & SH_SR_BL)
 		    && ((cpu->cd.sh.sr & SH_SR_IMASK) >> SH_SR_IMASK_SHIFT)
@@ -345,6 +335,17 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 			sh_exception(cpu, 0, cpu->cd.sh.int_to_assert, 0);
 #endif
 	}
+#ifdef DYNTRANS_PPC
+  if (!(cpu->ninstrs & (INSTRUCTION_STRIDE - 1)) &&
+      cpu->cd.ppc.dec_intr_pending && (cpu->cd.ppc.msr & PPC_MSR_EE)) {
+    cpu->cd.ppc.dec_intr_pending = 0;
+    if (!(cpu->cd.ppc.cpu_type.flags & PPC_NO_DEC)) {
+      ppc_exception(cpu, PPC_EXCEPTION_DEC, 0);
+    }
+  }
+  if (cpu->cd.ppc.irq_asserted && (cpu->cd.ppc.msr & PPC_MSR_EE))
+    ppc_exception(cpu, PPC_EXCEPTION_EI, 0);
+#endif
 
 #ifdef DYNTRANS_ARM
 	if (cpu->cd.arm.cpsr & ARM_FLAG_T) {
@@ -381,7 +382,10 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
   auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
 #ifdef DYNTRANS_PPC
-    ppc_instr_dump_registers(cpu, ic);
+    extern uint32_t required_sr1;
+    if (!required_sr1 || (cpu->cd.ppc.sr[1] == required_sr1)) {
+      ppc_instr_dump_registers(cpu, ic);
+    }
 #endif
     I;
   };
@@ -854,6 +858,9 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 
 	cpu->cd.DYNTRANS_ARCH.combination_check = NULL;
 
+  memcpy(ic->instr, ib, sizeof(ic->instr));
+  ic->pc = addr;
+
 	/*  An additional check, to catch some bugs:  */
 	if (ic->f == TO_BE_TRANSLATED) {
 		fatal("INTERNAL ERROR: ic->f not set!\n");
@@ -872,8 +879,14 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
   if (!single_step) {
     for (int i=0; i<cpu->machine->breakpoints.n; i++) {
       if (addr == cpu->machine->breakpoints.addr[i]) {
-        fprintf(stderr, "translated breakpoint %08x\n", (unsigned int)addr);
-        goto stop_running_translated;
+#ifdef DYNTRANS_PPC
+        if (!cpu->machine->breakpoints.expect_insn[i] || iword == cpu->machine->breakpoints.expect_insn[i]) {
+#endif
+          fprintf(stderr, "translated breakpoint %08x\n", (unsigned int)addr);
+          goto stop_running_translated;
+#ifdef DYNTRANS_PPC
+        }
+#endif
       }
     }
   }

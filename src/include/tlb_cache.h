@@ -57,6 +57,9 @@ struct host_load_store_t {
   uint8_t *host_store;
 };
 
+template <typename TcPhyspage> constexpr bool is_ppc() { return false; }
+template <> constexpr bool is_ppc<struct ppc_tc_physpage>() { return true; }
+
 template <typename TcPhyspage> constexpr bool is_arm() { return false; }
 template <> constexpr bool is_arm<struct arm_tc_physpage>() { return true; }
 
@@ -65,6 +68,9 @@ template <> constexpr bool is_m88k<struct m88k_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr bool is_mips() { return false; }
 template <> constexpr bool is_mips<struct mips_tc_physpage>() { return true; }
+
+template <typename TcPhyspage> constexpr bool is_alpha() { return false; }
+template <> constexpr bool is_mips<struct alpha_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr int pagesize() { return 1 << 12; }
 template <> constexpr int pagesize<struct alpha_tc_physpage>() { return 1 << 13; }
@@ -170,6 +176,11 @@ protected:
     if (flags & JUST_MARK_AS_NON_WRITABLE) {
       /*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
           (int)vaddr_page);  */
+      auto found = vaddr_to_tlbindex->find(index);
+      if (found != vaddr_to_tlbindex->end()) {
+        auto tlbi = found->second;
+        vph_tlb_entry[tlbi].writeflag = 0;
+      }
       clear_writable(cpu, vaddr_page);
     } else {
       index %= N_VPH32_ENTRIES;
@@ -194,6 +205,7 @@ protected:
   }
 
   void clear_writable(Cpu *cpu, uint64_t addr) {
+    
     auto index = get_page_index(cpu, addr, false);
     pages[index].host_store = nullptr;
   }
@@ -241,7 +253,10 @@ public:
       vph_tlb_entry[r].valid = 1;
       vph_tlb_entry[r].paddr_page = paddr_page;
       vph_tlb_entry[r].vaddr_page = vaddr_page;
-      vph_tlb_entry[r].writeflag = writeflag & MEM_WRITE;
+      if (!(writeflag & MEM_WRITE)) {
+        vph_tlb_entry[r].writeflag = 0;
+        this->clear_writable(cpu, vaddr_page);
+      }
 
       /*  Add the new translation to the table:  */
       update_cache_page
@@ -263,6 +278,7 @@ public:
       }
       if (writeflag & MEM_DOWNGRADE) {
         vph_tlb_entry[r].writeflag = 0;
+        this->clear_writable(cpu, vph_tlb_entry[r].vaddr_page);
       }
 
       pages[index].ppp = nullptr;
@@ -320,6 +336,7 @@ public:
         this->invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, flags);
         if (flags & JUST_MARK_AS_NON_WRITABLE) {
           vph_tlb_entry[r].writeflag = 0;
+          this->clear_writable(cpu, vph_tlb_entry[r].vaddr_page);
         } else {
           decomission_vph(cpu, r);
         }

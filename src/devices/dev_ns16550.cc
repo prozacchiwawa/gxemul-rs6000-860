@@ -30,6 +30,7 @@
  *  TODO: Implement the FIFO.
  */
 
+#include <deque>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,7 @@
 
 #include "thirdparty/comreg.h"
 
+std::deque<uint8_t> debug_serial0_chars;
 
 /*  #define debug fatal  */
 
@@ -105,17 +107,23 @@ DEVICE_TICK(ns16550)
 	 */
 	struct ns_data *d = (struct ns_data *) extra;
 
-	while (console_charavail(d->console_handle)) {
-		auto ch = console_readchar(d->console_handle);
-		if (ch >= 0x100) {
-			continue;
-		}
-		d->available = ch;
-    d->reg[com_lsr] |= LSR_RXRDY;
-		d->reg[com_iir] |= IIR_RXRDY;
-		break;
-	}
+  if (!strcmp(d->name, "tty0") && debug_serial0_chars.size() && !(d->reg[com_lsr] & LSR_RXRDY)) {
+    fprintf(stderr, "[ ns16550: debug queue size %d ]\n", (int)debug_serial0_chars.size());
+    console_makeavail(d->console_handle, debug_serial0_chars.front());
+    debug_serial0_chars.pop_front();
+  }
 
+  while (console_charavail(d->console_handle)) {
+    auto ch = console_readchar(d->console_handle);
+    if (ch >= 0x100) {
+      continue;
+    }
+    d->available = ch;
+    d->reg[com_lsr] |= LSR_RXRDY;
+    d->reg[com_iir] |= IIR_RXTOUT; // (d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY;
+    break;
+  }
+  
   if (d->sent_recently) {
     d->sent_recently = false;
     d->reg[com_iir] |= IIR_TXRDY;
@@ -131,8 +139,10 @@ DEVICE_ACCESS(ns16550)
 	size_t i;
 	struct ns_data *d = (struct ns_data *) extra;
 
-	if (writeflag == MEM_WRITE)
+	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
+    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
+  }
 
 #if 1
 	/*  The NS16550 should be accessed using byte read/writes:  */
@@ -185,7 +195,7 @@ DEVICE_ACCESS(ns16550)
 		} else {
       fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
 			odata = d->available;
-      d->reg[com_iir] &= ~IIR_RXRDY;
+      d->reg[com_iir] &= ~IIR_RXTOUT; // ((d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY);
       d->reg[com_lsr] &= ~LSR_RXRDY;
       eval_interrupt(d);
 		}
@@ -228,9 +238,12 @@ DEVICE_ACCESS(ns16550)
 			    "\n", d->name, (int)idata);
 			d->fcr = idata;
 		} else {
-			odata = d->reg[com_iir];
-			if (d->reg[com_iir] & IIR_TXRDY)
+      auto iir_val = d->reg[com_iir];
+			odata = (iir_val == 0) ? 1 : iir_val;
+			if (d->reg[com_iir] & IIR_TXRDY) {
 				d->reg[com_iir] &= ~IIR_TXRDY;
+      }
+      d->sent_recently = false;
 			debug("[ ns16550 (%s): read from iir: 0x%02x ]\n",
 			    d->name, (int)odata);
 		}
@@ -328,8 +341,10 @@ DEVICE_ACCESS(ns16550)
 		}
 	}
 
-	if (writeflag == MEM_READ)
+	if (writeflag == MEM_READ) {
+    fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
 		memory_writemax64(cpu, data, len, odata);
+  }
 
 	return 1;
 }

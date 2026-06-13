@@ -192,9 +192,14 @@ DEVICE_ACCESS(eagle_8mb)
 	struct eagle_data *d = (struct eagle_data *) extra;
 	uint64_t real_addr = relative_addr, idata = 0xffffff00;
 
+  if (!d->discontiguous && (real_addr >= 0x10000)) {
+    fprintf(stderr, "[ eagle: discontiguous access on %x ]\n", (unsigned int)real_addr);
+    d->discontiguous = 1;
+  }
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;
+    fprintf(stderr, "[ eagle: d-io %x %x ]\n", (unsigned int)page, (unsigned int)subaddr);
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
     fprintf(stderr, "[ eagle: non contig %" PRIx64 "x ]\n", real_addr);
   } else {

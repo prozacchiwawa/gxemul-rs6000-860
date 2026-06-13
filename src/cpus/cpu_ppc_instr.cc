@@ -3942,6 +3942,7 @@ X(to_be_translated)
 			ic->f = instr(nop);
 			break;
 
+    case PPC_31_DCBI:
 		case PPC_31_ICBI:
       ra = (iword >> 16) & 31;
       rb = (iword >> 11) & 31;

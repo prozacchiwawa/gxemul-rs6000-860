@@ -699,6 +699,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     }
 
     case 0x00:
+    case 0x01:
     case 0x08:
     case 0x12:
     case 0x16:
@@ -792,7 +793,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
       return 1;
 
     default:
-      DEBUG("lsi: unknown opcode %02x\n", req->cmd.buf[0]);
+      fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
         ABORT();
     }
 }
@@ -901,6 +902,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
 
     switch (req->cmd.buf[0]) {
     case 0x00:
+    case 0x01:
     case 0x1b:
     case 0x1e:
 	case 0x2f:
@@ -1728,7 +1730,7 @@ static void lsi_do_msgout(struct cpu *cpu, LSIState *s)
             case 1:
                 trace_lsi_do_msgout_ignored("SDTR");
                 lsi_skip_msgbytes(s, 2);
-                lsi_add_msg_byte(s, 7); // reject
+                // lsi_add_msg_byte(s, 7); // reject
                 break;
             case 3:
                 trace_lsi_do_msgout_ignored("WDTR");

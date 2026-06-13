@@ -103,8 +103,8 @@ MACHINE_SETUP(prep)
          "wd90c00");
 		}
 
-    bus_pci_add(machine, pci_data, machine->memory,
-                0, 15, 0, "ibm_isa");
+        bus_pci_add(machine, pci_data, machine->memory,
+            0, 11, 0, "ibm_isa");
 
     // Locate rom image and load it.
     rom_image = find_rom_disk(machine);

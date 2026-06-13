@@ -60,60 +60,60 @@
  * SII hardware registers
  */
 typedef /*volatile*/ struct {
-	u_short	sdb;		/* SCSI Data Bus and Parity */
-	u_short	pad0;
-	u_short	sc1;		/* SCSI Control Signals One */
-	u_short	pad1;
-	u_short	sc2;		/* SCSI Control Signals Two */
-	u_short	pad2;
-	u_short	csr;		/* Control/Status register */
-	u_short	pad3;
-	u_short	id;		/* Bus ID register */
-	u_short	pad4;
-	u_short	slcsr;		/* Select Control and Status Register */
-	u_short	pad5;
-	u_short	destat;		/* Selection Detector Status Register */
-	u_short	pad6;
-	u_short	dstmo;		/* DSSI Timeout Register */
-	u_short	pad7;
-	u_short	data;		/* Data Register */
-	u_short	pad8;
-	u_short	dmctrl;		/* DMA Control Register */
-	u_short	pad9;
-	u_short	dmlotc;		/* DMA Length of Transfer Counter */
-	u_short	pad10;
-	u_short	dmaddrl;	/* DMA Address Register Low */
-	u_short	pad11;
-	u_short	dmaddrh;	/* DMA Address Register High */
-	u_short	pad12;
-	u_short	dmabyte;	/* DMA Initial Byte Register */
-	u_short	pad13;
-	u_short	stlp;		/* DSSI Short Target List Pointer */
-	u_short	pad14;
-	u_short	ltlp;		/* DSSI Long Target List Pointer */
-	u_short	pad15;
-	u_short	ilp;		/* DSSI Initiator List Pointer */
-	u_short	pad16;
-	u_short	dsctrl;		/* DSSI Control Register */
-	u_short	pad17;
-	u_short	cstat;		/* Connection Status Register */
-	u_short	pad18;
-	u_short	dstat;		/* Data Transfer Status Register */
-	u_short	pad19;
-	u_short	comm;		/* Command Register */
-	u_short	pad20;
-	u_short	dictrl;		/* Diagnostic Control Register */
-	u_short	pad21;
-	u_short	clock;		/* Diagnostic Clock Register */
-	u_short	pad22;
-	u_short	bhdiag;		/* Bus Handler Diagnostic Register */
-	u_short	pad23;
-	u_short	sidiag;		/* SCSI IO Diagnostic Register */
-	u_short	pad24;
-	u_short	dmdiag;		/* Data Mover Diagnostic Register */
-	u_short	pad25;
-	u_short	mcdiag;		/* Main Control Diagnostic Register */
-	u_short	pad26;
+	uint16_t	sdb;		/* SCSI Data Bus and Parity */
+	uint16_t	pad0;
+	uint16_t	sc1;		/* SCSI Control Signals One */
+	uint16_t	pad1;
+	uint16_t	sc2;		/* SCSI Control Signals Two */
+	uint16_t	pad2;
+	uint16_t	csr;		/* Control/Status register */
+	uint16_t	pad3;
+	uint16_t	id;		/* Bus ID register */
+	uint16_t	pad4;
+	uint16_t	slcsr;		/* Select Control and Status Register */
+	uint16_t	pad5;
+	uint16_t	destat;		/* Selection Detector Status Register */
+	uint16_t	pad6;
+	uint16_t	dstmo;		/* DSSI Timeout Register */
+	uint16_t	pad7;
+	uint16_t	data;		/* Data Register */
+	uint16_t	pad8;
+	uint16_t	dmctrl;		/* DMA Control Register */
+	uint16_t	pad9;
+	uint16_t	dmlotc;		/* DMA Length of Transfer Counter */
+	uint16_t	pad10;
+	uint16_t	dmaddrl;	/* DMA Address Register Low */
+	uint16_t	pad11;
+	uint16_t	dmaddrh;	/* DMA Address Register High */
+	uint16_t	pad12;
+	uint16_t	dmabyte;	/* DMA Initial Byte Register */
+	uint16_t	pad13;
+	uint16_t	stlp;		/* DSSI Short Target List Pointer */
+	uint16_t	pad14;
+	uint16_t	ltlp;		/* DSSI Long Target List Pointer */
+	uint16_t	pad15;
+	uint16_t	ilp;		/* DSSI Initiator List Pointer */
+	uint16_t	pad16;
+	uint16_t	dsctrl;		/* DSSI Control Register */
+	uint16_t	pad17;
+	uint16_t	cstat;		/* Connection Status Register */
+	uint16_t	pad18;
+	uint16_t	dstat;		/* Data Transfer Status Register */
+	uint16_t	pad19;
+	uint16_t	comm;		/* Command Register */
+	uint16_t	pad20;
+	uint16_t	dictrl;		/* Diagnostic Control Register */
+	uint16_t	pad21;
+	uint16_t	clock;		/* Diagnostic Clock Register */
+	uint16_t	pad22;
+	uint16_t	bhdiag;		/* Bus Handler Diagnostic Register */
+	uint16_t	pad23;
+	uint16_t	sidiag;		/* SCSI IO Diagnostic Register */
+	uint16_t	pad24;
+	uint16_t	dmdiag;		/* Data Mover Diagnostic Register */
+	uint16_t	pad25;
+	uint16_t	mcdiag;		/* Main Control Diagnostic Register */
+	uint16_t	pad26;
 } SIIRegs;
 
 /*

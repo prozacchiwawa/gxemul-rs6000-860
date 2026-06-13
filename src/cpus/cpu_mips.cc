@@ -35,7 +35,7 @@
 #include <ctype.h>
 #include <unistd.h>
 
-#include "../../config.h"
+#include "config.h"
 
 #include "arcbios.h"
 #include "cop0.h"

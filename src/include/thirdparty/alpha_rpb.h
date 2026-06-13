@@ -51,15 +51,15 @@
 
 #ifndef	ASSEMBLER
 struct rpb {
-	u_int64_t	rpb_phys;		/*   0: HWRPB phys. address. */
+	uint64_t	rpb_phys;		/*   0: HWRPB phys. address. */
 	char		rpb_magic[8];		/*   8: "HWRPB" (in ASCII) */
-	u_int64_t	rpb_version;		/*  10 */
-	u_int64_t	rpb_size;		/*  18: HWRPB size in bytes */
-	u_int64_t	rpb_primary_cpu_id;	/*  20 */
-	u_int64_t	rpb_page_size;		/*  28: (8192) */
-	u_int32_t	rpb_phys_addr_size;	/*  30: physical address size */
-	u_int32_t	rpb_extended_va_size;	/*  34: extended VA size (4L) */
-	u_int64_t	rpb_max_asn;		/*  38:   (16) */
+	uint64_t	rpb_version;		/*  10 */
+	uint64_t	rpb_size;		/*  18: HWRPB size in bytes */
+	uint64_t	rpb_primary_cpu_id;	/*  20 */
+	uint64_t	rpb_page_size;		/*  28: (8192) */
+	uint32_t	rpb_phys_addr_size;	/*  30: physical address size */
+	uint32_t	rpb_extended_va_size;	/*  34: extended VA size (4L) */
+	uint64_t	rpb_max_asn;		/*  38:   (16) */
 	char		rpb_ssn[16];		/*  40: only first 10 valid */
 
 #define	ST_ADU			1		/* Alpha Demo. Unit (?) */
@@ -98,7 +98,7 @@ struct rpb {
 	/* Alpha Processor, Inc. systypes */
 #define	ST_API_NAUTILUS		201		/* EV6-AMD 751 UP1000 */
 
-	u_int64_t	rpb_type;		/*  50: */
+	uint64_t	rpb_type;		/*  50: */
 
 #define	SV_MPCAP		0x00000001	/* multiprocessor capable */
 
@@ -191,37 +191,37 @@ struct rpb {
  */
 #define	SV_ST_MIATA_1_5		0x00004c00	/* Miata 1.5 */
 
-	u_int64_t	rpb_variation;		/*  58 */
+	uint64_t	rpb_variation;		/*  58 */
 
 	char		rpb_revision[8];	/*  60; only first 4 valid */
-	u_int64_t	rpb_intr_freq;		/*  68; scaled by 4096 */
-	u_int64_t	rpb_cc_freq;		/*  70: cycle cntr frequency */
-	u_int64_t	rpb_vptb;		/*  78: */
-	u_int64_t	rpb_reserved_arch;	/*  80: */
-	u_int64_t	rpb_tbhint_off;		/*  88: */
-	u_int64_t	rpb_pcs_cnt;		/*  90: */
-	u_int64_t	rpb_pcs_size;		/*  98; pcs size in bytes */
-	u_int64_t	rpb_pcs_off;		/*  A0: offset to pcs info */ 
-	u_int64_t	rpb_ctb_cnt;		/*  A8: console terminal */
-	u_int64_t	rpb_ctb_size;		/*  B0: ctb size in bytes */
-	u_int64_t	rpb_ctb_off;		/*  B8: offset to ctb */
-	u_int64_t	rpb_crb_off;		/*  C0: offset to crb */
-	u_int64_t	rpb_memdat_off;		/*  C8: memory data offset */
-	u_int64_t	rpb_condat_off;		/*  D0: config data offset */
-	u_int64_t	rpb_fru_off;		/*  D8: FRU table offset */
-	u_int64_t	rpb_save_term;		/*  E0: terminal save */
-	u_int64_t	rpb_save_term_val;	/*  E8: */
-	u_int64_t	rpb_rest_term;		/*  F0: terminal restore */
-	u_int64_t	rpb_rest_term_val;	/*  F8: */
-	u_int64_t	rpb_restart;		/* 100: restart */
-	u_int64_t	rpb_restart_val;	/* 108: */
-	u_int64_t	rpb_reserve_os;		/* 110: */
-	u_int64_t	rpb_reserve_hw;		/* 118: */
-	u_int64_t	rpb_checksum;		/* 120: HWRPB checksum */
-	u_int64_t	rpb_rxrdy;		/* 128: receive ready */
-	u_int64_t	rpb_txrdy;		/* 130: transmit ready */
-	u_int64_t	rpb_dsrdb_off;		/* 138: HWRPB + DSRDB offset */
-	u_int64_t	rpb_tbhint[8];		/* 140: TB hint block */
+	uint64_t	rpb_intr_freq;		/*  68; scaled by 4096 */
+	uint64_t	rpb_cc_freq;		/*  70: cycle cntr frequency */
+	uint64_t	rpb_vptb;		/*  78: */
+	uint64_t	rpb_reserved_arch;	/*  80: */
+	uint64_t	rpb_tbhint_off;		/*  88: */
+	uint64_t	rpb_pcs_cnt;		/*  90: */
+	uint64_t	rpb_pcs_size;		/*  98; pcs size in bytes */
+	uint64_t	rpb_pcs_off;		/*  A0: offset to pcs info */ 
+	uint64_t	rpb_ctb_cnt;		/*  A8: console terminal */
+	uint64_t	rpb_ctb_size;		/*  B0: ctb size in bytes */
+	uint64_t	rpb_ctb_off;		/*  B8: offset to ctb */
+	uint64_t	rpb_crb_off;		/*  C0: offset to crb */
+	uint64_t	rpb_memdat_off;		/*  C8: memory data offset */
+	uint64_t	rpb_condat_off;		/*  D0: config data offset */
+	uint64_t	rpb_fru_off;		/*  D8: FRU table offset */
+	uint64_t	rpb_save_term;		/*  E0: terminal save */
+	uint64_t	rpb_save_term_val;	/*  E8: */
+	uint64_t	rpb_rest_term;		/*  F0: terminal restore */
+	uint64_t	rpb_rest_term_val;	/*  F8: */
+	uint64_t	rpb_restart;		/* 100: restart */
+	uint64_t	rpb_restart_val;	/* 108: */
+	uint64_t	rpb_reserve_os;		/* 110: */
+	uint64_t	rpb_reserve_hw;		/* 118: */
+	uint64_t	rpb_checksum;		/* 120: HWRPB checksum */
+	uint64_t	rpb_rxrdy;		/* 128: receive ready */
+	uint64_t	rpb_txrdy;		/* 130: transmit ready */
+	uint64_t	rpb_dsrdb_off;		/* 138: HWRPB + DSRDB offset */
+	uint64_t	rpb_tbhint[8];		/* 140: TB hint block */
 };
 
 #define	LOCATE_PCS(h,cpunumber) ((struct pcs *)	\
@@ -231,7 +231,7 @@ struct rpb {
  * PCS: Per-CPU information.
  */
 struct pcs {
-	u_int8_t	pcs_hwpcb[128];		/*   0: PAL dependent */
+	uint8_t	pcs_hwpcb[128];		/*   0: PAL dependent */
 
 #define	PCS_BIP			0x000001	/* boot in progress */
 #define	PCS_RC			0x000002	/* restart possible */
@@ -250,12 +250,12 @@ struct pcs {
 #define	PCS_HALT_WARM_BOOT	0x030000
 #define	PCS_HALT_STAY_HALTED	0x040000
 #define	PCS_mbz	      0xffffffffff000000	/* 24:63 -- must be zero */
-	u_int64_t	pcs_flags;		/*  80: */
+	uint64_t	pcs_flags;		/*  80: */
 
-	u_int64_t	pcs_pal_memsize;	/*  88: PAL memory size */
-	u_int64_t	pcs_pal_scrsize;	/*  90: PAL scratch size */
-	u_int64_t	pcs_pal_memaddr;	/*  98: PAL memory addr */	
-	u_int64_t	pcs_pal_scraddr;	/*  A0: PAL scratch addr */
+	uint64_t	pcs_pal_memsize;	/*  88: PAL memory size */
+	uint64_t	pcs_pal_scrsize;	/*  90: PAL scratch size */
+	uint64_t	pcs_pal_memaddr;	/*  98: PAL memory addr */	
+	uint64_t	pcs_pal_scraddr;	/*  A0: PAL scratch addr */
 	struct {
 		int	/*  TODO/NOTE: should be uint64_t  */
 			minorrev	: 8,	/* alphabetic char 'a' - 'z' */
@@ -280,7 +280,7 @@ struct pcs {
 #define pcs_compatibility	pcs_pal_rev.compatibility
 #define pcs_proc_cnt	pcs_pal_rev.proc_cnt
 
-	u_int64_t	pcs_proc_type;		/*  B0: processor type */
+	uint64_t	pcs_proc_type;		/*  B0: processor type */
 
 #define	PCS_PROC_EV3		1			/* EV3 */
 #define	PCS_PROC_EV4		2			/* EV4: 21064 */
@@ -302,7 +302,7 @@ struct pcs {
 
 	/* Minor number interpretation is processor specific.  See cpu.c. */
 
-	u_int64_t	pcs_proc_var;		/* B8: processor variation. */
+	uint64_t	pcs_proc_var;		/* B8: processor variation. */
 
 #define	PCS_VAR_VAXFP		0x0000000000000001	/* VAX FP support */
 #define	PCS_VAR_IEEEFP		0x0000000000000002	/* IEEE FP support */
@@ -311,14 +311,14 @@ struct pcs {
 
 	char		pcs_proc_revision[8];	/*  C0: only first 4 valid */
 	char		pcs_proc_sn[16];	/*  C8: only first 10 valid */
-	u_int64_t	pcs_machcheck;		/*  D8: mach chk phys addr. */
-	u_int64_t	pcs_machcheck_len;	/*  E0: length in bytes */
-	u_int64_t	pcs_halt_pcbb;		/*  E8: phys addr of halt PCB */
-	u_int64_t	pcs_halt_pc;		/*  F0: halt PC */
-	u_int64_t	pcs_halt_ps;		/*  F8: halt PS */
-	u_int64_t	pcs_halt_r25;		/* 100: halt argument list */
-	u_int64_t	pcs_halt_r26;		/* 108: halt return addr list */
-	u_int64_t	pcs_halt_r27;		/* 110: halt procedure value */
+	uint64_t	pcs_machcheck;		/*  D8: mach chk phys addr. */
+	uint64_t	pcs_machcheck_len;	/*  E0: length in bytes */
+	uint64_t	pcs_halt_pcbb;		/*  E8: phys addr of halt PCB */
+	uint64_t	pcs_halt_pc;		/*  F0: halt PC */
+	uint64_t	pcs_halt_ps;		/*  F8: halt PS */
+	uint64_t	pcs_halt_r25;		/* 100: halt argument list */
+	uint64_t	pcs_halt_r26;		/* 108: halt return addr list */
+	uint64_t	pcs_halt_r27;		/* 110: halt procedure value */
 
 #define	PCS_HALT_RESERVED		0
 #define	PCS_HALT_POWERUP		1
@@ -329,13 +329,13 @@ struct pcs {
 #define	PCS_HALT_DOUBLE_ERROR_ABORT	6
 #define	PCS_HALT_SCBB			7
 #define	PCS_HALT_PTBR			8	/* 9-FF: reserved */
-	u_int64_t	pcs_halt_reason;	/* 118: */
+	uint64_t	pcs_halt_reason;	/* 118: */
 
-	u_int64_t	pcs_reserved_soft;	/* 120: preserved software */
+	uint64_t	pcs_reserved_soft;	/* 120: preserved software */
 
 	struct {				/* 128: inter-console buffers */
-		u_int	iccb_rxlen;
-		u_int	iccb_txlen;
+		unsigned int	iccb_rxlen;
+		unsigned int	iccb_txlen;
 		char	iccb_rxbuf[80];
 		char	iccb_txbuf[80];
 	} pcs_iccb;
@@ -343,22 +343,22 @@ struct pcs {
 #define	PALvar_reserved	0
 #define	PALvar_OpenVMS	1
 #define	PALvar_OSF1	2
-	u_int64_t	pcs_palrevisions[16];	/* 1D0: PALcode revisions */
+	uint64_t	pcs_palrevisions[16];	/* 1D0: PALcode revisions */
 
-	u_int64_t	pcs_reserved_arch[6];	/* 250: reserved arch */
+	uint64_t	pcs_reserved_arch[6];	/* 250: reserved arch */
 };
 
 /*
  * CTB: Console Terminal Block
  */
 struct ctb {
-	u_int64_t	ctb_type;		/*   0: CTB type */
-	u_int64_t	ctb_unit;		/*   8: */
-	u_int64_t	ctb_reserved;		/*  16: */
-	u_int64_t	ctb_len;		/*  24: bytes of info */
-	u_int64_t	ctb_ipl;		/*  32: console ipl level */
-	u_int64_t	ctb_tintr_vec;		/*  40: transmit vec (0x800) */
-	u_int64_t	ctb_rintr_vec;		/*  48: receive vec (0x800) */
+	uint64_t	ctb_type;		/*   0: CTB type */
+	uint64_t	ctb_unit;		/*   8: */
+	uint64_t	ctb_reserved;		/*  16: */
+	uint64_t	ctb_len;		/*  24: bytes of info */
+	uint64_t	ctb_ipl;		/*  32: console ipl level */
+	uint64_t	ctb_tintr_vec;		/*  40: transmit vec (0x800) */
+	uint64_t	ctb_rintr_vec;		/*  48: receive vec (0x800) */
 
 #define	CTB_NONE		0x00		/* no console present */
 #define	CTB_SERVICE		0x01		/* service processor */
@@ -366,48 +366,48 @@ struct ctb {
 #define	CTB_GRAPHICS		0x03		/* graphics device */
 #define	CTB_TYPE4		0x04		/* type 4 CTB */
 #define	CTB_NETWORK		0xC0		/* network device */
-	u_int64_t	ctb_term_type;		/*  56: terminal type */
+	uint64_t	ctb_term_type;		/*  56: terminal type */
 
-	u_int64_t	ctb_keybd_type;		/*  64: keyboard nationality */
-	u_int64_t	ctb_keybd_trans;	/*  72: trans. table addr */
-	u_int64_t	ctb_keybd_map;		/*  80: map table addr */
-	u_int64_t	ctb_keybd_state;	/*  88: keyboard flags */
-	u_int64_t	ctb_keybd_last;		/*  96: last key entered */
-	u_int64_t	ctb_font_us;		/* 104: US font table addr */
-	u_int64_t	ctb_font_mcs;		/* 112: MCS font table addr */
-	u_int64_t	ctb_font_width;		/* 120: font width, height */
-	u_int64_t	ctb_font_height;	/* 128:		in pixels */
-	u_int64_t	ctb_mon_width;		/* 136: monitor width, height */
-	u_int64_t	ctb_mon_height;		/* 144:		in pixels */
-	u_int64_t	ctb_dpi;		/* 152: monitor dots per inch */
-	u_int64_t	ctb_planes;		/* 160: # of planes */
-	u_int64_t	ctb_cur_width;		/* 168: cursor width, height */
-	u_int64_t	ctb_cur_height;		/* 176:		in pixels */
-	u_int64_t	ctb_head_cnt;		/* 184: # of heads */
-	u_int64_t	ctb_opwindow;		/* 192: opwindow on screen */
-	u_int64_t	ctb_head_offset;	/* 200: offset to head info */
-	u_int64_t	ctb_putchar;		/* 208: output char to TURBO */
-	u_int64_t	ctb_io_state;		/* 216: I/O flags */
-	u_int64_t	ctb_listen_state;	/* 224: listener flags */
-	u_int64_t	ctb_xaddr;		/* 232: extended info addr */
-	u_int64_t	ctb_turboslot;		/* 248: TURBOchannel slot # */
-	u_int64_t	ctb_server_off;		/* 256: offset to server info */
-	u_int64_t	ctb_line_off;		/* 264: line parameter offset */
-	u_int8_t	ctb_csd;		/* 272: console specific data */
+	uint64_t	ctb_keybd_type;		/*  64: keyboard nationality */
+	uint64_t	ctb_keybd_trans;	/*  72: trans. table addr */
+	uint64_t	ctb_keybd_map;		/*  80: map table addr */
+	uint64_t	ctb_keybd_state;	/*  88: keyboard flags */
+	uint64_t	ctb_keybd_last;		/*  96: last key entered */
+	uint64_t	ctb_font_us;		/* 104: US font table addr */
+	uint64_t	ctb_font_mcs;		/* 112: MCS font table addr */
+	uint64_t	ctb_font_width;		/* 120: font width, height */
+	uint64_t	ctb_font_height;	/* 128:		in pixels */
+	uint64_t	ctb_mon_width;		/* 136: monitor width, height */
+	uint64_t	ctb_mon_height;		/* 144:		in pixels */
+	uint64_t	ctb_dpi;		/* 152: monitor dots per inch */
+	uint64_t	ctb_planes;		/* 160: # of planes */
+	uint64_t	ctb_cur_width;		/* 168: cursor width, height */
+	uint64_t	ctb_cur_height;		/* 176:		in pixels */
+	uint64_t	ctb_head_cnt;		/* 184: # of heads */
+	uint64_t	ctb_opwindow;		/* 192: opwindow on screen */
+	uint64_t	ctb_head_offset;	/* 200: offset to head info */
+	uint64_t	ctb_putchar;		/* 208: output char to TURBO */
+	uint64_t	ctb_io_state;		/* 216: I/O flags */
+	uint64_t	ctb_listen_state;	/* 224: listener flags */
+	uint64_t	ctb_xaddr;		/* 232: extended info addr */
+	uint64_t	ctb_turboslot;		/* 248: TURBOchannel slot # */
+	uint64_t	ctb_server_off;		/* 256: offset to server info */
+	uint64_t	ctb_line_off;		/* 264: line parameter offset */
+	uint8_t	ctb_csd;		/* 272: console specific data */
 };
 
 struct ctb_tt {
-	u_int64_t	ctb_type;		/*   0: CTB type */
-	u_int64_t	ctb_unit;		/*   8: console unit */
-	u_int64_t	ctb_reserved;		/*  16: reserved */
-	u_int64_t	ctb_length;		/*  24: length */
-	u_int64_t	ctb_csr;		/*  32: address */
-	u_int64_t	ctb_tivec;		/*  40: Tx intr vector */
-	u_int64_t	ctb_rivec;		/*  48: Rx intr vector */
-	u_int64_t	ctb_baud;		/*  56: baud rate */
-	u_int64_t	ctb_put_sts;		/*  64: PUTS status */
-	u_int64_t	ctb_get_sts;		/*  72: GETS status */
-	u_int64_t	ctb_reserved0;		/*  80: reserved */
+	uint64_t	ctb_type;		/*   0: CTB type */
+	uint64_t	ctb_unit;		/*   8: console unit */
+	uint64_t	ctb_reserved;		/*  16: reserved */
+	uint64_t	ctb_length;		/*  24: length */
+	uint64_t	ctb_csr;		/*  32: address */
+	uint64_t	ctb_tivec;		/*  40: Tx intr vector */
+	uint64_t	ctb_rivec;		/*  48: Rx intr vector */
+	uint64_t	ctb_baud;		/*  56: baud rate */
+	uint64_t	ctb_put_sts;		/*  64: PUTS status */
+	uint64_t	ctb_get_sts;		/*  72: GETS status */
+	uint64_t	ctb_reserved0;		/*  80: reserved */
 };
 
 /*
@@ -432,7 +432,7 @@ struct ctb_tt {
  */
 struct crd {
 	int64_t		descriptor;
-	u_int64_t	entry_va;
+	uint64_t	entry_va;
 };
 
 /*
@@ -440,24 +440,24 @@ struct crd {
  */
 struct crb {
 	/*  struct crd *  */
-	u_int64_t	crb_v_dispatch;		/*   0: virtual dispatch addr */
-	u_int64_t	crb_p_dispatch;		/*   8: phys dispatch addr */
+	uint64_t	crb_v_dispatch;		/*   0: virtual dispatch addr */
+	uint64_t	crb_p_dispatch;		/*   8: phys dispatch addr */
 	/*  struct crd *  */
-	u_int64_t	crb_v_fixup;		/*  10: virtual fixup addr */
-	u_int64_t	crb_p_fixup;		/*  18: phys fixup addr */
-	u_int64_t	crb_map_cnt;		/*  20: phys/virt map entries */
-	u_int64_t	crb_page_cnt;		/*  28: pages to be mapped */
+	uint64_t	crb_v_fixup;		/*  10: virtual fixup addr */
+	uint64_t	crb_p_fixup;		/*  18: phys fixup addr */
+	uint64_t	crb_map_cnt;		/*  20: phys/virt map entries */
+	uint64_t	crb_page_cnt;		/*  28: pages to be mapped */
 };
 
 /*
  * MDDT: Memory Data Descriptor Table
  */
 struct mddt_cluster {
-	u_int64_t	mddt_pfn;	/*   0: starting PFN */
-	u_int64_t	mddt_pg_cnt;	/*   8: 8KB page count */
-	u_int64_t	mddt_pg_test;	/*  10: tested page count */
-	u_int64_t	mddt_v_bitaddr;	/*  18: bitmap virt addr */
-	u_int64_t	mddt_p_bitaddr;	/*  20: bitmap phys addr */
+	uint64_t	mddt_pfn;	/*   0: starting PFN */
+	uint64_t	mddt_pg_cnt;	/*   8: 8KB page count */
+	uint64_t	mddt_pg_test;	/*  10: tested page count */
+	uint64_t	mddt_v_bitaddr;	/*  18: bitmap virt addr */
+	uint64_t	mddt_p_bitaddr;	/*  20: bitmap phys addr */
 	int64_t		mddt_bit_cksum;	/*  28: bitmap checksum */
 
 #define	MDDT_NONVOLATILE		0x10	/* cluster is non-volatile */
@@ -469,10 +469,10 @@ struct mddt_cluster {
 
 struct mddt {
 	int64_t	 	mddt_cksum;		/*   0: 7-N checksum */
-	u_int64_t	mddt_physaddr;		/*   8: bank config addr
+	uint64_t	mddt_physaddr;		/*   8: bank config addr
 						 * IMPLEMENTATION SPECIFIC
 						 */
-	u_int64_t	mddt_cluster_cnt;	/*  10: memory cluster count */
+	uint64_t	mddt_cluster_cnt;	/*  10: memory cluster count */
 	struct mddt_cluster mddt_clusters[2];			/* variable length array */
 };
 
@@ -486,8 +486,8 @@ struct mddt {
  */
 struct dsrdb {
 	int64_t		dsr_smm;		/*  0: SMM number */
-	u_int64_t	dsr_lurt_off;		/*  8: LURT table offset */
-	u_int64_t	dsr_sysname_off;	/* 16: offset to sysname */
+	uint64_t	dsr_lurt_off;		/*  8: LURT table offset */
+	uint64_t	dsr_sysname_off;	/* 16: offset to sysname */
 };
 
 /*

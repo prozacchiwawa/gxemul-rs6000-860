@@ -59,13 +59,13 @@
 #define _PMAX_DC7085CONS_H_
 
 typedef volatile struct dc7085regs {
-	u_short	dc_csr;		/* control and status (R/W) */
-	u_short	pad0[3];
+	uint16_t	dc_csr;		/* control and status (R/W) */
+	uint16_t	pad0[3];
 	short	dc_rbuf_lpr;	/* receiver data (R), line params (W) */
-	u_short	pad1[3];
-	u_short	dc_tcr;		/* transmitter control (R/W) */
-	u_short	pad2[3];
-	u_short	dc_msr_tdr;	/* modem status (R), transmit data (W) */
+	uint16_t	pad1[3];
+	uint16_t	dc_tcr;		/* transmitter control (R/W) */
+	uint16_t	pad2[3];
+	uint16_t	dc_msr_tdr;	/* modem status (R), transmit data (W) */
 } dcregs;
 #define dc_rbuf	dc_rbuf_lpr
 #define dc_lpr	dc_rbuf_lpr

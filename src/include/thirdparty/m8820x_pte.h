@@ -76,7 +76,7 @@
  * Area descriptors
  */
 
-typedef	u_int32_t	apr_t;
+typedef	uint32_t	apr_t;
 
 #define	APR_V		0x00000001	/* valid bit */
 
@@ -102,7 +102,7 @@ typedef	u_int32_t	apr_t;
  * Segment table entries
  */
 
-typedef u_int32_t	sdt_entry_t;
+typedef uint32_t	sdt_entry_t;
 
 #define	SG_V		0x00000001
 #define	SG_NV		0x00000000
@@ -119,7 +119,7 @@ typedef u_int32_t	sdt_entry_t;
  * Page table entries
  */
 
-typedef u_int32_t	pt_entry_t;
+typedef uint32_t	pt_entry_t;
 
 #define	PG_V		0x00000001
 #define	PG_NV		0x00000000
@@ -142,7 +142,7 @@ typedef u_int32_t	pt_entry_t;
  * Indirect descriptors (mc81110)
  */
 
-typedef	u_int32_t	pt_ind_entry_t;
+typedef	uint32_t	pt_ind_entry_t;
 
 /* validity bits */
 #define	IND_V		0x00000001

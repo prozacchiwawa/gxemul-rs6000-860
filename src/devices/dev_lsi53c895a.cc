@@ -326,6 +326,8 @@ enum {
 
 typedef struct interrupt qemu_irq;
 
+#define QTAILQ_EMPTY(HEAD) ((HEAD)->prev == (HEAD) || (HEAD)->next == (HEAD))
+
 #define QTAILQ_INIT(HEAD) \
     do {                  \
         (HEAD)->prev = (HEAD); \
@@ -687,6 +689,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
       }
     case 0x1b:
     case 0x1e:
+	case 0x2f:
     case 0x35: {
       DEBUG("LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
       req->status = 0;
@@ -900,6 +903,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x00:
     case 0x1b:
     case 0x1e:
+	case 0x2f:
     case 0x35:
     case 0x51:
     case 0x52: {
@@ -1108,7 +1112,8 @@ static void lsi_soft_reset(LSIState *s)
     s->csbc = 0;
     s->sbr = 0;
     s->scid = 0;
-    assert(!s->queue);
+    // Queue is now owned and is a complex type.
+    // assert(!s->queue);
     assert(!s->current);
 }
 

@@ -68,22 +68,22 @@ struct bootdev_data {
  *		a4 contains bootinfo version number
  *	if a2 contains BOOTINFO_MAGIC and a4 contains 0 (backward compat):
  *		a3 contains pointer (BEVA) to bootinfo version
- *		    (u_long), then the bootinfo
+ *		    (uint64_t), then the bootinfo
  */
 
 #define	ALPHA_BOOTINFO_MAGIC		0xdeadbeeffeedfaceULL
 
 struct bootinfo_v1 {
-	u_long	ssym;			/* 0: start of kernel sym table	*/
-	u_long	esym;			/* 8: end of kernel sym table	*/
+	uint64_t	ssym;			/* 0: start of kernel sym table	*/
+	uint64_t	esym;			/* 8: end of kernel sym table	*/
 	char	boot_flags[64];		/* 16: boot flags		*/
 	char	booted_kernel[64];	/* 80: name of booted kernel	*/
 	void	*hwrpb;			/* 144: hwrpb pointer (BEVA)	*/
-	u_long	hwrpbsize;		/* 152: size of hwrpb data	*/
+	uint64_t	hwrpbsize;		/* 152: size of hwrpb data	*/
 	int	(*cngetc)(void);	/* 160: console getc pointer	*/
 	void	(*cnputc)(int);		/* 168: console putc pointer	*/
 	void	(*cnpollc)(int);	/* 176: console pollc pointer	*/
-	u_long	pad[9];			/* 184: rsvd for future use	*/
+	uint64_t	pad[9];			/* 184: rsvd for future use	*/
 					/* 256: total size		*/
 };
 
@@ -98,10 +98,10 @@ struct bootinfo_v1 {
  * filled in at startup with sane contents.
  */
 struct bootinfo_kernel {
-	u_long	ssym;			/* start of syms */
-	u_long	esym;			/* end of syms */
-	u_long	hwrpb_phys;		/* hwrpb physical address */
-	u_long	hwrpb_size;		/* size of hwrpb data */
+	uint64_t	ssym;			/* start of syms */
+	uint64_t	esym;			/* end of syms */
+	uint64_t	hwrpb_phys;		/* hwrpb physical address */
+	uint64_t	hwrpb_size;		/* size of hwrpb data */
 	char	boot_flags[64];		/* boot flags */
 	char	booted_kernel[64];	/* name of booted kernel */
 	char	booted_dev[64];		/* name of booted device */
@@ -111,7 +111,7 @@ struct bootinfo_kernel {
  * Lookup table entry for Alpha system variations.
  */
 struct alpha_variation_table {
-	u_int64_t	avt_variation;	/* variation, from HWRPB */
+	uint64_t	avt_variation;	/* variation, from HWRPB */
 	const char	*avt_model;	/* model string */
 };
 
@@ -119,7 +119,7 @@ struct alpha_variation_table {
 extern struct bootdev_data *bootdev_data;
 extern struct bootinfo_kernel bootinfo;
 
-const char *alpha_variation_name(u_int64_t,
+const char *alpha_variation_name(uint64_t,
     const struct alpha_variation_table *);
 const char *alpha_unknown_sysname(void);
 #endif /* _KERNEL */

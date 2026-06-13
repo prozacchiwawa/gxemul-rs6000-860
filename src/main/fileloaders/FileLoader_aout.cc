@@ -119,7 +119,7 @@ bool FileLoader_aout::LoadIntoComponent(refcount_ptr<Component> component, ostre
 		return false;
 	}
 
-	ifstream file(Filename().c_str());
+	ifstream file(Filename().c_str(), std::ios::binary | std::ios::in);
 	if (!file.is_open()) {
 		messages << "Unable to read file.\n";
 		return false;
@@ -265,7 +265,7 @@ bool FileLoader_aout::LoadIntoComponent(refcount_ptr<Component> component, ostre
 
 		off_t oldpos = file.tellg();
 		file.seekg(0, std::ios_base::end);
-		int strings_len = file.tellg() - oldpos;
+		int strings_len = static_cast<off_t>(file.tellg()) - oldpos;
 		file.seekg(oldpos, std::ios_base::beg);
 
 		messages.flags(std::ios::dec);

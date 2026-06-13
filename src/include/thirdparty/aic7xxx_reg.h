@@ -12,7 +12,7 @@
  * $NetBSD: aic7xxx_reg.h,v 1.2 2003/04/19 19:27:50 fvdl Exp $
  */
 #if 0
-typedef int (ahc_reg_print_t)(u_int, u_int *, u_int);
+typedef int (ahc_reg_print_t)(unsigned int, unsigned int *, unsigned int);
 typedef struct ahc_reg_parse_entry {
 	char	*name;
 	uint8_t	 value;

@@ -519,12 +519,12 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
 
 PCIINIT(s3_virge)
 {
-	PCI_SET_DATA(PCI_ID_REG,
-	    PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA /*PCI_PRODUCT_S3_VIRGE_DX*/));
+  auto id_code = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  PCI_SET_DATA(PCI_ID_REG, id_code);
 
 	PCI_SET_DATA(PCI_CLASS_REG,
-	    PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
-	    PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
+               PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
+                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
@@ -534,11 +534,38 @@ PCIINIT(s3_virge)
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 0;
   assoc->size = 32 * 1024 * 1024;
-  assoc->id = PCI_ID_CODE(PCI_VENDOR_S3, PCI_PRODUCT_S3_AURORA);
+  assoc->id = id_code;
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 
-	dev_vga_init(machine, mem, assoc->allocated_space,
-	    pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
+	dev_86mc64_init(machine, mem, assoc->allocated_space,
+               pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
+}
+
+#define PCI_VENDOR_WD                   0x101c
+#define PCI_PRODUCT_WD90C00            0xc24a
+
+PCIINIT(wd90c00)
+{
+  auto id_code = PCI_ID_CODE(PCI_VENDOR_WD, PCI_PRODUCT_WD90C00);
+  PCI_SET_DATA(PCI_ID_REG, id_code);
+
+	PCI_SET_DATA(PCI_CLASS_REG,
+               PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
+                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
+
+  PCI_SET_DATA(PCI_MAPREG_START, 0x00f00000);
+	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
+
+	pd->cfg_reg_write = s3_virge_cfg_reg_write;
+
+  struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 0;
+  assoc->size = 0x100000;
+  assoc->id = id_code;
+  assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+
+	dev_wd90c00_init(machine, mem, assoc->allocated_space,
+               pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
 #define PCI_VENDOR_NCR 0x1000

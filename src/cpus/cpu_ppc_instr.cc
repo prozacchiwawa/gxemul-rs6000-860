@@ -1139,32 +1139,19 @@ X(fmsub)
   frb.v = cpu->cd.ppc.fpr[b];
   frc.v = cpu->cd.ppc.fpr[c];
   float64_t result;
-  
+
 	if (f64_isnan(fra) || f64_isnan(frb) || f64_isnan(frc)) {
 		nan = 1;
   } else {
-    float64_t mul_result = f64_mul(fra, frc);
-    result = f64_sub(mul_result, frb);
+    float64_t mul_result = { 0 };
+    base_fmul(cpu, ic, &mul_result.v, &fra.v, &frc.v);
+    base_fsub(cpu, ic, &result.v, &mul_result.v, &frb.v);
+
     if (fnm) {
       float64_t zero = { 0 };
-      result = f64_sub(zero, result);
+      base_fsub(cpu, ic, &result.v, &zero.v, &result.v);
     }
   }
-
-  if (nan) {
-		cc = 1;
-  } else {
-		if (f64_lt(result, zero)) {
-			cc = 8;
-    } else if (f64_lt(zero, result)) {
-			cc = 4;
-    } else {
-			cc = 2;
-    }
-	}
-	/*  TODO: Signaling vs Quiet NaN  */
-	cpu->cd.ppc.fpscr &= ~(PPC_FPSCR_FPCC | PPC_FPSCR_VXSNAN);
-	cpu->cd.ppc.fpscr |= (cc << PPC_FPSCR_FPCC_SHIFT);
 
 	(*(uint64_t *)ic->arg[0]) = result.v;
 }
@@ -1173,14 +1160,7 @@ X(fmsub_dot)
 {
   instr(fmsub)(cpu, ic);
   fpu_update_cr1(cpu);
-}  
-
-X(fnmsubx_dot)
-{
-  instr(fmsub)(cpu, ic);
-  fpu_update_cr1(cpu);  
 }
-
 
 /*
  *  fadd, fsub, fdiv:  Various Floating-point operationgs
@@ -4542,7 +4522,7 @@ X(to_be_translated)
         break;
       case PPC_63_FNMSUBX:
         if (rc) {
-          ic->f = instr(fnmsubx_dot);
+          ic->f = instr(fmsub_dot);
         } else {
           ic->f = instr(fmsub);
         }

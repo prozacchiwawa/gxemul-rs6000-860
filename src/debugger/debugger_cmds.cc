@@ -862,8 +862,11 @@ static void debugger_cmd_quit(struct machine *m, char *cmd_line)
 {
 	int j, k;
 
-	if (*cmd_line) {
-		printf("syntax: quit\n");
+	if (!strcmp(cmd_line, "now")) {
+		quiet_mode = 1;
+		old_quiet_mode = 1;
+ 	} else if (*cmd_line) {
+		printf("syntax: quit [now]\n");
 		return;
 	}
 
@@ -1499,7 +1502,7 @@ static void debugger_cmd_kbd(struct machine *m, char *cmd_line) {
 
     cmd_line = endptr;
 
-    keyboard_event_t k = { kbd };
+    keyboard_event_t k = { static_cast<int>(kbd) };
     keyboard_debug_events.push_back(k);
   } while (isxdigit(*endptr));
 }

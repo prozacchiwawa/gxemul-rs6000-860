@@ -31,10 +31,10 @@
  *  See src/debugger/debugger.c.
  */
 
-#include "misc.h"
 #include <deque>
 #include <map>
 #include <memory>
+#include "misc.h"
 
 struct emul;
 struct machine;

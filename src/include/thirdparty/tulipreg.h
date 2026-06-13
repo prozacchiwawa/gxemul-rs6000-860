@@ -165,10 +165,10 @@
  * be a multiple of 4.
  */
 struct tulip_desc {
-	__volatile u_int32_t td_status;	  /* Status */
-	__volatile u_int32_t td_ctl;	  /* Control and Byte Counts */
-	__volatile u_int32_t td_bufaddr1; /* Buffer Address 1 */
-	__volatile u_int32_t td_bufaddr2; /* Buffer Address 2 */
+	__volatile uint32_t td_status;	  /* Status */
+	__volatile uint32_t td_ctl;	  /* Control and Byte Counts */
+	__volatile uint32_t td_bufaddr1; /* Buffer Address 1 */
+	__volatile uint32_t td_bufaddr2; /* Buffer Address 2 */
 };
 
 /*

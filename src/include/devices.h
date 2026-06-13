@@ -519,8 +519,12 @@ struct pci_data *dev_uninorth_init(struct machine *machine, struct memory *mem,
 /*  dev_vga.c:  */
 int dev_vga_access(struct cpu *cpu, struct memory *mem, uint64_t relative_addr,
 	unsigned char *data, size_t len, int writeflag, void *);
+void dev_86mc64_init(struct machine *machine, struct memory *mem,
+                 uint64_t videomem_base, uint64_t control_base, const char *name);
+void dev_wd90c00_init(struct machine *machine, struct memory *mem,
+                 uint64_t videomem_base, uint64_t control_base, const char *name);
 void dev_vga_init(struct machine *machine, struct memory *mem,
-	uint64_t videomem_base, uint64_t control_base, const char *name);
+                  uint64_t videomem_base, uint64_t control_base, const char *name);
 
 /*  dev_vr41xx.c:  */
 struct vr41xx_data *dev_vr41xx_init(struct machine *machine,

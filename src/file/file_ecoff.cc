@@ -68,7 +68,7 @@ static void file_load_ecoff(struct machine *m, struct memory *mem,
 	int program_byte_order = -1;
 	unsigned char buf[8192];
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "rb");
 	if (f == NULL) {
 		perror(filename);
 		exit(1);

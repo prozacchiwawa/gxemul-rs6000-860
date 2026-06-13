@@ -62,14 +62,14 @@
 void	dae_print(unsigned *);
 void	data_access_emulation(unsigned *);
 
-u_int32_t do_load_word(vaddr_t, int);
-u_int16_t do_load_half(vaddr_t, int);
-u_int8_t  do_load_byte(vaddr_t, int);
-void      do_store_word(vaddr_t, u_int32_t, int);
-void      do_store_half(vaddr_t, u_int16_t, int);
-void      do_store_byte(vaddr_t, u_int8_t, int);
-u_int32_t do_xmem_word(vaddr_t, u_int32_t, int);
-u_int8_t  do_xmem_byte(vaddr_t, u_int8_t, int);
+uint32_t do_load_word(vaddr_t, int);
+uint16_t do_load_half(vaddr_t, int);
+uint8_t  do_load_byte(vaddr_t, int);
+void      do_store_word(vaddr_t, uint32_t, int);
+void      do_store_half(vaddr_t, uint16_t, int);
+void      do_store_byte(vaddr_t, uint8_t, int);
+uint32_t do_xmem_word(vaddr_t, uint32_t, int);
+uint8_t  do_xmem_byte(vaddr_t, uint8_t, int);
 
 void	m88100_apply_patches(void);
 

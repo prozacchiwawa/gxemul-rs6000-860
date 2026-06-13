@@ -139,21 +139,21 @@ MACHINE_SETUP(mvmeppc)
 	store_32bit_word(cpu, cpu->cd.ppc.gpr[5]+ 84, 33 * 1000000);
 	store_32bit_word(cpu, cpu->cd.ppc.gpr[5]+ 88, 33 * 1000000);
 #if 0
-0         u_int32_t       bi_boothowto;
-4         u_int32_t       bi_bootaddr;
-8         u_int16_t       bi_bootclun;
-10        u_int16_t       bi_bootdlun;
+0         uint32_t       bi_boothowto;
+4         uint32_t       bi_bootaddr;
+8         uint16_t       bi_bootclun;
+10        uint16_t       bi_bootdlun;
 12        char            bi_bootline[BOOTLINE_LEN];  (32)
 44        char            bi_consoledev[CONSOLEDEV_LEN]; (16)
-60        u_int32_t       bi_consoleaddr;
-64        u_int32_t       bi_consolechan;
-68        u_int32_t       bi_consolespeed;
-72        u_int32_t       bi_consolecflag;
-76        u_int16_t       bi_modelnumber;
-80        u_int32_t       bi_memsize;
-84        u_int32_t       bi_mpuspeed;
-88        u_int32_t       bi_busspeed;
-92        u_int32_t       bi_clocktps;
+60        uint32_t       bi_consoleaddr;
+64        uint32_t       bi_consolechan;
+68        uint32_t       bi_consolespeed;
+72        uint32_t       bi_consolecflag;
+76        uint16_t       bi_modelnumber;
+80        uint32_t       bi_memsize;
+84        uint32_t       bi_mpuspeed;
+88        uint32_t       bi_busspeed;
+92        uint32_t       bi_clocktps;
 #endif
 }
 

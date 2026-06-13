@@ -373,6 +373,7 @@ int reg_access_msr(struct cpu *cpu, uint64_t *valuep, int writeflag,
   }
 
   if (cpu->cd.ppc.msr & PPC_MSR_IP &&
+      cpu->machine->machine_subtype != MACHINE_PREP_IBM850 &&
       cpu->machine->machine_subtype != MACHINE_PREP_IBM860) {
     fatal("\n[ Reboot hack for NetBSD/prep. TODO: "
 			    "fix this. ]\n");
@@ -2161,13 +2162,13 @@ static inline uint64_t ppc_sync_low_pc(struct cpu *cpu, struct ppc_instr_call *i
   }
 
 #define FP_CLEAR_BITS(X) { \
-    cpu->cd.ppc.fpscr &= ~(X);                   \
+    cpu->cd.ppc.fpscr = (cpu->cd.ppc.fpscr | (X)) ^ (X);  \
   }
 
 #define FP_CHECK_BIT(X) (((cpu->cd->cd.ppc.fpscr & (X)) != 0)
 
 void fpu_clear_non_sticky(struct cpu *cpu) {
-  FP_CLEAR_BITS(PPC_FPSCR_FEX | PPC_FPSCR_VX | PPC_FPSCR_FR | PPC_FPSCR_FI | (0x1f << 12));
+  FP_CLEAR_BITS(PPC_FPSCR_FEX | PPC_FPSCR_VX | PPC_FPSCR_FR | PPC_FPSCR_FI | (0x1f << 12) | (1 << 11));
 }
 
 int fpu_vsoft(struct cpu *cpu) {
@@ -2175,6 +2176,7 @@ int fpu_vsoft(struct cpu *cpu) {
 }
 
 static inline void fpu_bit_ladder(struct cpu *cpu, bool isnan,  uint64_t &fpscr) {
+  fpscr = (fpscr | PPC_FPSCR_VX) ^ PPC_FPSCR_VX;
   if (isnan || (fpscr & (PPC_FPSCR_VXSNAN | PPC_FPSCR_VXISI | PPC_FPSCR_VXIDI | PPC_FPSCR_VXZDZ | PPC_FPSCR_VXIMZ | PPC_FPSCR_VXVC | PPC_FPSCR_VXSQRT | PPC_FPSCR_VXCVI | PPC_FPSCR_VXSOFT))) {
     fpscr |= PPC_FPSCR_VX | PPC_FPSCR_FX;
   }
@@ -2200,16 +2202,18 @@ std::string format_float(uint64_t fval) {
 }
 
 void fpu_epilog(struct cpu *cpu, extFloat80_t *source, float64_t *result) {
-  uint64_t fpscr = cpu->cd.ppc.fpscr;
+  uint64_t fpscr = cpu->cd.ppc.fpscr & ~(0x1f << 12);
 
   if (source) {
     // Check for FI
     // XXX handle FR
     extFloat80_t re_converted;
     f64_to_extF80M(*result, &re_converted);
+#if 0
     if (memcmp(&re_converted, source, sizeof(re_converted))) {
       fpscr |= PPC_FPSCR_FI;
     }
+#endif
   }
 
   fpscr |= (fpscr & (PPC_FPSCR_FI | PPC_FPSCR_FR)) ? PPC_FPSCR_XX : 0;
@@ -2270,8 +2274,8 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   FPINST_PRELUDE();
 
   // Multiplying inf by 0 is an invalid multiplication.
-  if ((f64_isnan(frc) && f64_iszero(frc)) ||
-      (f64_iszero(frc) && f64_isnan(frc))) {
+  if ((f64_isnan(fra) && f64_iszero(frc)) ||
+      (f64_iszero(fra) && f64_isnan(frc))) {
     FP_SET_BIT(PPC_FPSCR_VXIMZ | PPC_FPSCR_VX);
     FPU_EXN;
   }
@@ -2291,6 +2295,12 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   *ptarget = result_64.v;
 }
 
+// fdiv inf / inf:
+// 0012f6b8: 7c053000      cmpw    r5,r6   (b2431000,ba411000)
+// should set:
+// VXIDI
+// aix wants:
+// FX VX OX | UX XX | VXIDI | FPCC | FU | 000
 void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, uint64_t *pfra, uint64_t *pfrc) {
   float64_t fra = { *pfra };
   float64_t frc = { *pfrc };
@@ -2304,7 +2314,7 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
   }
 
   if (f64_isinf(fra) && f64_isinf(frc)) {
-    FP_SET_BIT(PPC_FPSCR_VXIDI | PPC_FPSCR_UX);
+    FP_SET_BIT(PPC_FPSCR_VXIDI | PPC_FPSCR_UX | PPC_FPSCR_XX | PPC_FPSCR_FPCC | PPC_FPSCR_FU);
     FPU_EXN;
   }
 

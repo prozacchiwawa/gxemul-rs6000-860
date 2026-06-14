@@ -300,10 +300,12 @@ int ppc_translate_v2p(struct cpu *cpu, uint64_t vaddr,
 		return 0;
   }
 
+#if 0
 	if (!quiet_mode)
 		fatal("[ memory_ppc: exception! vaddr=0x%" PRIx64" pc=0x%" PRIx64
 		    " instr=%i user=%i wf=%i ]\n", (uint64_t) vaddr,
           (uint64_t) cpu->pc, instr, !!(cpu->cd.ppc.msr & PPC_MSR_PR), writeflag);
+#endif
 
 	if (cpu->cd.ppc.cpu_type.flags & PPC_603) {
 		cpu->cd.ppc.spr[instr? SPR_IMISS : SPR_DMISS] = vaddr;

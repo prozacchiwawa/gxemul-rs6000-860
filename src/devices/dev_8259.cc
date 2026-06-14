@@ -134,7 +134,7 @@ void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
 
     *d->last_int &= ~(0xff << d->irq_base);
     *d->last_int |= 0x10000 | (pri_mask << d->irq_base);
-    fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr);
+    // fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr);
 
     do_assert(d);
     return;

@@ -56,14 +56,14 @@ DEVICE_ACCESS(prep)
 		idata = memory_readmax64(cpu, data, len);
 		fatal("[ prep: write to interrupt register? ]\n");
   } else if (writeflag == MEM_READ) {
-    fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
+    // fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
     if (cpu->machine->isa_pic_data.last_int & 0x10000) {
       cpu->machine->isa_pic_data.last_int &= 0xffff;
       if (cpu->machine->isa_pic_data.last_int & 4) {
         for (int i = 8; i < 16; i++) {
           if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
             if ((i == 13 || i == 12) && cpu->machine->isa_pic_data.pic2) {
-              fprintf(stderr, "deassert int %d on pci ack\n", i);
+              // fprintf(stderr, "deassert int %d on pci ack\n", i);
               dev_8259_deassert(cpu->machine->isa_pic_data.pic2, i - 8);
               dev_8259_deassert(cpu->machine->isa_pic_data.pic1, 2);
             }
@@ -79,7 +79,7 @@ DEVICE_ACCESS(prep)
           }
 
           if ((i == 4 || i == 1) && cpu->machine->isa_pic_data.pic1) {
-            fprintf(stderr, "deassert int %d on pci ack\n", i);
+            // fprintf(stderr, "deassert int %d on pci ack\n", i);
             dev_8259_deassert(cpu->machine->isa_pic_data.pic1, i);
           }
 
@@ -92,7 +92,7 @@ DEVICE_ACCESS(prep)
     }
 
     cpu->cd.ppc.irq_asserted = false;
-    fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    // fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
     memory_writemax64(cpu, data, len, odata);
 	}
 

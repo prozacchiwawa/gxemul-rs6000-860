@@ -108,7 +108,7 @@ DEVICE_TICK(ns16550)
 	struct ns_data *d = (struct ns_data *) extra;
 
   if (!strcmp(d->name, "tty0") && debug_serial0_chars.size() && !(d->reg[com_lsr] & LSR_RXRDY)) {
-    fprintf(stderr, "[ ns16550: debug queue size %d ]\n", (int)debug_serial0_chars.size());
+    // fprintf(stderr, "[ ns16550: debug queue size %d ]\n", (int)debug_serial0_chars.size());
     console_makeavail(d->console_handle, debug_serial0_chars.front());
     debug_serial0_chars.pop_front();
   }
@@ -141,10 +141,10 @@ DEVICE_ACCESS(ns16550)
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
+        // fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
   }
 
-#if 1
+#if 0
 	/*  The NS16550 should be accessed using byte read/writes:  */
 	if (len != 1)
 		fatal("[ ns16550 (%s): len=%i, idata=0x%16llx! ]\n",
@@ -186,14 +186,14 @@ DEVICE_ACCESS(ns16550)
 
 		/*  Read/write of data:  */
 		if (writeflag == MEM_WRITE) {
-			fprintf(stderr, "%c", (int)idata);
+			// fprintf(stderr, "%c", (int)idata);
 			if (d->reg[com_mcr] & MCR_LOOPBACK)
 				console_makeavail(d->console_handle, idata);
 			else
 				console_putchar(d->console_handle, idata);
       d->sent_recently = true;
 		} else {
-      fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
+      //fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
 			odata = d->available;
       d->reg[com_iir] &= ~IIR_RXTOUT; // ((d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY);
       d->reg[com_lsr] &= ~LSR_RXRDY;
@@ -244,20 +244,25 @@ DEVICE_ACCESS(ns16550)
 				d->reg[com_iir] &= ~IIR_TXRDY;
       }
       d->sent_recently = false;
+#if 0
 			debug("[ ns16550 (%s): read from iir: 0x%02x ]\n",
 			    d->name, (int)odata);
+#endif
 		}
 		break;
 
 	case com_lsr:
 		if (writeflag == MEM_WRITE) {
+#if 0
 			debug("[ ns16550 (%s): write to lsr: 0x%02x ]\n",
 			    d->name, (int)idata);
+#endif
 			d->reg[com_lsr] = idata;
 		} else {
 			odata = d->reg[com_lsr];
 			/*  debug("[ ns16550 (%s): read from lsr: 0x%02x ]\n",
 			    d->name, (int)odata);  */
+
 		}
 		break;
 
@@ -342,7 +347,7 @@ DEVICE_ACCESS(ns16550)
 	}
 
 	if (writeflag == MEM_READ) {
-    fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
+    // fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
 		memory_writemax64(cpu, data, len, odata);
   }
 

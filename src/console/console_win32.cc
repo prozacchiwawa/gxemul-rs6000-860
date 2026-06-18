@@ -96,7 +96,6 @@ DWORD console_curmode_in, console_curmode_out;
 /*  For 'slave' mode:  */
 static HANDLE console_slave_outputd;
 
-static int console_initialized = 0;
 static struct settings *console_settings = NULL;
 static int console_stdout_pending;
 

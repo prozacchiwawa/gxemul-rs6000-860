@@ -73,7 +73,6 @@
 #include "machine.h"
 #include "settings.h"
 
-extern char *progname;
 extern int verbose;
 extern struct settings *global_settings;
 
@@ -281,7 +280,7 @@ ConsoleToKeyboard ansi_to_keyboard[] = {
   { }
 };
 
-static int console_initialized = 0;
+int console_initialized = 0;
 static struct settings *console_settings = NULL;
 static int console_stdout_pending;
 
@@ -607,6 +606,7 @@ static struct console_handle *console_new_handle(const char *name, int *handlep)
 
 	chp = &console_handles[found_free];
 	memset(chp, 0, sizeof(struct console_handle));
+  console_new_handle_platform(found_free);
 
 	chp->in_use = 1;
 	chp->machine_name = strdup("");
@@ -671,8 +671,6 @@ int console_start_slave(struct machine *machine, const char *consolename,
 
 	if (allow_slaves)
 		chp->using_xterm = USING_XTERM_BUT_NOT_YET_OPEN;
-
-  console_new_handle_platform(handle);
 
 	return handle;
 }
@@ -768,10 +766,7 @@ void console_init_main(struct emul *emul)
 	if (console_initialized)
 		return;
 
-  if (console_init_main_platform(emul) != 0) {
-    perror("problem initializing basic platform console");
-    return;
-  }
+  console_initialized = 1;
 
 	console_handles[MAIN_CONSOLE].fifo_head = 0;
 	console_handles[MAIN_CONSOLE].fifo_tail = 0;
@@ -780,7 +775,9 @@ void console_init_main(struct emul *emul)
 	console_mouse_y = 0;
 	console_mouse_buttons = 0;
 
-	console_initialized = 1;
+  if (console_init_main_platform(emul) != 0) {
+    perror("problem initializing basic platform console");
+  }
 }
 
 

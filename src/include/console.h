@@ -148,6 +148,7 @@ struct console_handle {
 };
 
 /*  A simple array of console_handles  */
+extern int console_initialized;
 extern struct console_handle *console_handles;
 extern int n_console_handles;
 extern int allow_slaves;

@@ -77,6 +77,11 @@
 #include "machine.h"
 #include "settings.h"
 
+extern char *progname;
+static int console_slave_outputd;
+static struct termios console_oldtermios;
+static struct termios console_curtermios;
+
 /*
  *  console_deinit_main():
  *
@@ -91,9 +96,6 @@ void console_deinit_main(void)
 
 	console_initialized = 0;
 }
-
-static struct termios console_oldtermios;
-static struct termios console_curtermios;
 
 /*  For 'slave' mode:  */
 static struct termios console_slave_tios;
@@ -220,8 +222,9 @@ void start_xterm_platform(int handle)
 	 *  write to filedes[1], read from filedesB[0]
 	 */
 
-	console_handles[handle].w_descriptor = filedes[1];
-	console_handles[handle].r_descriptor = filedesB[0];
+        auto platform = (struct console_handle_platform *)console_handles[handle].platform;
+	platform->w_descriptor = filedes[1];
+	platform->r_descriptor = filedesB[0];
 }
 
 
@@ -250,7 +253,7 @@ static int d_avail(int d)
  *  Returns 1 if a char is available from a handle's read descriptor,
  *  0 otherwise.
  */
-static int console_stdin_avail(int handle)
+int console_stdin_avail_platform(int handle)
 {
 	if (!console_handles[handle].in_use_for_input)
 		return 0;
@@ -262,9 +265,81 @@ static int console_stdin_avail(int handle)
 	    USING_XTERM_BUT_NOT_YET_OPEN)
 		return 0;
 
-	return d_avail(console_handles[handle].r_descriptor);
+  auto platform = (struct console_handle_platform *)console_handles[handle].platform;
+	return d_avail(platform->r_descriptor);
 }
 
+
+/*
+ *  console_slave_sigint():
+ */
+static void console_slave_sigint(int x)
+{
+	char buf[1];
+
+	/*  Send a ctrl-c:  */
+	buf[0] = 3;
+	if (write(console_slave_outputd, buf, sizeof(buf)) != sizeof(buf))
+		perror("error writing to console handle");
+
+	/*  Reset the signal handler:  */
+	signal(SIGINT, console_slave_sigint);
+}
+
+
+/*
+ *  console_slave_sigcont():
+ *
+ *  See comment for console_sigcont. This is for used by console_slave().
+ */
+static void console_slave_sigcont(int x)
+{
+	/*  Make sure our 'current' termios setting is active:  */
+	tcsetattr(STDIN_FILENO, TCSANOW, &console_slave_tios);
+
+	/*  Reset the signal handler:  */
+	signal(SIGCONT, console_slave_sigcont);
+}
+
+int console_init_main_platform(struct emul *emul) {
+  int tra = 0;
+
+  console_new_handle_platform(MAIN_CONSOLE);
+
+	tcgetattr(STDIN_FILENO, &console_oldtermios);
+	memcpy(&console_curtermios, &console_oldtermios,
+         sizeof (struct termios));
+
+	console_curtermios.c_lflag &= ~ICANON;
+	console_curtermios.c_cc[VTIME] = 0;
+	console_curtermios.c_cc[VMIN] = 1;
+
+	console_curtermios.c_lflag &= ~ECHO;
+
+	/*
+	 *  Most guest OSes seem to work ok without ~ICRNL, but Linux on
+	 *  DECstation requires it to be usable.  Unfortunately, clearing
+	 *  out ICRNL makes tracing with '-t ... |more' akward, as you
+	 *  might need to use CTRL-J instead of the enter key.  Hence,
+	 *  this bit is only cleared if we're not tracing:
+	 */
+	tra = 0;
+	for (int i=0; i<emul->n_machines; i++)
+		if (emul->machines[i]->show_trace_tree ||
+		    emul->machines[i]->instruction_trace ||
+		    emul->machines[i]->register_dump)
+			tra = 1;
+	if (!tra)
+		console_curtermios.c_iflag &= ~ICRNL;
+
+	tcsetattr(STDIN_FILENO, TCSANOW, &console_curtermios);
+
+  auto platform = (struct console_handle_platform *)console_handles[MAIN_CONSOLE].platform;
+	platform->w_descriptor = 1;
+	platform->r_descriptor = 0;
+
+  return 0;
+}
 
 /*
  *  console_slave():
@@ -328,89 +403,28 @@ void console_slave(const char *arg)
 	}
 }
 
-/*
- *  console_slave_sigint():
- */
-static void console_slave_sigint(int x)
-{
-	char buf[1];
-
-	/*  Send a ctrl-c:  */
-	buf[0] = 3;
-	if (write(console_slave_outputd, buf, sizeof(buf)) != sizeof(buf))
-		perror("error writing to console handle");
-
-	/*  Reset the signal handler:  */
-	signal(SIGINT, console_slave_sigint);
-}
-
-
-/*
- *  console_slave_sigcont():
- *
- *  See comment for console_sigcont. This is for used by console_slave().
- */
-static void console_slave_sigcont(int x)
-{
-	/*  Make sure our 'current' termios setting is active:  */
-	tcsetattr(STDIN_FILENO, TCSANOW, &console_slave_tios);
-
-	/*  Reset the signal handler:  */
-	signal(SIGCONT, console_slave_sigcont);
-}
-
-int console_init_main_platform() {
-	tcgetattr(STDIN_FILENO, &console_oldtermios);
-	memcpy(&console_curtermios, &console_oldtermios,
-         sizeof (struct termios));
-
-	console_curtermios.c_lflag &= ~ICANON;
-	console_curtermios.c_cc[VTIME] = 0;
-	console_curtermios.c_cc[VMIN] = 1;
-
-	console_curtermios.c_lflag &= ~ECHO;
-
-	/*
-	 *  Most guest OSes seem to work ok without ~ICRNL, but Linux on
-	 *  DECstation requires it to be usable.  Unfortunately, clearing
-	 *  out ICRNL makes tracing with '-t ... |more' akward, as you
-	 *  might need to use CTRL-J instead of the enter key.  Hence,
-	 *  this bit is only cleared if we're not tracing:
-	 */
-	tra = 0;
-	for (i=0; i<emul->n_machines; i++)
-		if (emul->machines[i]->show_trace_tree ||
-		    emul->machines[i]->instruction_trace ||
-		    emul->machines[i]->register_dump)
-			tra = 1;
-	if (!tra)
-		console_curtermios.c_iflag &= ~ICRNL;
-
-	tcsetattr(STDIN_FILENO, TCSANOW, &console_curtermios);
-
-	console_handles[MAIN_CONSOLE].w_descriptor = 1;
-	console_handles[MAIN_CONSOLE].r_descriptor = 0;
-
-  return 0;
-}
-
 int console_putchar_platform(int handle, int ch) {
-  return write(console_handles[handle].w_descriptor, &ch, 1);
+  auto platform = (struct console_handle_platform *)console_handles[handle].platform;
+  return write(platform->w_descriptor, &ch, 1);
 }
 
 int console_new_handle_platform(int handle) {
   struct console_handle *chp = &console_handles[handle];
   auto p = (struct console_handle_platform *)calloc(sizeof(struct console_handle_platform), 1);
   chp->platform = p;
+  return 0;
 }
 
 int console_read_platform(int handle, uint8_t *buf, size_t len) {
+  int d;
+
+  auto platform = (struct console_handle_platform *)console_handles[handle].platform;
   if (!allow_slaves)
     d = STDIN_FILENO;
   else
-    d = console_handles[handle].r_descriptor;
+    d = platform->r_descriptor;
 
-  return read(d, ch, sizeof(ch));
+  return read(d, buf, len);
 }
 
 int redirect_stderr_platform(const char *new_name) {

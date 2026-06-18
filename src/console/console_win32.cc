@@ -86,6 +86,7 @@ using ssize_t = SSIZE_T;
 extern char *progname;
 extern int verbose;
 extern struct settings *global_settings;
+static int redirect_stderr;
 
 //static struct termios console_oldtermios;
 //static struct termios console_curtermios;
@@ -162,7 +163,7 @@ void start_xterm_platform(int handle)
 		fprintf(stderr, " [Failed to create pipe handle set 1]\n");
 		exit(1);
 	}
-	swprintf(cmdline, L"%s -WW@S%llu,%llu,%d", modulefile, pipehandles[0], pipehandlesB[1], handle);
+	swprintf(cmdline, L"%s -WW@S%llu,%llu", modulefile, pipehandles[0], pipehandlesB[1]);
 	SetHandleInformation(pipehandles[0], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 	SetHandleInformation(pipehandlesB[1], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 
@@ -312,9 +313,6 @@ void console_slave(const char *arg)
 	/*  arg = '3,6' or similar, input and output descriptors  */
 	/*  printf("console_slave(): arg = '%s'\n", arg);  */
 
-  sprintf(buf, "gxemul console: %s\n", arg);
-  WriteConsole(conout, buf, strlen(buf), &len, nullptr);
-
 	inputd = (HANDLE)strtoull(arg, nullptr, 0); //atoi(arg);
 	p = strchr(arg, ',');
 	if (p == NULL) {
@@ -323,17 +321,6 @@ void console_slave(const char *arg)
 		exit(1);
 	}
 	console_slave_outputd = (HANDLE)strtoull(p+1, nullptr, 0);
-  int conhandle = 0;
-  p = strchr(p+1, ',');
-  if (p) {
-    conhandle = strtoull(p+1, nullptr, 10);
-  }
-
-  // Setup the main console if needed.
-  if (conhandle == MAIN_CONSOLE) {
-    const char *gxemul_prompt = "GXemul main console\n";
-    WriteConsole(conout, gxemul_prompt, strlen(gxemul_prompt), &len, nullptr);
-  }
 
   DWORD thread_id;
   HANDLE thread = CreateThread
@@ -393,7 +380,15 @@ int console_init_main_platform(struct emul *emul)
   freopen("NUL", "w", stdout);
   auto stdout_fdes = _fileno(stdout);
   auto new_stdout_fd = _open_osfhandle((intptr_t)platform->w_descriptor, _O_TEXT);
-  result = _dup2(new_stdout_fd, stdout_fdes) >= 0;
+  result = _dup2(new_stdout_fd, stdout_fdes);
+  if (result) {
+    return result;
+  }
+  if (!redirect_stderr) {
+    freopen("NUL", "w", stderr);
+    auto stderr_fdes = _fileno(stderr);
+    result = _dup2(new_stdout_fd, stderr_fdes);
+  }
   return result;
 }
 
@@ -415,6 +410,7 @@ int console_read_platform(int handle, uint8_t *buf, size_t len) {
 }
 
 int redirect_stderr_platform(const char *new_name) {
+  redirect_stderr = 1;
   if (!freopen(new_name, "w", stderr)) {
     MessageBox(nullptr, new_name, "Failed to redirect stderr", MB_ICONHAND);
     return -1;

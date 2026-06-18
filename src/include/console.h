@@ -127,6 +127,51 @@ enum KeyNames {
 extern const int KEY_RELEASE;
 extern const char *keynames[];
 
+#define	CONSOLE_FIFO_LEN	4096
+
+struct console_handle {
+	int		in_use;
+	int		in_use_for_input;
+	int		using_xterm;
+	int		inputonly;
+	int		outputonly;
+	int		warning_printed;
+
+	char		*machine_name;
+	char		*name;
+
+	unsigned int	fifo[CONSOLE_FIFO_LEN];
+	int		fifo_head;
+	int		fifo_tail;
+
+  void *platform;
+};
+
+/*  A simple array of console_handles  */
+extern struct console_handle *console_handles;
+extern int n_console_handles;
+extern int allow_slaves;
+
+extern int console_mouse_x;		/*  absolute x, 0-based  */
+extern int console_mouse_y;		/*  absolute y, 0-based  */
+extern int console_mouse_fb_nr;		/*  framebuffer number of
+                                      host movement, 0-based  */
+extern int console_mouse_buttons;	/*  left=4, middle=2, right=1  */
+
+extern char *stderr_redirect_log;
+
+extern const char *keynames[];
+
+#define ESCAPE 1
+#define SHIFTED 2
+#define CTRL 4
+#define ASCII_CASE 8
+#define NUL 16
+
+#define	NOT_USING_XTERM				0
+#define	USING_XTERM_BUT_NOT_YET_OPEN		1
+#define	USING_XTERM				2
+
 void console_deinit_main(void);
 void console_sigcont(int x);
 void console_makeavail(int handle, int ch);
@@ -151,5 +196,13 @@ void console_allow_slaves(int);
 void console_init(void);
 void console_deinit(void);
 
+int console_new_handle_platform(int handle);
+int console_init_main_platform(struct emul *emul);
+int console_stdin_avail_platform(int handle);
+int console_putchar_platform(int handle, int ch);
+int console_read_platform(int handle, uint8_t *buf, size_t len);
+void start_xterm_platform(int handle);
+int redirect_stderr_platform(const char *new_file);
+int console_makeavail_platform(int handle, int ch);
 
 #endif	/*  CONSOLE_H  */

@@ -41,10 +41,11 @@
 
 #include "thirdparty/bt459.h"
 
-
+#ifndef _WIN32
 #ifdef WITH_X11
 #include <X11/Xlib.h>     
 #include <X11/Xutil.h>
+#endif
 #endif
 
 extern int quiet_mode;

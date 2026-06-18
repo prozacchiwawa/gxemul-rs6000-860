@@ -450,6 +450,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                         m->cpus[j]->running = false;
                     }
                 }
+#ifdef _WIN32
+                exit(0);
+#endif
             }
         } else if (event.type == SDL_MOUSEMOTION) {
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {

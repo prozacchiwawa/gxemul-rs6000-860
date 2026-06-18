@@ -517,6 +517,9 @@ void console_putchar(int handle, int ch)
  */
 void console_flush(void)
 {
+  // Recognize ctrl-c or the like by stdin.
+  console_stdin_avail_platform(MAIN_CONSOLE);
+
 	if (console_stdout_pending)
 		fflush(stdout);
 

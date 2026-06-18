@@ -80,11 +80,13 @@
 #include "emul.h"
 #include "machine.h"
 #include "settings.h"
+#include "debugger.h"
 
 using ssize_t = SSIZE_T;
 
 extern char *progname;
 extern int verbose;
+extern uint64_t single_step;
 extern struct settings *global_settings;
 static int redirect_stderr;
 
@@ -196,6 +198,8 @@ void start_xterm_platform(int handle)
 	platform->is_proc_info_valid = true;
 }
 
+#define AVAIL_RES_CTRL_C 1000
+
 /*
  *  d_avail():
  *
@@ -209,16 +213,19 @@ static int d_avail(HANDLE d)
 		auto res = WaitForSingleObject(d, 0);
 		return res == WAIT_OBJECT_0;
 	} else if (ftype == FILE_TYPE_PIPE) {
-		char curbyte[1024];
+		unsigned char curbyte[1];
 		DWORD bytesread;
 		DWORD bytesavailable;
 		DWORD msgavailable;
 		BOOL res = PeekNamedPipe(d, (LPVOID)&curbyte, 1, &bytesread, &bytesavailable, &msgavailable);
     if (!res) {
       return -1;
-    } else if (!bytesavailable) {
-      Sleep(10);
     }
+
+    if (curbyte[0] == 0xff) {
+      return AVAIL_RES_CTRL_C;
+    }
+
     return bytesavailable;
 	} else if (d) {
 		fprintf(stderr, "Unknown file type 0x%04X\n", ftype);
@@ -247,7 +254,13 @@ int console_stdin_avail_platform(int handle)
 	    USING_XTERM_BUT_NOT_YET_OPEN)
 		return 0;
 
-	return d_avail(platform->r_descriptor);
+	int avail_res = d_avail(platform->r_descriptor);
+  if (avail_res == AVAIL_RES_CTRL_C && handle == MAIN_CONSOLE) {
+    // Recognize ctrl+c from a console.
+    single_step = 1;
+  }
+
+  return !!avail_res;
 }
 
 
@@ -287,6 +300,12 @@ DWORD WINAPI console_thread(PVOID console_slave_outputd) {
   return 0;
 }
 
+BOOL WINAPI console_ctrlc_handler(DWORD ctrl_type) {
+  DWORD len;
+  WriteFile(console_slave_outputd, "\xff", 1, &len, nullptr);
+  return TRUE;
+}
+
 /*
  *  console_slave():
  *
@@ -306,7 +325,10 @@ void console_slave(const char *arg)
   auto conin = GetStdHandle(STD_INPUT_HANDLE);
   auto conout = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	SetConsoleMode(conin, ENABLE_VIRTUAL_TERMINAL_INPUT);
+  // Disable signal delivery.
+  SetConsoleCtrlHandler(console_ctrlc_handler, TRUE);
+
+	SetConsoleMode(conin, ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_PROCESSED_INPUT);
 	SetConsoleMode(conout, ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT);
 
 	/*  arg = '3,6' or similar, input and output descriptors  */

@@ -1456,6 +1456,7 @@ struct vga_data {
 	int64_t		n_is1_reads;
 
   uint16_t  htotal, vtotal, hpanel, vpanel, htlast, vtlast, hplast, vplast;
+  uint16_t  hend, vend, helast, velast;
 
 	/*  Misc.:  */
 	int		console_handle;
@@ -1624,10 +1625,15 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
-  d->sequencer_reg[0x61] = 0x63;
+  // Hard set the panel for 1024x768
+  // Horizontal panel size
+  d->sequencer_reg[0x61] = 0x7f;
+  // Horizontal overflow
   d->sequencer_reg[0x66] = 0;
-  d->sequencer_reg[0x69] = 0x57;
-  d->sequencer_reg[0x6e] = 0x22;
+  // Vertical panel size
+  d->sequencer_reg[0x69] = 0xff;
+  // Vertical overflow
+  d->sequencer_reg[0x6e] = 0x32;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
@@ -2874,6 +2880,15 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 	case VGA_CRTC_CURSOR_LOCATION_LOW:		/*  0x0f  */
 		recalc_cursor_position(d);
 		break;
+  case VGA_CRTC_HORIZONTAL_DISPLAY_END:
+  case VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW: {
+    d->crtc_reg[regnr] = idata;
+    uint16_t hend_high = (d->crtc_reg[VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW] >> 1) & 1;
+    uint16_t hend_low = d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END];
+    d->hend = (hend_high << 8) | hend_low;
+    fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
+    break;
+  }
 	case 0xff:
 		grayscale = 0;
 		switch (d->crtc_reg[0xff]) {
@@ -3042,11 +3057,21 @@ static void vga_sequencer_reg_write(struct machine *machine, struct cpu *cpu, st
 	int regnr, int idata)
 {
 	switch (regnr) {
-  case VGA_SEQ_FP_HORIZONTAL_TOTAL_LOW:
+    /*
+      case VGA_SEQ_FP_VERTICAL_OVERFLOW_1:
+    d->sequencer_reg[regnr] = (d->sequencer_reg[regnr] & 0x0f) | (idata & 0xf0);
+    break;
+
+    case VGA_SEQ_FP_HORIZONTAL_PANEL_SIZE_LOW:
+    case VGA_SEQ_FP_VERTICAL_PANEL_SIZE_LOW:
+    // Don't write these.
+    break;
+    */
   case VGA_SEQ_FP_HORIZONTAL_PANEL_SIZE_LOW:
+  case VGA_SEQ_FP_VERTICAL_PANEL_SIZE_LOW:
+  case VGA_SEQ_FP_HORIZONTAL_TOTAL_LOW:
   case VGA_SEQ_FP_HORIZONTAL_OVERFLOW:
   case VGA_SEQ_FP_VERTICAL_TOTAL_LOW:
-  case VGA_SEQ_FP_VERTICAL_PANEL_SIZE_LOW:
   case VGA_SEQ_FP_VERTICAL_OVERFLOW_1:
   case VGA_SEQ_FP_VERTICAL_OVERFLOW_2: {
     d->sequencer_reg[regnr] = idata;
@@ -3068,6 +3093,7 @@ static void vga_sequencer_reg_write(struct machine *machine, struct cpu *cpu, st
 	case VGA_SEQ_RESET:
 	case VGA_SEQ_MAP_MASK:
 	case VGA_SEQ_SEQUENCER_MEMORY_MODE:
+    d->sequencer_reg[regnr] = idata;
 		debug("[ vga_sequencer_reg_write: select %i: TODO ]\n", regnr);
 		break;
 	default:fatal("[ vga_sequencer_reg_write: select %i ]\n", regnr);
@@ -3188,7 +3214,6 @@ DEVICE_ACCESS(s3_ctrl)
 				odata = d->sequencer_reg[
 				    d->sequencer_reg_select];
 			else {
-        d->sequencer_reg[d->sequencer_reg_select] = idata;
         fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
         vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
 			}

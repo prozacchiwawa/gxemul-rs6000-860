@@ -1476,7 +1476,16 @@ static void debugger_cmd_gdb(struct machine *m, char *cmd_line)
 
 static void debugger_cmd_until(struct machine *m, char *cmd_line) {
   char *endptr;
+  bool add_to_current = false;
+  if (*cmd_line == '+') {
+    add_to_current = true;
+    cmd_line++;
+  }
+
   uint64_t when = strtoull(cmd_line, &endptr, 16);
+  if (add_to_current) {
+     when = ((when + debugger_machine->cpus[0]->ninstrs) | 0xff) ^ 0xff;
+  }
 
   fprintf(stderr, "until %" PRIx64 "\n", (uint64_t)when);
 

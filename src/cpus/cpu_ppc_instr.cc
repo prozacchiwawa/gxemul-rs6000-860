@@ -1403,6 +1403,8 @@ X(loose_lhaux)
     full_addr += ic->arg[2];
   }
 
+  full_addr &= 0xffffffff;
+
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
@@ -3371,8 +3373,8 @@ X(to_be_translated)
 
 	case PPC_HI6_LHA:
   case PPC_HI6_LHAU:
+		rs = (iword >> 21) & 31; ra = (iword >> 16) & 31; rb = (iword >> 11) & 31;
     ic->f = instr(loose_lhaux);
-    rs = (iword >> 21) & 31; ra = (iword >> 16) & 31;
     ic->arg[0] = rs << 2 | lha_does_update(ra, rs, main_opcode == PPC_HI6_LHAU) << 1; // update or not.
     if (ra == 0) {
       ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
@@ -4078,8 +4080,8 @@ X(to_be_translated)
 
 		case PPC_31_LHAX:
 		case PPC_31_LHAUX:
-      ic->f = instr(loose_lhaux);
       rs = (iword >> 21) & 31; ra = (iword >> 16) & 31; rb = (iword >> 11) & 31;
+      ic->f = instr(loose_lhaux);
       ic->arg[0] = rs << 2 | lha_does_update(ra, rs, xo == PPC_31_LHAUX) << 1 | 1; // update or not, indexed.
       if (ra == 0) {
         ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);

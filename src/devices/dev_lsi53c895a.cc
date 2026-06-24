@@ -689,8 +689,9 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
       }
     case 0x1b:
     case 0x1e:
-	case 0x2f:
-    case 0x35: {
+    case 0x2f:
+    case 0x35:
+    case 0x46: {
       DEBUG("LSI: cmd %02x short circuit ok\n", (unsigned int)req->cmd.buf[0]);
       req->status = 0;
       req->xfer.data_in_len = 0;
@@ -905,8 +906,9 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x01:
     case 0x1b:
     case 0x1e:
-	case 0x2f:
+    case 0x2f:
     case 0x35:
+    case 0x46:
     case 0x51:
     case 0x52: {
         lsi_transfer_data(cpu, req, result_size);
@@ -944,7 +946,7 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x12:
     case 0x1a:
     case 0x25:
-    case 0x28: 
+    case 0x28:
     case 0x42:
     case 0x43: {
       DEBUG("lsi: transferred %d (cmd %02x)\n", req->transferred, req->cmd.buf[0]);

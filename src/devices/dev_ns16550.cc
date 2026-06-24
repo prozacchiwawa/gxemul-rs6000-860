@@ -115,7 +115,8 @@ static void clear_fifo(struct ns_data *d) {
 
 #define QUEUED_RECV 1
 #define QUEUED_SEND 2
-#define QUEUED_THR_EMPTY 3
+#define QUEUED_THR_EMPTY 4
+#define QUEUED_SEND_INT 8
 
 int trigger_levels[4] = { 1, 4, 8, 14 };
 
@@ -126,8 +127,6 @@ int trigger_levels[4] = { 1, 4, 8, 14 };
 static bool fifo_ena(struct ns_data *d) {
   return d->reg[com_fcr] & 1;
 }
-
-#define TASK_RECV 1
 
 static int device_tick(struct ns_data *d) {
   // Don't allow overrun even though real life would.
@@ -182,26 +181,32 @@ static bool deassert_condition(struct ns_data *d, int iir, int queue_mask) {
 }
 
 static void redo_interrupt(struct ns_data *d) {
-  if (fifo_have(&d->recv_f) && (d->reg[com_fcr] & 1)) {
-    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
-    d->reg[com_iir] = 12;
-  } else if (d->queued_int & QUEUED_RECV && !(d->reg[com_fcr] & 1)) {
-    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
-    d->reg[com_iir] = 4;
-  } else if (fifo_have(&d->send_f) && (d->reg[com_fcr] & 1)) {
+  // Always drain transmitter.
+  if (fifo_have(&d->send_f) && fifo_ena(d)) {
     d->reg[com_thr] = fifo_take(&d->send_f);
     d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
     d->queued_int &= ~QUEUED_THR_EMPTY;
-    d->reg[com_iir] = 2;
-  } else if (!(d->reg[com_fcr] & 1) && (d->queued_int & QUEUED_SEND)) {
+    d->queued_int |= QUEUED_SEND_INT;
+  } else if (!fifo_ena(d) && (d->queued_int & QUEUED_SEND)) {
     d->queued_int = ((d->queued_int | QUEUED_SEND) ^ QUEUED_SEND) | QUEUED_THR_EMPTY;
+    d->queued_int |= QUEUED_SEND_INT;
     d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
-    d->reg[com_iir] = 2;
-  } else if ((d->queued_int & QUEUED_THR_EMPTY) && (d->reg[com_iir] == 1)) {
-    d->queued_int = (d->queued_int | QUEUED_THR_EMPTY) ^ QUEUED_THR_EMPTY;
+  }
+
+  // Handle things that can cause interrupts one at a time.
+  if (fifo_have(&d->recv_f) && fifo_ena(d)) {
+    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
+    d->reg[com_lsr] |= LSR_RXRDY;
+    d->reg[com_iir] = 12;
+  } else if (d->queued_int & QUEUED_RECV && !fifo_ena(d)) {
+    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
+    d->reg[com_iir] = 4;
+  } else if ((d->queued_int & (QUEUED_THR_EMPTY | QUEUED_SEND_INT)) && (d->reg[com_iir] == 1)) {
+    d->queued_int = (d->queued_int | (QUEUED_THR_EMPTY | QUEUED_SEND_INT)) ^ (QUEUED_THR_EMPTY | QUEUED_SEND_INT);
     d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
     d->reg[com_iir] = 2;
   } else {
+    d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
     d->reg[com_iir] = 1;
   }
 
@@ -354,7 +359,7 @@ DEVINIT(ns16550)
 	    devinit->name2 : devinit->name, d->in_use);
 
   // THR empty
-  d->reg[com_lsr] = 0x60;
+  d->reg[com_lsr] = LSR_TXRDY | LSR_TSRE;
 
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 

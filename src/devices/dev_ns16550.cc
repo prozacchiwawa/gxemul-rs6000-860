@@ -49,89 +49,227 @@ std::deque<uint8_t> debug_serial0_chars;
 
 /*  #define debug fatal  */
 
-#define	TICK_SHIFT		14
+#define	TICK_SHIFT		11
 #define	DEV_NS16550_LENGTH	8
+
+#define com_fcr DEV_NS16550_LENGTH
+#define com_dlow (DEV_NS16550_LENGTH + 1)
+#define com_dhi (DEV_NS16550_LENGTH + 2)
+#define com_thr (DEV_NS16550_LENGTH + 3)
+#define com_lcr 3
+
+#define INT_QUEUE_RXNOW 1
+#define INT_QUEUE_RXWAT 2
+#define INT_QUEUE_TXWAT 4
+#define INT_QUEUE_TXTIMEOUT 8
+#define INT_QUEUE_RXTIMEOUT 16
+
+struct ns_fifo {
+  int head, count;
+  uint8_t data[14];
+};
+
+void fifo_push(struct ns_fifo *f, uint8_t data) {
+  if (f->count < 14) {
+    f->data[(f->head + f->count) % 14] = data;
+    f->count++;
+  }
+}
+
+int fifo_have(struct ns_fifo *f) {
+  return f->count;
+}
+
+int fifo_take(struct ns_fifo *f) {
+  if (f->count > 0) {
+    auto result = f->data[f->head];
+    f->head = (f->head + 1) % 14;
+    f->count--;
+    return result;
+  }
+
+  return 0;
+}
 
 struct ns_data {
 	int		addrmult;
 	int		in_use;
 	const char	*name;
+  bool  interrupt_asserted;
+  int   queued_int;
 	int		console_handle;
 	int		enable_fifo;
+  struct ns_fifo recv_f;
+  struct ns_fifo send_f;
 
 	struct interrupt irq;
 
-	unsigned char	reg[DEV_NS16550_LENGTH];
-	unsigned char	fcr;		/*  FIFO control register  */
-	int		int_asserted;
-	int		dlab;		/*  Divisor Latch Access bit  */
-	int		divisor;
-
-	int		databits;
-	char		parity;
-	const char	*stopbits;
-
-	unsigned char   available;
-  bool  sent_recently;
+	unsigned char	reg[DEV_NS16550_LENGTH + 4];
+  bool  pending_timeout;
 };
 
-
-static void eval_interrupt(struct ns_data *d) {
-	/*
-	 *  If interrupts are enabled, and interrupts are pending, then
-	 *  cause a CPU interrupt.
- 	 */
-
-	if (((d->reg[com_ier] & IER_ETXRDY) && (d->reg[com_iir] & IIR_TXRDY)) ||
-	    ((d->reg[com_ier] & IER_ERXRDY) && (d->reg[com_iir] & IIR_RXRDY))) {
-		d->reg[com_iir] &= ~IIR_NOPEND;
-		if (d->reg[com_mcr] & MCR_IENABLE) {
-			INTERRUPT_ASSERT(d->irq);
-			d->int_asserted = 1;
-		}
-	} else {
-		d->reg[com_iir] |= IIR_NOPEND;
-		if (d->int_asserted)
-			INTERRUPT_DEASSERT(d->irq);
-		d->int_asserted = 0;
-	}
+static void clear_fifo(struct ns_data *d) {
+  memset(&d->recv_f, 0, sizeof(d->recv_f));
+  memset(&d->send_f, 0, sizeof(d->send_f));
 }
 
+#define QUEUED_RECV 1
+#define QUEUED_SEND 2
+#define QUEUED_THR_EMPTY 3
 
-DEVICE_TICK(ns16550)
-{
-	/*
-	 *  This function is called at regular intervals. An interrupt is
-	 *  asserted if there is a character available for reading, or if the
-	 *  transmitter slot is empty (i.e. the ns16550 is ready to transmit).
-	 */
-	struct ns_data *d = (struct ns_data *) extra;
+int trigger_levels[4] = { 1, 4, 8, 14 };
 
-  if (!strcmp(d->name, "tty0") && debug_serial0_chars.size() && !(d->reg[com_lsr] & LSR_RXRDY)) {
-    // fprintf(stderr, "[ ns16550: debug queue size %d ]\n", (int)debug_serial0_chars.size());
-    console_makeavail(d->console_handle, debug_serial0_chars.front());
-    debug_serial0_chars.pop_front();
+ static int trigger_level(struct ns_data *d) {
+   return trigger_levels[d->reg[com_fcr] >> 6];
+}
+
+static bool fifo_ena(struct ns_data *d) {
+  return d->reg[com_fcr] & 1;
+}
+
+#define TASK_RECV 1
+
+static int device_tick(struct ns_data *d) {
+  // Don't allow overrun even though real life would.
+  if (fifo_ena(d) && fifo_have(&d->recv_f) > 13) {
+    return 0;
   }
 
+  // Don't allow overrun in non fifo mode either.
+  if (!fifo_ena(d) && d->queued_int & QUEUED_RECV) {
+    return 0;
+  }
+
+  // Handle a pending character if available.
   while (console_charavail(d->console_handle)) {
     auto ch = console_readchar(d->console_handle);
     if (ch >= 0x100) {
       continue;
     }
-    d->available = ch;
+
+    if (isprint(ch)) {
+      fprintf(stderr, "[ ns16550: making char '%c' available ]\n", ch);
+    } else {
+      fprintf(stderr, "[ ns16550: making byte '%02x' available ]\n", ch);
+    }
+
+    if (fifo_ena(d)) {
+      fifo_push(&d->recv_f, ch);
+      d->reg[com_lsr] |= LSR_RXRDY;
+      d->queued_int |= QUEUED_RECV;
+      return 0;
+    }
+
+    d->reg[0] = ch;
     d->reg[com_lsr] |= LSR_RXRDY;
-    d->reg[com_iir] |= IIR_RXTOUT; // (d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY;
-    break;
-  }
-  
-  if (d->sent_recently) {
-    d->sent_recently = false;
-    d->reg[com_iir] |= IIR_TXRDY;
+    d->queued_int |= QUEUED_RECV;
+    return 0;
   }
 
-  eval_interrupt(d);
+  return 0;
 }
 
+static bool deassert_condition(struct ns_data *d, int iir, int queue_mask) {
+  if (d->reg[com_iir] == iir) {
+    d->interrupt_asserted = false;
+    INTERRUPT_DEASSERT(d->irq);
+    d->reg[com_iir] = 1;
+    d->queued_int = (d->queued_int | queue_mask) ^ queue_mask;
+    return true;
+  }
+
+  return false;
+}
+
+static void redo_interrupt(struct ns_data *d) {
+  if (fifo_have(&d->recv_f) && (d->reg[com_fcr] & 1)) {
+    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
+    d->reg[com_iir] = 12;
+  } else if (d->queued_int & QUEUED_RECV && !(d->reg[com_fcr] & 1)) {
+    d->queued_int = (d->queued_int | QUEUED_RECV) ^ QUEUED_RECV;
+    d->reg[com_iir] = 4;
+  } else if (fifo_have(&d->send_f) && (d->reg[com_fcr] & 1)) {
+    d->reg[com_thr] = fifo_take(&d->send_f);
+    d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
+    d->queued_int &= ~QUEUED_THR_EMPTY;
+    d->reg[com_iir] = 2;
+  } else if (!(d->reg[com_fcr] & 1) && (d->queued_int & QUEUED_SEND)) {
+    d->queued_int = ((d->queued_int | QUEUED_SEND) ^ QUEUED_SEND) | QUEUED_THR_EMPTY;
+    d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
+    d->reg[com_iir] = 2;
+  } else if ((d->queued_int & QUEUED_THR_EMPTY) && (d->reg[com_iir] == 1)) {
+    d->queued_int = (d->queued_int | QUEUED_THR_EMPTY) ^ QUEUED_THR_EMPTY;
+    d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
+    d->reg[com_iir] = 2;
+  } else {
+    d->reg[com_iir] = 1;
+  }
+
+  if ((d->reg[com_iir] != 1) && !d->interrupt_asserted) {
+    fprintf(stderr, "[ ns16550: iir %02x assert interrupt ]\n", d->reg[com_iir]);
+    INTERRUPT_ASSERT(d->irq);
+    d->interrupt_asserted = true;
+    return;
+  }
+  if ((d->reg[com_iir] == 1) && d->interrupt_asserted) {
+    fprintf(stderr, "[ ns16550: iir 01 deassert interrupt ]\n", d->reg[com_iir]);
+    INTERRUPT_DEASSERT(d->irq);
+    d->interrupt_asserted = false;
+    return;
+  }
+}
+
+DEVICE_TICK(ns16550)
+{
+	struct ns_data *d = (struct ns_data *) extra;
+
+  device_tick(d);
+  redo_interrupt(d);
+}
+
+static void data_output(struct ns_data *d, uint8_t data) {
+  console_putchar(d->console_handle, data);
+  if (fifo_ena(d)) {
+    d->reg[com_lsr] |= LSR_TSRE;
+    fifo_push(&d->send_f, data);
+    if (fifo_have(&d->send_f) < 14) {
+      d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
+    } else {
+      d->reg[com_lsr] = (d->reg[com_lsr] | LSR_TXRDY | LSR_TSRE) ^ (LSR_TXRDY | LSR_TSRE);
+    }
+    return;
+  }
+
+
+  d->reg[com_thr] = data;
+  d->reg[com_lsr] |= LSR_TSRE;
+  if (!deassert_condition(d, 2, QUEUED_THR_EMPTY)) {
+    d->queued_int |= QUEUED_THR_EMPTY;
+  }
+}
+
+static uint8_t data_input(struct ns_data *d) {
+  if (fifo_ena(d)) {
+    if (fifo_have(&d->recv_f)) {
+      d->reg[0] = fifo_take(&d->recv_f);
+      if (!fifo_have(&d->recv_f)) {
+        d->reg[com_lsr] = (d->reg[com_lsr] | LSR_RXRDY) ^ LSR_RXRDY;
+      }
+      deassert_condition(d, 12, QUEUED_RECV);
+    }
+
+    return d->reg[0];
+  }
+
+  d->reg[com_lsr] = (d->reg[com_lsr] | LSR_RXRDY) ^ LSR_RXRDY;
+  if (!fifo_ena(d)) {
+    deassert_condition(d, 4, QUEUED_RECV);
+  }
+
+  redo_interrupt(d);
+
+  return d->reg[0];
+}
 
 DEVICE_ACCESS(ns16550)
 {
@@ -141,213 +279,57 @@ DEVICE_ACCESS(ns16550)
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-        // fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
+    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
   }
 
-#if 0
-	/*  The NS16550 should be accessed using byte read/writes:  */
-	if (len != 1)
-		fatal("[ ns16550 (%s): len=%i, idata=0x%16llx! ]\n",
-		    d->name, len, (long long)idata);
-#endif
+  int dlab = !!(d->reg[com_lcr] & LCR_DLAB);
+  if (relative_addr == com_iir && writeflag == MEM_WRITE) {
+    relative_addr = com_fcr;
+  } else if (relative_addr == 0 && dlab) {
+    relative_addr = com_dlow;
+  } else if (relative_addr == 1 && dlab) {
+    relative_addr = com_dhi;
+  } else if (relative_addr == 0 && writeflag == MEM_WRITE) {
+    relative_addr = com_thr;
+  }
 
-	/*
-	 *  Always ready to transmit:
-	 */
-	d->reg[com_lsr] |= LSR_TXRDY | LSR_TSRE;
-	d->reg[com_msr] |= MSR_DCD | MSR_DSR | MSR_CTS;
+  if (writeflag == MEM_WRITE) {
+    switch (relative_addr) {
+    case com_thr:
+      data_output(d, idata);
+      break;
 
-	d->reg[com_iir] &= ~0xf0;
-	if (d->enable_fifo)
-		d->reg[com_iir] |= ((d->fcr << 5) & 0xc0);
+    default:
+      d->reg[relative_addr] = idata;
+      break;
+    }
+  } else {
+    odata = d->reg[relative_addr];
+    switch (relative_addr) {
+    case 0:
+      odata = d->reg[relative_addr] = data_input(d);
+      break;
 
-	relative_addr /= d->addrmult;
-
-	if (relative_addr >= DEV_NS16550_LENGTH) {
-		fatal("[ ns16550 (%s): outside register space? relative_addr="
-		    "0x%llx. bad addrmult? bad device length? ]\n", d->name,
-		    (long long)relative_addr);
-		return 0;
-	}
-
-	switch (relative_addr) {
-
-	case com_data:	/*  data AND low byte of the divisor  */
-		/*  Read/write of the Divisor value:  */
-		if (d->dlab) {
-			/*  Write or read the low byte of the divisor:  */
-			if (writeflag == MEM_WRITE)
-				d->divisor = (d->divisor & 0xff00) | idata;
-			else {
-				odata = d->divisor & 0xff;
+    case com_lsr:
+      d->reg[com_lsr] = (d->reg[com_lsr] | LSR_RXRDY) ^ LSR_RXRDY;
+      if (fifo_ena(d)) {
+        deassert_condition(d, 12, QUEUED_RECV);
+      } else {
+        deassert_condition(d, 4, QUEUED_RECV);
       }
-			break;
-		}
+      break;
 
-		/*  Read/write of data:  */
-		if (writeflag == MEM_WRITE) {
-			// fprintf(stderr, "%c", (int)idata);
-			if (d->reg[com_mcr] & MCR_LOOPBACK)
-				console_makeavail(d->console_handle, idata);
-			else
-				console_putchar(d->console_handle, idata);
-      d->sent_recently = true;
-		} else {
-      //fprintf(stderr, "[ serial: read data %02x ]\n", d->available);
-			odata = d->available;
-      d->reg[com_iir] &= ~IIR_RXTOUT; // ((d->fcr & 1) ? IIR_RXTOUT : IIR_RXRDY);
-      d->reg[com_lsr] &= ~LSR_RXRDY;
-      eval_interrupt(d);
-		}
-		break;
-
-	case com_ier:	/*  interrupt enable AND high byte of the divisor  */
-		/*  Read/write of the Divisor value:  */
-		if (d->dlab) {
-			if (writeflag == MEM_WRITE) {
-				/*  Set the high byte of the divisor:  */
-				d->divisor = (d->divisor & 0xff) | (idata << 8);
-				debug("[ ns16550 (%s): speed set to %i bps ]\n",
-              d->name, d->divisor ? ((int)(115200 / d->divisor)) : 0);
-			} else
-				odata = d->divisor >> 8;
-			break;
-		}
-
-		/*  IER:  */
-		if (writeflag == MEM_WRITE) {
-			/*  This is to supress Linux' behaviour  */
-			if (idata != 0)
-				debug("[ ns16550 (%s): write to ier: 0x%02x ]"
-				    "\n", d->name, (int)idata);
-
-			/*  Needed for NetBSD 2.0.x, but not 1.6.2?  */
-			if (!(d->reg[com_ier] & IER_ETXRDY)
-			    && (idata & IER_ETXRDY))
-				d->reg[com_iir] |= IIR_TXRDY;
-
-			d->reg[com_ier] = idata;
-      eval_interrupt(d);
-		} else
-			odata = d->reg[com_ier];
-		break;
-
-	case com_iir:	/*  interrupt identification (r), fifo control (w)  */
-		if (writeflag == MEM_WRITE) {
-			debug("[ ns16550 (%s): write to fifo control: 0x%02x ]"
-			    "\n", d->name, (int)idata);
-			d->fcr = idata;
-		} else {
-      auto iir_val = d->reg[com_iir];
-			odata = (iir_val == 0) ? 1 : iir_val;
-			if (d->reg[com_iir] & IIR_TXRDY) {
-				d->reg[com_iir] &= ~IIR_TXRDY;
-      }
-      d->sent_recently = false;
-#if 0
-			debug("[ ns16550 (%s): read from iir: 0x%02x ]\n",
-			    d->name, (int)odata);
-#endif
-		}
-		break;
-
-	case com_lsr:
-		if (writeflag == MEM_WRITE) {
-#if 0
-			debug("[ ns16550 (%s): write to lsr: 0x%02x ]\n",
-			    d->name, (int)idata);
-#endif
-			d->reg[com_lsr] = idata;
-		} else {
-			odata = d->reg[com_lsr];
-			/*  debug("[ ns16550 (%s): read from lsr: 0x%02x ]\n",
-			    d->name, (int)odata);  */
-
-		}
-		break;
-
-	case com_msr:
-		if (writeflag == MEM_WRITE) {
-			debug("[ ns16550 (%s): write to mcr: 0x%02x ]\n",
-			    d->name, (int)idata);
-			d->reg[com_mcr] = idata;
-		} else {
-			odata = d->reg[com_msr];
-			//debug("[ ns16550 (%s): read from msr: 0x%02x ]\n",
-			//    d->name, (int)odata);
-		}
-		break;
-
-	case com_lctl:
-		if (writeflag == MEM_WRITE) {
-			d->reg[com_lctl] = idata;
-			switch (idata & 0x7) {
-			case 0:	d->databits = 5; d->stopbits = "1"; break;
-			case 1:	d->databits = 6; d->stopbits = "1"; break;
-			case 2:	d->databits = 7; d->stopbits = "1"; break;
-			case 3:	d->databits = 8; d->stopbits = "1"; break;
-			case 4:	d->databits = 5; d->stopbits = "1.5"; break;
-			case 5:	d->databits = 6; d->stopbits = "2"; break;
-			case 6:	d->databits = 7; d->stopbits = "2"; break;
-			case 7:	d->databits = 8; d->stopbits = "2"; break;
-			}
-			switch ((idata & 0x38) / 0x8) {
-			case 0:	d->parity = 'N'; break;		/*  none  */
-			case 1:	d->parity = 'O'; break;		/*  odd  */
-			case 2:	d->parity = '?'; break;
-			case 3:	d->parity = 'E'; break;		/*  even  */
-			case 4:	d->parity = '?'; break;
-			case 5:	d->parity = 'Z'; break;		/*  zero  */
-			case 6:	d->parity = '?'; break;
-			case 7:	d->parity = 'o'; break;		/*  one  */
-			}
-
-			d->dlab = idata & 0x80? 1 : 0;
-
-			debug("[ ns16550 (%s): write to lctl: 0x%02x (%s%s"
-			    "setting mode %i%c%s) ]\n", d->name, (int)idata,
-			    d->dlab? "Divisor Latch access, " : "",
-			    idata&0x40? "sending BREAK, " : "",
-			    d->databits, d->parity, d->stopbits);
-		} else {
-			odata = d->reg[com_lctl];
-			debug("[ ns16550 (%s): read from lctl: 0x%02x ]\n",
-			    d->name, (int)odata);
-		}
-		break;
-
-	case com_mcr:
-		if (writeflag == MEM_WRITE) {
-			d->reg[com_mcr] = idata;
-			debug("[ ns16550 (%s): write to mcr: 0x%02x ]\n",
-			    d->name, (int)idata);
-			if (!(d->reg[com_iir] & IIR_TXRDY)
-			    && (idata & MCR_IENABLE))
-				d->reg[com_iir] |= IIR_TXRDY;
-		} else {
-			odata = d->reg[com_mcr];
-			debug("[ ns16550 (%s): read from mcr: 0x%02x ]\n",
-			    d->name, (int)odata);
-		}
-		break;
-
-	default:
-		if (writeflag==MEM_READ) {
-			debug("[ ns16550 (%s): read from reg %i ]\n",
-			    d->name, (int)relative_addr);
-			odata = d->reg[relative_addr];
-		} else {
-			debug("[ ns16550 (%s): write to reg %i:",
-			    d->name, (int)relative_addr);
-			for (i=0; i<len; i++)
-				debug(" %02x", data[i]);
-			debug(" ]\n");
-			d->reg[relative_addr] = idata;
-		}
-	}
+    case com_iir:
+      odata |= d->reg[com_fcr] & 0xc0;
+      d->reg[com_iir] = 1;
+      d->interrupt_asserted = false;
+      INTERRUPT_DEASSERT(d->irq);
+      break;
+    }
+  }
 
 	if (writeflag == MEM_READ) {
-    // fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
+    fprintf(stderr, "[ ns16550 (%s): read %08x -> %08x ]\n", d->name, relative_addr, (unsigned int)odata);
 		memory_writemax64(cpu, data, len, odata);
   }
 
@@ -366,12 +348,6 @@ DEVINIT(ns16550)
 
 	d->addrmult	= devinit->addr_mult;
 	d->in_use	= devinit->in_use;
-	d->enable_fifo	= 1;
-	d->dlab		= 0;
-	d->divisor	= 115200 / 9600;
-	d->databits	= 8;
-	d->parity	= 'N';
-	d->stopbits	= "1";
 	d->name		= devinit->name2 != NULL? devinit->name2 : "";
 	d->console_handle =
 	    console_start_slave(devinit->machine, devinit->name2 != NULL?
@@ -405,4 +381,3 @@ DEVINIT(ns16550)
 
 	return 1;
 }
-

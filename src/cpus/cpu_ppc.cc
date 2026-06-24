@@ -433,10 +433,8 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
   } else if (!quiet_mode && exception_nr != 5) {
-#if 0
     fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %" PRIx64 " ]\n",
           exception_nr, cpu->pc, cpu->ninstrs);
-#endif
   }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
@@ -708,7 +706,7 @@ void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 void ppc_branch_conditional_desc(struct cpu *cpu, int bo, int bi, int bh) {
   static const char *cr_bits[] = {
     "npzv",
-    "feio",
+    "lgzv",
     "lgzv",
     "lgzv",
     "lgzv",

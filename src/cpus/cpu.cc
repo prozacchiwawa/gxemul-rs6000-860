@@ -61,6 +61,7 @@ constexpr int STORED_CALL_ODM_GET_LIST = 11;
 constexpr int STORED_CALL_ODM_ADD_OBJ_PROXY = 12;
 constexpr int STORED_CALL_DEVWRITE = 13;
 constexpr int STORED_CALL_VNOP_RDWR = 14;
+constexpr int STORED_CALL_FIND_ISA_INFO = 15;
 // constexpr int STORED_SYSCALL_LOG_ERROR = 5;
 // constexpr int STORED_SYSCALL_LOG_MESSAGE = 6;
 // constexpr int STORED_CALL_DEVSWQRY = 7;
@@ -92,6 +93,7 @@ struct match_functions_t trace_functions[] = {
   { "odm_add_obj_proxy", (1 << 5) },
   { "devwrite", (1 << 3) | (1 << 4) },
   { "vnop_rdwr", (1 << 4) },
+  { "find_isa_info", (1 << 3) | (1 << 4), 0x10001720, 0x1000171c },
 //  { "devswqry", 1 << 4, 0x57a34, 0x57864 },
 //  { "devswadd", 1 << 4, 0xfbfbc },
 //   { "devswdel", 1 << 4, 0xfbdd8 },
@@ -310,6 +312,18 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
     return;
   }
 
+	symbol = get_symbol_name_and_n_args(cpu, &cpu->machine->symbol_context,
+                                      f, &offset, &n_args);
+
+  auto matched = try_match_function(cpu, f, symbol);
+  if (matched) {
+    trace_match = matched;
+  }
+
+  if (matched - trace_functions == STORED_CALL_CMPKMCH) {
+    return;
+  }
+
 	/*  Special hack for M88K userspace:  */
 	if (cpu->machine->arch == ARCH_M88K &&
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
@@ -324,18 +338,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 		fatal("  ");
 
 	cpu->trace_tree_depth ++;
-
-	symbol = get_symbol_name_and_n_args(cpu, &cpu->machine->symbol_context,
-	    f, &offset, &n_args);
-
-  auto matched = try_match_function(cpu, f, symbol);
-  if (matched) {
-    trace_match = matched;
-  }
-
-  if (matched - trace_functions == STORED_CALL_CMPKMCH) {
-    return;
-  }
 
 	fatal("<");
 
@@ -401,6 +403,21 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
     debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x100);
     fprintf(stderr, "r4\n");
     debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x200);
+    break;
+
+  case STORED_CALL_FIND_ISA_INFO: {
+    auto r3 = cpu->cd.ppc.gpr[3];
+    auto r4 = cpu->cd.ppc.gpr[4];
+    fprintf(stderr, "find_isa_info r3\n");
+    debug_mem_hexdump(cpu, cpu->mem, r3, r3 + 0x200);
+    uint32_t target_addr;
+    if (load_uint32(cpu, r3, target_addr)) {
+      fprintf(stderr, "inner buf\n");
+      debug_mem_hexdump(cpu, cpu->mem, target_addr, target_addr + 0x200);
+    }
+    fprintf(stderr, "find_isa_info r4\n");
+    debug_mem_hexdump(cpu, cpu->mem, r4, r4 + 0x200);
+  }
     break;
   }
 

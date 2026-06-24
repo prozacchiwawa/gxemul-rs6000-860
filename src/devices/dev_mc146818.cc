@@ -616,9 +616,13 @@ DEVICE_ACCESS(mc146818)
 				break;
 			break;
 		case 4 * MC_REGA:
-      data[0] |= d->updating ? 0x80 : 0;
+      data[0] |= 0x20 | (d->updating ? 0x80 : 0);
       d->updating = false;
 			break;
+    case 4 * MC_REGB:
+      data[0] |= 2; /* 24hr */
+      break;
+
 		case 4 * MC_REGC:	/*  Interrupt ack.  */
 			/*  NOTE: Acking is done below, _after_ the
 			    register has been read.  */

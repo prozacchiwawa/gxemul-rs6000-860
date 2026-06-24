@@ -2567,30 +2567,30 @@ X(subfco)
 DOT2(subfco)
 X(subfe)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+  int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = reg(ic->arg[1]) + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
   update_xer_arith<true, false>(cpu, tmp, c6);
-	reg(ic->arg[2]) = tmp;
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfe)
 X(subfeo)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+  int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
   update_xer_arith<true, true>(cpu, tmp, c6);
-	reg(ic->arg[2]) = tmp;
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfeo)
 X(subfme)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = 0xffffffffULL + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
@@ -2600,8 +2600,8 @@ X(subfme)
 DOT2(subfme)
 X(subfmeo)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = 0xffffffffULL + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
@@ -2611,8 +2611,8 @@ X(subfmeo)
 DOT2(subfmeo)
 X(subfze)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = ~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = ~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   update_xer_arith<true, false>(cpu, tmp, c6);
@@ -2621,8 +2621,8 @@ X(subfze)
 DOT2(subfze)
 X(subfzeo)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = ~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = ~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;

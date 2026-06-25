@@ -782,9 +782,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		if (xferp->cmd_len != 10)
 			debug(" (weird len=%i)", xferp->cmd_len);
-
+#ifndef _WIN32
 		/*  TODO: actualy care about cmd[]  */
 		fsync(fileno(d->f));
+#endif
 
 		diskimage__return_default_status_and_message(xferp);
 		break;

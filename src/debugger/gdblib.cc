@@ -84,10 +84,16 @@
  ****************************************************************************/
 
 #include <sys/types.h>
+#include <ctype.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#endif
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -137,14 +143,6 @@ char *hex = "0123456789abcdef";
 
 static void Wait(struct cpu *cpu);
 
-int isxdigit(int ch)
-{
-    return
-        (ch >= 'A' && ch <= 'F') ||
-        (ch >= 'a' && ch <= 'f') ||
-        (ch >= '0' && ch <= '9');
-}
-
 void gdbstub_send(char c) {
     fprintf(stderr, "%c", c);
     if (gdbstub_socket != -1) {
@@ -162,8 +160,11 @@ int rdy(struct cpu *cpu, int wait)
     if (gdbstub_listen == -1) {
         return 0;
     }
-
+#ifdef _WIN32
+    WSAPOLLFD pfd_read[2] = { };
+#else
     struct pollfd pfd_read[2] = { };
+#endif
     pfd_read[0].fd = gdbstub_listen;
     pfd_read[0].events = POLLIN;
 
@@ -173,7 +174,11 @@ int rdy(struct cpu *cpu, int wait)
         n_pfds += 1;
     }
 
+#ifdef _WIN32
+    int poll_result = WSAPoll(pfd_read, n_pfds, wait ? 1000 : 0);
+#else
     int poll_result = poll(pfd_read, n_pfds, wait ? 1000 : 0);
+#endif
     if (poll_result < 1) {
         return 0;
     }

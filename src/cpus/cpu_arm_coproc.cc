@@ -201,9 +201,9 @@ void arm_coproc_15(struct cpu *cpu, int opcode1, int opcode2, int l_bit,
 
 	case 6:	/*  Fault Address Register:  */
 		if (l_bit)
-			cpu->cd.arm.r[rd] = cpu->cd.arm.far;
+			cpu->cd.arm.r[rd] = cpu->cd.arm.far_;
 		else
-			cpu->cd.arm.far = cpu->cd.arm.r[rd];
+			cpu->cd.arm.far_ = cpu->cd.arm.r[rd];
 		break;
 
 	case 7:	/*  Cache functions:  */

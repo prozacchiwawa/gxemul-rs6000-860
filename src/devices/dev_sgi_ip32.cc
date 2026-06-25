@@ -38,6 +38,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <immintrin.h>
+#endif
 
 #include "bus_pci.h"
 #include "console.h"

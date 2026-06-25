@@ -26,7 +26,7 @@ jobs:
 
           # test proper
           git clone --depth 1 https://github.com/prozacchiwawa/gxemul-rs6000-860-test
-          export TEST_REV=976fc633cb8bb328e548539ffa313406c92a3897
+          export TEST_REV=f13482638e4b2acd78ca7d5bc05f2bad610c17c6
           cd gxemul-rs6000-860-test && git fetch --depth 1 origin ${TEST_REV} && git checkout ${TEST_REV}
 
           # gxemul wants to see a selectable stdin.  xterm will provide it.

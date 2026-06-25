@@ -1455,7 +1455,6 @@ struct vga_data {
 	int		use_palette_per_line;
 	int64_t		n_is1_reads;
 
-  uint16_t  hpanel, vpanel;
   uint16_t  hend, vend, helast, velast;
 
 	/*  Misc.:  */
@@ -1625,10 +1624,6 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
-  d->sequencer_reg[0x61] = 0x63;
-  d->sequencer_reg[0x66] = 0;
-  d->sequencer_reg[0x69] = 0x57;
-  d->sequencer_reg[0x6e] = 0x22;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
@@ -1794,8 +1789,6 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
-
-  fprintf(stderr, "[ vga: update graphics lwidth %d end %dx%d rect %dx%d-%dx%d ]\n", logical_width, d->hend, d->vend, x1, y1, x2, y2);
 
 	for (y=y1; y<=y2; y++) {
 		for (x=x1; x<=x2; x++) {
@@ -3598,13 +3591,15 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
-	d->max_x          = 1024;
-	d->max_y          = 768;
+	d->max_x = d->hend = d->helast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
+	d->max_y = d->vend = d->velast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
 	d->cur_mode       = MODE_GRAPHICS;
 	d->graphics_mode  = GRAPHICS_MODE_8BIT;
 	d->bits_per_pixel = 8;
 	d->charcells_size = 0x8000;
-	d->gfx_mem_size = 2 * 1024 * 1024; 
+	d->gfx_mem_size = 2 * 1024 * 1024;
 	d->pixel_repx = d->pixel_repy = machine->x11_md.scaleup;
 
 	/*  Allocate in full pages, to make it possible to use dyntrans:  */

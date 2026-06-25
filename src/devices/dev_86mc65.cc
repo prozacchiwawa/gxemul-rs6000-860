@@ -2470,49 +2470,43 @@ void bitblt(cpu *cpu, struct vga_data *d) {
 
 
 void patblt(cpu *cpu, struct vga_data *d) {
-	int rectangle_height = d->bee8_regs[0];
-	int clipping_top = d->bee8_regs[1];
-	int clipping_left = d->bee8_regs[2];
-	int clipping_bottom = d->bee8_regs[3];
-	int clipping_right = d->bee8_regs[4];
-	auto start_row = std::max(d->s3_desty, clipping_top);
-	auto end_row = std::min(d->s3_desty + d->s3_rem_height, clipping_bottom);
-	auto start_column = std::max(d->s3_destx, clipping_left);
-	auto end_column = std::min(d->s3_destx + d->s3_draw_width, clipping_right);
+  int rectangle_height = d->bee8_regs[0];
+  int clipping_top = d->bee8_regs[1];
+  int clipping_left = d->bee8_regs[2];
+  int clipping_bottom = d->bee8_regs[3];
+  int clipping_right = d->bee8_regs[4];
+  int copy_start = d->s3_destx;
+  int target_row = d->s3_desty;
+  auto rows = d->s3_rem_height;
+  auto column = d->s3_draw_width;
 
-	auto pattern_x = d->s3_destx & 7;
-	auto pattern_y = d->s3_desty & 7;
-	auto src_x = d->s3_cur_x + pattern_x;
-	auto src_y = d->s3_cur_y + pattern_y;
+  auto start_x = d->s3_cur_x;
+  auto start_y = d->s3_cur_y;
+  auto pattern_x = d->s3_destx & 7;
+  auto pattern_y = d->s3_desty & 7;
+  uint8_t transfer_color[2]; // unused for patblt
 
-	auto dest_end_y = d->s3_v_dir < 0 ? start_row : end_row;
-	auto dest_end_x = d->s3_h_dir < 0 ? start_column : end_column;
+  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_destx, d->s3_desty);
 
-	fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_column, end_column, start_row, end_row);
+  for (; rows > 0; rows--) 
+  {
+    for (; column > 0; column--) 
+    {
+      d->s3_src_x = start_x + pattern_x;
+      d->s3_src_y = start_y + pattern_y;
+      d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
+      pixel_transfer(cpu, d, false, transfer_color, 1);
+      pattern_x = (pattern_x + d->s3_h_dir) & 7;
+      d->s3_destx += d->s3_h_dir;
+    }
+    pattern_x = d->s3_destx & 7;
+    d->s3_src_x = start_x + pattern_x;
+    pattern_y = (pattern_y + d->s3_v_dir) & 7;
+    target_row += d->s3_v_dir;
+  }
 
-	for (auto desty = start_row; desty != end_row; desty = std::min(desty + 8, end_row)) {
-	  for (auto destx = start_column; destx != end_column; destx = std::min(destx + 8, end_column)) {
-	    d->s3_desty = desty;
-	    d->s3_destx = destx;
-	    d->s3_cur_x = src_x;
-	    d->s3_cur_y = src_y;
-	    d->bee8_regs[1] = destx;
-	    d->bee8_regs[2] = desty;
-	    d->bee8_regs[3] = std::min(desty + 8, end_row);
-	    d->bee8_regs[4] = std::min(destx + 8, end_column);
-	    fprintf(stderr, "[ s3: patblt %d,%d ]\n", destx, desty);
-	    bitblt(cpu, d);
-	  }
-	}
-
-	d->bee8_regs[2] = clipping_top;
-	d->bee8_regs[1] = clipping_left;
-	d->bee8_regs[4] = clipping_right;
-	d->bee8_regs[3] = clipping_bottom;
-	d->s3_cur_x = src_x;
-	d->s3_cur_y = src_y;
-	d->s3_destx = dest_end_x;
-	d->s3_desty = start_row;
+  d->s3_cur_x = start_x;
+  d->s3_cur_y = start_y;
 }
 
 

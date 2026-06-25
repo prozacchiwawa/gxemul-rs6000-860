@@ -2275,6 +2275,35 @@ DEVICE_ACCESS(s3)
 }
 
 
+void s3_hack_start(struct vga_data *d) {
+  if (d->cur_mode != MODE_GRAPHICS) {
+    d->cur_mode = MODE_GRAPHICS;
+    d->max_x = 800; d->max_y = 600;
+    d->graphics_mode = GRAPHICS_MODE_8BIT;
+    d->bits_per_pixel = 8;
+    d->pixel_repx = d->pixel_repy = 1;
+
+    d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
+                                         (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
+
+    CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+
+    /*  Clear screen and reset the palette:  */
+    memset(d->charcells_outputed, 0, d->charcells_size);
+    memset(d->charcells_drawn, 0, d->charcells_size);
+    memset(d->gfx_mem, 0, d->gfx_mem_size);
+
+    reset_palette(d, 0);
+    register_reset(d);
+
+    d->bee8_regs[3] = 600;
+    d->bee8_regs[4] = 800;
+    d->s3_fg_color_mix = 0x27;
+    d->s3_bg_color_mix = 0x27;
+  }
+}
+
+
 uint32_t do_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
 {
   switch (mix_mode)
@@ -3565,13 +3594,13 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
-	d->max_x          = 1024;
-	d->max_y          = 768;
-	d->cur_mode       = MODE_GRAPHICS;
-	d->graphics_mode  = GRAPHICS_MODE_8BIT;
-	d->bits_per_pixel = 8;
+	d->max_x          = 100;
+	d->max_y          = 38;
+	d->cur_mode       = MODE_CHARCELL;
+	d->crtc_reg[0xff] = 0x03;
 	d->charcells_size = 0x8000;
-	d->gfx_mem_size = 2 * 1024 * 1024; 
+	d->gfx_mem_size   = 64;	/*  Nothing, as we start in text mode,
+			but size large enough to make gfx_mem aligned.  */
 	d->pixel_repx = d->pixel_repy = machine->x11_md.scaleup;
 
 	/*  Allocate in full pages, to make it possible to use dyntrans:  */
@@ -3708,4 +3737,5 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	register_reset(d);
 
 	vga_update_cursor(machine, d);
+  s3_hack_start(d);
 }

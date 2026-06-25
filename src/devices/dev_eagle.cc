@@ -689,12 +689,12 @@ DEVICE_ACCESS(eagle_880)
 
 DEVICE_ACCESS(eagle_8a0)
 {
-  struct eagle_data *d = (struct eagle_data *) extra;
-  uint64_t idata = 0, odata = 0;
+    struct eagle_data *d = (struct eagle_data *) extra;
+    uint64_t idata = 0, odata = 0;
 
-  if (writeflag == MEM_WRITE) {
-    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
-  }
+    if (writeflag == MEM_WRITE) {
+        idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+    }
 
     switch (relative_addr) {
     case 0:
@@ -726,7 +726,7 @@ DEVICE_ACCESS(eagle_d00)
   switch (relative_addr) {
   case 1:
     if (cpu->machine->machine_subtype == MACHINE_PREP_IBM860) {
-      odata = 0xff;
+      odata = 1;
     } else {
       odata = 0;
     }
@@ -922,12 +922,12 @@ DEVINIT(eagle)
                            DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "880",
-                           isa_portbase + 0x880, 16, dev_eagle_880_access, d,
-                           DM_DEFAULT, NULL);
+        isa_portbase + 0x880, 16, dev_eagle_880_access, d,
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "d00",
-                           isa_portbase + 0xd00, 2, dev_eagle_d00_access, d,
-                           DM_DEFAULT, NULL);
+        isa_portbase + 0xd00, 2, dev_eagle_d00_access, d,
+        DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 

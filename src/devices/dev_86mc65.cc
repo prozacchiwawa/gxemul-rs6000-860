@@ -1455,6 +1455,8 @@ struct vga_data {
 	int		use_palette_per_line;
 	int64_t		n_is1_reads;
 
+  uint16_t  hend, vend, helast, velast;
+
 	/*  Misc.:  */
 	int		console_handle;
 
@@ -1622,10 +1624,6 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
-  d->sequencer_reg[0x61] = 0x63;
-  d->sequencer_reg[0x66] = 0;
-  d->sequencer_reg[0x69] = 0x57;
-  d->sequencer_reg[0x6e] = 0x22;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
@@ -1977,6 +1975,16 @@ DEVICE_TICK(s3)
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
+  if (d->hend != d->helast || d->vend != d->velast) {
+    d->helast = d->hend;
+    d->velast = d->vend;
+    d->fb_max_x = d->helast;
+    d->fb_max_y = d->velast;
+    dev_fb_resize(d->fb, d->helast, d->velast);
+    d->fb_size = d->fb_max_x * d->fb_max_y * 3;
+    vga_update_graphics(cpu->machine, d, 0, 0, d->helast, d->velast);
+  }
+
 	vga_update_cursor(cpu->machine, d);
 
 	/*  TODO: text vs graphics tick?  */
@@ -2275,32 +2283,20 @@ DEVICE_ACCESS(s3)
 }
 
 
-void s3_hack_start(struct vga_data *d) {
-  if (d->cur_mode != MODE_GRAPHICS) {
-    d->cur_mode = MODE_GRAPHICS;
-    d->max_x = 800; d->max_y = 600;
-    d->graphics_mode = GRAPHICS_MODE_8BIT;
-    d->bits_per_pixel = 8;
-    d->pixel_repx = d->pixel_repy = 1;
+void s3_hack_start(struct machine *machine, struct vga_data *d) {
+  d->cur_mode = MODE_GRAPHICS;
+  d->max_x = d->hend = d->helast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
+  d->max_y = d->vend = d->velast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
+  d->graphics_mode = GRAPHICS_MODE_8BIT;
+  d->bits_per_pixel = 8;
+  d->pixel_repx = d->pixel_repy = 1;
 
-    d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
-                                         (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
+  d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
+                                       (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
 
-    CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
-
-    /*  Clear screen and reset the palette:  */
-    memset(d->charcells_outputed, 0, d->charcells_size);
-    memset(d->charcells_drawn, 0, d->charcells_size);
-    memset(d->gfx_mem, 0, d->gfx_mem_size);
-
-    reset_palette(d, 0);
-    register_reset(d);
-
-    d->bee8_regs[3] = 600;
-    d->bee8_regs[4] = 800;
-    d->s3_fg_color_mix = 0x27;
-    d->s3_bg_color_mix = 0x27;
-  }
+  CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
 }
 
 
@@ -2893,6 +2889,22 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 	case VGA_CRTC_CURSOR_LOCATION_LOW:		/*  0x0f  */
 		recalc_cursor_position(d);
 		break;
+  case VGA_CRTC_VERTICAL_DISPLAY_END:
+  case VGA_CRTC_OVERFLOW_REGISTER: {
+    uint16_t vend_high = ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 5) & 2) | ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 1) & 1);
+    uint16_t vend_low = d->crtc_reg[VGA_CRTC_VERTICAL_DISPLAY_END];
+    d->vend = ((vend_high << 8) | vend_low) + 1;
+    fprintf(stderr, "[ vga: vertical end %d ]\n", d->vend);
+    break;
+  }
+  case VGA_CRTC_HORIZONTAL_DISPLAY_END:
+  case VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW: {
+    uint16_t hend_high = (d->crtc_reg[VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW] >> 1) & 1;
+    uint16_t hend_low = d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END];
+    d->hend = (((hend_high << 8) | hend_low) + 1) * 8;
+    fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
+    break;
+  }
 	case 0xff:
 		grayscale = 0;
 		switch (d->crtc_reg[0xff]) {
@@ -3594,21 +3606,8 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
-	d->max_x          = 100;
-	d->max_y          = 38;
-	d->cur_mode       = MODE_CHARCELL;
-	d->crtc_reg[0xff] = 0x03;
-	d->charcells_size = 0x8000;
-	d->gfx_mem_size   = 64;	/*  Nothing, as we start in text mode,
-			but size large enough to make gfx_mem aligned.  */
 	d->pixel_repx = d->pixel_repy = machine->x11_md.scaleup;
-
-	/*  Allocate in full pages, to make it possible to use dyntrans:  */
-	allocsize = ((d->charcells_size-1) | (machine->arch_pagesize-1)) + 1;
-	CHECK_ALLOCATION(d->charcells = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->charcells_outputed = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->charcells_drawn = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+  s3_hack_start(machine, d);
 
 	memset(d->charcells_drawn, 0, d->charcells_size);
 
@@ -3716,12 +3715,6 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	memory_device_register(mem, "vga_s3_ff00_range", VIRTUAL_ISA_PORTBASE | 0x8000ff00, 0x80,
                          dev_vga_s3_ff00_range_access, d, DM_DEFAULT, NULL);
 
-	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
-	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
-	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
-
-	reset_palette(d, 0);
-
 	/*  This will force an initial redraw/resynch:  */
 	d->update_x1 = 0;
 	d->update_x2 = d->max_x - 1;
@@ -3734,8 +3727,11 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	machine_add_tickfunction(machine, dev_s3_tick, d, VGA_TICK_SHIFT);
 
-	register_reset(d);
+	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
+                      d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
+	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 
 	vga_update_cursor(machine, d);
-  s3_hack_start(d);
+  reset_palette(d, 0);
+  register_reset(d);
 }

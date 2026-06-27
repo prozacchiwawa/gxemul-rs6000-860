@@ -82,12 +82,12 @@ static const char *group_names[] = {
 #if 0
 #define REG_WRITE(R) do { \
 	if (writeflag == MEM_WRITE) {                         \
-	  fprintf(stderr, "@@@o%08x", relative_addr + (R));     \
-	  for (int ii = 0; ii < len; ii++) {                    \
-	    fprintf(stderr, " %02x", data[ii]);                 \
-	  }                                                     \
-	  fprintf(stderr, "\n");                                \
-	}                                                       \
+		fprintf(stderr, "@@@o%08x", relative_addr + (R)); \
+		for (int ii = 0; ii < len; ii++) {                \
+			fprintf(stderr, " %02x", data[ii]);           \
+		}                                                 \
+		fprintf(stderr, "\n");                            \
+	}                                                     \
 	} while (0)
 #else
 #define REG_WRITE(X) do { } while (0)
@@ -1506,26 +1506,26 @@ struct vga_data {
 
 inline uint16_t get_le_16(bool already, uint64_t idata) {
 	if (already) {
-	  return idata;
+		return idata;
 	} else {
-	  return ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
+		return ((idata >> 8) & 0xff) | ((idata << 8) & 0xff00);
 	}
 }
 
 
 inline uint32_t get_le_32(bool already, uint64_t idata) {
 	if (already) {
-	  return idata;
+		return idata;
 	} else {
-	  return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
+		return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
 	}
 }
 
 static const char *vga_find_register_prim(int source, int id) {
 	for (int i = 0; r_name_table[i].reg_name; i++) {
-	  if (r_name_table[i].source == source && r_name_table[i].reg_index == id) {
-	    return r_name_table[i].reg_name;
-	  }
+		if (r_name_table[i].source == source && r_name_table[i].reg_index == id) {
+			return r_name_table[i].reg_name;
+		}
 	}
 
 	return nullptr;
@@ -1535,51 +1535,51 @@ static char vga_find_register_name_buf[100];
 static const char *vga_find_register_name(struct vga_data *d, int source, int relative_addr) {
 	const char *result = nullptr;
 	if (source == S_PRIMARY && relative_addr == 0x01) {
-	  result = vga_find_register_prim(S_ATT, d->attribute_reg_select);
-	  if (result) {
-	    return result;
-	  }
+		result = vga_find_register_prim(S_ATT, d->attribute_reg_select);
+		if (result) {
+			return result;
+		}
 	}
 	if (source == S_PRIMARY && relative_addr == 0x05) {
-	  if ((d->sequencer_reg[8] & 15) == 6) {
-	    result = vga_find_register_prim(S_SEQ2, d->sequencer_reg_select);
-	  }
-	  if (!result) {
-	    result = vga_find_register_prim(S_SEQ, d->sequencer_reg_select);
-	  }
+		if ((d->sequencer_reg[8] & 15) == 6) {
+			result = vga_find_register_prim(S_SEQ2, d->sequencer_reg_select);
+		}
+		if (!result) {
+			result = vga_find_register_prim(S_SEQ, d->sequencer_reg_select);
+		}
 
-	  if (result) {
-	    return result;
-	  }
+		if (result) {
+			return result;
+		}
 	}
 	if (source == S_PRIMARY && relative_addr == 0x0f) {
-	  result = vga_find_register_prim(S_GR, d->graphcontr_reg_select);
-	  if (result) {
-	    return result;
-	  }
+		result = vga_find_register_prim(S_GR, d->graphcontr_reg_select);
+		if (result) {
+			return result;
+		}
 	}
 
 	if (source == S_PRIMARY && relative_addr == 0x15) {
-	  if (((d->crtc_reg[0x38] & 0xcc) == 0x48) && (d->crtc_reg[0x39] & 1)) {
-	    result = vga_find_register_prim(S_CRT2, d->crtc_reg_select);
-	  }
-	  if (!result) {
-	    result = vga_find_register_prim(S_CRTC, d->crtc_reg_select);
-	  }
+		if (((d->crtc_reg[0x38] & 0xcc) == 0x48) && (d->crtc_reg[0x39] & 1)) {
+			result = vga_find_register_prim(S_CRT2, d->crtc_reg_select);
+		}
+		if (!result) {
+			result = vga_find_register_prim(S_CRTC, d->crtc_reg_select);
+		}
 
-	  if (result) {
-	    return result;
-	  }
+		if (result) {
+			return result;
+		}
 	}
 
 	result = vga_find_register_prim(S_EXTENDED, relative_addr);
 	if (result) {
-	  return result;
+		return result;
 	}
 
 	result = vga_find_register_prim(S_PRIMARY, relative_addr);
 	if (result) {
-	  return result;
+		return result;
 	}
 
 	sprintf(vga_find_register_name_buf, "vga unknown register %s %x", group_names[source], relative_addr);
@@ -1595,9 +1595,9 @@ static const char *vga_find_register_name(struct vga_data *d, int source, int re
 static void recalc_cursor_position(struct vga_data *d)
 {
 	int base = (d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
-	    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW];
+			+ d->crtc_reg[VGA_CRTC_START_ADDR_LOW];
 	int ofs = d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_HIGH] * 256 +
-	    d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_LOW];
+			d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_LOW];
 	ofs -= base;
 	d->cursor_x = ofs % d->max_x;
 	d->cursor_y = ofs / d->max_x;
@@ -1613,9 +1613,9 @@ static void register_reset(struct vga_data *d)
 {
 	/*  Home cursor and start at the top:  */
 	d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_HIGH] =
-	    d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_LOW] = 0;
+			d->crtc_reg[VGA_CRTC_CURSOR_LOCATION_LOW] = 0;
 	d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] =
-	    d->crtc_reg[VGA_CRTC_START_ADDR_LOW] = 0;
+			d->crtc_reg[VGA_CRTC_START_ADDR_LOW] = 0;
 
 	recalc_cursor_position(d);
 
@@ -1657,13 +1657,13 @@ static void reset_palette(struct vga_data *d, int grayscale)
 	/*  TODO: default values for entry 16..255?  */
 	for (i=16; i<256; i++)
 		d->fb->rgb_palette[i*3 + 0] = d->fb->rgb_palette[i*3 + 1] =
-		    d->fb->rgb_palette[i*3 + 2] = (i & 15) * 4;
+				d->fb->rgb_palette[i*3 + 2] = (i & 15) * 4;
 	d->palette_modified = 1;
 	i = 0;
 
 	if (grayscale) {
 		for (r=0; r<2; r++)
-		    for (g=0; g<2; g++)
+				for (g=0; g<2; g++)
 			for (b=0; b<2; b++) {
 				d->fb->rgb_palette[i + 0] =
 				    d->fb->rgb_palette[i + 1] =
@@ -1719,7 +1719,7 @@ static void vga_update_textmode(struct machine *machine,
 		int y = (i/2) / d->max_x;
 
 		if (d->charcells[base+i] == d->charcells_outputed[i] &&
-		    d->charcells[base+i+1] == d->charcells_outputed[i+1]) {
+				d->charcells[base+i+1] == d->charcells_outputed[i+1]) {
 			printed_last = 0;
 			continue;
 		}
@@ -1793,10 +1793,10 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 	for (y=y1; y<=y2; y++) {
 		for (x=x1; x<=x2; x++) {
 			/*  addr is where to read from VGA memory, addr2 is
-			    where to write on the 24-bit framebuffer device  */
+				  where to write on the 24-bit framebuffer device  */
 			int addr = (y * logical_width + x) * d->bits_per_pixel;
-	    addr += (d->crtc_reg[0x51] & 0xc) << 16;
-	    addr += (d->crtc_reg[0x35] & 0xf) << 14;
+			addr += (d->crtc_reg[0x51] & 0xc) << 16;
+			addr += (d->crtc_reg[0x35] & 0xf) << 14;
 			switch (d->bits_per_pixel) {
 			case 8:	addr >>= 3;
 				if (addr >= d->gfx_mem_size) {
@@ -1821,18 +1821,18 @@ static void vga_update_graphics(struct machine *machine, struct vga_data *d,
 				break;
 			}
 
-	    for (iy=y*ry; iy<(y+1)*ry; iy++) {
-	      for (ix=x*rx; ix<(x+1)*rx; ix++) {
-	        uint32_t addr2 = (d->fb_max_x * iy
-	                          + ix) * 3;
-	        if (addr2 < d->fb_size)
-	          dev_fb_access(machine->cpus[0],
-	                        machine->memory, addr2,
-	                        pixel, sizeof(pixel),
-	                        MEM_WRITE, d->fb);
-	      }
-	    }
-	  }
+			for (iy=y*ry; iy<(y+1)*ry; iy++) {
+				for (ix=x*rx; ix<(x+1)*rx; ix++) {
+					uint32_t addr2 = (d->fb_max_x * iy
+					                  + ix) * 3;
+					if (addr2 < d->fb_size)
+					dev_fb_access(machine->cpus[0],
+					              machine->memory, addr2,
+					              pixel, sizeof(pixel),
+					              MEM_WRITE, d->fb);
+				}
+			}
+		}
 	}
 }
 
@@ -1869,7 +1869,7 @@ static void vga_update_text(struct machine *machine, struct vga_data *d,
 		end = d->charcells_size - 1;
 
 	base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
-	        + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
+				  + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 
 	if (!machine->x11_md.in_use)
 		vga_update_textmode(machine, d, base, start, end);
@@ -1878,7 +1878,7 @@ static void vga_update_text(struct machine *machine, struct vga_data *d,
 		unsigned char ch = d->charcells[i + base];
 
 		if (!d->palette_modified && d->charcells_drawn[i] == ch &&
-		    d->charcells_drawn[i+1] == d->charcells[i+base+1])
+				d->charcells_drawn[i+1] == d->charcells[i+base+1])
 			continue;
 
 		d->charcells_drawn[i] = ch;
@@ -1945,13 +1945,13 @@ static void vga_update_text(struct machine *machine, struct vga_data *d,
 static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 {
 	int onoff = 1, height = d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END]
-	    - d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] + 1;
+			- d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] + 1;
 
 	if (d->cur_mode != MODE_CHARCELL)
 		onoff = 0;
 
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >
-	    d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END]) {
+			d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END]) {
 		onoff = 0;
 		height = 1;
 	}
@@ -1960,10 +1960,10 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 		onoff = 0;
 
 	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+			d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
+			d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
+			d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
+			d->pixel_repy);
 }
 
 
@@ -1976,27 +1976,27 @@ DEVICE_TICK(s3)
 	auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
 	if (d->hend != d->helast || d->vend != d->velast) {
-	  d->helast = d->hend;
-	  d->velast = d->vend;
-	  d->fb_max_x = d->helast;
-	  d->fb_max_y = d->velast;
-	  dev_fb_resize(d->fb, d->helast, d->velast);
-	  d->fb_size = d->fb_max_x * d->fb_max_y * 3;
-	  vga_update_graphics(cpu->machine, d, 0, 0, d->helast, d->velast);
+		d->helast = d->hend;
+		d->velast = d->vend;
+		d->fb_max_x = d->helast;
+		d->fb_max_y = d->velast;
+		dev_fb_resize(d->fb, d->helast, d->velast);
+		d->fb_size = d->fb_max_x * d->fb_max_y * 3;
+		vga_update_graphics(cpu->machine, d, 0, 0, d->helast, d->velast);
 	}
 
 	vga_update_cursor(cpu->machine, d);
 
 	/*  TODO: text vs graphics tick?  */
 	memory_device_dyntrans_access(cpu, cpu->mem, extra,
-	    (uint64_t *) &low, (uint64_t *) &high);
+			(uint64_t *) &low, (uint64_t *) &high);
 
 	if (low != -1) {
 		int base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
-		    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
+				+ d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 		int new_u_y1, new_u_y2;
 		debug("[ dev_vga_tick: dyntrans access, %" PRIx64" .. %"
-		    PRIx64" ]\n", (uint64_t) low, (uint64_t) high);
+				PRIx64" ]\n", (uint64_t) low, (uint64_t) high);
 		low -= base;
 		high -= base;
 		d->update_x1 = 0;
@@ -2015,7 +2015,7 @@ DEVICE_TICK(s3)
 	}
 
 	if (d->n_is1_reads > N_IS1_READ_THRESHOLD &&
-	    d->retrace_palette != NULL) {
+			d->retrace_palette != NULL) {
 		d->use_palette_per_line = 1;
 		d->update_x1 = 0;
 		d->update_x2 = d->max_x - 1;
@@ -2035,17 +2035,17 @@ DEVICE_TICK(s3)
 
 	if (!cpu->machine->x11_md.in_use) {
 		/*  NOTE: 2 > 0, so this only updates the cursor, no
-		    character cells.  */
+				character cells.  */
 		vga_update_textmode(cpu->machine, d, 0, 2, 0);
 	}
 
 	if (d->modified) {
 		if (d->cur_mode == MODE_CHARCELL)
 			vga_update_text(cpu->machine, d, d->update_x1,
-			    d->update_y1, d->update_x2, d->update_y2);
+				  d->update_y1, d->update_x2, d->update_y2);
 		else
 			vga_update_graphics(cpu->machine, d, d->update_x1,
-	                        d->update_y1, d->update_x2, d->update_y2);
+				                  d->update_y1, d->update_x2, d->update_y2);
 
 		d->palette_modified = 0;
 		d->modified = 0;
@@ -2070,7 +2070,7 @@ DEVICE_ACCESS(s3_graphics)
 
 	// fprintf(stderr, "@@@%08x", relative_addr);
 	for (int ii = 0; ii < len; ii++) {
-	  // fprintf(stderr, " %02x", data[ii]);
+		// fprintf(stderr, " %02x", data[ii]);
 	}
 	// fprintf(stderr, "\n");
 
@@ -2078,52 +2078,52 @@ DEVICE_ACCESS(s3_graphics)
 
 	//                 0x38000000
 	if (relative_addr >= 0x10a0000) {
-	  fprintf(stderr, "Access S3d register %04lx\n", relative_addr - 0x10a0000);
-	  return 0;
+		fprintf(stderr, "Access S3d register %04lx\n", relative_addr - 0x10a0000);
+		return 0;
 	}
 	if (relative_addr >= 0x1008000) {
-	  uint8_t data_copy[8];
-	  if (d->window_mapped) {
-	    for (i = 0; i < len; i++) {
-	      data_copy[len - i - 1] = data[i];
-	    }
-	  } else {
-	    memcpy(data_copy, data, len);
-	  }
-	  bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data_copy, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-	  fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04lx", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
-	  for (i = 0; i < len; i++) {
-	    fprintf(stderr, " %02x", data_copy[i]);
-	  }
-	  fprintf(stderr, " ]\n");
-	  if (d->window_mapped && relative_addr != 0x1009ae8) {
-	    for (i = 0; i < len; i++) {
-	      data[len - i - 1] = data_copy[i];
-	    }
-	  } else {
-	    memcpy(data, data_copy, len);
-	  }
-	  return result;
+		uint8_t data_copy[8];
+		if (d->window_mapped) {
+			for (i = 0; i < len; i++) {
+				data_copy[len - i - 1] = data[i];
+			}
+		} else {
+			memcpy(data_copy, data, len);
+		}
+		bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data_copy, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
+		fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04lx", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
+		for (i = 0; i < len; i++) {
+			fprintf(stderr, " %02x", data_copy[i]);
+		}
+		fprintf(stderr, " ]\n");
+		if (d->window_mapped && relative_addr != 0x1009ae8) {
+			for (i = 0; i < len; i++) {
+				data[len - i - 1] = data_copy[i];
+			}
+		} else {
+			memcpy(data, data_copy, len);
+		}
+		return result;
 	}
 	if (relative_addr >= 0x1000000) {
-	  // fprintf(stderr, "[ vga: windowed, pixel transfer? ]\n", relative_addr);
-	  int size = len;
-	  while (size > 0) {
-	    bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, std::min(2, size), writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-	    if (!result) {
-	      return 0;
-	    }
-	    data += 2;
-	    size -= 2;
-	  }
-	  return 1;
+		// fprintf(stderr, "[ vga: windowed, pixel transfer? ]\n", relative_addr);
+		int size = len;
+		while (size > 0) {
+			bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, std::min(2, size), writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
+			if (!result) {
+				return 0;
+			}
+			data += 2;
+			size -= 2;
+		}
+		return 1;
 	}
 
 	auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
 	auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
 	if (relative_addr + len >= d->gfx_mem_size) {
-	  fprintf(stderr, "[ vga: failed access at %08lx+%lx greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
+		fprintf(stderr, "[ vga: failed access at %08lx+%lx greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
 		return 0;
 	}
 
@@ -2181,13 +2181,13 @@ DEVICE_ACCESS(s3_graphics)
 			modified = 1;
 		} else {
 			fatal("TODO: 4 bit graphics read, mask=0x%02x\n",
-			    d->sequencer_reg[VGA_SEQ_MAP_MASK]);
+				  d->sequencer_reg[VGA_SEQ_MAP_MASK]);
 			for (i=0; i<len; i++)
 				data[i] = random();
 		}
 		break;
 	default:fatal("dev_vga: Unimplemented graphics mode %i\n",
-		    d->graphics_mode);
+				d->graphics_mode);
 		/*cpu->running = 0;*/
 	}
 
@@ -2227,7 +2227,7 @@ DEVICE_ACCESS(s3)
 		idata = memory_readmax64(cpu, data, len);
 
 	base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
-	    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
+			+ d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 	r = relative_addr - base;
 	y = r / (logical_width * 2);
 	x = (r/2) % logical_width;
@@ -2269,10 +2269,10 @@ DEVICE_ACCESS(s3)
 	default:
 		if (writeflag==MEM_READ) {
 			debug("[ vga: read from 0x%08lx ]\n",
-			    (long)relative_addr);
+				  (long)relative_addr);
 		} else {
 			debug("[ vga: write to  0x%08lx: 0x%08x ]\n",
-			    (long)relative_addr, idata);
+				  (long)relative_addr, idata);
 		}
 	}
 
@@ -2286,9 +2286,9 @@ DEVICE_ACCESS(s3)
 void s3_hack_start(struct machine *machine, struct vga_data *d) {
 	d->cur_mode = MODE_GRAPHICS;
 	d->max_x = d->hend = d->helast =
-	  machine->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
+		machine->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
 	d->max_y = d->vend = d->velast =
-	  machine->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
+		machine->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
 	d->graphics_mode = GRAPHICS_MODE_8BIT;
 	d->bits_per_pixel = 8;
 	d->pixel_repx = d->pixel_repy = 1;
@@ -2304,23 +2304,23 @@ uint32_t do_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
 {
 	switch (mix_mode)
 	{
-	  case 0x00: return ~dst;
-	  case 0x01: return 0;
-	  case 0x02: return ~0;
-	  case 0x03: return dst;
-	  case 0x04: return ~src;
-	  case 0x05: return src ^ dst;
-	  case 0x06: return ~(src ^ dst);
-	  case 0x07: return src;
-	  case 0x08: return ~(src & dst);
-	  case 0x09: return (~src) | dst;
-	  case 0x0a: return src | (~dst);
-	  case 0x0b: return src | dst;
-	  case 0x0c: return src & dst;
-	  case 0x0d: return src & (~dst);
-	  case 0x0e: return (~src) & dst;
-	  case 0x0f: return ~(src | dst);
-	  default:   return src;            // shouldn't reach here
+		case 0x00: return ~dst;
+		case 0x01: return 0;
+		case 0x02: return ~0;
+		case 0x03: return dst;
+		case 0x04: return ~src;
+		case 0x05: return src ^ dst;
+		case 0x06: return ~(src ^ dst);
+		case 0x07: return src;
+		case 0x08: return ~(src & dst);
+		case 0x09: return (~src) | dst;
+		case 0x0a: return src | (~dst);
+		case 0x0b: return src | dst;
+		case 0x0c: return src & dst;
+		case 0x0d: return src & (~dst);
+		case 0x0e: return (~src) & dst;
+		case 0x0f: return ~(src | dst);
+		default:   return src;            // shouldn't reach here
 	}
 }
 
@@ -2328,21 +2328,21 @@ int color_mix_function(struct vga_data *d, int cpu, int bitmap) {
 	bool mask_bit = 0;
 	switch ((d->bee8_regs[0x0a] >> 6) & 3) 
 	{
-	  case 0:
-	    mask_bit = 1;
-	    break;
+		case 0:
+			mask_bit = 1;
+			break;
 
-	  case 1:
-	    mask_bit = 0;
-	    break;
+		case 1:
+			mask_bit = 0;
+			break;
 
-	  case 2:
-	    mask_bit = cpu == 0xff;
-	    break;
+		case 2:
+			mask_bit = cpu == 0xff;
+			break;
 
-	  case 3:
-	    mask_bit = bitmap == 0xff;
-	    break;
+		case 3:
+			mask_bit = bitmap == 0xff;
+			break;
 	}
 	return mask_bit;
 }
@@ -2359,81 +2359,81 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
 	auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
 	if (d->s3_rem_height == 0) {
-	  G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
-	  return;
+		G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
+		return;
 	}
 
 	for (pix = 0; pix < write_len; pix++) {
-	  uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
-	  uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
+		uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
+		uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
 
-	  // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
-	  nowrite = ((d->s3_pix_y < d->bee8_regs[1]) &&
-	            (d->s3_pix_y > d->bee8_regs[3]) &&
-	            (d->s3_pix_x < d->bee8_regs[2]) &&
-	            (d->s3_pix_x > d->bee8_regs[4]));
+		// Step 1: Clipping — derive actual pixel coordinates for the scissors test.
+		nowrite = ((d->s3_pix_y < d->bee8_regs[1]) &&
+				      (d->s3_pix_y > d->bee8_regs[3]) &&
+				      (d->s3_pix_x < d->bee8_regs[2]) &&
+				      (d->s3_pix_x > d->bee8_regs[4]));
 
-	  // Step 2: Select source color and mix mode
-	  use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
-	  uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
-	  uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
-	  uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
-	  uint32_t src_dat = 0, dst_dat = 0;
+		// Step 2: Select source color and mix mode
+		use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
+		uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
+		uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
+		uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
+		uint32_t src_dat = 0, dst_dat = 0;
 
-	  switch (sel) 
-	  {
-	    case 0: // Background Color register
-	      src_dat = d->s3_bg_color;
-	      break;
-	    case 1: // Foreground Color register
-	      src_dat = d->s3_fg_color;
-	      break;
-	    case 2: // CPU data (pixel transfer register)
-	      src_dat = pixel_p[pix];
-	      break;
-	    case 3: // Display memory (VRAM at source coords)
-	      src_dat = d->gfx_mem[source];
-	      break;
-	  }
+		switch (sel) 
+		{
+			case 0: // Background Color register
+				src_dat = d->s3_bg_color;
+				break;
+			case 1: // Foreground Color register
+				src_dat = d->s3_fg_color;
+				break;
+			case 2: // CPU data (pixel transfer register)
+				src_dat = pixel_p[pix];
+				break;
+			case 3: // Display memory (VRAM at source coords)
+				src_dat = d->gfx_mem[source];
+				break;
+		}
 
-	  // Step 3: Read destination
-	  dst_dat = d->gfx_mem[target];
+		// Step 3: Read destination
+		dst_dat = d->gfx_mem[target];
 
-	  // Step 4: Color Compare gate
-	  if (d->bee8_regs[0xe] & 0x100)
-	  {
-	    auto src_ne = d->bee8_regs[0xe] & 0x80;
-	    bool match = (src_dat == d->s3_color_compare);
-	    // SRC NE = 0: write only when source != compare (skip when match)
-	    // SRC NE = 1: write only when source == compare (skip when no match)
-	    if (src_ne ? !match : match) nowrite = 1; // color compare rejects this pixel
-	  }
+		// Step 4: Color Compare gate
+		if (d->bee8_regs[0xe] & 0x100)
+		{
+			auto src_ne = d->bee8_regs[0xe] & 0x80;
+			bool match = (src_dat == d->s3_color_compare);
+			// SRC NE = 0: write only when source != compare (skip when match)
+			// SRC NE = 1: write only when source == compare (skip when no match)
+			if (src_ne ? !match : match) nowrite = 1; // color compare rejects this pixel
+		}
 
-	  // Step 5: Apply MIX
-	  uint32_t pixel = do_color_mix(mix_mode, src_dat, dst_dat);
+		// Step 5: Apply MIX
+		uint32_t pixel = do_color_mix(mix_mode, src_dat, dst_dat);
 
-	  // Step 6: Write Mask merge
-	  uint32_t wrt_mask = d->plane_write_mask;
-	  pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
+		// Step 6: Write Mask merge
+		uint32_t wrt_mask = d->plane_write_mask;
+		pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
 
-	  // Step 7: Write to VRAM
-	  if (!nowrite) d->gfx_mem[target] = pixel;
+		// Step 7: Write to VRAM
+		if (!nowrite) d->gfx_mem[target] = pixel;
 
-	  // Switch to next pixel
-	  d->s3_src_x += d->s3_h_dir;
-	  d->s3_pix_x += d->s3_h_dir;
+		// Switch to next pixel
+		d->s3_src_x += d->s3_h_dir;
+		d->s3_pix_x += d->s3_h_dir;
 	}
 
 	uint32_t lane = (d->s3_pix_x > d->s3_cur_x)? 
-	                (d->s3_pix_x - d->s3_cur_x): 
-	                (d->s3_cur_x - d->s3_pix_x);
+				    (d->s3_pix_x - d->s3_cur_x): 
+				    (d->s3_cur_x - d->s3_pix_x);
 
 	if (lane >= d->s3_draw_width) {
-	  d->s3_src_x = d->s3_cur_x;
-	  d->s3_pix_x = d->s3_cur_x;
-	  d->s3_src_y += d->s3_v_dir;
-	  d->s3_pix_y += d->s3_v_dir;
-	  d->s3_rem_height -= 1;
+		d->s3_src_x = d->s3_cur_x;
+		d->s3_pix_x = d->s3_cur_x;
+		d->s3_src_y += d->s3_v_dir;
+		d->s3_pix_y += d->s3_v_dir;
+		d->s3_rem_height -= 1;
 	}
 
 	d->modified = 1;
@@ -2459,54 +2459,54 @@ void bitblt(cpu *cpu, struct vga_data *d) {
 
 	for (; rows > 0; d->s3_cur_y += d->s3_v_dir, rows--, target_row += d->s3_v_dir) 
 	{
-	  d->s3_src_x = d->s3_cur_x; d->s3_src_y = d->s3_cur_y;
-	  d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
-	  pixel_transfer(cpu, d, false, transfer_color, d->s3_draw_width);
+		d->s3_src_x = d->s3_cur_x; d->s3_src_y = d->s3_cur_y;
+		d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
+		pixel_transfer(cpu, d, false, transfer_color, d->s3_draw_width);
 	}
 
 	vga_update_graphics(cpu->machine, d, 
-	  clipping_left, clipping_top, clipping_right, clipping_bottom);
+		clipping_left, clipping_top, clipping_right, clipping_bottom);
 }
 
 
 void patblt(cpu *cpu, struct vga_data *d) {
-  int rectangle_height = d->bee8_regs[0];
-  int clipping_top = d->bee8_regs[1];
-  int clipping_left = d->bee8_regs[2];
-  int clipping_bottom = d->bee8_regs[3];
-  int clipping_right = d->bee8_regs[4];
-  int copy_start = d->s3_destx;
-  int target_row = d->s3_desty;
-  auto rows = d->s3_rem_height;
-  auto column = d->s3_draw_width;
+	int rectangle_height = d->bee8_regs[0];
+	int clipping_top = d->bee8_regs[1];
+	int clipping_left = d->bee8_regs[2];
+	int clipping_bottom = d->bee8_regs[3];
+	int clipping_right = d->bee8_regs[4];
+	int copy_start = d->s3_destx;
+	int target_row = d->s3_desty;
+	auto rows = d->s3_rem_height;
+	auto column = d->s3_draw_width;
 
-  auto start_x = d->s3_cur_x;
-  auto start_y = d->s3_cur_y;
-  auto pattern_x = d->s3_destx & 7;
-  auto pattern_y = d->s3_desty & 7;
-  uint8_t transfer_color[2]; // unused for patblt
+	auto start_x = d->s3_cur_x;
+	auto start_y = d->s3_cur_y;
+	auto pattern_x = d->s3_destx & 7;
+	auto pattern_y = d->s3_desty & 7;
+	uint8_t transfer_color[2]; // unused for patblt
 
-  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_destx, d->s3_desty);
+	fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_destx, d->s3_desty);
 
-  for (; rows > 0; rows--) 
-  {
-    for (; column > 0; column--) 
-    {
-      d->s3_src_x = start_x + pattern_x;
-      d->s3_src_y = start_y + pattern_y;
-      d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
-      pixel_transfer(cpu, d, false, transfer_color, 1);
-      pattern_x = (pattern_x + d->s3_h_dir) & 7;
-      d->s3_destx += d->s3_h_dir;
-    }
-    pattern_x = d->s3_destx & 7;
-    d->s3_src_x = start_x + pattern_x;
-    pattern_y = (pattern_y + d->s3_v_dir) & 7;
-    target_row += d->s3_v_dir;
-  }
+	for (; rows > 0; rows--) 
+	{
+		for (; column > 0; column--) 
+		{
+			d->s3_src_x = start_x + pattern_x;
+			d->s3_src_y = start_y + pattern_y;
+			d->s3_pix_x = d->s3_destx; d->s3_pix_y = target_row;
+			pixel_transfer(cpu, d, false, transfer_color, 1);
+			pattern_x = (pattern_x + d->s3_h_dir) & 7;
+			d->s3_destx += d->s3_h_dir;
+		}
+		pattern_x = d->s3_destx & 7;
+		d->s3_src_x = start_x + pattern_x;
+		pattern_y = (pattern_y + d->s3_v_dir) & 7;
+		target_row += d->s3_v_dir;
+	}
 
-  d->s3_cur_x = start_x;
-  d->s3_cur_y = start_y;
+	d->s3_cur_x = start_x;
+	d->s3_cur_y = start_y;
 }
 
 
@@ -2516,21 +2516,21 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
 	int width = d->s3_draw_width;
 
 	if (command & 0x10) {
-	  // Actually draw
-	  d->s3_src_x = d->s3_cur_x;
-	  d->s3_src_y = d->s3_cur_y;
-	  auto start_x = d->s3_cur_x;
-	  auto start_y = d->s3_cur_y;
+		// Actually draw
+		d->s3_src_x = d->s3_cur_x;
+		d->s3_src_y = d->s3_cur_y;
+		auto start_x = d->s3_cur_x;
+		auto start_y = d->s3_cur_y;
 
-	  while (d->s3_rem_height > 0) {
-	    pixel_transfer(cpu, d, false, transfer_color, width);
-	  }
+		while (d->s3_rem_height > 0) {
+			pixel_transfer(cpu, d, false, transfer_color, width);
+		}
 
-	  vga_update_graphics(cpu->machine, d, 
-	    start_x, start_y, start_x + width, start_y + height);
+		vga_update_graphics(cpu->machine, d, 
+			start_x, start_y, start_x + width, start_y + height);
 
-	  d->s3_cur_x = start_x;
-	  d->s3_cur_y = start_y;
+		d->s3_cur_x = start_x;
+		d->s3_cur_y = start_y;
 	}
 }
 
@@ -2541,65 +2541,65 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
 	REG_WRITE( 0x9ae8);
 
 	if (writeflag != MEM_WRITE) {
-	  uint16_t outval = d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
-	  d->fifo_in_progress = false;
-	  if (len == 1) {
-	    outval >>= relative_addr * 8;
-	  }
-	  memory_writemax64(cpu, data, len, outval);
+		uint16_t outval = d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
+		d->fifo_in_progress = false;
+		if (len == 1) {
+			outval >>= relative_addr * 8;
+		}
+		memory_writemax64(cpu, data, len, outval);
 	} else {
-	  written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
-	  d->s3_cmd_mx = !!(written & 2);
-	  d->s3_cmd_pxtrans = !!(written & 0x100);
-	  bool draws_up = written & (1 << 7);
-	  d->s3_pix_x = d->s3_cur_x;
-	  d->s3_pix_y = d->s3_cur_y;
-	  d->s3_v_dir = draws_up ? 1 : -1;
-	  bool draws_right = written & (1 << 5);
-	  d->s3_h_dir = draws_right ? 1 : -1;
-	  d->s3_y_major = written & (1 << 6);
-	  d->s3_last_pof = written & (1 << 2);
-	  d->s3_cmd_bus_size = (written >> 9) & 3;
-	  d->s3_cmd_swap = (written >> 12) & 1;
-	  d->s3_no_draw = !(written & (1 << 4));
-	  d->s3_current_command = written >> 13;
+		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
+		d->s3_cmd_mx = !!(written & 2);
+		d->s3_cmd_pxtrans = !!(written & 0x100);
+		bool draws_up = written & (1 << 7);
+		d->s3_pix_x = d->s3_cur_x;
+		d->s3_pix_y = d->s3_cur_y;
+		d->s3_v_dir = draws_up ? 1 : -1;
+		bool draws_right = written & (1 << 5);
+		d->s3_h_dir = draws_right ? 1 : -1;
+		d->s3_y_major = written & (1 << 6);
+		d->s3_last_pof = written & (1 << 2);
+		d->s3_cmd_bus_size = (written >> 9) & 3;
+		d->s3_cmd_swap = (written >> 12) & 1;
+		d->s3_no_draw = !(written & (1 << 4));
+		d->s3_current_command = written >> 13;
 
-	  d->fifo_in_progress = true;
-	  if (d->s3_no_draw) {
-	    fprintf(stderr, "[ s3: just move not implemented ]\n");
-	    d->s3_cur_x = d->s3_destx;
-	    d->s3_cur_y = d->s3_desty;
-	  } else {
-	    switch (d->s3_current_command) {
-	    case 0: // Nop
-	      break;
+		d->fifo_in_progress = true;
+		if (d->s3_no_draw) {
+			fprintf(stderr, "[ s3: just move not implemented ]\n");
+			d->s3_cur_x = d->s3_destx;
+			d->s3_cur_y = d->s3_desty;
+		} else {
+			switch (d->s3_current_command) {
+			case 0: // Nop
+				break;
 
-	    case 1: // Line draw
-	      fprintf(stderr, "[ s3: line draw not implemented ]\n");
-	      break;
+			case 1: // Line draw
+				fprintf(stderr, "[ s3: line draw not implemented ]\n");
+				break;
 
-	    case 2: // Rectangle Fill
-	      if (!(written & 0x100)) {
-	        L(fprintf(stderr, "[ s3 fillrect ]\n"));
-	        fillrect(cpu, d, written & 0x1fff);
-	      } // Otherwise accept pixel fill below.
-	      break;
+			case 2: // Rectangle Fill
+				if (!(written & 0x100)) {
+				  L(fprintf(stderr, "[ s3 fillrect ]\n"));
+				  fillrect(cpu, d, written & 0x1fff);
+				} // Otherwise accept pixel fill below.
+				break;
 
-	    case 6: // BitBlt
-	      bitblt(cpu, d);
-	      break;
+			case 6: // BitBlt
+				bitblt(cpu, d);
+				break;
 
-	    case 7: // PatBLT
-	      fprintf(stderr, "[ s3: patblt not implemented ]\n");
-	      patblt(cpu, d);
-	      break;
+			case 7: // PatBLT
+				fprintf(stderr, "[ s3: patblt not implemented ]\n");
+				patblt(cpu, d);
+				break;
 
-	    default:
-	      G(fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written));
-	      break;
-	    }
-	  }
+			default:
+				G(fprintf(stderr, "[ s3: unimplemented cmd %d (%04x) ]\n", written >> 13, written));
+				break;
+			}
+		}
 	}
 
 	return 1;
@@ -2613,12 +2613,12 @@ DEVICE_ACCESS(vga_s3_curx) {
 	REG_WRITE( 0x86e8);
 
 	if (writeflag == MEM_WRITE) {
-	  written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-	  d->s3_cur_x = written;
-	  G(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
+		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+		d->s3_cur_x = written;
+		G(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
 	} else {
-	  fprintf(stderr, "[ s3: get pix x ]\n");
-	  memory_writemax64(cpu, data, len, d->s3_cur_x);
+		fprintf(stderr, "[ s3: get pix x ]\n");
+		memory_writemax64(cpu, data, len, d->s3_cur_x);
 	}
 
 	return 1;
@@ -2632,12 +2632,12 @@ DEVICE_ACCESS(vga_s3_cury) {
 	REG_WRITE( 0x82e8);
 
 	if (writeflag == MEM_WRITE) {
-	  written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-	  d->s3_cur_y = written;
-	  G(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
+		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+		d->s3_cur_y = written;
+		G(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
 	} else {
-	  fprintf(stderr, "[ s3: get pix y ]\n");
-	  memory_writemax64(cpu, data, len, d->s3_cur_y);
+		fprintf(stderr, "[ s3: get pix y ]\n");
+		memory_writemax64(cpu, data, len, d->s3_cur_y);
 	}
 
 	return 1;
@@ -2651,11 +2651,11 @@ DEVICE_ACCESS(vga_s3_bg_color) {
 	REG_WRITE( 0xa2e8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_bg_color = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  G(fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written));
+		d->s3_bg_color = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		G(fprintf(stderr, "[ s3: set bg color = %d (raw %04x) ]\n", (int)d->s3_bg_color, (int)written));
 	} else {
-	  fprintf(stderr, "[ s3: get bg color ]\n");
-	  memory_writemax64(cpu, data, len, d->s3_bg_color);
+		fprintf(stderr, "[ s3: get bg color ]\n");
+		memory_writemax64(cpu, data, len, d->s3_bg_color);
 	}
 
 	return 1;
@@ -2669,11 +2669,11 @@ DEVICE_ACCESS(vga_s3_fg_color) {
 	REG_WRITE( 0xbae8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_fg_color = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  G(fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written));
+		d->s3_fg_color = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		G(fprintf(stderr, "[ s3: set fg color = %d (raw %04x) ]\n", (int)d->s3_fg_color, (int)written));
 	} else {
-	  fprintf(stderr, "[ s3: get fg color ]\n");
-	  memory_writemax64(cpu, data, len, d->s3_fg_color);
+		fprintf(stderr, "[ s3: get fg color ]\n");
+		memory_writemax64(cpu, data, len, d->s3_fg_color);
 	}
 
 	return 1;
@@ -2687,10 +2687,10 @@ DEVICE_ACCESS(vga_s3_fg_color_mix) {
 	REG_WRITE( 0xbae8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_fg_color_mix = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  G(fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
+		d->s3_fg_color_mix = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		G(fprintf(stderr, "[ s3: set fg color mix = %d (raw %04x) ]\n", (int)d->s3_fg_color_mix, (int)written));
 	} else {
-	  memory_writemax64(cpu, data, len, d->s3_fg_color_mix);
+		memory_writemax64(cpu, data, len, d->s3_fg_color_mix);
 	}
 
 	return 1;
@@ -2704,10 +2704,10 @@ DEVICE_ACCESS(vga_s3_bg_color_mix) {
 	REG_WRITE( 0xb6e8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_bg_color_mix = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  G(fprintf(stderr, "[ s3: set bg color mix = %d (raw %04x) ]\n", (int)d->s3_bg_color_mix, (int)written));
+		d->s3_bg_color_mix = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		G(fprintf(stderr, "[ s3: set bg color mix = %d (raw %04x) ]\n", (int)d->s3_bg_color_mix, (int)written));
 	} else {
-	  memory_writemax64(cpu, data, len, d->s3_bg_color_mix);
+		memory_writemax64(cpu, data, len, d->s3_bg_color_mix);
 	}
 
 	return 1;
@@ -2721,8 +2721,8 @@ DEVICE_ACCESS(vga_s3_destx) {
 	REG_WRITE( 0x8ee8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_destx = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-	  G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_destx, (int)written));
+		d->s3_destx = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+		G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_destx, (int)written));
 	}
 
 	return 1;
@@ -2736,8 +2736,8 @@ DEVICE_ACCESS(vga_s3_desty) {
 	REG_WRITE( 0x8ae8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_desty = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-	  G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_desty));
+		d->s3_desty = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+		G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_desty));
 	}
 
 	return 1;
@@ -2751,9 +2751,9 @@ DEVICE_ACCESS(vga_s3_major_axis_len) {
 	REG_WRITE( 0x96e8);
 
 	if (writeflag == MEM_WRITE) {
-	  written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  d->s3_draw_width = written + 1;
-	  G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
+		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		d->s3_draw_width = written + 1;
+		G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
 	}
 
 	return 1;
@@ -2767,8 +2767,8 @@ DEVICE_ACCESS(vga_s3_color_compare) {
 	REG_WRITE( 0xb2e8);
 
 	if (writeflag == MEM_WRITE) {
-	  d->s3_color_compare = get_le_32(d->window_mapped, memory_readmax64(cpu, data, len));
-	  G(fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare));
+		d->s3_color_compare = get_le_32(d->window_mapped, memory_readmax64(cpu, data, len));
+		G(fprintf(stderr, "[ s3: set color compare %08x ]\n", (int)d->s3_color_compare));
 	}
 
 	return 1;
@@ -2784,25 +2784,25 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
 	REG_WRITE( 0xbee8);
 
 	if (writeflag == MEM_WRITE) {
-	  written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-	  write_index = written >> 12;
-	  d->bee8_regs[write_index] = written & 0xfff;
+		written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+		write_index = written >> 12;
+		d->bee8_regs[write_index] = written & 0xfff;
 
-	  fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff));
+		fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff));
 
-	  switch (write_index) {
-	  case 0:
-	    d->s3_rem_height = d->bee8_regs[0] + 1;
-	    break;
+		switch (write_index) {
+		case 0:
+			d->s3_rem_height = d->bee8_regs[0] + 1;
+			break;
 
-	  case 13:
-	    if ((written >> 8) & 15) { // apply command?
-	      uint8_t command = written & 0xff;
-	      if (command == 0x31) {
-	      }
-	    }
-	    break;
-	  }
+		case 13:
+			if ((written >> 8) & 15) { // apply command?
+				uint8_t command = written & 0xff;
+				if (command == 0x31) {
+				}
+			}
+			break;
+		}
 
 	}
 
@@ -2817,35 +2817,35 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
 	REG_WRITE( 0xe2e8);
 
 	if (writeflag == MEM_WRITE) {
-	  idata = memory_readmax64(cpu, data, len);
-	  int swizzle = d->s3_cmd_swap ? len - 1 : 0;
-	  for (int i = 0; i < len; i++) {
-	    to_write[i ^ swizzle] = idata >> (i * 8);
-	  }
+		idata = memory_readmax64(cpu, data, len);
+		int swizzle = d->s3_cmd_swap ? len - 1 : 0;
+		for (int i = 0; i < len; i++) {
+			to_write[i ^ swizzle] = idata >> (i * 8);
+		}
 
-	  int pxcount = std::max(8 + (8 * d->s3_cmd_bus_size), (int)(8 * len));
-	  auto start_x = d->s3_pix_x;
-	  auto start_y = d->s3_pix_y;
-	  uint8_t pixels[32];
+		int pxcount = std::max(8 + (8 * d->s3_cmd_bus_size), (int)(8 * len));
+		auto start_x = d->s3_pix_x;
+		auto start_y = d->s3_pix_y;
+		uint8_t pixels[32];
 
-	  if (d->s3_cmd_mx) {
-	    // Transfer across the plane, 1bpp
-	    L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width));
-	    for (int i = 0; i < pxcount; i++) {
-	      bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
-	      L(fprintf(stderr, "%c", cpu ? '#' : '.'));
-	      pixels[i] = cpu ? 0xff : 0;
-	    }
-	    L(fprintf(stderr, " ]\n"));
-	    pixel_transfer(cpu, d, true, pixels, pxcount);
-	    vga_update_graphics(cpu->machine, d, 
-	      start_x, start_y, start_x + pxcount, start_y);
-	  } else {
-	    G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
-	    pixel_transfer(cpu, d, false, to_write, 1 + d->s3_cmd_bus_size);
-	    vga_update_graphics(cpu->machine, d, 
-	      start_x, start_y, start_x + d->s3_cmd_bus_size + 1, start_y);
-	  }
+		if (d->s3_cmd_mx) {
+			// Transfer across the plane, 1bpp
+			L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width));
+			for (int i = 0; i < pxcount; i++) {
+				bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
+				L(fprintf(stderr, "%c", cpu ? '#' : '.'));
+				pixels[i] = cpu ? 0xff : 0;
+			}
+			L(fprintf(stderr, " ]\n"));
+			pixel_transfer(cpu, d, true, pixels, pxcount);
+			vga_update_graphics(cpu->machine, d, 
+				start_x, start_y, start_x + pxcount, start_y);
+		} else {
+			G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
+			pixel_transfer(cpu, d, false, to_write, 1 + d->s3_cmd_bus_size);
+			vga_update_graphics(cpu->machine, d, 
+				start_x, start_y, start_x + d->s3_cmd_bus_size + 1, start_y);
+		}
 	}
 
 	return 1;
@@ -2865,7 +2865,7 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 	uint8_t idata_byte;
 
 	fatal("[ vga_crtc_reg_write: regnr=0x%02x idata=0x%02x (%s) ]\n",
-		    regnr, idata, vga_find_register_name(d, S_PRIMARY, 0x15));
+				regnr, idata, vga_find_register_name(d, S_PRIMARY, 0x15));
 	switch (regnr) {
 	case VGA_CRTC_CURSOR_SCANLINE_START:		/*  0x0a  */
 	case VGA_CRTC_CURSOR_SCANLINE_END:		/*  0x0b  */
@@ -2885,19 +2885,19 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 		break;
 	case VGA_CRTC_VERTICAL_DISPLAY_END:
 	case VGA_CRTC_OVERFLOW_REGISTER: {
-	  uint16_t vend_high = ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 5) & 2) | ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 1) & 1);
-	  uint16_t vend_low = d->crtc_reg[VGA_CRTC_VERTICAL_DISPLAY_END];
-	  d->vend = ((vend_high << 8) | vend_low) + 1;
-	  fprintf(stderr, "[ vga: vertical end %d ]\n", d->vend);
-	  break;
+		uint16_t vend_high = ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 5) & 2) | ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 1) & 1);
+		uint16_t vend_low = d->crtc_reg[VGA_CRTC_VERTICAL_DISPLAY_END];
+		d->vend = ((vend_high << 8) | vend_low) + 1;
+		fprintf(stderr, "[ vga: vertical end %d ]\n", d->vend);
+		break;
 	}
 	case VGA_CRTC_HORIZONTAL_DISPLAY_END:
 	case VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW: {
-	  uint16_t hend_high = (d->crtc_reg[VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW] >> 1) & 1;
-	  uint16_t hend_low = d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END];
-	  d->hend = (((hend_high << 8) | hend_low) + 1) * 8;
-	  fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
-	  break;
+		uint16_t hend_high = (d->crtc_reg[VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW] >> 1) & 1;
+		uint16_t hend_low = d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END];
+		d->hend = (((hend_high << 8) | hend_low) + 1) * 8;
+		fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
+		break;
 	}
 	case 0xff:
 		grayscale = 0;
@@ -2938,7 +2938,7 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 			d->graphics_mode = GRAPHICS_MODE_4BIT;
 			d->bits_per_pixel = 4;
 			d->pixel_repx = d->pixel_repy =
-			    2 * machine->x11_md.scaleup;
+				  2 * machine->x11_md.scaleup;
 			break;
 		case 0x0e:
 			d->cur_mode = MODE_GRAPHICS;
@@ -2968,37 +2968,37 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 			d->graphics_mode = GRAPHICS_MODE_8BIT;
 			d->bits_per_pixel = 8;
 			d->pixel_repx = d->pixel_repy =
-			    2 * machine->x11_md.scaleup;
+				  2 * machine->x11_md.scaleup;
 			break;
 		default:
 			fatal("TODO! video mode change hack (mode 0x%02x)\n",
-			    d->crtc_reg[0xff]);
+				  d->crtc_reg[0xff]);
 			exit(1);
 		}
 
 		if (d->cur_mode == MODE_CHARCELL) {
 			dev_fb_resize(d->fb, d->max_x * d->font_width *
-			    d->pixel_repx, d->max_y * d->font_height *
-			    d->pixel_repy);
+				  d->pixel_repx, d->max_y * d->font_height *
+				  d->pixel_repy);
 			d->fb_size = d->max_x * d->pixel_repx * d->font_width *
-			     d->max_y * d->pixel_repy * d->font_height * 3;
+				   d->max_y * d->pixel_repy * d->font_height * 3;
 		} else {
 			dev_fb_resize(d->fb, d->max_x * d->pixel_repx,
-			    d->max_y * d->pixel_repy);
+				  d->max_y * d->pixel_repy);
 			d->fb_size = d->max_x * d->pixel_repx *
-			     d->max_y * d->pixel_repy * 3;
+				   d->max_y * d->pixel_repy * 3;
 		}
 
 		for (i=0; i<machine->ncpus; i++)
 			machine->cpus[i]->invalidate_translation_caches(
-			    machine->cpus[i], 0, INVALIDATE_ALL);
+				  machine->cpus[i], 0, INVALIDATE_ALL);
 
 		if (d->gfx_mem != NULL)
 			free(d->gfx_mem);
 		d->gfx_mem_size = 1;
 		if (d->cur_mode == MODE_GRAPHICS)
 			d->gfx_mem_size = d->max_x * d->max_y /
-			    (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);
+				  (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);
 
 		CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
 
@@ -3015,45 +3015,45 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 		register_reset(d);
 		break;
 	case 0x58:
-	  if (idata & 1) {
-	    d->window_mapped = true;
-	    debug("[ vga_crtc: non-linear mode ]\n");
-	  } else {
-	    d->window_mapped = false;
-	    debug("[ vga_crtc: linear mode ]\n");
-	  }
-	  break;
+		if (idata & 1) {
+			d->window_mapped = true;
+			debug("[ vga_crtc: non-linear mode ]\n");
+		} else {
+			d->window_mapped = false;
+			debug("[ vga_crtc: linear mode ]\n");
+		}
+		break;
 	case 0x59:
-	  debug("[ vga_crtc: set PCI bar upper byte ]\n");
-	  idata_byte = idata;
-	  dev_address[0] = 0x10;
-	  dev_address[1] = 14 << 3;
-	  dev_address[3] = 0x80;
-	  // Set a pci address
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
-	  value[3] = idata_byte;
-	  value[1] = 0x55;
-	  value[0] = 0xaa;
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
-	  break;
+		debug("[ vga_crtc: set PCI bar upper byte ]\n");
+		idata_byte = idata;
+		dev_address[0] = 0x10;
+		dev_address[1] = 14 << 3;
+		dev_address[3] = 0x80;
+		// Set a pci address
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
+		value[3] = idata_byte;
+		value[1] = 0x55;
+		value[0] = 0xaa;
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
+		break;
 	case 0x5a:
-	  debug("[ vga_crtc: set PCI bar lower upper byte ]\n");
-	  idata_byte = idata;
-	  dev_address[0] = 0x10;
-	  dev_address[1] = 14 << 3;
-	  dev_address[3] = 0x80;
-	  // Set a pci address
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
-	  // Write a byte
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
-	  value[2] = idata_byte;
-	  value[1] = 0x55;
-	  value[0] = 0xaa;
-	  cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
-	  break;
+		debug("[ vga_crtc: set PCI bar lower upper byte ]\n");
+		idata_byte = idata;
+		dev_address[0] = 0x10;
+		dev_address[1] = 14 << 3;
+		dev_address[3] = 0x80;
+		// Set a pci address
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cf8, dev_address, 4, MEM_WRITE, PHYSICAL);
+		// Write a byte
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_READ, PHYSICAL);
+		value[2] = idata_byte;
+		value[1] = 0x55;
+		value[0] = 0xaa;
+		cpu->memory_rw(cpu, cpu->mem, 0x80000cfc, value, 4, MEM_WRITE, PHYSICAL);
+		break;
 	default:
-	  break;
+		break;
 	}
 }
 
@@ -3190,9 +3190,9 @@ DEVICE_ACCESS(s3_ctrl)
 				odata = d->sequencer_reg[
 				    d->sequencer_reg_select];
 			else {
-	      d->sequencer_reg[d->sequencer_reg_select] = idata;
-	      fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
-	      vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
+				d->sequencer_reg[d->sequencer_reg_select] = idata;
+				fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
+				vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
 			}
 			break;
 
@@ -3221,7 +3221,7 @@ DEVICE_ACCESS(s3_ctrl)
 			break;
 		case VGA_DAC_DATA:			/*  0x09  */
 			if (writeflag == MEM_WRITE) {
-	      L(fprintf(stderr, "[ vga: writing dac data (index %d sub %d) ]\n", d->palette_write_index, d->palette_write_subindex));
+				L(fprintf(stderr, "[ vga: writing dac data (index %d sub %d) ]\n", d->palette_write_index, d->palette_write_subindex));
 				int new_ = (idata & 63) << 2;
 				int old = d->fb->rgb_palette[d->
 				    palette_write_index*3+d->
@@ -3242,17 +3242,17 @@ DEVICE_ACCESS(s3_ctrl)
 					d->palette_write_index ++;
 					d->palette_write_subindex = 0;
 				}
-	      if (d->palette_write_index > 255) {
-	        d->palette_write_index = 0;
-	      }
+				if (d->palette_write_index > 255) {
+				  d->palette_write_index = 0;
+				}
 			} else {
 				odata = (d->fb->rgb_palette[d->
 				    palette_read_index * 3 +
 				    d->palette_read_subindex] >> 2) & 63;
 				d->palette_read_subindex ++;
 				if (d->palette_read_subindex == 3) {
-					d->palette_read_index ++;
-					d->palette_read_subindex = 0;
+				    d->palette_read_index ++;
+				    d->palette_read_subindex = 0;
 				}
 			}
 			break;
@@ -3288,12 +3288,12 @@ DEVICE_ACCESS(s3_ctrl)
 		case VGA_CRTC_DATA:			/*  0x15  */
 			if (writeflag == MEM_READ) {
 				odata = d->crtc_reg[d->crtc_reg_select];
-	      fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) ]\n",
-	            d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr));
-	    } else {
-	      if (d->crtc_reg_select != 0x30) {
-	        d->crtc_reg[d->crtc_reg_select] = idata;
-	      }
+				fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) ]\n",
+				      d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr));
+			} else {
+				if (d->crtc_reg_select != 0x30) {
+				  d->crtc_reg[d->crtc_reg_select] = idata;
+				}
 				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
 			}
@@ -3305,10 +3305,10 @@ DEVICE_ACCESS(s3_ctrl)
 			d->current_retrace_line ++;
 			d->current_retrace_line %= (MAX_RETRACE_SCANLINES * 8);
 			/*  Whenever we are "inside" a scan line, copy the
-			    current palette into retrace_palette[][]:  */
+				  current palette into retrace_palette[][]:  */
 			if ((d->current_retrace_line & 7) == 7) {
 				if (d->retrace_palette == NULL &&
-				    d->n_is1_reads > N_IS1_READ_THRESHOLD) {
+					d->n_is1_reads > N_IS1_READ_THRESHOLD) {
 					CHECK_ALLOCATION(d->retrace_palette =
 					    (unsigned char *) malloc(
 					    MAX_RETRACE_SCANLINES * 256*3));
@@ -3320,7 +3320,7 @@ DEVICE_ACCESS(s3_ctrl)
 					    MODE_CHARCELL? (16*3) : (256*3));
 			}
 			/*  These need to go on and off, to fake the
-			    real vertical and horizontal retrace info.  */
+				  real vertical and horizontal retrace info.  */
 			if (d->current_retrace_line < 20*8)
 				odata |= VGA_IS1_DISPLAY_VRETRACE;
 			else {
@@ -3334,7 +3334,7 @@ DEVICE_ACCESS(s3_ctrl)
 		if (writeflag == MEM_READ)
 			data[i] = odata;
 
-	  fprintf(stderr, "vga ctr at %08x [%04lx] %s %02x (%s)\n", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i], vga_find_register_name(d, S_PRIMARY, relative_addr));
+		fprintf(stderr, "vga ctr at %08x [%04lx] %s %02x (%s)\n", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i], vga_find_register_name(d, S_PRIMARY, relative_addr));
 
 		/*  For multi-byte accesses:  */
 		relative_addr ++;
@@ -3361,7 +3361,7 @@ DEVICE_ACCESS(vga_s3_4ae8) {
 	if (writeflag == MEM_WRITE) {
 		d->adv_fun_4ae8 = memory_readmax64(cpu, data, len);
 	} else {
-	  memory_writemax64(cpu, data, len, d->adv_fun_4ae8);
+		memory_writemax64(cpu, data, len, d->adv_fun_4ae8);
 	}
 
 	return 1;
@@ -3376,7 +3376,7 @@ DEVICE_ACCESS(vga_s3_92e8) {
 	if (writeflag == MEM_WRITE) {
 		d->line_error_term = memory_readmax64(cpu, data, len);
 	} else {
-	  memory_writemax64(cpu, data, len, d->line_error_term);
+		memory_writemax64(cpu, data, len, d->line_error_term);
 	}
 
 	return 1;
@@ -3391,7 +3391,7 @@ DEVICE_ACCESS(vga_s3_9ee8) {
 	if (writeflag == MEM_WRITE) {
 		d->short_stroke_transfer = memory_readmax64(cpu, data, len);
 	} else {
-	  memory_writemax64(cpu, data, len, d->short_stroke_transfer);
+		memory_writemax64(cpu, data, len, d->short_stroke_transfer);
 	}
 
 	return 1;
@@ -3405,7 +3405,7 @@ DEVICE_ACCESS(vga_s3_aae8) {
 	if (writeflag == MEM_WRITE) {
 		d->plane_write_mask = memory_readmax64(cpu, data, len);
 	} else {
-	  memory_writemax64(cpu, data, len, d->plane_write_mask);
+		memory_writemax64(cpu, data, len, d->plane_write_mask);
 	}
 	return 1;
 }
@@ -3418,7 +3418,7 @@ DEVICE_ACCESS(vga_s3_aee8) {
 	if (writeflag == MEM_WRITE) {
 		d->plane_read_mask = memory_readmax64(cpu, data, len);
 	} else {
-	  memory_writemax64(cpu, data, len, d->plane_read_mask);
+		memory_writemax64(cpu, data, len, d->plane_read_mask);
 	}
 	return 1;
 }
@@ -3426,77 +3426,77 @@ DEVICE_ACCESS(vga_s3_aee8) {
 DEVICE_ACCESS(vga_s3_8100_range) {
 	struct vga_data *d = (struct vga_data *) extra;
 	int register_map[][3] = {
-	  { 0x00, 0x82e8, -1 },
-	  { 0x02, 0x86e8, -1 },
-	  { 0x08, 0x8ae8, -1 },
-	  { 0x0a, 0x8ee8, -1 },
-	  { 0x10, 0x92e8, -1 },
-	  { 0x18, 0x9ae8, -1 },
-	  { 0x1c, 0x9ee8, -1 },
-	  { 0x20, 0xa2e8, -1 },
-	  { 0x24, 0xa6e8, -1 },
-	  { 0x28, 0xaae8, -1 },
-	  { 0x2c, 0xaee8, -1 },
-	  { 0x30, 0xb2e8, -1 },
-	  { 0x34, 0xb6e8, -1 },
-	  { 0x36, 0xbae8, -1 },
-	  { 0x38, 0xbee8, 1 },
-	  { 0x3a, 0xbee8, 2 },
-	  { 0x3c, 0xbee8, 3 },
-	  { 0xe3, 0xbee8, 4 },
-	  { 0x40, 0xbee8, 0xa },
-	  { 0x42, 0xbee8, 0xd },
-	  { 0x44, 0xbee8, 0xe },
-	  { 0x46, 0xbee8, 0xf },
-	  { 0x48, 0xbee8, 0 },
-	  { 0x4a, 0x96e8, -1 },
-	  { 0, 0, 0 },
+		{ 0x00, 0x82e8, -1 },
+		{ 0x02, 0x86e8, -1 },
+		{ 0x08, 0x8ae8, -1 },
+		{ 0x0a, 0x8ee8, -1 },
+		{ 0x10, 0x92e8, -1 },
+		{ 0x18, 0x9ae8, -1 },
+		{ 0x1c, 0x9ee8, -1 },
+		{ 0x20, 0xa2e8, -1 },
+		{ 0x24, 0xa6e8, -1 },
+		{ 0x28, 0xaae8, -1 },
+		{ 0x2c, 0xaee8, -1 },
+		{ 0x30, 0xb2e8, -1 },
+		{ 0x34, 0xb6e8, -1 },
+		{ 0x36, 0xbae8, -1 },
+		{ 0x38, 0xbee8, 1 },
+		{ 0x3a, 0xbee8, 2 },
+		{ 0x3c, 0xbee8, 3 },
+		{ 0xe3, 0xbee8, 4 },
+		{ 0x40, 0xbee8, 0xa },
+		{ 0x42, 0xbee8, 0xd },
+		{ 0x44, 0xbee8, 0xe },
+		{ 0x46, 0xbee8, 0xf },
+		{ 0x48, 0xbee8, 0 },
+		{ 0x4a, 0x96e8, -1 },
+		{ 0, 0, 0 },
 	};
 
 	REG_WRITE( 0x8100);
 
 	uint8_t *dselect = data + len - 2;
 	if (writeflag == MEM_WRITE) {
-	  bool found = false;
-	  while (len > 0) {
-	    int amount = MIN(len, 2);
-	    for (int i = 0; register_map[i][1]; i++) {
-	      if (relative_addr != register_map[i][0]) {
-	        continue;
-	      }
+		bool found = false;
+		while (len > 0) {
+			int amount = MIN(len, 2);
+			for (int i = 0; register_map[i][1]; i++) {
+				if (relative_addr != register_map[i][0]) {
+					continue;
+				}
 
-	      found = true;
-	      if (register_map[i][2] != -1) {
-	        d->bee8_regs[0xf] = register_map[i][2];
-	      }
-	      fprintf(stderr, "[ vga: write %04x via 8100 compressed area %02x %02x ]\n", register_map[i][1], dselect[0], dselect[1]);
-	      cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], dselect, amount, MEM_WRITE, PHYSICAL);
-	      found = true;
-	      break;
-	    }
-	    relative_addr += 2;
-	    dselect -= 2;
-	    len -= amount;
-	  }
-	  if (!found) {
-	    cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, len, MEM_WRITE, PHYSICAL);
-	  }
+				found = true;
+				if (register_map[i][2] != -1) {
+					d->bee8_regs[0xf] = register_map[i][2];
+				}
+				fprintf(stderr, "[ vga: write %04x via 8100 compressed area %02x %02x ]\n", register_map[i][1], dselect[0], dselect[1]);
+				cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], dselect, amount, MEM_WRITE, PHYSICAL);
+				found = true;
+				break;
+			}
+			relative_addr += 2;
+			dselect -= 2;
+			len -= amount;
+		}
+		if (!found) {
+			cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, len, MEM_WRITE, PHYSICAL);
+		}
 	} else {
-	  for (int i = 0; register_map[i][1]; i++) {
-	    if (relative_addr ^ 2 == register_map[i][0]) {
-	      if (register_map[i][2] != -1) {
-	        d->bee8_regs[0xf] = register_map[i][2];
-	      }
-	      memset(data, 0, len);
-	      cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], data, 2, MEM_READ, PHYSICAL);
-	      fprintf(stderr, "[ vga: read %04x via 8100 compressed area yielding", register_map[i][1]);
-	      for (int j = 0; j < len; i++) {
-	        fprintf(stderr, " %02x", data[j]);
-	      }
-	      fprintf(stderr, "]\n");
-	      break;
-	    }
-	  }
+		for (int i = 0; register_map[i][1]; i++) {
+			if (relative_addr ^ 2 == register_map[i][0]) {
+				if (register_map[i][2] != -1) {
+					d->bee8_regs[0xf] = register_map[i][2];
+				}
+				memset(data, 0, len);
+				cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], data, 2, MEM_READ, PHYSICAL);
+				fprintf(stderr, "[ vga: read %04x via 8100 compressed area yielding", register_map[i][1]);
+				for (int j = 0; j < len; i++) {
+					fprintf(stderr, " %02x", data[j]);
+				}
+				fprintf(stderr, "]\n");
+				break;
+			}
+		}
 	}
 	return 1;
 }
@@ -3508,13 +3508,13 @@ DEVICE_ACCESS(vga_s3_ff00_range) {
 
 	relative_addr &= 0xff;
 	if (writeflag == MEM_WRITE) {
-	  memcpy(&d->reg_ff00_data[relative_addr], data, len);
+		memcpy(&d->reg_ff00_data[relative_addr], data, len);
 	} else {
-	  memcpy(data, &d->reg_ff00_data[relative_addr], len);
+		memcpy(data, &d->reg_ff00_data[relative_addr], len);
 	}
 	fprintf(stderr, "vga ff00 %s", writeflag == MEM_WRITE ? "read" : "write");
 	for (int i = 0; i < len; i++) {
-	  fprintf(stderr, " %02x", data[i]);
+		fprintf(stderr, " %02x", data[i]);
 	}
 	fprintf(stderr, " (%s)\n", vga_find_register_name(d, S_EXTENDED, 0xff00 + relative_addr));
 	return 1;
@@ -3523,59 +3523,59 @@ DEVICE_ACCESS(vga_s3_ff00_range) {
 DEVICE_ACCESS(vga_option_rom)
 {
 	uint8_t rom_data[0x2000] = {
-	  0x55, 0xaa, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  //          Target Loc
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 10
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 20
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 30
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 40
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 50
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 60
-	  0x01, 0xff, 0x6e, 0x64, 0x20, 0x4d, 0x75, 0x6c,
-	  0x74, 0x69, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x20, // 70
-	  0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x73, 0x2c,
-	  0x20, 0x49, 0x6e, 0x63, 0x2e, 0x20, 0x20, 0x4d, // 80
-	  0x42, 0x20, 0x64, 0x69, 0x73, 0x70, 0x6c, 0x61,
-	  0x79, 0x20, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, // 90
-	  0x20, 0x69, 0x6e, 0x73, 0x74, 0x61, 0x6c, 0x6c,
-	  0x65, 0x64, 0x30, 0x35, 0x2f, 0x30, 0x31, 0x2f, // a0
-	  0x39, 0x35, 0x30, 0x35, 0x2f, 0x30, 0x31, 0x2f,
-	  0x39, 0x35, 0x09, 0x02, 0x03, 0xd0, 0x30, 0x00, // b0
-	  0x7f, 0x11, 0x00, 0x00, 0x00, 0x00, 0x94, 0x38,
-	  0xa4, 0x38, 0xce, 0x38, 0x00, 0x00, 0x00, 0x00, // c0
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x4a,
-	  0xff, 0x7f, 0xd6, 0x00, 0x21, 0x01, 0x25, 0x38, // d0
-	  0x48, 0x39, 0xa5, 0x31, 0x05, 0x50, 0x00, 0x51,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // e0
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // f0
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	  //                      Size______
-	  0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
-	  0x04, 0x05, 0x06, 0x07, 0x00, 0x09, 0x0a, 0x0b,
-	  0x01, 0x0d, 0x0f, 0x0f
+		0x55, 0xaa, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+		//          Target Loc
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 10
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 20
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 30
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 40
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 50
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 60
+		0x01, 0xff, 0x6e, 0x64, 0x20, 0x4d, 0x75, 0x6c,
+		0x74, 0x69, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x20, // 70
+		0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x73, 0x2c,
+		0x20, 0x49, 0x6e, 0x63, 0x2e, 0x20, 0x20, 0x4d, // 80
+		0x42, 0x20, 0x64, 0x69, 0x73, 0x70, 0x6c, 0x61,
+		0x79, 0x20, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, // 90
+		0x20, 0x69, 0x6e, 0x73, 0x74, 0x61, 0x6c, 0x6c,
+		0x65, 0x64, 0x30, 0x35, 0x2f, 0x30, 0x31, 0x2f, // a0
+		0x39, 0x35, 0x30, 0x35, 0x2f, 0x30, 0x31, 0x2f,
+		0x39, 0x35, 0x09, 0x02, 0x03, 0xd0, 0x30, 0x00, // b0
+		0x7f, 0x11, 0x00, 0x00, 0x00, 0x00, 0x94, 0x38,
+		0xa4, 0x38, 0xce, 0x38, 0x00, 0x00, 0x00, 0x00, // c0
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x4a,
+		0xff, 0x7f, 0xd6, 0x00, 0x21, 0x01, 0x25, 0x38, // d0
+		0x48, 0x39, 0xa5, 0x31, 0x05, 0x50, 0x00, 0x51,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // e0
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // f0
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		//                      Size______
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03,
+		0x04, 0x05, 0x06, 0x07, 0x00, 0x09, 0x0a, 0x0b,
+		0x01, 0x0d, 0x0f, 0x0f
 	};
 	int rom_size = sizeof(rom_data);
 	if (writeflag != MEM_WRITE) {
-	  uint32_t result;
+		uint32_t result;
 
-	  if (len == 1) {
-	    result = rom_data[(relative_addr) % rom_size];
-	  } else if (len == 2) {
-	    result = (rom_data[relative_addr % rom_size] << 8) | rom_data[(relative_addr + 1) % rom_size];
-	  } else {
-	    result = rom_data[relative_addr % rom_size] | (rom_data[(relative_addr + 1) % rom_size] << 8) | (rom_data[(relative_addr + 2) % rom_size] << 16) | (rom_data[(relative_addr + 3) % rom_size] << 24);
-	  }
+		if (len == 1) {
+			result = rom_data[(relative_addr) % rom_size];
+		} else if (len == 2) {
+			result = (rom_data[relative_addr % rom_size] << 8) | rom_data[(relative_addr + 1) % rom_size];
+		} else {
+			result = rom_data[relative_addr % rom_size] | (rom_data[(relative_addr + 1) % rom_size] << 8) | (rom_data[(relative_addr + 2) % rom_size] << 16) | (rom_data[(relative_addr + 3) % rom_size] << 24);
+		}
 
-	  fprintf(stderr, "vga: access option rom: %08lx @ %08lx = %08x\n", relative_addr, cpu->pc, result);
-	  memory_writemax64(cpu, data, len, result);
+		fprintf(stderr, "vga: access option rom: %08lx @ %08lx = %08x\n", relative_addr, cpu->pc, result);
+		memory_writemax64(cpu, data, len, result);
 	}
 	return 1;
 }
@@ -3587,7 +3587,7 @@ DEVICE_ACCESS(vga_option_rom)
  *  like 80 and 25, respectively.
  */
 void dev_86mc64_init(struct machine *machine, struct memory *mem,
-	                   uint64_t videomem_base, uint64_t control_base, const char *name)
+					 uint64_t videomem_base, uint64_t control_base, const char *name)
 {
 	struct vga_data *d;
 	size_t allocsize, i;
@@ -3596,7 +3596,7 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	memset(d, 0, sizeof(struct vga_data));
 
 	d->console_handle = console_start_slave(machine, "vga",
-	    CONSOLE_OUTPUT_ONLY);
+			CONSOLE_OUTPUT_ONLY);
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
@@ -3628,13 +3628,13 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	/*
 	memory_device_register(mem, "vga_charcells", videomem_base + 0x18000,
-	    allocsize, dev_vga_access, d, DM_DYNTRANS_OK |
-	    DM_DYNTRANS_WRITE_OK | DM_READS_HAVE_NO_SIDE_EFFECTS,
-	    d->charcells);
+			allocsize, dev_vga_access, d, DM_DYNTRANS_OK |
+			DM_DYNTRANS_WRITE_OK | DM_READS_HAVE_NO_SIDE_EFFECTS,
+			d->charcells);
 	*/
 	memory_device_register(mem, "s3_gfx", videomem_base, GFX_ADDR_WINDOW,
-	                       dev_s3_graphics_access, d, DM_DEFAULT |
-	                       DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
+	                             dev_s3_graphics_access, d, DM_DEFAULT |
+	                             DM_READS_HAVE_NO_SIDE_EFFECTS, d->gfx_mem);
 
 	// memory_device_register(mem, "vga_gfx", 0xc0000000, 0xc0000,
 	//                        dev_vga_graphics_access, d, DM_DEFAULT |
@@ -3644,70 +3644,70 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	//     65536, dev_vga_option_rom_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "s3_ctrl", control_base,
-	    32, dev_s3_ctrl_access, d, DM_DEFAULT, NULL);
+	                             32, dev_s3_ctrl_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_subsystem_control", VIRTUAL_ISA_PORTBASE | 0x800042e8, 4,
-	                       dev_vga_s3_42e8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_42e8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_adv_func_control", VIRTUAL_ISA_PORTBASE | 0x80004ae8, 4,
-	                       dev_vga_s3_4ae8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_4ae8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_8100_range", VIRTUAL_ISA_PORTBASE | 0x80008100, 0x100,
-	                       dev_vga_s3_8100_range_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_8100_range_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_cury", VIRTUAL_ISA_PORTBASE | 0x800082e8, 4,
-	                       dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_cury_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_curx", VIRTUAL_ISA_PORTBASE | 0x800086e8, 4,
-	    dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_curx_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_desty", VIRTUAL_ISA_PORTBASE | 0x80008ae8, 4,
-	                       dev_vga_s3_desty_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_desty_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_destx", VIRTUAL_ISA_PORTBASE | 0x80008ee8, 4,
-	                       dev_vga_s3_destx_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_destx_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_line_term_error", VIRTUAL_ISA_PORTBASE | 0x800092e8, 4,
-	                       dev_vga_s3_92e8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_92e8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_major_axis_len", VIRTUAL_ISA_PORTBASE | 0x800096e8, 4,
-	    dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_major_axis_len_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_control", VIRTUAL_ISA_PORTBASE | 0x80009ae8, 4,
-	                       dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_control_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_short_stroke_transfer", VIRTUAL_ISA_PORTBASE | 0x80009ee8, 4,
-	                       dev_vga_s3_9ee8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_9ee8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_bg_color", VIRTUAL_ISA_PORTBASE | 0x8000a2e8, 4,
-	                       dev_vga_s3_bg_color_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_bg_color_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_fg_color", VIRTUAL_ISA_PORTBASE | 0x8000a6e8, 4,
-	                       dev_vga_s3_fg_color_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_fg_color_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_bitplane_write_mask", VIRTUAL_ISA_PORTBASE | 0x8000aae8, 4,
-	                       dev_vga_s3_aae8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_aae8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_bitplane_read_mask", VIRTUAL_ISA_PORTBASE | 0x8000aee8, 4,
-	                       dev_vga_s3_aee8_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_aee8_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_color_compare", VIRTUAL_ISA_PORTBASE | 0x8000b2e8, 4,
-	                       dev_vga_s3_color_compare_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_color_compare_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_bg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000b6e8, 4,
-	                       dev_vga_s3_bg_color_mix_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_bg_color_mix_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_fg_color_mix", VIRTUAL_ISA_PORTBASE | 0x8000bae8, 4,
-	                       dev_vga_s3_fg_color_mix_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_fg_color_mix_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_pio_cmd", VIRTUAL_ISA_PORTBASE | 0x8000bee8, 4,
-	                       dev_vga_s3_pio_cmd_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_pio_cmd_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_pix_transfer", VIRTUAL_ISA_PORTBASE | 0x8000e2e8, 4,
-	    dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_pix_transfer_access, d, DM_DEFAULT, NULL);
 
 	memory_device_register(mem, "vga_s3_ff00_range", VIRTUAL_ISA_PORTBASE | 0x8000ff00, 0x80,
-	                       dev_vga_s3_ff00_range_access, d, DM_DEFAULT, NULL);
+	                             dev_vga_s3_ff00_range_access, d, DM_DEFAULT, NULL);
 
 	/*  This will force an initial redraw/resynch:  */
 	d->update_x1 = 0;
@@ -3722,7 +3722,7 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	machine_add_tickfunction(machine, dev_s3_tick, d, VGA_TICK_SHIFT);
 
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
-	                    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
+	                             d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
 	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 
 	vga_update_cursor(machine, d);

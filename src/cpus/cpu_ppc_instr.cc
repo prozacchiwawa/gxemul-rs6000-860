@@ -800,6 +800,7 @@ X(dcbz)
  *
  *  arg[0] = ptr to frb
  *  arg[1] = mask
+ *  arg[2] = rc
  */
 X(mtfsf)
 {
@@ -808,12 +809,12 @@ X(mtfsf)
   uint64_t new_fpscr = old_fpscr;
 	new_fpscr &= ~ic->arg[1];
 	new_fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
-  if (ic->arg[1] != 0) {
-    // FX is altered only if crf = 0
-    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
-  }
-  fpu_bit_ladder(cpu, cpu->cd.ppc.fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
   cpu->cd.ppc.fpscr = new_fpscr;
+  fpu_bit_ladder(cpu, cpu->cd.ppc.fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  if (!ic->arg[2]) {
+    // Old FX bit if not RC.
+    new_fpscr = (new_fpscr & 0x7fffffff) | (old_fpscr & 0x80000000);
+  }
 }
 X(mtfsf_dot)
 {
@@ -826,7 +827,7 @@ X(mtfsf_dot)
  *
  *  arg[0] = ptr to frb
  *  arg[1] = crf
- *  arg[2] = imm
+ *  arg[2] = imm | (rc = 16)
  */
 X(mtfsfi)
 {
@@ -834,13 +835,13 @@ X(mtfsfi)
   uint64_t old_fpscr = cpu->cd.ppc.fpscr;
   uint64_t new_fpscr = old_fpscr;
 	new_fpscr &= ~(15 << (ic->arg[1] * 4));
-	new_fpscr |= ic->arg[2] << (ic->arg[1] * 4);
-  if (ic->arg[1] != 0) {
-    // FX is altered only if crf = 0
-    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
-  }
-  fpu_bit_ladder(cpu, old_fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+	new_fpscr |= (ic->arg[2] & 15) << (ic->arg[1] * 4);
   cpu->cd.ppc.fpscr = new_fpscr;
+  fpu_bit_ladder(cpu, old_fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  if (!(ic->arg[2] & 16)) {
+    // Old FX bit if not RC.
+    new_fpscr = (new_fpscr & 0x7fffffff) | (old_fpscr & 0x80000000);
+  }
 }
 X(mtfsfi_dot)
 {
@@ -858,7 +859,6 @@ X(mtfsfi_dot)
 X(mtfsb1x)
 {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
-    
   fpscr = (fpscr | (1 << ic->arg[0])) ^ (ic->arg[1] << ic->arg[0]);
   cpu->cd.ppc.fpscr = fpscr;
 }
@@ -972,6 +972,7 @@ X(fcmpu)
   base_cmp(cpu, ic, (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 	int bf_shift = ic->arg[0];
   int c = (cpu->cd.ppc.fpscr >> PPC_FPSCR_FPCC_SHIFT) & 0xf;
+  fprintf(stderr, "fcmpu new flags cr%d = %x\n", 7 - (bf_shift / 4), c);
 	cpu->cd.ppc.cr &= ~(0xf << bf_shift);
 	cpu->cd.ppc.cr |= (c << bf_shift);
 }
@@ -2141,13 +2142,13 @@ X(lswi)
     nb = cpu->cd.ppc.spr[SPR_XER] & 127;
     if (nb == 0) {
       // fprintf(stderr, "lswx: zero bytes\n");
-      cpu->cd.ppc.gpr[rt] = 0;
+      // cpu->cd.ppc.gpr[rt] = 0;
       return;
     }
     // fprintf(stderr, "lswx: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
-  uint64_t register_values[32];
+  uint64_t register_values[32] = { 0 };
   uint32_t start_rt = (rt + 31) & 31;
 
 	while (nb > 0) {
@@ -2155,7 +2156,6 @@ X(lswi)
 
 		if ((sub & 3) == 0) {
 			rt = (rt + (sub >> 2)) & 31;
-			register_values[rt] = 0;
 			sub = 0;
 		}
 
@@ -2179,7 +2179,7 @@ X(lswi)
       // fprintf(stderr, "lsw%c: r%02d = %08x\n", ix, rt, (unsigned int)register_values[rt]);
       cpu->cd.ppc.gpr[rt] = register_values[rt];
     }
-    rt--;
+    rt = (rt + 31) & 31;
   }
 }
 X(stswi)
@@ -4630,6 +4630,7 @@ X(to_be_translated)
 					if (iword & (1 << (17+bi)))
 						ic->arg[1] |= 0xf;
 				}
+        ic->arg[2] = iword & 1;
 				break;
       case PPC_63_MTFSFI:
         if (rc) {
@@ -4639,7 +4640,7 @@ X(to_be_translated)
         }
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				ic->arg[1] = (iword >> 24) & 7;
-        ic->arg[2] = (iword >> 12) & 15;
+        ic->arg[2] = ((iword >> 12) & 15) | ((iword & 1) ? 16 : 0);
         break;
       case PPC_63_MTFSB1x:
       case PPC_63_MTFSB0x:

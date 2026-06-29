@@ -133,6 +133,7 @@ int diskimage_scsicommand(struct cpu *cpu, int id, int type,
 
 /*  diskimage.c:  */
 int64_t diskimage_getsize(struct machine *machine, int id, int type);
+uint32_t diskimage_get_logical_blocksize(struct machine *machine, int id, int type);
 int64_t diskimage_get_baseoffset(struct machine *machine, int id, int type);
 void diskimage_set_baseoffset(struct machine *machine, int id, int type, int64_t offset);
 void diskimage_getchs(struct machine *machine, int id, int type,

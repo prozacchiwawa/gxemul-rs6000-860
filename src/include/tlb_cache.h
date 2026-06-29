@@ -178,7 +178,7 @@ protected:
           (int)vaddr_page);  */
       auto found = vaddr_to_tlbindex->find(index);
       if (found != vaddr_to_tlbindex->end()) {
-        auto tlbi = found->second;
+        auto tlbi = found->second - 1;
         vph_tlb_entry[tlbi].writeflag = 0;
       }
       clear_writable(cpu, vaddr_page);
@@ -205,7 +205,6 @@ protected:
   }
 
   void clear_writable(Cpu *cpu, uint64_t addr) {
-    
     auto index = get_page_index(cpu, addr, false);
     pages[index].host_store = nullptr;
   }
@@ -273,6 +272,21 @@ public:
        *	Writeflag = MEM_DOWNGRADE: Downgrade to readonly.
        */
       auto r = found;
+      if (vph_tlb_entry[r].paddr_page != paddr_page) {
+        // The translation wasn't the right one.
+        fprintf(stderr, "[ tlb: replace mapping %08x -> %08x to %08x %s ]\n", (unsigned int)vaddr_page, (unsigned int)vph_tlb_entry[r].paddr_page, (unsigned int)paddr_page);
+        this->invalidate_tc(cpu, vaddr_page, INVALIDATE_VADDR);
+        this->update_make_valid_translation
+          (cpu,
+           vaddr_page,
+           paddr_page,
+           host_page,
+           writeflag,
+           instr,
+           is_userpage);
+        return;
+      }
+
       if (writeflag & MEM_WRITE) {
         vph_tlb_entry[r].writeflag = 1;
       }
@@ -425,6 +439,8 @@ public:
   }
 
   void set_physpage_template(typename T::physpage_t *templ) {
+    templ->physaddr = ~0ull;
+    templ->virtaddr = ~0ull;
     physpage_template = templ;
   }
 
@@ -442,19 +458,15 @@ public:
 
   void pc_to_pointers_generic(typename T::cpu_t *cpu) {
     uint32_t cached_pc = cpu->pc;
-    int ok;
     typename T::physpage_t *ppp;
 
     auto host_pages = this->get_cached_tlb_pages(cpu, cached_pc, true);
 
     /*  Virtual to physical address translation:  */
-    ok = 0;
-    if (host_pages.host_load != nullptr) {
-      ok = 1;
-    }
+    int ok = host_pages.host_load != nullptr;
 
     if (!ok) {
-      uint64_t paddr;
+      uint64_t paddr = 0;
       if (cpu->translate_v2p != NULL) {
         uint64_t vaddr = is_mips<typename T::physpage_t>() ? (int32_t)cached_pc : cached_pc;
         ok = cpu->translate_v2p(cpu, vaddr, &paddr, FLAG_INSTR);

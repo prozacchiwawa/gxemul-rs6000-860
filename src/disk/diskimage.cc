@@ -1110,6 +1110,20 @@ int diskimage_getname(struct machine *machine, int id, int type,
 }
 
 
+uint32_t diskimage_get_logical_blocksize(struct machine *machine, int id, int type) {
+	struct diskimage *d = machine->first_diskimage;
+
+	while (d != NULL) {
+		if (d->type == type && d->id == id) {
+      			return d->logical_block_size;
+		}
+		d = d->next;
+        }
+
+	return 0;
+}
+
+
 /*
  *  diskimage_is_a_cdrom():
  *

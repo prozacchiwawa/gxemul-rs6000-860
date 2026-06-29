@@ -47,7 +47,7 @@
 #define ARRAY_SIZE(a) ((sizeof(a))/sizeof(a[0]))
 #define ABORT() do { fprintf(stderr, "ABORT %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 
-#if 1
+#if 0
 #define DEBUG(...) fprintf(stderr, __VA_ARGS__)
 #else
 #define DEBUG(fmt, ...) do { } while(0)
@@ -236,7 +236,6 @@ struct SCSIDevice {
     int id;
     int sense_data_len;
     char sense_data[64];
-    int block_size;
 };
 
 typedef struct SCSIDevice DeviceState;
@@ -759,10 +758,10 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
         req->xfer.cmd = req->cmd.buf;
         req->xfer.cmd_len = req->cmd.len;
         if (req->xfer.cmd[0] == 0x0a) {
-            req->xfer.data_out_len = req->cmd.buf[4] * req->dev->block_size;
+          req->xfer.data_out_len = req->cmd.buf[4] * diskimage_get_logical_blocksize(cpu->machine, req->dev->id, DISKIMAGE_SCSI);
             req->hba_private->dma_len = req->xfer.data_out_len;
         } else if (req->xfer.cmd[0] == 0x2a || req->xfer.cmd[0] == 0x2e) {
-            req->xfer.data_out_len = ((req->cmd.buf[7] << 8) | req->cmd.buf[8]) * req->dev->block_size;
+          req->xfer.data_out_len = ((req->cmd.buf[7] << 8) | req->cmd.buf[8]) * diskimage_get_logical_blocksize(cpu->machine, req->dev->id, DISKIMAGE_SCSI);
             req->hba_private->dma_len = req->xfer.data_out_len;
         } else {
             ABORT();
@@ -1043,7 +1042,6 @@ static void lsi_soft_reset(LSIState *s)
     for (int i = 0; i < 8; i++) {
       memset(&s->bus.devices[i], 0, sizeof(s->bus.devices[i]));
       s->bus.devices[i].id = i;
-      s->bus.devices[i].block_size = 512;
     }
 
     s->bus.qbus.parent = s;

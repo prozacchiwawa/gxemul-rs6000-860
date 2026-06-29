@@ -192,12 +192,10 @@ DEVICE_ACCESS(eagle_8mb)
 	struct eagle_data *d = (struct eagle_data *) extra;
 	uint64_t real_addr = relative_addr, idata = 0xffffff00;
 
-/*
   if (!d->discontiguous && (real_addr >= 0x10000)) {
     fprintf(stderr, "[ eagle: discontiguous access on %x ]\n", (unsigned int)real_addr);
     d->discontiguous = 1;
   }
-*/
   if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
     uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;

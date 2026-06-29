@@ -1662,7 +1662,8 @@ static void debugger_cmd_screenshot(struct machine *m, char *cmd_line) {
 
   png_init_io(png, f);
 
-  int width = 800, height = 600;
+  int width = m->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
+  int height = m->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
 
   // Output is 8bit depth, RGBA format.
   png_set_IHDR

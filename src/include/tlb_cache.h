@@ -274,7 +274,7 @@ public:
       auto r = found;
       if (vph_tlb_entry[r].paddr_page != paddr_page) {
         // The translation wasn't the right one.
-        fprintf(stderr, "[ tlb: replace mapping %08x -> %08x to %08x %s ]\n", (unsigned int)vaddr_page, (unsigned int)vph_tlb_entry[r].paddr_page, (unsigned int)paddr_page);
+        fprintf(stderr, "[ tlb: replace mapping %08x -> %08x to %08x %s ]\n", (unsigned int)vaddr_page, (unsigned int)vph_tlb_entry[r].paddr_page, (unsigned int)paddr_page, (writeflag == 1) ? "write" : "read");
         this->invalidate_tc(cpu, vaddr_page, INVALIDATE_VADDR);
         this->update_make_valid_translation
           (cpu,

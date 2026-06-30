@@ -74,9 +74,17 @@ std::deque<keyboard_event_t> keyboard_debug_events;
 
 static inline bool port_enabled(int port, int cmdbyte) {
   if (port) {
-    return !(cmdbyte & KC8_MDISABLE) && (cmdbyte & KC8_MENABLE);
+    return !(cmdbyte & KC8_MDISABLE);
   } else {
-    return !(cmdbyte & KC8_KDISABLE) && (cmdbyte & KC8_KENABLE);
+    return !(cmdbyte & KC8_KDISABLE);
+  }
+}
+
+static inline bool port_int_enabled(int port, int cmdbyte) {
+  if (port) {
+    return cmdbyte & KC8_MENABLE;
+  } else {
+    return cmdbyte & KC8_KENABLE;
   }
 }
 
@@ -439,12 +447,14 @@ void pckbc_add_code(struct pckbc_data *d, int code, int port)
 	d->key_queue[port][d->head[port]] = code;
   if (port_enabled(port, d->cmdbyte) && !d->currently_asserted[port]) {
     fprintf(stderr, "[ pckbc: interrupt port %d ]\n", port);
-    if (port == 0) {
-      INTERRUPT_ASSERT(d->irq_keyboard);
-    } else {
-      INTERRUPT_ASSERT(d->irq_mouse);
+    if (port_int_enabled(port, d->cmdbyte)) {
+      if (port == 0) {
+        INTERRUPT_ASSERT(d->irq_keyboard);
+      } else {
+        INTERRUPT_ASSERT(d->irq_mouse);
+      }
+      d->currently_asserted[port] = true;
     }
-    d->currently_asserted[port] = true;
   }
 }
 
@@ -468,12 +478,14 @@ int pckbc_get_code(struct pckbc_data *d, int port)
     }
     d->currently_asserted[port] = false;
   } else if (port_enabled(port, d->cmdbyte)) {
-    if (port) {
-      INTERRUPT_ASSERT(d->irq_mouse);
-    } else {
-      INTERRUPT_ASSERT(d->irq_keyboard);
+    if (port_int_enabled(port, d->cmdbyte)) {
+      if (port) {
+        INTERRUPT_ASSERT(d->irq_mouse);
+      } else {
+        INTERRUPT_ASSERT(d->irq_keyboard);
+      }
+      d->currently_asserted[port] = true;
     }
-    d->currently_asserted[port] = true;
   }
 
 	return d->key_queue[port][d->tail[port]];
@@ -572,12 +584,14 @@ DEVICE_TICK(pckbc)
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
-      if (port == 0) {
-        INTERRUPT_ASSERT(d->irq_keyboard);
-      } else {
-        INTERRUPT_ASSERT(d->irq_mouse);
+      if (port_int_enabled(port, d->cmdbyte)) {
+        if (port == 0) {
+          INTERRUPT_ASSERT(d->irq_keyboard);
+        } else {
+          INTERRUPT_ASSERT(d->irq_mouse);
+        }
+        d->currently_asserted[port] = true;
       }
-      d->currently_asserted[port] = true;
     }
   }
 }
@@ -650,9 +664,14 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
         d->mouse_remote = 0;
         d->mouse_ena = 1;
 
+        d->head[port_nr] = d->tail[port_nr] = 0;
         pckbc_add_code(d, 0xfa, port_nr);
         pckbc_add_code(d, 0xaa, port_nr);
         pckbc_add_code(d, 0, port_nr);
+        break;
+
+      case 0xf6:
+        pckbc_add_code(d, 0xfa, port_nr);
         break;
 
       case 0xf5:

@@ -581,7 +581,7 @@ DEVICE_TICK(pckbc)
     return;
   }
 
-  for (int port = 0; port < 2; port++) {
+  for (int port = 0; port < 1; port++) {
     if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port_int_enabled(port, d->cmdbyte)) {
@@ -716,14 +716,14 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 
       case 0xe9:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, d->mouse_reporting << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
+        pckbc_add_code(d, d->mouse_remote << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
         pckbc_add_code(d, d->mouse_resolution, port_nr);
         pckbc_add_code(d, d->mouse_sample_rate, port_nr);
         break;
 
       case 0xeb:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 8, port_nr);
         pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;

@@ -1495,6 +1495,8 @@ struct vga_data {
   bool window_mapped;
   int window_address;
   int fifo_in_progress;
+  bool odd_fifo;
+
 
   uint32_t plane_read_mask, plane_write_mask;
   uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
@@ -2624,7 +2626,8 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
   REG_WRITE( 0x9ae8);
 
   if (writeflag != MEM_WRITE) {
-    uint16_t outval = d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
+    d->odd_fifo = !d->odd_fifo;
+    uint16_t outval = d->odd_fifo ? 0 : d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
     d->fifo_in_progress = false;
     if (len == 1) {
       outval >>= relative_addr * 8;

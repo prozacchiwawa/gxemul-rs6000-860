@@ -3573,7 +3573,7 @@ DEVICE_ACCESS(vga_s3_8100_range) {
         memset(data, 0, len);
         cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], data, 2, MEM_READ, PHYSICAL);
         fprintf(stderr, "[ vga: read %04x via 8100 compressed area yielding", register_map[i][1]);
-        for (int j = 0; j < len; i++) {
+        for (int j = 0; j < len; j++) {
           fprintf(stderr, " %02x", data[j]);
         }
         fprintf(stderr, "]\n");

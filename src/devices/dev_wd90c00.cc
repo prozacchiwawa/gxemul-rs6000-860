@@ -44,6 +44,7 @@
 #include "bus_isa.h"
 
 #include "vga.h"
+#include "x11.h"
 
 #define S_CRTC 0
 #define S_SEQ 1
@@ -1963,11 +1964,7 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >= d->font_height)
 		onoff = 0;
 
-	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+  x11_update_cursor(d->fb->fb_window, 0, onoff, d->cursor_x * d->font_width, d->cursor_y * d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]);
 }
 
 

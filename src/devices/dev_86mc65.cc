@@ -44,6 +44,7 @@
 #include "bus_isa.h"
 
 #include "vga.h"
+#include "x11.h"
 
 #define S_CRTC 0
 #define S_SEQ 1
@@ -1481,12 +1482,15 @@ struct vga_data {
   int   s3_destx, s3_desty;
   int   s3_current_command;
   uint32_t s3_color_compare;
+  uint32_t s3_cursor_address;
 
   /* BEE8H */
   uint16_t bee8_regs[16];
 
   /* Command */
   int s3_cmd_mx, s3_cmd_bus_size, s3_cmd_swap, s3_cmd_pxtrans;
+  uint8_t s3_color_stack;
+  struct x11_cursor gfx_cursor;
 
   /* Ext sequencer */
   bool ext_seq_unlock;
@@ -1496,7 +1500,6 @@ struct vga_data {
   int window_address;
   int fifo_in_progress;
   bool odd_fifo;
-
 
   uint32_t plane_read_mask, plane_write_mask;
   uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
@@ -1774,6 +1777,69 @@ static void vga_update_textmode(struct machine *machine,
 }
 
 
+static void update_cursor(struct machine *machine, struct vga_data *d)
+{
+  uint16_t origin_x = ((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_LOW];
+  uint16_t origin_y = ((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_LOW];
+  d->gfx_cursor.on = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE] & 1;
+  d->gfx_cursor.render_x = origin_x;
+  d->gfx_cursor.render_y = origin_y;
+  x11_update_cursor
+    (d->fb->fb_window,
+     1,
+     d->gfx_cursor.on,
+     d->gfx_cursor.render_x,
+     d->gfx_cursor.render_y
+     );
+}
+
+
+/*
+ * Fill in gfx_cursor from the data we have and update it in the display system.
+ *
+ * Based on whether windows or x11 mode is set, change the transparent and inverse colors in
+ * the palette.
+ *
+ * Read the bit masks and compose the cursor image.
+ *
+ * Set the center of the cursor image.
+ */
+static void compose_cursor(struct machine *machine, struct vga_data *d)
+{
+  bool x11_mode = !!(d->crtc_reg[VGA_CRTC_EXTENDED_RAMDAC_CONTROL] & 0x10);
+  auto alpha_mask = 0xff000000;
+  if (x11_mode) {
+    d->gfx_cursor.palette[0] &= ~alpha_mask;
+    d->gfx_cursor.palette[1] &= ~alpha_mask;
+    d->gfx_cursor.palette[2] |= alpha_mask;
+    d->gfx_cursor.palette[3] |= alpha_mask;
+    d->gfx_cursor.invert_color = -1;
+  } else { // windows
+    d->gfx_cursor.palette[2] &= ~alpha_mask;
+    d->gfx_cursor.palette[3] &= ~alpha_mask;
+    d->gfx_cursor.palette[0] |= alpha_mask;
+    d->gfx_cursor.palette[1] |= alpha_mask;
+    d->gfx_cursor.invert_color = 3;
+  }
+
+  for (int y = 0; y < 64; y++) {
+    uint32_t row = d->s3_cursor_address + 16 * y;
+    for (int x = 0; x < 64; x++) {
+      uint8_t word_pair = x >> 4;
+      uint8_t byte_off = (x >> 3) & 1;
+      uint8_t byte_0 = d->gfx_mem[row + word_pair * 4 + byte_off];
+      uint8_t byte_1 = d->gfx_mem[row + word_pair * 4 + 2 + byte_off];
+      uint8_t mask = 1 << (7 - (x & 7));
+      uint8_t color = (!!(byte_0 & mask) << 1) | !!(byte_1 & mask);
+      d->gfx_cursor.data[y * 64 + x] = color;
+    }
+  }
+
+  x11_set_cursor_data(d->fb->fb_window, 1, d->gfx_cursor);
+  update_cursor(machine, d);
+}
+
+
 /*
  *  vga_update_graphics():
  *
@@ -1959,11 +2025,7 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >= d->font_height)
 		onoff = 0;
 
-	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+  x11_update_cursor(d->fb->fb_window, 0, onoff, d->cursor_x * d->font_width, d->cursor_y * d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]);
 }
 
 
@@ -2139,6 +2201,9 @@ DEVICE_ACCESS(s3_graphics)
 
 		if (writeflag == MEM_WRITE) {
 			memcpy(d->gfx_mem + relative_addr, data, len);
+      if (d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE] && ((relative_addr >> 10) == (d->s3_cursor_address >> 10))) {
+        compose_cursor(cpu->machine, d);
+      }
 			modified = 1;
 		} else
 			memcpy(data, d->gfx_mem + relative_addr, len);
@@ -2982,6 +3047,53 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
     fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
     break;
   }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_FG_COLOR_STACK:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_BG_COLOR_STACK: {
+    int fg = !(regnr & 1);
+    auto primary = d->s3_color_stack;
+    int shift = 8 * primary;
+    uint32_t mask = 0xff << shift;
+    // X11 and windows use opposing pairs of colors for the solid colors.
+    auto value = d->crtc_reg[regnr];
+    if (value == 1) {
+      // AIX writes 1 or 0 for white or black
+      value = 0xff;
+    }
+    d->gfx_cursor.palette[fg] = ((d->gfx_cursor.palette[fg] | mask) ^ mask) | (value << shift);
+    d->gfx_cursor.palette[fg + 2] = ((d->gfx_cursor.palette[fg] | mask) ^ mask) | (value << shift);
+    d->s3_color_stack = (d->s3_color_stack + 1) % 3;
+    compose_cursor(machine, d);
+    break;
+  }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_HIGH:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_LOW: {
+    uint32_t new_address = (((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_LOW]) << 10;
+    if (d->s3_cursor_address != new_address) {
+      d->s3_cursor_address = new_address;
+      compose_cursor(machine, d);
+    }
+    break;
+  }
+  case VGA_CRTC_EXTENDED_RAMDAC_CONTROL:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_X:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_Y: {
+    d->gfx_cursor.center_x = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_X];
+    d->gfx_cursor.center_y = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_Y];
+    compose_cursor(machine, d);
+    break;
+  }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE:
+    if (d->crtc_reg[regnr] != (d->gfx_cursor.on & 1)) {
+      compose_cursor(machine, d);
+    }
+    break;
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_LOW:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_HIGH:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_LOW:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_HIGH: {
+    update_cursor(machine, d);
+    break;
+  }
 	case 0xff:
 		grayscale = 0;
 		switch (d->crtc_reg[0xff]) {
@@ -3376,6 +3488,9 @@ DEVICE_ACCESS(s3_ctrl)
       } else {
         if (d->crtc_reg_select != 0x30) {
           d->crtc_reg[d->crtc_reg_select] = idata;
+        }
+        if (d->crtc_reg_select == VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE) {
+          d->s3_color_stack = 0;
         }
 				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
@@ -3807,6 +3922,17 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
                       d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
 	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
+
+  // text and graphic
+  x11_set_num_cursors(d->fb->fb_window, 2);
+  struct x11_cursor text_cursor;
+  text_cursor.block(1, d->font_width, d->font_height);
+  text_cursor.palette[1] = 0xffffff;
+  x11_set_cursor_data(d->fb->fb_window, 0, text_cursor);
+  d->gfx_cursor.width = 64;
+  for (int i = 0; i < 64 * 64; i++) {
+    d->gfx_cursor.data.push_back(0);
+  }
 
 	vga_update_cursor(machine, d);
   reset_palette(d, 0);

@@ -963,14 +963,16 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	return;
 
 
-bad:	/*
+bad:
+  /*
 	 *  Nothing was translated. (Unimplemented or illegal instruction.)
 	 */
 
 	/*  Clear the translation, in case it was "half-way" done:  */
 	ic->f = TO_BE_TRANSLATED;
 
-	if (cpu->translation_readahead) {
+  // We can ignore a translation failure when we took an exception.
+	if (cpu->translation_readahead || low_pc == ~0ull) {
 		fprintf(stderr, "bad: readahead failed at %08x\n", (unsigned int)addr);
 		return;
 	}

@@ -3208,6 +3208,7 @@ X(to_be_translated)
                                              sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
     fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
     memcpy(ic, &nothing_call, sizeof(nothing_call));
+    low_pc = ~0ull;
     goto bad;
   }
 

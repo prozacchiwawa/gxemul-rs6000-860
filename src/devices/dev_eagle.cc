@@ -565,7 +565,7 @@ DEVICE_ACCESS(eagle_200)
     break;
   }
 
-  fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
+  // fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
 
   return 1;
 }
@@ -951,16 +951,16 @@ DEVINIT(eagle)
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "200",
-                           isa_portbase + 0x200, 16, dev_eagle_200_access, d,
-                           DM_DEFAULT, NULL);
-    
+        isa_portbase + 0x200, 16, dev_eagle_200_access, d,
+        DM_DEFAULT, NULL);
+
     memory_device_register(devinit->machine->memory, "830",
         isa_portbase + 0x830, 16, dev_eagle_830_access, d,
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "850",
-                           isa_portbase + 0x850, 4, dev_eagle_850_access, d,
-                           DM_DEFAULT, NULL);
+        isa_portbase + 0x850, 4, dev_eagle_850_access, d,
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "880",
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,

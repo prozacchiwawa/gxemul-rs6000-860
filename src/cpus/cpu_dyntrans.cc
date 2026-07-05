@@ -213,7 +213,7 @@ void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_
 
 #ifdef CPU_BITS_64
 struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr, bool instr) {
-  cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
+  return cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
 }
 
 void CPU64(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {

@@ -89,8 +89,6 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
-		fatal("%08x: PPC LOAD/STORE misalignment across page boundary: TODO"
-		    " (addr=0x%08x, LS_SIZE=%i)\n", (unsigned int)cpu->pc, (int)addr, LS_SIZE);
 		if (swizzle | offset) {
       fprintf(stderr, "misaligned LE without full translation\n");
       exit(1);
@@ -102,30 +100,48 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
     auto first_span = second_page - addr;
 
 #ifdef LS_LOAD
-    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+    auto op_desc = "load";
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned load exception @ %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
       // Throw
       return;
     }
 
-    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span, MEM_READ, CACHE_DATA)) {
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span, MEM_READ, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned load exception @ %08x from %08x\n", (unsigned int)cpu->pc, (unsigned int)second_page, (unsigned int)addr);
       // Throw
       return;
     }
 
     load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], data, swizzle);
+    auto regval = reg(ic->arg[0]);
 #else
+    auto op_desc = "store";
+    auto regval = reg(ic->arg[0]);
     store_reg<LS_SIZE * 8>(ic->arg[0], data, swizzle);
 
-    if (!cpu->memory_rw(cpu, cpu->mem, second_page, data + first_span, second_span,
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, data, first_span,
                         MEM_WRITE, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned store exception @ %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
       return;
     }
 
-    if (!cpu->memory_rw(cpu, cpu->mem, addr, data, first_span,
-                        MEM_WRITE, CACHE_DATA)) {
+    if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, second_page, data + first_span, second_span,
+                                               MEM_WRITE, CACHE_DATA)) {
+      fprintf(stderr, "%08x: misaligned store exception @ %08x from %08x\n", (unsigned int)cpu->pc, (unsigned int)second_page, (unsigned int)addr);
       return;
     }
 #endif
+
+		fprintf(stderr, "%08x: PPC %s misalignment across page boundary "
+          " (addr=0x%08x, LS_SIZE=%i, value %08x): ", (unsigned int)cpu->pc, op_desc, (int)addr, LS_SIZE, (unsigned int)regval);
+    for (int i = 0; i < first_span; i++) {
+      fprintf(stderr, " %02x", data[i]);
+    }
+    for (int i = first_span; i < LS_SIZE; i++) {
+      fprintf(stderr, ".%02x", data[i]);
+    }
+    fprintf(stderr, "\n");
 
 #ifdef LS_UPDATE
     reg(ic->arg[1]) = addr;
@@ -136,7 +152,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #endif
 
 #ifdef LS_LOAD
-	if (!cpu->memory_rw(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
+	if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr ^ offset, data, sizeof(data),
                       MEM_READ, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -150,7 +166,7 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 
   access_log(cpu, 1, addr^offset, data, sizeof(data), swizzle);
 
-	if (!cpu->memory_rw(cpu, cpu->mem, addr^offset, data, sizeof(data),
+	if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr^offset, data, sizeof(data),
                       MEM_WRITE, CACHE_DATA)) {
 		/*  Exception.  */
 		return;
@@ -175,93 +191,6 @@ void LS_N(struct cpu *cpu, struct ppc_instr_call *ic)
 	}
 #endif
 
-
-#ifndef LS_INDEXED
-#ifndef LS_IGNOREOFS
-	int32_t ofs = ic->arg[2];
-#endif
-#endif
-
-#ifdef MODE32
-	uint32_t addr =
-#else
-	uint64_t addr =
-#endif
-	    reg(ic->arg[1])
-#ifdef LS_INDEXED
-	    + reg(ic->arg[2])
-#else
-#ifndef LS_IGNOREOFS
-	    + ofs
-#endif
-#endif
-	    ;
-
-  uint64_t full_addr = addr;
-
-  int swizzle, offset;
-  cpu_ppc_swizzle_offset(cpu, LS_SIZE, 0, &swizzle, &offset);
-
-  auto pages =
-#ifdef MODE32
-    ppc32_get_cached_tlb_pages(cpu, addr, false)
-#else
-    ppc64_get_cached_tlb_pages(cpu, addr, false)
-#endif
-    ;
-
-#ifdef LS_BYTEREVERSE
-#ifdef LS_H
-  swizzle ^= 1;
-#endif
-#ifdef LS_W
-  swizzle ^= 3;
-#endif
-#ifdef LS_D
-  swizzle ^= 7;
-#endif
-#endif
-
-#ifdef LS_UPDATE
-  uint32_t new_addr = addr;
-#endif
-
-  auto page =
-#ifdef LS_LOAD
-    pages.host_load
-#else
-    pages.host_store
-#endif
-    ;
-
-#ifndef LS_B
-	if (addr & (LS_SIZE-1)) {
-		LS_GENERIC_N(cpu, ic);
-		return;
-	}
-#endif
-
-	if (page == NULL) {
-		LS_GENERIC_N(cpu, ic);
-		return;
-	}
-
-  addr &= 4095;
-
-#ifdef LS_LOAD
-  /*  Load:  */
-  load_reg<LS_SIZE * 8, DO_ZERO>(ic->arg[0], &page[addr ^ offset], swizzle);
-
-  access_log(cpu, 0, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
-#else	/*  !LS_LOAD  */
-  /*  Store:  */
-  store_reg<LS_SIZE * 8>(ic->arg[0], &page[addr ^ offset], swizzle);
-
-  access_log(cpu, 1, full_addr, (void *)ic->arg[0], LS_SIZE, swizzle);
-#endif	/*  !LS_LOAD  */
-
-#ifdef LS_UPDATE
-	reg(ic->arg[1]) = new_addr;
-#endif
+  LS_GENERIC_N(cpu, ic);
 }
 

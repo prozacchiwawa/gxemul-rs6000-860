@@ -77,6 +77,7 @@
 #define	KBC_SETTABLE	0xF0	/* set scancode translation table */
 #define	KBC_ECHO	0xEE	/* request an echo from the keyboard */
 #define	KBC_MODEIND	0xED	/* set mode indicators (i.e. LEDs) */
+#define KBC_GETTABLE 0xEF /* get scancode translation table */
 
 /* keyboard responses */
 #define	KBR_EXTENDED	0xE0	/* extended key sequence */

@@ -51,6 +51,8 @@
 #define DYNTRANS_32
 #include "tmp_arm_head.cc"
 
+#include "memory_rw.h"
+
 /*  ARM symbolic register names and condition strings:  */
 static const char *arm_regname[N_ARM_REGS] = ARM_REG_NAMES;
 static const char *arm_condition_string[16] = ARM_CONDITION_STRINGS;
@@ -95,7 +97,7 @@ int arm_cpu_new(struct cpu *cpu, struct memory *mem,
 		return 0;
 
 	cpu->run_instr = arm_run_instr;
-	cpu->memory_rw = arm_memory_rw;
+	cpu->memory_rw = memory_rw<arm_tc_physpage>;
 	cpu->update_translation_table = []
     (struct cpu *cpu,
      uint64_t vaddr_page,

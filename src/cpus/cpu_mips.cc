@@ -50,6 +50,7 @@
 #include "opcodes_mips.h"
 #include "settings.h"
 #include "symbol.h"
+#include "memory_rw.h"
 
 
 static const char *exception_names[] = EXCEPTION_NAMES;
@@ -108,7 +109,7 @@ int mips_cpu_new(struct cpu *cpu, struct memory *mem, struct machine *machine,
 	if (found == -1)
 		return 0;
 
-	cpu->memory_rw                = mips_memory_rw;
+	cpu->memory_rw                = memory_rw<mips_tc_physpage>;
 	cpu->cd.mips.cpu_type         = cpu_type_defs[found];
 	cpu->name                     = strdup(cpu->cd.mips.cpu_type.name);
 	cpu->byte_order               = EMUL_LITTLE_ENDIAN;

@@ -62,7 +62,6 @@ extern struct settings *global_settings;
 extern int quiet_mode;
 static const unsigned char POWERPC_BLR_INSN[4] = { 0x4e, 0x80, 0x00, 0x20 };
 std::deque<std::string> script_queue;
-static std::map<uint64_t, std::vector<std::string>> break_commands;
 std::map<uint64_t, std::unique_ptr<dump_register_state_t>> dump_registers;
 
 int ppc_recording_fd = -1;
@@ -81,6 +80,8 @@ int force_debugger_at_exit = 0;
 
 volatile int single_step_breakpoint = 0;
 int debugger_n_steps_left_before_interaction = 0;
+uint64_t trace_low, trace_high;
+uint32_t required_sr1;
 
 int old_instruction_trace = 0;
 int old_quiet_mode = 0;
@@ -91,7 +92,7 @@ int trace_mapping = 0;
  *  Private (global) debugger variables:
  */
 
-static volatile int ctrl_c;
+volatile int ctrl_c;
 
 /*  Currently focused CPU, machine, and emulation:  */
 int debugger_cur_cpu;
@@ -138,19 +139,23 @@ void breakpoint_delete(struct machine *m, uint64_t addr) {
   }
 }
 
-void breakpoint_add(struct machine *m, uint64_t addr, const char *name, int namelen) {
+void breakpoint_add(struct machine *m, uint64_t addr, uint32_t instr, const char *name, int namelen) {
   CHECK_ALLOCATION
     (m->breakpoints.string = (char **) realloc
      (m->breakpoints.string, sizeof(char *) *(m->breakpoints.n + 1)));
   CHECK_ALLOCATION
     (m->breakpoints.addr = (uint64_t *) realloc
      (m->breakpoints.addr, sizeof(uint64_t) *(m->breakpoints.n + 1)));
+  CHECK_ALLOCATION
+    (m->breakpoints.expect_insn = (uint32_t *) realloc
+     (m->breakpoints.expect_insn, sizeof(uint32_t) * (m->breakpoints.n + 1)));
 
   int i = m->breakpoints.n;
 
   CHECK_ALLOCATION(m->breakpoints.string[i] = (char *)malloc(namelen+1));
   strlcpy(m->breakpoints.string[i], name, namelen);
   m->breakpoints.addr[i] = addr;
+  m->breakpoints.expect_insn[i] = instr;
 
   m->breakpoints.n ++;
 
@@ -247,7 +252,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
 
   while (addr < max_addr) {
     r = c->memory_rw(c, mem, addr, cur_insn, sizeof(cur_insn),
-                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                     MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
     if (r == MEMORY_ACCESS_FAILED) {
       return 0;
     }
@@ -257,7 +262,7 @@ int debugger_get_name(struct cpu *c, uint64_t addr, uint64_t max_addr, struct ib
       char namebuf[68];
 
       r = c->memory_rw(c, mem, addr + 0x18, (unsigned char *)namebuf, sizeof(namebuf),
-                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                       MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 
       if (r == MEMORY_ACCESS_FAILED) {
         return 0;
@@ -779,14 +784,6 @@ void debugger(void)
       fprintf(stderr, "resume from gdb (step)\n");
     }
     return;
-  }
-
-  auto bkpt_commands = break_commands.find(debugger_machine->cpus[0]->pc);
-  if (bkpt_commands != break_commands.end()) {
-    for (auto prefix_cmd = bkpt_commands->second.rbegin(); prefix_cmd != bkpt_commands->second.rend(); prefix_cmd++) {
-      fprintf(stderr, "enqueue command %s\n", prefix_cmd->c_str());
-      script_queue.push_front(*prefix_cmd);
-    }
   }
 
 	while (!exit_debugger) {

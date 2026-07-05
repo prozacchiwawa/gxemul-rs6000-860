@@ -65,6 +65,7 @@ struct breakpoints {
 	/*  Arrays, with one element for each entry:  */
 	char		**string;
 	uint64_t	*addr;
+  uint32_t  *expect_insn;
 };
 
 struct statistics {

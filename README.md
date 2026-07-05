@@ -34,3 +34,4 @@ for the original firmware (-d R:...) and a copy of the nvram
 to boot into "Personal Power Firmware".
 
 ![RS/6000 model 860 config screen](https://github.com/prozacchiwawa/gxemul-rs6000-860/blob/main/doc/2023-02-05-rs6000-860-firmware.png?raw=true)
+![RS/6000 model 860 config screen](https://github.com/prozacchiwawa/gxemul-rs6000-860/blob/main/doc/2026-06-22-aix-help-viewer.png?raw=true)

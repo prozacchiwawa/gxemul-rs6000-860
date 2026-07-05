@@ -493,13 +493,12 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, value);
     return 1;
 
-  case 0x10:
+  case 0x10: {
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    if (value) {
-      uint32_t mem_stride = 0xfc000000;
-      PCI_SET_DATA(reg, value & mem_stride);
-    }
+    uint32_t mem_stride = 0xfc000000;
+    PCI_SET_DATA(reg, value & mem_stride);
     return 1;
+  }
 
   case 0x30:
     fprintf(stderr, "vga: set option rom address to %08x\n", value);
@@ -1642,11 +1641,11 @@ PCIINIT(eagle)
   // Cache line size
   PCI_SET_DATA(0x0c, 8);
   // Memory Starting address 1 (MB)
-  PCI_SET_DATA(0x80, 0x1000);
+  PCI_SET_DATA(0x80, 0x2000);
   // Memory Starting address 2 (MB)
   PCI_SET_DATA(0x84, 0);
   // Memory ending address 1 0x90 (MB)
-  PCI_SET_DATA(0x90, 0x2010);
+  PCI_SET_DATA(0x90, 0x4000);
   // Memory ending address 2 0x94 (MB)
   PCI_SET_DATA(0x94, 0);
   // Memory bank enable.

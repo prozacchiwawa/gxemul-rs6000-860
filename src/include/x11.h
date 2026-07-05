@@ -40,6 +40,34 @@ struct emul;
 #endif
 
 
+struct x11_cursor {
+  bool on;
+  uint32_t palette[256];
+  int invert_color;
+  int width;
+  int render_x, render_y;
+  int center_x, center_y;
+  std::vector<uint8_t> data;
+  SDL_Texture *render;
+
+  x11_cursor() :
+    on(), invert_color(), width(), render_x(), render_y(), center_x(), center_y(), render()
+  {
+    memset(palette, 0, sizeof(palette));
+  }
+
+  ~x11_cursor();
+
+  void block(int color, int x, int y) {
+    width = x;
+    data.clear();
+    for (int i = 0; i < x * y; i++) {
+      data.push_back(color);
+    }
+  }
+};
+
+
 /*  x11.c:  */
 #define N_GRAYCOLORS            16
 #define	CURSOR_COLOR_TRANSPARENT	-1
@@ -68,28 +96,18 @@ struct fb_window {
   SDL_Texture *fb_data;
 	// unsigned char	*ximage_data;
 
-	/*  -1 means transparent, 0 and up are grayscales  */
-	int		cursor_pixels[CURSOR_MAXY][CURSOR_MAXX];
-	int		cursor_x;
-	int		cursor_y;
-	int		cursor_xsize;
-	int		cursor_ysize;
-	int		cursor_on;
-	int		OLD_cursor_x;
-	int		OLD_cursor_y;
-	int		OLD_cursor_xsize;
-	int		OLD_cursor_ysize;
-	int		OLD_cursor_on;
+  std::vector<struct x11_cursor> cursors;
 
 	/*  Host's X11 cursor:  */
   SDL_Texture *pixel;
-  SDL_Texture *cursor_reserve;
-  SDL_Texture *host_cursor_pixmap;
   uint32_t window_id;
   SDL_PixelFormat *argb32;
 #endif
 };
-void x11_redraw_cursor(struct machine *, int);
+void x11_set_num_cursors(struct fb_window *win, size_t n);
+void x11_set_cursor_data(struct fb_window *win, size_t n, const struct x11_cursor &cursor);
+void x11_update_cursor(struct fb_window *win, size_t n, bool on, int x, int y);
+
 void x11_redraw(struct machine *, int);
 #ifdef WITH_X11
 void x11_putimage_fb(struct machine *, int);

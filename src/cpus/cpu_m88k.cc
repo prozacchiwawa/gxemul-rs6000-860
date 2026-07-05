@@ -58,6 +58,7 @@
 #define DYNTRANS_DELAYSLOT
 #include "tmp_m88k_head.cc"
 
+#include "memory_rw.h"
 
 void m88k_pc_to_pointers(struct cpu *);
 void m88k_cpu_functioncall_trace(struct cpu *cpu, int n_args);
@@ -117,7 +118,7 @@ int m88k_cpu_new(struct cpu *cpu, struct memory *mem,
 		return 0;
 
 	cpu->run_instr = m88k_run_instr;
-	cpu->memory_rw = m88k_memory_rw;
+	cpu->memory_rw = memory_rw<m88k_tc_physpage>;
 	cpu->update_translation_table = []
     (struct cpu *cpu,
      uint64_t vaddr_page,

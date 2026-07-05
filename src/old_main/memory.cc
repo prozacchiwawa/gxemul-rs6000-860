@@ -175,31 +175,30 @@ int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
                             int min_string_length)
 {
 	unsigned char c;
+  auto stride = 1;
 
-  for (int stride = 1; stride <= 2; stride++) {
-    int mz = 0;
-    int cur_length = 0;
-    bool good_char = true;
-    for (cur_length = 0; good_char;) {
-      c = '\0';
-      cpu->memory_rw(cpu, mem, addr+cur_length,
-                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
-      if (c == 'M' && mz == 0) {
-        mz++;
-      }
-      if (c == 'Z' && mz == 1) {
-        return 0;
-      }
-      if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
-        cur_length += stride;
-      } else {
-        good_char = false;
-      }
+  int mz = 0;
+  int cur_length = 0;
+  bool good_char = true;
+  for (cur_length = 0; good_char;) {
+    c = '\0';
+    cpu->memory_rw(cpu, mem, addr+cur_length,
+                   &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+    if (c == 'M' && mz == 0) {
+      mz++;
     }
-    if (cur_length / stride >= min_string_length) {
-      return 1;
+    if (c == 'Z' && mz == 1) {
+      return 0;
     }
-	}
+    if (c=='\n' || c=='\t' || c=='\r' || (c>=' ' && c<127)) {
+      cur_length += stride;
+    } else {
+      good_char = false;
+    }
+  }
+  if (cur_length / stride >= min_string_length) {
+    return 1;
+  }
 
   return 0;
 }
@@ -686,7 +685,7 @@ void dump_mem_string(struct cpu *cpu, uint64_t addr)
 		unsigned char ch = '\0';
 
 		cpu->memory_rw(cpu, cpu->mem, addr + i, &ch, sizeof(ch),
-		    MEM_READ, CACHE_DATA | NO_EXCEPTIONS);
+		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
 		if (ch == '\0')
 			return;
 		if (ch >= ' ' && ch < 126)
@@ -707,7 +706,7 @@ void store_byte(struct cpu *cpu, uint64_t addr, uint8_t data)
 	if ((addr >> 32) == 0)
 		addr = (int64_t)(int32_t)addr;
 	cpu->memory_rw(cpu, cpu->mem,
-	    addr, &data, sizeof(data), MEM_WRITE, CACHE_DATA);
+	    addr, &data, sizeof(data), MEM_WRITE, CACHE_NONE | NO_EXCEPTIONS);
 }
 
 
@@ -1025,3 +1024,40 @@ void store_16bit_word_in_host(struct cpu *cpu,
 	}
 }
 
+struct memory_access_result memory_device_lookup(struct memory *mem, uint64_t paddr) {
+  struct memory_access_result access_result = { 0 };
+	/*
+	 *  Memory mapped device?
+	 *
+	 *  TODO: if paddr < base, but len enough, then the device should
+	 *  still be written to!
+	 */
+	if (paddr >= mem->mmap_dev_minaddr && paddr < mem->mmap_dev_maxaddr) {
+		int i, start, end, res;
+
+		start = 0; end = mem->n_mmapped_devices - 1;
+		i = mem->last_accessed_device;
+
+		/*  Scan through all devices:  */
+		do {
+			if (paddr >= mem->devices[i].baseaddr &&
+			    paddr < mem->devices[i].endaddr) {
+				/*  Found a device, let's access it:  */
+				mem->last_accessed_device = i;
+
+        access_result.res = 1;
+        access_result.device_offset = paddr - mem->devices[i].baseaddr;
+        access_result.device = &mem->devices[i];
+        break;
+			}
+
+			if (paddr < mem->devices[i].baseaddr)
+				end = i - 1;
+			if (paddr >= mem->devices[i].endaddr)
+				start = i + 1;
+			i = (start + end) >> 1;
+		} while (start <= end);
+	}
+
+  return access_result;
+}

@@ -1007,7 +1007,7 @@ X(jr_ra_trace)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->pc = rs;
-		cpu_functioncall_trace_return(cpu, nullptr);
+		cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 		/*  Note: Must be non-delayed when jumping to the new pc:  */
 		cpu->delay_slot = NOT_DELAYED;
 		quick_pc_to_pointers(cpu);
@@ -2003,7 +2003,7 @@ X(promemul)
 		cpu->delay_slot = NOT_DELAYED;
 
 		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu, nullptr);
+			cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 	} else {
 		/*  The PROM call blocks.  */
 		cpu->n_translated_instrs += 10;

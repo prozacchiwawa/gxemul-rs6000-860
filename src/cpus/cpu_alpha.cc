@@ -49,6 +49,7 @@
 #define	DYNTRANS_8K
 #define	DYNTRANS_PAGESIZE	8192
 #include "tmp_alpha_head.cc"
+#include "memory_rw.h"
 
 
 /*  Alpha symbolic register names:  */
@@ -83,7 +84,7 @@ int alpha_cpu_new(struct cpu *cpu, struct memory *mem,
 	cpu->is_32bit = 0;
 	cpu->byte_order = EMUL_LITTLE_ENDIAN;
 
-	cpu->memory_rw = alpha_memory_rw;
+	cpu->memory_rw = memory_rw<alpha_tc_physpage>;
 	cpu->run_instr = alpha_run_instr;
 	cpu->translate_v2p = alpha_translate_v2p;
 	cpu->update_translation_table = []

@@ -374,7 +374,7 @@ X(bx_trace)
 		return;
 	}
 
-	cpu_functioncall_trace_return(cpu, nullptr);
+	cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 
 	/*  Find the new physical page and update the translation pointers:  */
 	quick_pc_to_pointers_arm(cpu);
@@ -692,7 +692,7 @@ X(ret_trace)
 	/*  Update the PC register:  */
 	cpu->pc = cpu->cd.arm.r[ARM_LR];
 
-	cpu_functioncall_trace_return(cpu, nullptr);
+	cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 
 	/*
 	 *  Is this a return to code within the same page? Then there is no
@@ -873,7 +873,7 @@ X(openfirmware)
 	of_emul(cpu);
 	cpu->pc = cpu->cd.arm.r[ARM_LR];
 	if (cpu->machine->show_trace_tree)
-		cpu_functioncall_trace_return(cpu, nullptr);
+		cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 	quick_pc_to_pointers_arm(cpu);
 }
 
@@ -1205,7 +1205,7 @@ X(bdt_load)
 	if (iw & 0x8000) {
 		cpu->pc = cpu->cd.arm.r[ARM_PC] & 0xfffffffc;
 		if (cpu->machine->show_trace_tree)
-			cpu_functioncall_trace_return(cpu, nullptr);
+			cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 		/*  TODO: There is no need to update the
 		    pointers if this is a return to the
 		    same page!  */

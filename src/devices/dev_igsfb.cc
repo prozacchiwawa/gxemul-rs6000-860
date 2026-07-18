@@ -46,6 +46,7 @@
 #include "memory.h"
 #include "misc.h"
 #include "vga.h"
+#include "x11.h"
 
 #include "thirdparty/igsfbreg.h"
 
@@ -100,7 +101,7 @@ static void recalc_sprite_position(struct dev_igsfb_data *d)
 	int y = d->ext_reg[IGS_EXT_SPRITE_VSTART_LO] +
 		d->ext_reg[IGS_EXT_SPRITE_VSTART_HI] * 256;
 
-	dev_fb_setcursor(d->vfb_data, x, y, 1, 12, 22);
+  x11_update_cursor(d->vfb_data->fb_window, 0, true, x, y);
 }
 
 

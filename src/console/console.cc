@@ -575,7 +575,7 @@ int make_available(int handle, const unsigned char *ch, int len, int *i) {
 
     if (atc.flags & ASCII_CASE) {
       int shift_keys[] = { 0, KeyNames::LShift, KeyNames::Ctrl, -1 };
-      unsigned char upcase[2] = { atc.sequence[0], 0 };
+      unsigned char upcase[2] = { static_cast<unsigned char>(atc.sequence[0]), 0 };
       for (int x = 0; shift_keys[x] != -1; x++) {
         if (!memcmp(here, upcase, 1)) {
           if (shift_keys[x]) {

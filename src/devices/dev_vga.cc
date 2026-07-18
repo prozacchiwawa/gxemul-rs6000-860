@@ -43,6 +43,7 @@
 #include "misc.h"
 
 #include "vga.h"
+#include "x11.h"
 
 /*  These are generated from binary font files:  */
 #include "fonts/font8x8.cc"
@@ -493,11 +494,7 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >= d->font_height)
 		onoff = 0;
 
-	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+  x11_update_cursor(d->fb->fb_window, 0, onoff, d->cursor_x * d->font_width, d->cursor_y * d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]);
 }
 
 
@@ -516,7 +513,7 @@ DEVICE_TICK(vga)
 		int base = ((d->crtc_reg[VGA_CRTC_START_ADDR_HIGH] << 8)
 		    + d->crtc_reg[VGA_CRTC_START_ADDR_LOW]) * 2;
 		int new_u_y1, new_u_y2;
-		debug("[ dev_vga_tick: dyntrans access, %"PRIx64" .. %"
+		debug("[ dev_vga_tick: dyntrans access, %" PRIx64" .. %"
 		    PRIx64" ]\n", (uint64_t) low, (uint64_t) high);
 		low -= base;
 		high -= base;
@@ -1264,6 +1261,7 @@ void dev_vga_init(struct machine *machine, struct memory *mem,
 
 	register_reset(d);
 
+  x11_set_num_cursors(d->fb->fb_window, 1);
 	vga_update_cursor(machine, d);
 }
 

@@ -57,6 +57,9 @@ struct host_load_store_t {
   uint8_t *host_store;
 };
 
+template <typename TcPhyspage> constexpr bool is_ppc() { return false; }
+template <> constexpr bool is_ppc<struct ppc_tc_physpage>() { return true; }
+
 template <typename TcPhyspage> constexpr bool is_arm() { return false; }
 template <> constexpr bool is_arm<struct arm_tc_physpage>() { return true; }
 
@@ -65,6 +68,9 @@ template <> constexpr bool is_m88k<struct m88k_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr bool is_mips() { return false; }
 template <> constexpr bool is_mips<struct mips_tc_physpage>() { return true; }
+
+template <typename TcPhyspage> constexpr bool is_alpha() { return false; }
+template <> constexpr bool is_mips<struct alpha_tc_physpage>() { return true; }
 
 template <typename TcPhyspage> constexpr int pagesize() { return 1 << 12; }
 template <> constexpr int pagesize<struct alpha_tc_physpage>() { return 1 << 13; }
@@ -170,6 +176,11 @@ protected:
     if (flags & JUST_MARK_AS_NON_WRITABLE) {
       /*  printf("JUST MARKING NON-W: vaddr 0x%08x\n",
           (int)vaddr_page);  */
+      auto found = vaddr_to_tlbindex->find(index);
+      if (found != vaddr_to_tlbindex->end()) {
+        auto tlbi = found->second - 1;
+        vph_tlb_entry[tlbi].writeflag = 0;
+      }
       clear_writable(cpu, vaddr_page);
     } else {
       index %= N_VPH32_ENTRIES;
@@ -241,7 +252,10 @@ public:
       vph_tlb_entry[r].valid = 1;
       vph_tlb_entry[r].paddr_page = paddr_page;
       vph_tlb_entry[r].vaddr_page = vaddr_page;
-      vph_tlb_entry[r].writeflag = writeflag & MEM_WRITE;
+      if (!(writeflag & MEM_WRITE)) {
+        vph_tlb_entry[r].writeflag = 0;
+        this->clear_writable(cpu, vaddr_page);
+      }
 
       /*  Add the new translation to the table:  */
       update_cache_page
@@ -258,11 +272,27 @@ public:
        *	Writeflag = MEM_DOWNGRADE: Downgrade to readonly.
        */
       auto r = found;
+      if (vph_tlb_entry[r].paddr_page != paddr_page) {
+        // The translation wasn't the right one.
+        fprintf(stderr, "[ tlb: replace mapping %08x -> %08x to %08x %s ]\n", (unsigned int)vaddr_page, (unsigned int)vph_tlb_entry[r].paddr_page, (unsigned int)paddr_page, (writeflag == 1) ? "write" : "read");
+        this->invalidate_tc(cpu, vaddr_page, INVALIDATE_VADDR);
+        this->update_make_valid_translation
+          (cpu,
+           vaddr_page,
+           paddr_page,
+           host_page,
+           writeflag,
+           instr,
+           is_userpage);
+        return;
+      }
+
       if (writeflag & MEM_WRITE) {
         vph_tlb_entry[r].writeflag = 1;
       }
       if (writeflag & MEM_DOWNGRADE) {
         vph_tlb_entry[r].writeflag = 0;
+        this->clear_writable(cpu, vph_tlb_entry[r].vaddr_page);
       }
 
       pages[index].ppp = nullptr;
@@ -320,6 +350,7 @@ public:
         this->invalidate_tlb_entry(cpu, vph_tlb_entry[r].vaddr_page, flags);
         if (flags & JUST_MARK_AS_NON_WRITABLE) {
           vph_tlb_entry[r].writeflag = 0;
+          this->clear_writable(cpu, vph_tlb_entry[r].vaddr_page);
         } else {
           decomission_vph(cpu, r);
         }
@@ -408,6 +439,8 @@ public:
   }
 
   void set_physpage_template(typename T::physpage_t *templ) {
+    templ->physaddr = ~0ull;
+    templ->virtaddr = ~0ull;
     physpage_template = templ;
   }
 
@@ -425,19 +458,15 @@ public:
 
   void pc_to_pointers_generic(typename T::cpu_t *cpu) {
     uint32_t cached_pc = cpu->pc;
-    int ok;
     typename T::physpage_t *ppp;
 
     auto host_pages = this->get_cached_tlb_pages(cpu, cached_pc, true);
 
     /*  Virtual to physical address translation:  */
-    ok = 0;
-    if (host_pages.host_load != nullptr) {
-      ok = 1;
-    }
+    int ok = host_pages.host_load != nullptr;
 
     if (!ok) {
-      uint64_t paddr;
+      uint64_t paddr = 0;
       if (cpu->translate_v2p != NULL) {
         uint64_t vaddr = is_mips<typename T::physpage_t>() ? (int32_t)cached_pc : cached_pc;
         ok = cpu->translate_v2p(cpu, vaddr, &paddr, FLAG_INSTR);

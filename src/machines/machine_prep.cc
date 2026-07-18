@@ -81,18 +81,18 @@ MACHINE_SETUP(prep)
 		    machine->path, machine->bootstrap_cpu);
 		device_add(machine, tmpstr);
 
-        //snprintf(tmpstr, sizeof(tmpstr), "rtc irq=%s.cpu[%i]",
-        //machine->path, machine->bootstrap_cpu);
-        //device_add(machine, tmpstr);
+    //snprintf(tmpstr, sizeof(tmpstr), "rtc irq=%s.cpu[%i]",
+    //machine->path, machine->bootstrap_cpu);
+    //device_add(machine, tmpstr);
 
-        device_add(machine, "ibm_carerra addr=0x808680004100");
+    device_add(machine, "ibm_carerra addr=0x808680004100");
 
 		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
 		    machine->path, machine->bootstrap_cpu);
 
 		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
-		bus_pci_add(machine, pci_data, machine->memory, 0, 13, 0, "lsi53c895a");
+		bus_pci_add(machine, pci_data, machine->memory, 0, 12, 0, "lsi53c895a");
 
 		if (machine->x11_md.in_use) {
       bus_pci_add
@@ -103,8 +103,8 @@ MACHINE_SETUP(prep)
          "wd90c00");
 		}
 
-    bus_pci_add(machine, pci_data, machine->memory,
-                0, 15, 0, "ibm_isa");
+        bus_pci_add(machine, pci_data, machine->memory,
+            0, 11, 0, "ibm_isa");
 
     // Locate rom image and load it.
     rom_image = find_rom_disk(machine);

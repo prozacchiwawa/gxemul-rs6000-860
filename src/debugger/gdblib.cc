@@ -87,6 +87,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -443,7 +444,7 @@ void GotPacket(struct cpu *cpu)
         {
             int readsize = memsize > sizeof(membuf) ? sizeof(membuf) : memsize;
 
-            if (cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS) == MEMORY_ACCESS_FAILED) {
+            if (cpu->memory_rw(cpu, cpu->mem, memaddr, membuf, readsize, MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS) == MEMORY_ACCESS_FAILED) {
                 break;
             }
 
@@ -517,7 +518,7 @@ void GotPacket(struct cpu *cpu)
         DataInAddr++;
         memaddr = PacketReadHexNumber(8);
         sprintf(namebuf, "%08x", memaddr);
-        breakpoint_add(cpu->machine, memaddr, namebuf, strlen(namebuf));
+        breakpoint_add(cpu->machine, memaddr, 0, namebuf, strlen(namebuf));
         PacketOk(cpu);
         breakpoint_show(cpu->machine);
         break;

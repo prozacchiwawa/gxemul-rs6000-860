@@ -1477,12 +1477,13 @@ struct vga_data {
   int   s3_pix_x, s3_pix_y, s3_draw_width;
   int   s3_fg_color, s3_bg_color;
   int   s3_fg_color_mix, s3_bg_color_mix;
-  int   s3_v_dir, s3_h_dir;
-  bool  s3_y_major, s3_last_pof, s3_no_draw;
+  int   s3_v_dir, s3_h_dir, s3_pixel_bit;
+  bool  s3_y_major, s3_last_pof, s3_no_draw, s3_bit_order;
   int   s3_rem_height;
   int   s3_cur_x, s3_cur_y;
   int   s3_destx, s3_desty;
   int   s3_current_command;
+  uint32_t s3_pixel_xfer;
   uint32_t s3_color_compare;
   uint32_t s3_cursor_address;
 
@@ -2367,7 +2368,7 @@ void s3_hack_start(struct machine *machine, struct vga_data *d) {
 }
 
 
-uint32_t do_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
+uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
 {
   switch (mix_mode)
   {
@@ -2477,7 +2478,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     }
 
     // Step 5: Apply MIX
-    uint32_t pixel = do_color_mix(mix_mode, src_dat, dst_dat);
+    uint32_t pixel = s3_color_mix(mix_mode, src_dat, dst_dat);
 
     // Step 6: Write Mask merge
     uint32_t wrt_mask = d->plane_write_mask;
@@ -2506,10 +2507,9 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   d->modified = 1;
 }
 
-void s3_do_pixel(cpu* cpu, struct vga_data* d, bool across_the_plane)
+void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
 {
   int pix;
-  int use_fgmix;
   int nowrite = 0;
   int check_x, check_y;
 
@@ -2526,7 +2526,6 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool across_the_plane)
     (d->s3_pix_x > d->bee8_regs[4]));
 
   // Step 2: Select source color and mix mode
-  use_fgmix = color_mix_function(d, 0, d->gfx_mem[source]);
   uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
   uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
   uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
@@ -2562,7 +2561,7 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool across_the_plane)
   }
 
   // Step 5: Apply MIX
-  uint32_t pixel = do_color_mix(mix_mode, src_dat, dst_dat);
+  uint32_t pixel = s3_color_mix(mix_mode, src_dat, dst_dat);
 
   // Step 6: Write Mask merge
   uint32_t wrt_mask = d->plane_write_mask;
@@ -2572,6 +2571,92 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool across_the_plane)
   if (!nowrite) d->gfx_mem[target] = (uint8_t)pixel;
 
   d->modified = 1;
+}
+
+static inline void s3_write_fg(cpu* cpu, struct vga_data* d)
+{
+  s3_do_pixel(cpu, d, true);
+}
+
+static inline void s3_write_bg(cpu* cpu, struct vga_data* d)
+{
+  s3_do_pixel(cpu, d, false);
+}
+  
+void s3_pixel_write(cpu* cpu, struct vga_data* d)
+{
+  int data_size = 8;
+  uint32_t xfer;
+
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+  uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
+
+  switch (d->bee8_regs[5] & 0x00c0)
+  {
+    case 0x0000:  // Foreground Mix only
+      s3_write_fg(cpu, d);
+      break;
+    case 0x0040:  // fixed pattern (?)
+      // TODO
+      break;
+    case 0x0080:  // use pixel transfer register
+      if (d->s3_cmd_bus_size == 0)  // 8-bit
+        data_size = 8;
+      if (d->s3_cmd_bus_size == 1)  // 16-bit
+        data_size = 16;
+      if (d->s3_cmd_bus_size >= 2)  // 32-bit
+        data_size = 32;
+      xfer = d->s3_pixel_xfer;
+      if (d->s3_cmd_swap && (data_size != 8)) {
+        if (data_size == 16) {
+          xfer = ((xfer & 0x00ff) << 8) | ((xfer & 0xff00) >> 8);
+        }
+      else if (data_size == 32) {
+        xfer = ((xfer & 0x000000ff) << 24) |
+                ((xfer & 0x0000ff00) << 8) |
+	            ((xfer & 0x00ff0000) >> 8) |
+                ((xfer & 0xff000000) >> 24);
+        }
+      }
+      if (d->s3_cmd_mx)
+      {
+        // Mono expand: bit order depends on CMD bit 3 (0x0008).
+        //  - 0x0008 clear: MSB-first
+        //  - 0x0008 set:   LSB-first
+        uint32_t bitpos;
+        if (d->s3_bit_order) {
+          bitpos = d->s3_pixel_bit;                     // LSB-first
+        }
+        else {
+          bitpos = (data_size - 1u) - d->s3_pixel_bit;  // MSB-first
+        }
+        const uint32_t mask = 1u << bitpos;
+        if (xfer & mask)
+          s3_write_fg(cpu, d);
+        else
+          s3_write_bg(cpu, d);
+      }
+      else
+      {
+        s3_write_fg(cpu, d);
+      }
+      d->s3_pixel_bit++;
+      if (d->s3_pixel_bit >= data_size)
+        d->s3_pixel_bit = 0;
+      break;
+    case 0x00c0:  // use source plane
+    {
+      uint32_t srcpix = d->gfx_mem[source];
+      // In Mix Select==11 mode the source plane (VRAM) selects between FG/BG mix.
+      // The Read Mask register chooses which bit(s) in the source byte are examined.
+      uint32_t readmask = d->plane_read_mask; // foreground only when all bits are set
+	  const bool use_fg = ((srcpix & readmask) == readmask); // always true if readmask = 0
+      if (use_fg) s3_write_fg(cpu, d);
+      else        s3_write_bg(cpu, d);
+      break;
+    }
+  }
 }
 
 void bitblt(cpu *cpu, struct vga_data *d) {
@@ -2597,7 +2682,7 @@ void bitblt(cpu *cpu, struct vga_data *d) {
     d->s3_pix_x = d->s3_destx;
     for (int x = 0; x < width; x++)
     {
-      s3_do_pixel(cpu, d, false);
+      s3_pixel_write(cpu, d);
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
     }
@@ -2634,7 +2719,7 @@ void patblt(cpu* cpu, struct vga_data* d) {
     {
       d->s3_src_x = start_x + pattern_x;
       d->s3_src_y = start_y + pattern_y;
-      s3_do_pixel(cpu, d, false);
+      s3_pixel_write(cpu, d);
       d->s3_pix_x += d->s3_h_dir;
       pattern_x = (pattern_x + d->s3_h_dir) & 7;
     }
@@ -2669,7 +2754,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     {
       for (int x = 0; x < width; x++)
       {
-        s3_do_pixel(cpu, d, false);
+        s3_pixel_write(cpu, d);
         d->s3_src_x += d->s3_h_dir;
         d->s3_pix_x += d->s3_h_dir;
       }
@@ -2714,12 +2799,14 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_h_dir = draws_right ? 1 : -1;
     d->s3_y_major = written & (1 << 6);
     d->s3_last_pof = written & (1 << 2);
+	d->s3_bit_order = written & (1 << 3);
     d->s3_cmd_bus_size = (written >> 9) & 3;
     d->s3_cmd_swap = (written >> 12) & 1;
     d->s3_no_draw = !(written & (1 << 4));
     d->s3_current_command = written >> 13;
 
     d->fifo_in_progress = true;
+    d->s3_pixel_bit = 0;
     if (d->s3_no_draw) {
       fprintf(stderr, "[ s3: just move not implemented ]\n");
       d->s3_cur_x = d->s3_destx;
@@ -2970,6 +3057,8 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
   REG_WRITE( 0xe2e8);
 
   if (writeflag == MEM_WRITE) {
+    d->s3_pixel_xfer = get_le_32(d->window_mapped, memory_readmax64(cpu, data, len));
+    G(fprintf(stderr, "[ s3: set pixel transfer %08x ]\n", (int)d->s3_pixel_xfer));
     idata = memory_readmax64(cpu, data, len);
     int swizzle = d->s3_cmd_swap ? len - 1 : 0;
     for (int i = 0; i < len; i++) {

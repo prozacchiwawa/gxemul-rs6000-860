@@ -3059,17 +3059,15 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
   if (writeflag == MEM_WRITE) {
     d->s3_pixel_xfer = get_le_32(d->window_mapped, memory_readmax64(cpu, data, len));
     G(fprintf(stderr, "[ s3: set pixel transfer %08x ]\n", (int)d->s3_pixel_xfer));
-    int bs = (d->s3_cmd_bus_size >= 2) ? 2 : d->s3_cmd_bus_size;
-    const uint32_t lanes = 1u << bs; // 1, 2, 4
     idata = memory_readmax64(cpu, data, len);
-    int swizzle = d->s3_cmd_swap ? lanes - 1 : 0;
-    for (int i = 0; i < lanes; i++) {
+    int swizzle = d->s3_cmd_swap ? len - 1 : 0;
+    for (int i = 0; i < len; i++) {
       to_write[i ^ swizzle] = idata >> (i * 8);
     }
 
     auto start_x = d->s3_pix_x;
     auto start_y = d->s3_pix_y;
-    int pxcount = 8 * lanes;
+    int pxcount = 8 * len;
     uint8_t pixels[32];
 
     if (d->s3_cmd_mx) {
@@ -3086,9 +3084,9 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
         start_x, start_y, start_x + pxcount - 1, start_y);
     } else {
       G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
-      pixel_transfer(cpu, d, false, to_write, lanes);
+      pixel_transfer(cpu, d, false, to_write, len);
       vga_update_graphics(cpu->machine, d, 
-        start_x, start_y, start_x + lanes - 1, start_y);
+        start_x, start_y, start_x + len - 1, start_y);
     }
   }
 

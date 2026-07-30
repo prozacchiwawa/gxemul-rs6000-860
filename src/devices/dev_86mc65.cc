@@ -2115,10 +2115,10 @@ DEVICE_TICK(s3)
 
 		d->palette_modified = 0;
 		d->modified = 0;
-		d->update_x1 = 999999;
-		d->update_x2 = -1;
-		d->update_y1 = 999999;
-		d->update_y2 = -1;
+		d->update_x1 = 0;
+		d->update_y1 = 0;
+		d->update_x2 = d->fb_max_x;
+		d->update_y2 = d->fb_max_y;
 	}
 
 	if (d->n_is1_reads > N_IS1_READ_THRESHOLD)
@@ -2504,8 +2504,6 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     d->s3_pix_y += d->s3_v_dir;
     d->s3_rect_height -= 1;
   }
-
-  d->modified = 1;
 }
 
 void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
@@ -2570,8 +2568,6 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
 
   // Step 7: Write to VRAM
   if (!nowrite) d->gfx_mem[target] = (uint8_t)pixel;
-
-  d->modified = 1;
 }
 
 static inline void s3_write_fg(cpu* cpu, struct vga_data* d)
@@ -2765,11 +2761,14 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
       d->s3_pix_x = d->s3_curr_x;
     }
 
-    vga_update_graphics(cpu->machine, d, 
-      start_x, start_y, start_x + width, start_y + height);
+    d->s3_curr_x = d->s3_src_x;
+    d->s3_curr_y = d->s3_src_y;
 
-    d->s3_curr_x = start_x;
-    d->s3_curr_y = start_y;
+    vga_update_graphics(cpu->machine, d,
+      d->s3_curr_x > start_x ? start_x : d->s3_curr_x,
+      d->s3_curr_y > start_y ? start_y : d->s3_curr_y,
+      d->s3_curr_x > start_x ? d->s3_curr_x : start_x,
+      d->s3_curr_y > start_y ? d->s3_curr_y : start_y);
   }
 }
 
@@ -2969,6 +2968,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     }
   }
 
+  d->modified = 1;
   return 1;
 }
 
@@ -3219,6 +3219,7 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
     }
   }
 
+  d->modified = 1;
   return 1;
 }
 

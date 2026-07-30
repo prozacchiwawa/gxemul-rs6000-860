@@ -2506,12 +2506,20 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   }
 }
 
+static inline uint32_t pixtrans_lane_u32(uint32_t pixel_xfer, uint8_t bus_size, uint32_t lane)
+{
+  // bus_size: 0=8-bit, 1=16-bit, >=2=32-bit
+  int bs = (bus_size >= 2) ? 2 : bus_size;
+  const uint32_t lanes = 1u << bs;           // 1, 2, 4
+  lane &= (lanes - 1);
+
+  return (pixel_xfer >> (lane * 8));
+}
+
 void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
 {
-  int pix;
+  uint32_t lane;
   int nowrite = 0;
-  int check_x, check_y;
-
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
@@ -2533,17 +2541,18 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
   switch (sel)
   {
     case 0: // Background Color register
-        src_dat = d->s3_bg_color;
-        break;
+      src_dat = d->s3_bg_color;
+      break;
     case 1: // Foreground Color register
-        src_dat = d->s3_fg_color;
-        break;
+      src_dat = d->s3_fg_color;
+      break;
     case 2: // CPU data (pixel transfer register)
-        src_dat = 0;
-        break;
+      lane = (d->s3_pix_x >= d->s3_curr_x) ? (d->s3_pix_x - d->s3_curr_x) : (d->s3_curr_x - d->s3_pix_x);
+      src_dat = pixtrans_lane_u32(d->s3_pixel_xfer, d->s3_cmd_bus_size, lane);
+      break;
     case 3: // Display memory (VRAM at source coords)
-        src_dat = d->gfx_mem[source];
-        break;
+      src_dat = d->gfx_mem[source];
+      break;
   }
 
   // Step 3: Read destination
@@ -2567,7 +2576,7 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
   pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
 
   // Step 7: Write to VRAM
-  if (!nowrite) d->gfx_mem[target] = (uint8_t)pixel;
+  if (!nowrite) d->gfx_mem[target] = pixel;
 }
 
 static inline void s3_write_fg(cpu* cpu, struct vga_data* d)

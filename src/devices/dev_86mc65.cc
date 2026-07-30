@@ -1480,8 +1480,8 @@ struct vga_data {
   int   s3_v_dir, s3_h_dir, s3_pixel_bit;
   bool  s3_y_major, s3_last_pof, s3_no_draw, s3_bit_order;
   int   s3_rem_height;
-  int   s3_cur_x, s3_cur_y;
-  int   s3_destx, s3_desty;
+  int   s3_curr_x, s3_curr_y;
+  int   s3_dest_x, s3_dest_y;
   int   s3_current_command;
   uint32_t s3_pixel_xfer;
   uint32_t s3_color_compare;
@@ -2492,13 +2492,13 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     d->s3_pix_x += d->s3_h_dir;
   }
 
-  uint32_t lane = (d->s3_pix_x > d->s3_cur_x)? 
-                  (d->s3_pix_x - d->s3_cur_x): 
-                  (d->s3_cur_x - d->s3_pix_x);
+  uint32_t lane = (d->s3_pix_x > d->s3_curr_x)? 
+                  (d->s3_pix_x - d->s3_curr_x): 
+                  (d->s3_curr_x - d->s3_pix_x);
 
   if (lane >= d->s3_draw_width) {
-    d->s3_src_x = d->s3_cur_x;
-    d->s3_pix_x = d->s3_cur_x;
+    d->s3_src_x = d->s3_curr_x;
+    d->s3_pix_x = d->s3_curr_x;
     d->s3_src_y += d->s3_v_dir;
     d->s3_pix_y += d->s3_v_dir;
     d->s3_rem_height -= 1;
@@ -2668,18 +2668,18 @@ void bitblt(cpu *cpu, struct vga_data *d) {
   int width = d->s3_draw_width;
   int rows = d->s3_rem_height;
 
-  d->s3_src_y = d->s3_cur_y;
-  d->s3_pix_y = d->s3_desty;
+  d->s3_src_y = d->s3_curr_y;
+  d->s3_pix_y = d->s3_dest_y;
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  G(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_destx, d->s3_desty, clipping_right, clipping_top + rows, d->s3_cur_x, d->s3_cur_y));
+  G(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_dest_x, d->s3_dest_y, clipping_right, clipping_top + rows, d->s3_curr_x, d->s3_curr_y));
   
   for (int y = 0; y < rows; y++)
   {
-    d->s3_src_x = d->s3_cur_x;
-    d->s3_pix_x = d->s3_destx;
+    d->s3_src_x = d->s3_curr_x;
+    d->s3_pix_x = d->s3_dest_x;
     for (int x = 0; x < width; x++)
     {
       s3_pixel_write(cpu, d);
@@ -2704,14 +2704,14 @@ void patblt(cpu* cpu, struct vga_data* d) {
   auto height = d->s3_rem_height;
   auto width = d->s3_draw_width;
 
-  d->s3_pix_x = d->s3_destx;
-  d->s3_pix_y = d->s3_desty;
-  auto start_x = d->s3_cur_x;
-  auto start_y = d->s3_cur_y;
-  auto pattern_x = d->s3_destx & 7;
-  auto pattern_y = d->s3_desty & 7;
+  d->s3_pix_x = d->s3_dest_x;
+  d->s3_pix_y = d->s3_dest_y;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
+  auto pattern_x = d->s3_dest_x & 7;
+  auto pattern_y = d->s3_dest_y & 7;
 
-  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_destx, d->s3_desty);
+  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_dest_x, d->s3_dest_y);
   
   for (int y = 0; y < height; y++)
   {
@@ -2723,17 +2723,17 @@ void patblt(cpu* cpu, struct vga_data* d) {
       d->s3_pix_x += d->s3_h_dir;
       pattern_x = (pattern_x + d->s3_h_dir) & 7;
     }
-    d->s3_pix_x = d->s3_destx;
+    d->s3_pix_x = d->s3_dest_x;
     d->s3_pix_y += d->s3_v_dir;
-    pattern_x = d->s3_destx & 7;
+    pattern_x = d->s3_dest_x & 7;
     pattern_y = (pattern_y + d->s3_v_dir) & 7;
   }
 
   vga_update_graphics(cpu->machine, d,
     clipping_left, clipping_top, clipping_right, clipping_bottom);
 
-  d->s3_cur_x = start_x;
-  d->s3_cur_y = start_y;
+  d->s3_curr_x = start_x;
+  d->s3_curr_y = start_y;
 }
 
 
@@ -2743,13 +2743,13 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
 
   if (command & 0x10) {
     // Actually draw
-    d->s3_src_x = d->s3_cur_x;
-    d->s3_pix_x = d->s3_cur_x;
-    d->s3_src_y = d->s3_cur_y;
-    d->s3_pix_y = d->s3_cur_y;
+    d->s3_src_x = d->s3_curr_x;
+    d->s3_pix_x = d->s3_curr_x;
+    d->s3_src_y = d->s3_curr_y;
+    d->s3_pix_y = d->s3_curr_y;
 
-    auto start_x = d->s3_cur_x;
-    auto start_y = d->s3_cur_y;
+    auto start_x = d->s3_curr_x;
+    auto start_y = d->s3_curr_y;
     for (int y = 0; y < height; y++)
     {
       for (int x = 0; x < width; x++)
@@ -2760,15 +2760,15 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
       }
       d->s3_src_y += d->s3_v_dir;
       d->s3_pix_y += d->s3_v_dir;
-      d->s3_src_x = d->s3_cur_x;
-      d->s3_pix_x = d->s3_cur_x;
+      d->s3_src_x = d->s3_curr_x;
+      d->s3_pix_x = d->s3_curr_x;
     }
 
     vga_update_graphics(cpu->machine, d, 
       start_x, start_y, start_x + width, start_y + height);
 
-    d->s3_cur_x = start_x;
-    d->s3_cur_y = start_y;
+    d->s3_curr_x = start_x;
+    d->s3_curr_y = start_y;
   }
 }
 
@@ -2792,8 +2792,8 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_cmd_mx = !!(written & 2);
     d->s3_cmd_pxtrans = !!(written & 0x100);
     bool draws_up = written & (1 << 7);
-    d->s3_pix_x = d->s3_cur_x;
-    d->s3_pix_y = d->s3_cur_y;
+    d->s3_pix_x = d->s3_curr_x;
+    d->s3_pix_y = d->s3_curr_y;
     d->s3_v_dir = draws_up ? 1 : -1;
     bool draws_right = written & (1 << 5);
     d->s3_h_dir = draws_right ? 1 : -1;
@@ -2809,8 +2809,8 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_pixel_bit = 0;
     if (d->s3_no_draw) {
       fprintf(stderr, "[ s3: just move not implemented ]\n");
-      d->s3_cur_x = d->s3_destx;
-      d->s3_cur_y = d->s3_desty;
+      d->s3_curr_x = d->s3_dest_x;
+      d->s3_curr_y = d->s3_dest_y;
     } else {
       switch (d->s3_current_command) {
       case 0: // Nop
@@ -2854,11 +2854,11 @@ DEVICE_ACCESS(vga_s3_curx) {
 
   if (writeflag == MEM_WRITE) {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    d->s3_cur_x = written;
+    d->s3_curr_x = written;
     G(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
   } else {
     fprintf(stderr, "[ s3: get pix x ]\n");
-    memory_writemax64(cpu, data, len, d->s3_cur_x);
+    memory_writemax64(cpu, data, len, d->s3_curr_x);
   }
 
   return 1;
@@ -2873,11 +2873,11 @@ DEVICE_ACCESS(vga_s3_cury) {
 
   if (writeflag == MEM_WRITE) {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    d->s3_cur_y = written;
+    d->s3_curr_y = written;
     G(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
   } else {
     fprintf(stderr, "[ s3: get pix y ]\n");
-    memory_writemax64(cpu, data, len, d->s3_cur_y);
+    memory_writemax64(cpu, data, len, d->s3_curr_y);
   }
 
   return 1;
@@ -2961,8 +2961,8 @@ DEVICE_ACCESS(vga_s3_destx) {
   REG_WRITE( 0x8ee8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_destx = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_destx, (int)written));
+    d->s3_dest_x = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+    G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_dest_x, (int)written));
   }
 
   return 1;
@@ -2976,8 +2976,8 @@ DEVICE_ACCESS(vga_s3_desty) {
   REG_WRITE( 0x8ae8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_desty = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_desty));
+    d->s3_dest_y = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+    G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_dest_y));
   }
 
   return 1;

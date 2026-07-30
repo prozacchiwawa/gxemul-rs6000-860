@@ -2437,10 +2437,10 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
     uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
 
     // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
-    nowrite = ((d->s3_pix_y < d->bee8_regs[1]) &&
-              (d->s3_pix_y > d->bee8_regs[3]) &&
-              (d->s3_pix_x < d->bee8_regs[2]) &&
-              (d->s3_pix_x > d->bee8_regs[4]));
+    nowrite = ((d->s3_pix_y < d->bee8_regs[1])||
+               (d->s3_pix_y > d->bee8_regs[3])||
+               (d->s3_pix_x < d->bee8_regs[2])||
+               (d->s3_pix_x > d->bee8_regs[4]));
 
     // Step 2: Select source color and mix mode
     use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
@@ -2527,10 +2527,10 @@ void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
   uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
 
   // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
-  nowrite = ((d->s3_pix_y < d->bee8_regs[1]) &&
-    (d->s3_pix_y > d->bee8_regs[3]) &&
-    (d->s3_pix_x < d->bee8_regs[2]) &&
-    (d->s3_pix_x > d->bee8_regs[4]));
+  nowrite = ((d->s3_pix_y < d->bee8_regs[1])||
+             (d->s3_pix_y > d->bee8_regs[3])||
+             (d->s3_pix_x < d->bee8_regs[2])||
+             (d->s3_pix_x > d->bee8_regs[4]));
 
   // Step 2: Select source color and mix mode
   uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;

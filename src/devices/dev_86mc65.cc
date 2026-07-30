@@ -2741,6 +2741,8 @@ void patblt(cpu* cpu, struct vga_data* d) {
 void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
   int height = d->s3_rect_height;
   int width = d->s3_rect_width;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
 
   if (command & 0x10) {
     // Actually draw
@@ -2749,8 +2751,6 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
     d->s3_src_y = d->s3_curr_y;
     d->s3_pix_y = d->s3_curr_y;
 
-    auto start_x = d->s3_curr_x;
-    auto start_y = d->s3_curr_y;
     for (int y = 0; y < height; y++)
     {
       for (int x = 0; x < width; x++)
@@ -2770,6 +2770,79 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
 
     d->s3_curr_x = start_x;
     d->s3_curr_y = start_y;
+  }
+}
+
+void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
+  int height = d->s3_rect_height;
+  int width = d->s3_rect_width;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
+
+  d->s3_src_x = d->s3_curr_x;
+  d->s3_pix_x = d->s3_curr_x;
+  d->s3_src_y = d->s3_curr_y;
+  d->s3_pix_y = d->s3_curr_y;
+
+  if (command & 0x0008) 
+  {
+    uint32_t offset;
+    int x = 0;
+    bool last_pxof = (command & 0x04) != 0;  // CMD bit 2
+
+    while (x <= d->s3_rect_width) {
+      // skip last pixel if LAST_PXOF set
+      if (!(last_pxof && x == d->s3_rect_width)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      switch ((command & 0x00e0) >> 5) {
+        case 0:  // 0 degrees
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          break;
+        case 1:  // 45 degrees
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          break;
+        case 2:  // 90 degrees
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          break;
+        case 3:  // 135 degrees
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          break;
+        case 4:  // 180 degrees
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          break;
+        case 5:  // 225 degrees
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          break;
+        case 6:  // 270 degrees
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          break;
+        case 7:  // 315 degrees
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          break;
+      }
+      x++;
+    }
+
+    vga_update_graphics(cpu->machine, d,
+      start_x, start_y, d->s3_pix_x, d->s3_pix_y);
   }
 }
 
@@ -2819,6 +2892,10 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
 
       case 1: // Line draw
         fprintf(stderr, "[ s3: line draw not implemented ]\n");
+        if (!(written & 0x100)) {
+          L(fprintf(stderr, "[ s3 linedraw ]\n"));
+          linedraw(cpu, d, written & 0x1fff);
+        } // Otherwise accept pixel fill below.
         break;
 
       case 2: // Rectangle Fill

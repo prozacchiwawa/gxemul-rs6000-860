@@ -1474,12 +1474,12 @@ struct vga_data {
 	/* S3 */
   int   s3_pio_select;
   int   s3_src_x, s3_src_y;
-  int   s3_pix_x, s3_pix_y, s3_draw_width;
+  int   s3_pix_x, s3_pix_y;
   int   s3_fg_color, s3_bg_color;
   int   s3_fg_color_mix, s3_bg_color_mix;
   int   s3_v_dir, s3_h_dir, s3_pixel_bit;
   bool  s3_y_major, s3_last_pof, s3_no_draw, s3_bit_order;
-  int   s3_rem_height;
+  int   s3_rect_width, s3_rect_height;
   int   s3_curr_x, s3_curr_y;
   int   s3_dest_x, s3_dest_y;
   int   s3_current_command;
@@ -2426,7 +2426,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  if (d->s3_rem_height == 0) {
+  if (d->s3_rect_height == 0) {
     G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
     return;
   }
@@ -2496,12 +2496,12 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
                   (d->s3_pix_x - d->s3_curr_x): 
                   (d->s3_curr_x - d->s3_pix_x);
 
-  if (lane >= d->s3_draw_width) {
+  if (lane >= d->s3_rect_width) {
     d->s3_src_x = d->s3_curr_x;
     d->s3_pix_x = d->s3_curr_x;
     d->s3_src_y += d->s3_v_dir;
     d->s3_pix_y += d->s3_v_dir;
-    d->s3_rem_height -= 1;
+    d->s3_rect_height -= 1;
   }
 
   d->modified = 1;
@@ -2665,8 +2665,8 @@ void bitblt(cpu *cpu, struct vga_data *d) {
   int clipping_left = d->bee8_regs[2];
   int clipping_bottom = d->bee8_regs[3];
   int clipping_right = d->bee8_regs[4];
-  int width = d->s3_draw_width;
-  int rows = d->s3_rem_height;
+  int width = d->s3_rect_width;
+  int rows = d->s3_rect_height;
 
   d->s3_src_y = d->s3_curr_y;
   d->s3_pix_y = d->s3_dest_y;
@@ -2701,8 +2701,8 @@ void patblt(cpu* cpu, struct vga_data* d) {
   int clipping_left = d->bee8_regs[2];
   int clipping_bottom = d->bee8_regs[3];
   int clipping_right = d->bee8_regs[4];
-  auto height = d->s3_rem_height;
-  auto width = d->s3_draw_width;
+  auto height = d->s3_rect_height;
+  auto width = d->s3_rect_width;
 
   d->s3_pix_x = d->s3_dest_x;
   d->s3_pix_y = d->s3_dest_y;
@@ -2738,8 +2738,8 @@ void patblt(cpu* cpu, struct vga_data* d) {
 
 
 void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
-  int height = d->s3_rem_height;
-  int width = d->s3_draw_width;
+  int height = d->s3_rect_height;
+  int width = d->s3_rect_width;
 
   if (command & 0x10) {
     // Actually draw
@@ -2992,8 +2992,8 @@ DEVICE_ACCESS(vga_s3_major_axis_len) {
 
   if (writeflag == MEM_WRITE) {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-    d->s3_draw_width = written + 1;
-    G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
+    d->s3_rect_width = written + 1;
+    G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_rect_width, (int)written));
   }
 
   return 1;
@@ -3032,7 +3032,7 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
 
     switch (write_index) {
     case 0:
-      d->s3_rem_height = d->bee8_regs[0] + 1;
+      d->s3_rect_height = d->bee8_regs[0] + 1;
       break;
 
     case 13:
@@ -3072,7 +3072,7 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
 
     if (d->s3_cmd_mx) {
       // Transfer across the plane, 1bpp
-      L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width));
+      L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_rect_width));
       for (int i = 0; i < pxcount; i++) {
         bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
         L(fprintf(stderr, "%c", cpu ? '#' : '.'));

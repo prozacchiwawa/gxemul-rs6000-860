@@ -2840,10 +2840,60 @@ void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
       }
       x++;
     }
-
-    vga_update_graphics(cpu->machine, d,
-      start_x, start_y, d->s3_pix_x, d->s3_pix_y);
   }
+  else
+  {
+    int16_t err = d->line_errorterm;
+    int16_t axial_step = d->line_axial_step;
+    int16_t diag_step = d->line_diagonal_step;
+    int count = d->s3_rect_width;
+    bool last_pxof = (command & 0x04) != 0;
+
+    // Sign-extend 14-bit register values to 16-bit
+    if (err & 0x2000) err |= 0xC000;
+    if (axial_step & 0x2000) axial_step |= 0xC000;
+    if (diag_step & 0x2000) diag_step |= 0xC000;
+
+    // Direction bits
+    int sx = (command & 0x0020) ? 1 : -1;
+    int sy = (command & 0x0080) ? 1 : -1;
+    bool y_major = (command & 0x0040) != 0;
+
+    int32_t cx = d->s3_curr_x;
+    if (cx >= 0x800) cx |= ~0x7ff;
+    int32_t cy = d->s3_curr_y;
+    if (cy >= 0x800) cy |= ~0x7ff;
+
+    for (int i = 0; i <= count; i++) {
+      d->s3_src_x = cx & 0xfff;
+      d->s3_pix_x = cx & 0xfff;
+      d->s3_src_y = cy & 0xfff;
+      d->s3_pix_y = cy & 0xfff;
+
+      if (!(last_pxof && i == count)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      if (err >= 0) {
+        err += diag_step;
+        if (y_major) cx += sx; else cy += sy;
+      } else {
+        err += axial_step;
+      }
+
+      if (y_major) cy += sy; else cx += sx;
+    }
+
+    // Update position registers
+    d->s3_curr_x = cx & 0xfff;
+    d->s3_curr_y = cy & 0xfff;
+  }
+
+  vga_update_graphics(cpu->machine, d,
+    d->s3_curr_x > start_x ? start_x : d->s3_curr_x,
+    d->s3_curr_y > start_y ? start_y : d->s3_curr_y,
+    d->s3_curr_x > start_x ? d->s3_curr_x : start_x,
+    d->s3_curr_y > start_y ? d->s3_curr_y : start_y);
 }
 
 DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
@@ -2891,7 +2941,6 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
         break;
 
       case 1: // Line draw
-        fprintf(stderr, "[ s3: line draw not implemented ]\n");
         if (!(written & 0x100)) {
           L(fprintf(stderr, "[ s3 linedraw ]\n"));
           linedraw(cpu, d, written & 0x1fff);

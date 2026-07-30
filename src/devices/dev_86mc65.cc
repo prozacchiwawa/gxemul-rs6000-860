@@ -1505,7 +1505,8 @@ struct vga_data {
   bool odd_fifo;
 
   uint32_t plane_read_mask, plane_write_mask;
-  uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
+  uint32_t adv_fun_4ae8, short_stroke_transfer;
+  uint16_t line_errorterm, line_axial_step, line_diagonal_step;
 
   uint8_t reg_ff00_data[0x100];
 };
@@ -2961,8 +2962,9 @@ DEVICE_ACCESS(vga_s3_destx) {
   REG_WRITE( 0x8ee8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_dest_x = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_dest_x, (int)written));
+    d->line_diagonal_step = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x3fff;
+    d->s3_dest_x = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x0fff;
+    G(fprintf(stderr, "[ s3: set destx = %d ]\n", (int)d->s3_dest_x));
   }
 
   return 1;
@@ -2976,7 +2978,8 @@ DEVICE_ACCESS(vga_s3_desty) {
   REG_WRITE( 0x8ae8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_dest_y = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
+    d->line_axial_step = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x3fff;
+    d->s3_dest_y = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x0fff;
     G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_dest_y));
   }
 
@@ -3666,9 +3669,9 @@ DEVICE_ACCESS(vga_s3_92e8) {
   REG_WRITE( 0x92e8);
 
   if (writeflag == MEM_WRITE) {
-		d->line_error_term = memory_readmax64(cpu, data, len);
+		d->line_errorterm = memory_readmax64(cpu, data, len);
   } else {
-    memory_writemax64(cpu, data, len, d->line_error_term);
+    memory_writemax64(cpu, data, len, d->line_errorterm);
   }
 
   return 1;

@@ -2420,10 +2420,7 @@ int color_mix_function(struct vga_data *d, int cpu, int bitmap) {
 void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t *pixel_p, int write_len)
 {
   int pix;
-  int nowrite;
-  int use_fgmix;
-  int check_x, check_y;
-
+  int nowrite = 0;
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
@@ -2443,7 +2440,7 @@ void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t
                (d->s3_pix_x > d->bee8_regs[4]));
 
     // Step 2: Select source color and mix mode
-    use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
+    int use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
     uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
     uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
     uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
@@ -2598,7 +2595,7 @@ void s3_pixel_write(cpu* cpu, struct vga_data* d)
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
   uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
 
-  switch (d->bee8_regs[5] & 0x00c0)
+  switch (d->bee8_regs[0xa] & 0x00c0)
   {
     case 0x0000:  // Foreground Mix only
       s3_write_fg(cpu, d);
@@ -2996,7 +2993,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_h_dir = draws_right ? 1 : -1;
     d->s3_y_major = written & (1 << 6);
     d->s3_last_pof = written & (1 << 2);
-	d->s3_bit_order = written & (1 << 3);
+    d->s3_bit_order = written & (1 << 3);
     d->s3_cmd_bus_size = (written >> 9) & 3;
     d->s3_cmd_swap = (written >> 12) & 1;
     d->s3_no_draw = !(written & (1 << 4));
@@ -3939,7 +3936,7 @@ DEVICE_ACCESS(vga_s3_8100_range) {
     { 0x38, 0xbee8, 1 },
     { 0x3a, 0xbee8, 2 },
     { 0x3c, 0xbee8, 3 },
-    { 0xe3, 0xbee8, 4 },
+    { 0x3e, 0xbee8, 4 },
     { 0x40, 0xbee8, 0xa },
     { 0x42, 0xbee8, 0xd },
     { 0x44, 0xbee8, 0xe },
@@ -3964,6 +3961,10 @@ DEVICE_ACCESS(vga_s3_8100_range) {
         found = true;
         if (register_map[i][2] != -1) {
           d->bee8_regs[0xf] = register_map[i][2];
+          d->bee8_regs[0x1] = 0;
+          d->bee8_regs[0x2] = 0;
+          d->bee8_regs[0x3] = 0xfff;
+          d->bee8_regs[0x4] = 0xfff;
         }
         fprintf(stderr, "[ vga: write %04x via 8100 compressed area %02x %02x ]\n", register_map[i][1], dselect[0], dselect[1]);
         cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], dselect, amount, MEM_WRITE, PHYSICAL);

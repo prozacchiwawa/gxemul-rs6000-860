@@ -2848,9 +2848,74 @@ void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
       }
       x++;
     }
-  }
-  else
-  {
+  } else if (command & 0x0800) {
+    // ============================================================
+    // Trio64 CMD type 1001: Polyline / 2-Point Line
+    // (S3 Trio64 datasheet Section 13.3.3.11)
+    //
+    // Draws from (curr_x, curr_y) to (dest_x, dest_y).
+    // The hardware auto-computes direction, major axis, and
+    // Bresenham parameters from the endpoints.
+    //
+    // Register 8AE8h = ending Y coordinate (dest_y)
+    // Register 8EE8h = ending X coordinate (dest_x)
+    // ============================================================
+
+    int32_t x0 = (int16_t)d->s3_curr_x;
+    int32_t y0 = (int16_t)d->s3_curr_y;
+    int32_t x1 = (int16_t)d->s3_dest_x;
+    int32_t y1 = (int16_t)d->s3_dest_y;
+
+    int32_t dx = (x1 > x0) ? (x1 - x0) : (x0 - x1);
+    int32_t dy = (y1 > y0) ? (y1 - y0) : (y0 - y1);
+    int sx = (x1 >= x0) ? 1 : -1;
+    int sy = (y1 >= y0) ? 1 : -1;
+
+    bool steep = (dy > dx);
+    int count = steep ? dy : dx;
+    int err;
+    bool last_pxof = (command & 0x04) != 0;
+
+    if (steep)
+      err = 2 * dx - dy;
+    else
+      err = 2 * dy - dx;
+
+    for (int i = 0; i <= count; i++) {
+      d->s3_src_x = (int16_t)(x0 & 0xfff);
+      d->s3_pix_x = (int16_t)(x0 & 0xfff);
+      d->s3_src_y = (int16_t)(y0 & 0xfff);
+      d->s3_pix_y = (int16_t)(y0 & 0xfff);
+
+      if (!(last_pxof && i == count)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      if (steep) {
+        if (err >= 0) { x0 += sx; err -= 2 * dy; }
+        err += 2 * dx;
+        y0 += sy;
+      } else {
+        if (err >= 0) { y0 += sy; err -= 2 * dx; }
+        err += 2 * dy;
+        x0 += sx;
+      }
+    }
+
+    d->s3_curr_x = (int16_t)(x0 & 0xfff);
+    d->s3_curr_y = (int16_t)(y0 & 0xfff);
+  } else {
+    // ============================================================
+    // CMD type 0001: Draw Line (traditional Bresenham)
+    //
+    // Uses pre-programmed step constants:
+    //   8AE8h = Axial Step Constant (14-bit signed)
+    //   8EE8h = Diagonal Step Constant (14-bit signed)
+    //   92E8h = Error Term (14-bit signed)
+    //   96E8h = Major Axis Pixel Count
+    // Direction from CMD bits: INC_X (5), YMAJAXIS (6), INC_Y (7)
+    // ============================================================
+
     int16_t err = d->line_errorterm;
     int16_t axial_step = d->line_axial_step;
     int16_t diag_step = d->line_diagonal_step;

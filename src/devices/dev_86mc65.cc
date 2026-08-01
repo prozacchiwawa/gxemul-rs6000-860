@@ -2692,9 +2692,6 @@ void bitblt(cpu *cpu, struct vga_data *d) {
     d->s3_src_y += d->s3_v_dir;
     d->s3_pix_y += d->s3_v_dir;
   }
-
-  vga_update_graphics(cpu->machine, d, 
-    clipping_left, clipping_top, clipping_right, clipping_bottom);
 }
 
 
@@ -2732,9 +2729,6 @@ void patblt(cpu* cpu, struct vga_data* d) {
     pattern_y = (pattern_y + d->s3_v_dir) & 7;
   }
 
-  vga_update_graphics(cpu->machine, d,
-    clipping_left, clipping_top, clipping_right, clipping_bottom);
-
   d->s3_curr_x = start_x;
   d->s3_curr_y = start_y;
 }
@@ -2769,12 +2763,6 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
 
     d->s3_curr_x = d->s3_src_x;
     d->s3_curr_y = d->s3_src_y;
-
-    vga_update_graphics(cpu->machine, d,
-      d->s3_curr_x > start_x ? start_x : d->s3_curr_x,
-      d->s3_curr_y > start_y ? start_y : d->s3_curr_y,
-      d->s3_curr_x > start_x ? d->s3_curr_x : start_x,
-      d->s3_curr_y > start_y ? d->s3_curr_y : start_y);
   }
 }
 
@@ -2958,12 +2946,6 @@ void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
     d->s3_curr_x = cx & 0xfff;
     d->s3_curr_y = cy & 0xfff;
   }
-
-  vga_update_graphics(cpu->machine, d,
-    d->s3_curr_x > start_x ? start_x : d->s3_curr_x,
-    d->s3_curr_y > start_y ? start_y : d->s3_curr_y,
-    d->s3_curr_x > start_x ? d->s3_curr_x : start_x,
-    d->s3_curr_y > start_y ? d->s3_curr_y : start_y);
 }
 
 DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
@@ -3280,13 +3262,9 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
       }
       L(fprintf(stderr, " ]\n"));
       pixel_transfer(cpu, d, true, pixels, pxcount);
-      vga_update_graphics(cpu->machine, d, 
-        start_x, start_y, start_x + pxcount - 1, start_y);
     } else {
       L(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
       pixel_transfer(cpu, d, false, to_write, len);
-      vga_update_graphics(cpu->machine, d, 
-        start_x, start_y, start_x + len - 1, start_y);
     }
   }
 
@@ -3681,7 +3659,7 @@ DEVICE_ACCESS(s3_ctrl)
 				    d->sequencer_reg_select];
 			else {
         d->sequencer_reg[d->sequencer_reg_select] = idata;
-        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
+        L(fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr)));
         vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
 			}
 			break;

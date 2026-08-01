@@ -1370,11 +1370,11 @@ static struct register_name_table_t r_name_table[] = {
 
 #if VGA_DEBUG
 #define L(x) do { x; } while (0)
+#define G(x) do { if (d->window_mapped) { x; } } while (0)
 #else
 #define L(x) do { } while(0)
+#define G(x) do { } while(0)
 #endif
-
-#define G(x) do { if (d->window_mapped) { x; } } while (0)
 
 /*  For videomem -> framebuffer updates:  */
 #define	VGA_TICK_SHIFT		18
@@ -2157,11 +2157,11 @@ DEVICE_ACCESS(s3_graphics)
       memcpy(data_copy, data, len);
     }
     bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data_copy, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-    fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04lx", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
+    L(fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04lx", writeflag == MEM_WRITE ? "write" : "read", relative_addr));
     for (i = 0; i < len; i++) {
-      fprintf(stderr, " %02x", data_copy[i]);
+      L(fprintf(stderr, " %02x", data_copy[i]));
     }
-    fprintf(stderr, " ]\n");
+    L(fprintf(stderr, " ]\n"));
     if (d->window_mapped && relative_addr != 0x1009ae8) {
       for (i = 0; i < len; i++) {
         data[len - i - 1] = data_copy[i];
@@ -2677,7 +2677,7 @@ void bitblt(cpu *cpu, struct vga_data *d) {
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  G(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_dest_x, d->s3_dest_y, clipping_right, clipping_top + rows, d->s3_curr_x, d->s3_curr_y));
+  L(fprintf(stderr, "[ s3: bitblt x=%d-%d y=%d-%d ]\n", d->s3_curr_x, d->s3_curr_y, d->s3_dest_x, d->s3_dest_y));
   
   for (int y = 0; y < rows; y++)
   {
@@ -2714,7 +2714,7 @@ void patblt(cpu* cpu, struct vga_data* d) {
   auto pattern_x = d->s3_dest_x & 7;
   auto pattern_y = d->s3_dest_y & 7;
 
-  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_x, start_y, d->s3_dest_x, d->s3_dest_y);
+  L(fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", d->s3_curr_x, d->s3_curr_y, d->s3_dest_x, d->s3_dest_y));
   
   for (int y = 0; y < height; y++)
   {
@@ -2982,7 +2982,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     memory_writemax64(cpu, data, len, outval);
   } else {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
+    G(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
     d->s3_cmd_mx = !!(written & 2);
     d->s3_cmd_pxtrans = !!(written & 0x100);
     bool draws_up = written & (1 << 7);
@@ -3228,7 +3228,7 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
     write_index = written >> 12;
     d->bee8_regs[write_index] = written & 0xfff;
 
-    fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff));
+    G(fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff)));
 
     switch (write_index) {
     case 0:
@@ -3283,7 +3283,7 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
       vga_update_graphics(cpu->machine, d, 
         start_x, start_y, start_x + pxcount - 1, start_y);
     } else {
-      G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
+      L(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
       pixel_transfer(cpu, d, false, to_write, len);
       vga_update_graphics(cpu->machine, d, 
         start_x, start_y, start_x + len - 1, start_y);

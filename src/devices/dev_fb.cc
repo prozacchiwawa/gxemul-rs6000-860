@@ -104,7 +104,7 @@ void set_blackwhite_palette(struct vfb_data *d, int ncolors)
 
 static void set_title(struct vfb_data *d)
 {
-	snprintf(d->title, sizeof(d->title),"GXemul: %ix%ix%i %s framebuffer",
+	snprintf(d->title, sizeof(d->title),"GXemul: %ix%ix%i %s framebuffer - Ctrl+F10 releases mouse",
 	    d->visible_xsize, d->visible_ysize, d->bit_depth, d->name);
 	d->title[sizeof(d->title)-1] = '\0';
 }

@@ -2375,10 +2375,10 @@ static inline uint32_t pixtrans_lane_u32(uint32_t pixel_xfer, uint8_t bus_size, 
   const uint32_t lanes = 1u << bs;           // 1, 2, 4
   lane &= (lanes - 1);
 
-  return (pixel_xfer >> (lane * 8));
+  return (pixel_xfer >> (lane * 8)) & 0xff;
 }
 
-uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
+static inline uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
 {
   switch (mix_mode)
   {

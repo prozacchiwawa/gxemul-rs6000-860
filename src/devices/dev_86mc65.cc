@@ -2368,6 +2368,15 @@ void s3_hack_start(struct machine *machine, struct vga_data *d) {
   CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
 }
 
+static inline uint32_t pixtrans_lane_u32(uint32_t pixel_xfer, uint8_t bus_size, uint32_t lane)
+{
+  // bus_size: 0=8-bit, 1=16-bit, >=2=32-bit
+  int bs = (bus_size >= 2) ? 2 : bus_size;
+  const uint32_t lanes = 1u << bs;           // 1, 2, 4
+  lane &= (lanes - 1);
+
+  return (pixel_xfer >> (lane * 8));
+}
 
 uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
 {
@@ -2391,126 +2400,6 @@ uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
     case 0x0f: return ~(src | dst);
     default:   return src;            // shouldn't reach here
   }
-}
-
-int color_mix_function(struct vga_data *d, int cpu, int bitmap) {
-  bool mask_bit = 0;
-  switch ((d->bee8_regs[0x0a] >> 6) & 3) 
-  {
-    case 0:
-      mask_bit = 1;
-      break;
-
-    case 1:
-      mask_bit = 0;
-      break;
-
-    case 2:
-      mask_bit = cpu == 0xff;
-      break;
-
-    case 3:
-      mask_bit = bitmap == 0xff;
-      break;
-  }
-  return mask_bit;
-}
-
-
-void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t *pixel_p, int write_len)
-{
-  int pix;
-  int nowrite = 0;
-  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
-  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
-
-  if (d->s3_rect_height == 0) {
-    G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
-    return;
-  }
-
-  for (pix = 0; pix < write_len; pix++) {
-    uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
-    uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
-
-    // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
-    nowrite = ((d->s3_pix_y < d->bee8_regs[1])||
-               (d->s3_pix_y > d->bee8_regs[3])||
-               (d->s3_pix_x < d->bee8_regs[2])||
-               (d->s3_pix_x > d->bee8_regs[4]));
-
-    // Step 2: Select source color and mix mode
-    int use_fgmix = color_mix_function(d, pixel_p[pix], d->gfx_mem[source]);
-    uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
-    uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
-    uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
-    uint32_t src_dat = 0, dst_dat = 0;
-
-    switch (sel) 
-    {
-      case 0: // Background Color register
-        src_dat = d->s3_bg_color;
-        break;
-      case 1: // Foreground Color register
-        src_dat = d->s3_fg_color;
-        break;
-      case 2: // CPU data (pixel transfer register)
-        src_dat = pixel_p[pix];
-        break;
-      case 3: // Display memory (VRAM at source coords)
-        src_dat = d->gfx_mem[source];
-        break;
-    }
-
-    // Step 3: Read destination
-    dst_dat = d->gfx_mem[target];
-
-    // Step 4: Color Compare gate
-    if (d->bee8_regs[0xe] & 0x100)
-    {
-      auto src_ne = d->bee8_regs[0xe] & 0x80;
-      bool match = (src_dat == d->s3_color_compare);
-      // SRC NE = 0: write only when source != compare (skip when match)
-      // SRC NE = 1: write only when source == compare (skip when no match)
-      if (src_ne ? !match : match) nowrite = 1; // color compare rejects this pixel
-    }
-
-    // Step 5: Apply MIX
-    uint32_t pixel = s3_color_mix(mix_mode, src_dat, dst_dat);
-
-    // Step 6: Write Mask merge
-    uint32_t wrt_mask = d->plane_write_mask;
-    pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
-
-    // Step 7: Write to VRAM
-    if (!nowrite) d->gfx_mem[target] = pixel;
-
-    // Switch to next pixel
-    d->s3_src_x += d->s3_h_dir;
-    d->s3_pix_x += d->s3_h_dir;
-  }
-
-  uint32_t lane = (d->s3_pix_x > d->s3_curr_x)? 
-                  (d->s3_pix_x - d->s3_curr_x): 
-                  (d->s3_curr_x - d->s3_pix_x);
-
-  if (lane >= d->s3_rect_width) {
-    d->s3_src_x = d->s3_curr_x;
-    d->s3_pix_x = d->s3_curr_x;
-    d->s3_src_y += d->s3_v_dir;
-    d->s3_pix_y += d->s3_v_dir;
-    d->s3_rect_height -= 1;
-  }
-}
-
-static inline uint32_t pixtrans_lane_u32(uint32_t pixel_xfer, uint8_t bus_size, uint32_t lane)
-{
-  // bus_size: 0=8-bit, 1=16-bit, >=2=32-bit
-  int bs = (bus_size >= 2) ? 2 : bus_size;
-  const uint32_t lanes = 1u << bs;           // 1, 2, 4
-  lane &= (lanes - 1);
-
-  return (pixel_xfer >> (lane * 8));
 }
 
 void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
@@ -2618,7 +2507,7 @@ void s3_pixel_write(cpu* cpu, struct vga_data* d)
       else if (data_size == 32) {
         xfer = ((xfer & 0x000000ff) << 24) |
                 ((xfer & 0x0000ff00) << 8) |
-	            ((xfer & 0x00ff0000) >> 8) |
+                ((xfer & 0x00ff0000) >> 8) |
                 ((xfer & 0xff000000) >> 24);
         }
       }
@@ -2948,6 +2837,65 @@ void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
   }
 }
 
+void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int len)
+{
+  uint32_t lane;
+
+  if (d->s3_rect_height == 0) {
+    G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
+    return;
+  }
+
+  if (across_the_plane)
+  {
+    // "across plane" mode
+    for (int x = 0; x < len * 8; x++)
+    {
+      s3_pixel_write(cpu, d);
+      d->s3_src_x += d->s3_h_dir;
+      d->s3_pix_x += d->s3_h_dir;
+    }
+
+    lane = (d->s3_pix_x > d->s3_curr_x)?
+           (d->s3_pix_x - d->s3_curr_x):
+           (d->s3_curr_x - d->s3_pix_x);
+
+    if (lane >= d->s3_rect_width)
+    {
+      d->s3_pixel_bit = 0;
+      d->s3_rect_height -= 1;
+      d->s3_src_x = d->s3_curr_x;
+      d->s3_pix_x = d->s3_curr_x;
+      d->s3_src_y += d->s3_v_dir;
+      d->s3_pix_y += d->s3_v_dir;
+    }
+  }
+  else
+  {
+    // "through plane" mode (single pixel)
+    for (int x = 0; x < len * 8; x = x + 8)
+    {
+      s3_pixel_write(cpu, d);
+      d->s3_src_x += d->s3_h_dir;
+      d->s3_pix_x += d->s3_h_dir;
+    }
+
+    lane = (d->s3_pix_x > d->s3_curr_x)?
+           (d->s3_pix_x - d->s3_curr_x):
+           (d->s3_curr_x - d->s3_pix_x);
+
+    if (lane >= d->s3_rect_width)
+    {
+      d->s3_pixel_bit = 0;
+      d->s3_rect_height -= 1;
+      d->s3_src_x = d->s3_curr_x;
+      d->s3_pix_x = d->s3_curr_x;
+      d->s3_src_y += d->s3_v_dir;
+      d->s3_pix_y += d->s3_v_dir;
+    }
+  }
+}
+
 DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
 	struct vga_data *d = (struct vga_data *) extra;
   uint16_t written;
@@ -2976,7 +2924,6 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     d->s3_y_major = written & (1 << 6);
     d->s3_last_pof = written & (1 << 2);
     d->s3_bit_order = written & (1 << 3);
-    d->s3_cmd_bus_size = (written >> 9) & 3;
     d->s3_cmd_swap = (written >> 12) & 1;
     d->s3_no_draw = !(written & (1 << 4));
     d->s3_current_command = written >> 13;
@@ -3247,24 +3194,33 @@ DEVICE_ACCESS(vga_s3_pix_transfer) {
       to_write[i ^ swizzle] = idata >> (i * 8);
     }
 
-    auto start_x = d->s3_pix_x;
-    auto start_y = d->s3_pix_y;
-    int pxcount = 8 * len;
-    uint8_t pixels[32];
+    if (d->s3_cmd_swap) {
+      if (len == 2) {
+        idata = ((idata & 0x00ff) << 8) | ((idata & 0xff00) >> 8);
+      }
+      else if (len == 4) {
+        idata = ((idata & 0x000000ff) << 24) |
+          ((idata & 0x0000ff00) << 8) |
+          ((idata & 0x00ff0000) >> 8) |
+          ((idata & 0xff000000) >> 24);
+      }
+    }
+
+    d->s3_cmd_bus_size = len - 1;
+    d->s3_pixel_xfer = idata;
 
     if (d->s3_cmd_mx) {
       // Transfer across the plane, 1bpp
       L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_rect_width));
-      for (int i = 0; i < pxcount; i++) {
-        bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
+      for (int i = 0; i < len * 8; i++) {
+        bool cpu = !!(to_write[i / 8] & (1 << (7 - (i % 8))));
         L(fprintf(stderr, "%c", cpu ? '#' : '.'));
-        pixels[i] = cpu ? 0xff : 0;
       }
       L(fprintf(stderr, " ]\n"));
-      pixel_transfer(cpu, d, true, pixels, pxcount);
+      pixel_wait_draw(cpu, d, true, len);
     } else {
       L(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
-      pixel_transfer(cpu, d, false, to_write, len);
+      pixel_wait_draw(cpu, d, false, len);
     }
   }
 

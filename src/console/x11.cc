@@ -527,7 +527,7 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
 
-                fprintf(stderr, "[ SDL [DOWN]: unknown keysym %x ]\n", event.key.keysym);
+                fprintf(stderr, "[ SDL [DOWN]: unknown keysym %x ]\n", event.key.keysym.scancode);
                 return;
             }
             break;
@@ -545,7 +545,7 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
 
-                fprintf(stderr, "[ SDL [UP]: unknown keysym %x ]\n", event.key.keysym);
+                fprintf(stderr, "[ SDL [UP]: unknown keysym %x ]\n", event.key.keysym.scancode);
                 return;
             }
             break;

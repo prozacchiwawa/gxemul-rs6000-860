@@ -432,8 +432,10 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 
     SDL_PumpEvents();
     while (SDL_PollEvent(&event) != 0) {
-        if (event.type == SDL_WINDOWEVENT) {
-            if (event.window.event == SDL_WINDOWEVENT_EXPOSED) {
+        switch (event.type) {
+        case SDL_WINDOWEVENT:
+            switch (event.window.event) {
+            case SDL_WINDOWEVENT_EXPOSED:
                 fprintf(stderr, "[ SDL: redraw ]\n");
                 for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                     if (m->x11_md.fb_windows[i]->window_id != event.window.windowID) {
@@ -441,7 +443,8 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                     x11_redraw(m, i);
                 }
-            } else if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+                break;
+            case SDL_WINDOWEVENT_CLOSE:
                 fprintf(stderr, "[ SDL: close ]\n");
                 for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                     if (m->x11_md.fb_windows[i]->window_id != event.window.windowID) {
@@ -451,8 +454,13 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                         m->cpus[j]->running = false;
                     }
                 }
+                break;
+            default:
+                break;
             }
-        } else if (event.type == SDL_MOUSEMOTION) {
+            break;
+
+        case SDL_MOUSEMOTION:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.motion.windowID) {
                     continue;
@@ -465,7 +473,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     i
                 );
             }
-        } else if (event.type == SDL_MOUSEBUTTONUP) {
+            break;
+
+        case SDL_MOUSEBUTTONUP:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.button.windowID) {
                     continue;
@@ -476,7 +486,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
             }
-        } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+            break;
+
+        case SDL_MOUSEBUTTONDOWN:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.button.windowID) {
                     continue;
@@ -487,7 +499,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
             }
-        } else if (event.type == SDL_KEYDOWN) {
+            break;
+
+        case SDL_KEYDOWN:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.key.windowID) {
                     continue;
@@ -503,7 +517,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                 fprintf(stderr, "[ SDL [DOWN]: unknown keysym %x ]\n", event.key.keysym);
                 return;
             }
-        } else if (event.type == SDL_KEYUP) {
+            break;
+
+        case SDL_KEYUP:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.key.windowID) {
                     continue;
@@ -519,6 +535,10 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                 fprintf(stderr, "[ SDL [UP]: unknown keysym %x ]\n", event.key.keysym);
                 return;
             }
+            break;
+
+        default:
+            break;
         }
     }
 }

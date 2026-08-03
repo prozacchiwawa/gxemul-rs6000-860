@@ -1511,7 +1511,7 @@ struct vga_data {
   uint8_t reg_ff00_data[0x100];
 };
 
-inline uint16_t get_le_16(bool already, uint64_t idata) {
+static inline uint16_t get_le_16(bool already, uint64_t idata) {
   if (already) {
     return idata;
   } else {
@@ -1519,11 +1519,22 @@ inline uint16_t get_le_16(bool already, uint64_t idata) {
   }
 }
 
-
-inline uint32_t get_le_32(bool already, uint64_t idata) {
+static inline uint32_t get_le_32(bool already, uint64_t idata) {
   if (already) {
     return idata;
   } else {
+    return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
+  }
+}
+
+static inline uint32_t get_le_swap(bool already, uint64_t idata, int len) {
+  if (already || len == 1) {
+    return idata;
+  }
+  else if (len == 2) {
+    return (get_le_16(false, idata >> 16) << 16) | get_le_16(false, idata);
+  }
+  else {
     return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
   }
 }
@@ -3180,34 +3191,21 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
 
 DEVICE_ACCESS(vga_s3_pix_transfer) {
   struct vga_data *d = (struct vga_data *) extra;
-  uint64_t idata;
   uint8_t to_write[4];
+  uint64_t idata;
 
   REG_WRITE( 0xe2e8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_pixel_xfer = get_le_32(d->window_mapped, memory_readmax64(cpu, data, len));
-    G(fprintf(stderr, "[ s3: set pixel transfer %08x ]\n", (int)d->s3_pixel_xfer));
     idata = memory_readmax64(cpu, data, len);
+    d->s3_pixel_xfer = get_le_swap(!d->s3_cmd_swap, idata, len);
+    L(fprintf(stderr, "[ s3: set pixel transfer %08x (raw %08x) ]\n", (int)d->s3_pixel_xfer, (int)idata));
     int swizzle = d->s3_cmd_swap ? len - 1 : 0;
     for (int i = 0; i < len; i++) {
       to_write[i ^ swizzle] = idata >> (i * 8);
     }
 
-    if (d->s3_cmd_swap) {
-      if (len == 2) {
-        idata = ((idata & 0x00ff) << 8) | ((idata & 0xff00) >> 8);
-      }
-      else if (len == 4) {
-        idata = ((idata & 0x000000ff) << 24) |
-          ((idata & 0x0000ff00) << 8) |
-          ((idata & 0x00ff0000) >> 8) |
-          ((idata & 0xff000000) >> 24);
-      }
-    }
-
     d->s3_cmd_bus_size = len - 1;
-    d->s3_pixel_xfer = idata;
 
     if (d->s3_cmd_mx) {
       // Transfer across the plane, 1bpp

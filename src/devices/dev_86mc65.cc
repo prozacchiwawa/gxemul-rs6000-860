@@ -2589,6 +2589,7 @@ void bitblt(cpu *cpu, struct vga_data *d) {
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
     }
+    d->s3_pixel_bit = 0;
     d->s3_src_y += d->s3_v_dir;
     d->s3_pix_y += d->s3_v_dir;
   }
@@ -2623,6 +2624,7 @@ void patblt(cpu* cpu, struct vga_data* d) {
       d->s3_pix_x += d->s3_h_dir;
       pattern_x = (pattern_x + d->s3_h_dir) & 7;
     }
+    d->s3_pixel_bit = 0;
     d->s3_pix_x = d->s3_dest_x;
     d->s3_pix_y += d->s3_v_dir;
     pattern_x = d->s3_dest_x & 7;
@@ -2655,6 +2657,7 @@ void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
         d->s3_src_x += d->s3_h_dir;
         d->s3_pix_x += d->s3_h_dir;
       }
+      d->s3_pixel_bit = 0;
       d->s3_src_y += d->s3_v_dir;
       d->s3_pix_y += d->s3_v_dir;
       d->s3_src_x = d->s3_curr_x;
@@ -2865,20 +2868,21 @@ void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int le
       s3_pixel_write(cpu, d);
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
-    }
 
-    lane = (d->s3_pix_x > d->s3_curr_x)?
-           (d->s3_pix_x - d->s3_curr_x):
-           (d->s3_curr_x - d->s3_pix_x);
+      lane = (d->s3_pix_x > d->s3_curr_x)?
+             (d->s3_pix_x - d->s3_curr_x):
+             (d->s3_curr_x - d->s3_pix_x);
 
-    if (lane >= d->s3_rect_width)
-    {
-      d->s3_pixel_bit = 0;
-      d->s3_rect_height -= 1;
-      d->s3_src_x = d->s3_curr_x;
-      d->s3_pix_x = d->s3_curr_x;
-      d->s3_src_y += d->s3_v_dir;
-      d->s3_pix_y += d->s3_v_dir;
+      if (lane >= d->s3_rect_width)
+      {
+        d->s3_src_x = d->s3_curr_x;
+        d->s3_pix_x = d->s3_curr_x;
+        d->s3_src_y += d->s3_v_dir;
+        d->s3_pix_y += d->s3_v_dir;
+        d->s3_rect_height -= 1;
+        d->s3_pixel_bit = 0;
+        return;
+      }
     }
   }
   else
@@ -2889,20 +2893,21 @@ void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int le
       s3_pixel_write(cpu, d);
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
-    }
 
-    lane = (d->s3_pix_x > d->s3_curr_x)?
-           (d->s3_pix_x - d->s3_curr_x):
-           (d->s3_curr_x - d->s3_pix_x);
+      lane = (d->s3_pix_x > d->s3_curr_x)?
+             (d->s3_pix_x - d->s3_curr_x):
+             (d->s3_curr_x - d->s3_pix_x);
 
-    if (lane >= d->s3_rect_width)
-    {
-      d->s3_pixel_bit = 0;
-      d->s3_rect_height -= 1;
-      d->s3_src_x = d->s3_curr_x;
-      d->s3_pix_x = d->s3_curr_x;
-      d->s3_src_y += d->s3_v_dir;
-      d->s3_pix_y += d->s3_v_dir;
+      if (lane >= d->s3_rect_width)
+      {
+        d->s3_src_x = d->s3_curr_x;
+        d->s3_pix_x = d->s3_curr_x;
+        d->s3_src_y += d->s3_v_dir;
+        d->s3_pix_y += d->s3_v_dir;
+        d->s3_rect_height -= 1;
+        d->s3_pixel_bit = 0;
+        return;
+      }
     }
   }
 }

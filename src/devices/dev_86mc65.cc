@@ -2853,7 +2853,15 @@ void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
 
 void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int len)
 {
-  uint32_t lane;
+  uint32_t height, width;
+  height = (d->s3_pix_y > d->s3_curr_y)?
+           (d->s3_pix_y - d->s3_curr_y):
+           (d->s3_curr_y - d->s3_pix_y);
+
+  if (height > d->s3_rect_height) {
+    L(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0] + 1));
+    return;
+  }
 
   if (across_the_plane)
   {
@@ -2864,11 +2872,11 @@ void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int le
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
 
-      lane = (d->s3_pix_x > d->s3_curr_x)?
-             (d->s3_pix_x - d->s3_curr_x):
-             (d->s3_curr_x - d->s3_pix_x);
+      width = (d->s3_pix_x > d->s3_curr_x)?
+              (d->s3_pix_x - d->s3_curr_x):
+              (d->s3_curr_x - d->s3_pix_x);
 
-      if (lane > d->s3_rect_width)
+      if (width > d->s3_rect_width)
       {
         d->s3_src_x = d->s3_curr_x;
         d->s3_pix_x = d->s3_curr_x;
@@ -2888,11 +2896,11 @@ void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int le
       d->s3_src_x += d->s3_h_dir;
       d->s3_pix_x += d->s3_h_dir;
 
-      lane = (d->s3_pix_x > d->s3_curr_x)?
-             (d->s3_pix_x - d->s3_curr_x):
-             (d->s3_curr_x - d->s3_pix_x);
+      width = (d->s3_pix_x > d->s3_curr_x)?
+              (d->s3_pix_x - d->s3_curr_x):
+              (d->s3_curr_x - d->s3_pix_x);
 
-      if (lane > d->s3_rect_width)
+      if (width > d->s3_rect_width)
       {
         d->s3_src_x = d->s3_curr_x;
         d->s3_pix_x = d->s3_curr_x;

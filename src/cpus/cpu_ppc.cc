@@ -49,6 +49,7 @@
 #include "thirdparty/ppc_bat.h"
 #include "thirdparty/ppc_pte.h"
 #include "thirdparty/ppc_spr.h"
+#define THREAD_LOCAL thread_local
 extern "C" {
 #include "softfloat.h"
 }
@@ -432,11 +433,9 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
-  } else if (!quiet_mode && exception_nr != 5) {
-#if 0
+  } else if (!quiet_mode && (exception_nr != 5 && exception_nr != 12)) {
     fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %" PRIx64 " ]\n",
           exception_nr, cpu->pc, cpu->ninstrs);
-#endif
   }
 
 	/*  Disable External Interrupts, Recoverable Interrupt Mode,
@@ -708,7 +707,7 @@ void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 void ppc_branch_conditional_desc(struct cpu *cpu, int bo, int bi, int bh) {
   static const char *cr_bits[] = {
     "npzv",
-    "feio",
+    "lgzv",
     "lgzv",
     "lgzv",
     "lgzv",
@@ -2275,6 +2274,8 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
 
   FPINST_PRELUDE();
 
+	softfloat_roundingMode = softfloat_round_minMag;
+
   // Multiplying inf by 0 is an invalid multiplication.
   if ((f64_isnan(fra) && f64_iszero(frc)) ||
       (f64_iszero(fra) && f64_isnan(frc))) {
@@ -2282,18 +2283,21 @@ void base_fmul(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
     FPU_EXN;
   }
 
+  float64_t result_64 = f64_mul(fra, frc);
+
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
   f64_to_extF80M(frc, &efrc);
-  extFloat80_t result;
-  extF80M_mul(&efra, &efrc, &result);
-  float64_t result_64 = extF80M_to_f64(&result);
+  extFloat80_t eresult;
+  extF80M_mul(&efra, &efrc, &eresult);
   auto fra_s = format_float(fra.v), frc_s = format_float(frc.v), result_s = format_float(result_64.v);
+  fprintf
+    (stderr, "fmul raw %" PRIx64 " * %" PRIx64 " = %" PRIx64 "\n", fra.v, frc.v, result_64.v);
   fprintf
     (stderr, "fmul: %s * %s -> %s\n",
      fra_s.c_str(), frc_s.c_str(), result_s.c_str());
-  fpu_epilog(cpu, &result, &result_64);
+  fpu_epilog(cpu, &eresult, &result_64);
   *ptarget = result_64.v;
 }
 
@@ -2320,6 +2324,8 @@ void base_fdiv(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
     FPU_EXN;
   }
 
+	softfloat_roundingMode = softfloat_round_near_even;
+
   float64_t result_64 = f64_div(fra, frc);
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
@@ -2344,6 +2350,8 @@ void base_fadd(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
 
   // XXX detect addition of different infinities.
 
+	softfloat_roundingMode = softfloat_round_minMag;
+
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
@@ -2367,6 +2375,8 @@ void base_fsub(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *ptarget, ui
 
   // XXX detect addition of different infinities.
 
+	softfloat_roundingMode = softfloat_round_minMag;
+
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);
   extFloat80_t efrc;
@@ -2387,6 +2397,8 @@ void base_cmp(struct cpu *cpu, struct ppc_instr_call *ic, uint64_t *pfra, uint64
   float64_t frc = { *pfrc };
 
   FPINST_PRELUDE();
+
+	softfloat_roundingMode = softfloat_round_minMag;
 
   extFloat80_t efra;
   f64_to_extF80M(fra, &efra);

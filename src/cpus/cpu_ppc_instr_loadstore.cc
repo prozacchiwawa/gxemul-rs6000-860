@@ -90,8 +90,10 @@ void LS_GENERIC_N(struct cpu *cpu, struct ppc_instr_call *ic)
 #ifndef LS_B
 	if ((addr & 0xfff) + LS_SIZE-1 > 0xfff) {
 		if (swizzle | offset) {
-      fprintf(stderr, "misaligned LE without full translation\n");
-      exit(1);
+      fprintf(stderr, "[ %08x: misaligned LE without full translation %" PRIx64 " addr %08x s%d o%d ]\n", (unsigned int)cpu->pc, cpu->ninstrs, (unsigned int)addr, swizzle, offset);
+      if (LS_SIZE > 4) {
+        fprintf(stderr, "[ red alert! misaligned access of size %d with swizzle %d offset %d ]\n", LS_SIZE, swizzle, offset);
+      }
     }
 
     auto end = addr + LS_SIZE;

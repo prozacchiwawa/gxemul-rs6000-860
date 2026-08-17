@@ -213,7 +213,7 @@ void CPU32(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_
 
 #ifdef CPU_BITS_64
 struct host_load_store_t CPU64(get_cached_tlb_pages)(struct cpu *cpu, uint64_t addr, bool instr) {
-  cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
+  return cpu->cd.DYNTRANS_ARCH.vph64.get_cached_tlb_pages(cpu, addr);
 }
 
 void CPU64(set_tlb_physpage)(struct cpu *cpu, uint64_t addr, struct DYNTRANS_TC_PHYSPAGE *ppp) {
@@ -382,10 +382,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
   auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
 #ifdef DYNTRANS_PPC
-    extern uint32_t required_sr1;
-    if (!required_sr1 || (cpu->cd.ppc.sr[1] == required_sr1)) {
-      ppc_instr_dump_registers(cpu, ic);
-    }
+    ppc_instr_dump_registers(cpu, ic);
 #endif
     I;
   };
@@ -963,14 +960,16 @@ void DYNTRANS_INIT_TABLES(struct cpu *cpu)
 	return;
 
 
-bad:	/*
+bad:
+  /*
 	 *  Nothing was translated. (Unimplemented or illegal instruction.)
 	 */
 
 	/*  Clear the translation, in case it was "half-way" done:  */
 	ic->f = TO_BE_TRANSLATED;
 
-	if (cpu->translation_readahead) {
+  // We can ignore a translation failure when we took an exception.
+	if (cpu->translation_readahead || low_pc == ~0ull) {
 		fprintf(stderr, "bad: readahead failed at %08x\n", (unsigned int)addr);
 		return;
 	}

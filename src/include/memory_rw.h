@@ -105,7 +105,7 @@ mapping_result_t determine_paddr
         (mem,
          mapping.host_pages.physaddr & ~mapping.offset_mask,
          writeflag);
-      
+
       mapping.offset = mapping.host_pages.physaddr & mapping.offset_mask;
     } else {
       mapping.outside_ram = true;

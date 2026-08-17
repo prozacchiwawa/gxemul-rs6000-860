@@ -200,26 +200,20 @@ uint64_t bus_pci_get_io_target(struct cpu *cpu, struct pci_data *pci_data, bool 
     uint32_t id = bus_pci_read_cfg(dev, 0);
     for (i = PCI_MAPREG_START; i < PCI_MAPREG_END; i += 4) {
       uint32_t bar = bus_pci_read_cfg(dev, i);
-      if (!bar) {
-        continue;
-      }
-
       uint32_t bar_addr = (io ? PCI_MAPREG_IO_ADDR(bar) : PCI_MAPREG_MEM_ADDR(bar)) & 0x7fffffff;
-      uint32_t bar_len = io ? PCI_MAPREG_IO_SIZE(bar) : PCI_MAPREG_MEM_SIZE(bar);
 
 #if 0
       fprintf
-        (stderr, "[ pci: search for %s %s target %08x? bar %02x = %08x:%08x ]\n",
+        (stderr, "[ pci: search for %s %s target %08x? bar %02x = %08x ]\n",
          io ? "io" : "mem",
          dev->name,
          (unsigned int)target,
          i,
-         (unsigned int)bar_addr,
-         (unsigned int)bar_len
+         (unsigned int)bar_addr
          );
 #endif
 
-      if (target >= bar_addr && target < bar_addr + bar_len) {
+      if (target >= bar_addr) {
         for (auto j = 0; j < pci_io_target; j++) {
           if (id == pci_io_allocation[j].id && pci_io_allocation[j].io_space == io && target < bar_addr + pci_io_allocation[j].size) {
             return pci_io_allocation[j].allocated_space + (target - bar_addr);
@@ -493,13 +487,12 @@ int s3_virge_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
     PCI_SET_DATA(reg, value);
     return 1;
 
-  case 0x10:
+  case 0x10: {
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    if (value) {
-      uint32_t mem_stride = 0xfc000000;
-      PCI_SET_DATA(reg, value & mem_stride);
-    }
+    uint32_t mem_stride = 0xfc000000;
+    PCI_SET_DATA(reg, value & mem_stride);
     return 1;
+  }
 
   case 0x30:
     fprintf(stderr, "vga: set option rom address to %08x\n", value);
@@ -544,28 +537,58 @@ PCIINIT(s3_virge)
 #define PCI_VENDOR_WD                   0x101c
 #define PCI_PRODUCT_WD90C00            0xc24a
 
+int wd_90c00_cfg_reg_write(struct pci_device *pd, int reg, uint32_t value) {
+  switch (reg) {
+  case 0x04:
+    PCI_SET_DATA(reg, value);
+    return 1;
+
+  case 0x10: {
+    fprintf(stderr, "vga: set BAR0 to %08x\n", value);
+    uint32_t mem_stride = 0xff000000;
+    PCI_SET_DATA(reg, value & mem_stride);
+    return 1;
+  }
+
+  case 0x30:
+    fprintf(stderr, "vga: set option rom address to %08x\n", value);
+    // PCI_SET_DATA(reg, value & 0xffff8000);
+    PCI_SET_DATA(reg, 0);
+    return 1;
+
+  case 0x3c:
+    fprintf(stderr, "vga: set interrupt line? %08x\n", value);
+    PCI_SET_DATA(reg, 0x100 | (value & 0xff));
+    return 1;
+
+  default:
+    return 0;
+  }
+}
+
 PCIINIT(wd90c00)
 {
   auto id_code = PCI_ID_CODE(PCI_VENDOR_WD, PCI_PRODUCT_WD90C00);
   PCI_SET_DATA(PCI_ID_REG, id_code);
 
-	PCI_SET_DATA(PCI_CLASS_REG,
+  PCI_SET_DATA(PCI_CLASS_REG,
                PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
                               PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
   PCI_SET_DATA(PCI_MAPREG_START, 0x00f00000);
-	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
+  PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
 
-	pd->cfg_reg_write = s3_virge_cfg_reg_write;
+	pd->cfg_reg_write = wd_90c00_cfg_reg_write;
 
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
   assoc->io_space = 0;
-  assoc->size = 0x100000;
+  assoc->size = 16 * 1024 * 1024;
   assoc->id = id_code;
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
 
-	dev_wd90c00_init(machine, mem, assoc->allocated_space,
-               pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
+  dev_wd90c00_init
+    (machine, mem, assoc->allocated_space,
+     pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
 #define PCI_VENDOR_NCR 0x1000

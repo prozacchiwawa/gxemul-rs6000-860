@@ -74,9 +74,17 @@ std::deque<keyboard_event_t> keyboard_debug_events;
 
 static inline bool port_enabled(int port, int cmdbyte) {
   if (port) {
-    return !(cmdbyte & KC8_MDISABLE) && (cmdbyte & KC8_MENABLE);
+    return !(cmdbyte & KC8_MDISABLE);
   } else {
-    return !(cmdbyte & KC8_KDISABLE) && (cmdbyte & KC8_KENABLE);
+    return !(cmdbyte & KC8_KDISABLE);
+  }
+}
+
+static inline bool port_int_enabled(int port, int cmdbyte) {
+  if (port) {
+    return cmdbyte & KC8_MENABLE;
+  } else {
+    return cmdbyte & KC8_KENABLE;
   }
 }
 
@@ -439,12 +447,14 @@ void pckbc_add_code(struct pckbc_data *d, int code, int port)
 	d->key_queue[port][d->head[port]] = code;
   if (port_enabled(port, d->cmdbyte) && !d->currently_asserted[port]) {
     fprintf(stderr, "[ pckbc: interrupt port %d ]\n", port);
-    if (port == 0) {
-      INTERRUPT_ASSERT(d->irq_keyboard);
-    } else {
-      INTERRUPT_ASSERT(d->irq_mouse);
+    if (port_int_enabled(port, d->cmdbyte)) {
+      if (port == 0) {
+        INTERRUPT_ASSERT(d->irq_keyboard);
+      } else {
+        INTERRUPT_ASSERT(d->irq_mouse);
+      }
+      d->currently_asserted[port] = true;
     }
-    d->currently_asserted[port] = true;
   }
 }
 
@@ -468,12 +478,14 @@ int pckbc_get_code(struct pckbc_data *d, int port)
     }
     d->currently_asserted[port] = false;
   } else if (port_enabled(port, d->cmdbyte)) {
-    if (port) {
-      INTERRUPT_ASSERT(d->irq_mouse);
-    } else {
-      INTERRUPT_ASSERT(d->irq_keyboard);
+    if (port_int_enabled(port, d->cmdbyte)) {
+      if (port) {
+        INTERRUPT_ASSERT(d->irq_mouse);
+      } else {
+        INTERRUPT_ASSERT(d->irq_keyboard);
+      }
+      d->currently_asserted[port] = true;
     }
-    d->currently_asserted[port] = true;
   }
 
 	return d->key_queue[port][d->tail[port]];
@@ -536,11 +548,13 @@ DEVICE_TICK(pckbc)
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
+  bool mouse_output_generated = false;
   if (d->mouse_ena && (d->in_use & 2) &&
       ((d->mouse_last_x != mouse_x) ||
        (d->mouse_last_y != mouse_y) ||
        (d->mouse_last_but != mouse_but))
       ) {
+    mouse_output_generated = true;
     int diff_x = mouse_x - d->mouse_last_x;
     int diff_y = -(mouse_y - d->mouse_last_y);
     int flags =
@@ -569,15 +583,17 @@ DEVICE_TICK(pckbc)
     return;
   }
 
-  for (int port = 0; port < 2; port++) {
+  for (int port = 0; port < (mouse_output_generated ? 1 : 2); port++) {
     if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
-      if (port == 0) {
-        INTERRUPT_ASSERT(d->irq_keyboard);
-      } else {
-        INTERRUPT_ASSERT(d->irq_mouse);
+      if (port_int_enabled(port, d->cmdbyte)) {
+        if (port == 0) {
+          INTERRUPT_ASSERT(d->irq_keyboard);
+        } else {
+          INTERRUPT_ASSERT(d->irq_mouse);
+        }
+        d->currently_asserted[port] = true;
       }
-      d->currently_asserted[port] = true;
     }
   }
 }
@@ -650,9 +666,14 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
         d->mouse_remote = 0;
         d->mouse_ena = 1;
 
+        d->head[port_nr] = d->tail[port_nr] = 0;
         pckbc_add_code(d, 0xfa, port_nr);
         pckbc_add_code(d, 0xaa, port_nr);
         pckbc_add_code(d, 0, port_nr);
+        break;
+
+      case 0xf6:
+        pckbc_add_code(d, 0xfa, port_nr);
         break;
 
       case 0xf5:
@@ -697,14 +718,18 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 
       case 0xe9:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, d->mouse_reporting << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
+        pckbc_add_code(d, d->mouse_remote << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
         pckbc_add_code(d, d->mouse_resolution, port_nr);
         pckbc_add_code(d, d->mouse_sample_rate, port_nr);
         break;
 
+      case 0xea:
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
       case 0xeb:
         pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
+        pckbc_add_code(d, 8, port_nr);
         pckbc_add_code(d, 0, port_nr);
         pckbc_add_code(d, 0, port_nr);
         break;
@@ -825,7 +850,7 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 
 	case KBC_GETID:
 		/*  Get keyboard ID.  NOTE/TODO: Ugly hardcoded answer.  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
+		// pckbc_add_code(d, KBR_ACK, port_nr);
 		pckbc_add_code(d, 0xab, port_nr);
 		pckbc_add_code(d, 0x83, port_nr);
 		break;
@@ -1075,6 +1100,7 @@ DEVICE_ACCESS(pckbc)
 				fatal("[ pckbc: unknown CONTROL 0x%x ]\n",
 				    (int)idata);
 				d->state = STATE_NORMAL;
+        break;
 			}
 		}
 		break;

@@ -72,7 +72,7 @@ MACHINE_SETUP(prep)
       (machine->machine_subtype == MACHINE_PREP_IBM860 ?
        "RS/6000 Model 860\n" :
        "RS/6000 Model 850\n");
-    model_name = "IBM PPS Model 7249 (E)";
+    model_name = machine->machine_subtype == MACHINE_PREP_IBM860 ? "IBM PPS Model 7249 (E)" : "IBM PPS Model 7248 (E)";
 
 		if (machine->emulated_hz == 0)
 			machine->emulated_hz = 20000000;

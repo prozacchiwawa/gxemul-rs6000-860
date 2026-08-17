@@ -774,8 +774,16 @@ X(dcbz)
 	size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
 	size_t cleared = 0;
 
+  if (cpu->cd.ppc.zero) {
+    abort();
+  }
+
 	/*  Synchronize the PC first:  */
   sync_pc(cpu, ic);
+
+  if (!reg(ic->arg[0])) {
+    fprintf(stderr, "%08x: dcbz %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
+  }
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -800,6 +808,7 @@ X(dcbz)
  *
  *  arg[0] = ptr to frb
  *  arg[1] = mask
+ *  arg[2] = rc
  */
 X(mtfsf)
 {
@@ -808,12 +817,12 @@ X(mtfsf)
   uint64_t new_fpscr = old_fpscr;
 	new_fpscr &= ~ic->arg[1];
 	new_fpscr |= (ic->arg[1] & (*(uint64_t *)ic->arg[0]));
-  if (ic->arg[1] != 0) {
-    // FX is altered only if crf = 0
-    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
-  }
-  fpu_bit_ladder(cpu, cpu->cd.ppc.fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
   cpu->cd.ppc.fpscr = new_fpscr;
+  fpu_bit_ladder(cpu, cpu->cd.ppc.fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  if (!ic->arg[2]) {
+    // Old FX bit if not RC.
+    new_fpscr = (new_fpscr & 0x7fffffff) | (old_fpscr & 0x80000000);
+  }
 }
 X(mtfsf_dot)
 {
@@ -826,7 +835,7 @@ X(mtfsf_dot)
  *
  *  arg[0] = ptr to frb
  *  arg[1] = crf
- *  arg[2] = imm
+ *  arg[2] = imm | (rc = 16)
  */
 X(mtfsfi)
 {
@@ -834,13 +843,13 @@ X(mtfsfi)
   uint64_t old_fpscr = cpu->cd.ppc.fpscr;
   uint64_t new_fpscr = old_fpscr;
 	new_fpscr &= ~(15 << (ic->arg[1] * 4));
-	new_fpscr |= ic->arg[2] << (ic->arg[1] * 4);
-  if (ic->arg[1] != 0) {
-    // FX is altered only if crf = 0
-    new_fpscr = (PPC_FPSCR_FX & old_fpscr) | (~PPC_FPSCR_FX & new_fpscr);
-  }
-  fpu_bit_ladder(cpu, old_fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+	new_fpscr |= (ic->arg[2] & 15) << (ic->arg[1] * 4);
   cpu->cd.ppc.fpscr = new_fpscr;
+  fpu_bit_ladder(cpu, old_fpscr & PPC_FPSCR_VXSNAN, new_fpscr);
+  if (!(ic->arg[2] & 16)) {
+    // Old FX bit if not RC.
+    new_fpscr = (new_fpscr & 0x7fffffff) | (old_fpscr & 0x80000000);
+  }
 }
 X(mtfsfi_dot)
 {
@@ -858,7 +867,6 @@ X(mtfsfi_dot)
 X(mtfsb1x)
 {
   uint64_t fpscr = cpu->cd.ppc.fpscr;
-    
   fpscr = (fpscr | (1 << ic->arg[0])) ^ (ic->arg[1] << ic->arg[0]);
   cpu->cd.ppc.fpscr = fpscr;
 }
@@ -972,6 +980,7 @@ X(fcmpu)
   base_cmp(cpu, ic, (uint64_t *)ic->arg[1], (uint64_t *)ic->arg[2]);
 	int bf_shift = ic->arg[0];
   int c = (cpu->cd.ppc.fpscr >> PPC_FPSCR_FPCC_SHIFT) & 0xf;
+  fprintf(stderr, "fcmpu new flags cr%d = %x\n", 7 - (bf_shift / 4), c);
 	cpu->cd.ppc.cr &= ~(0xf << bf_shift);
 	cpu->cd.ppc.cr |= (c << bf_shift);
 }
@@ -1403,6 +1412,8 @@ X(loose_lhaux)
     full_addr += ic->arg[2];
   }
 
+  full_addr &= 0xffffffff;
+
   int swizzle = 0, offset = 0;
   cpu_ppc_swizzle_offset(cpu, 2, 0, &swizzle, &offset);
 
@@ -1411,7 +1422,7 @@ X(loose_lhaux)
   /*  Synchronize the PC:  */
   sync_pc(cpu, ic);
 
-  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr ^ offset, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 
@@ -1690,10 +1701,10 @@ X(icbi)
 
 X(dcbt)
 {
-  sync_pc(cpu, ic);
-  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  uint64_t dummy;
-  cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
+  // sync_pc(cpu, ic);
+  // auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
+  // uint64_t dummy;
+  // cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
 }
 
 /*
@@ -2139,13 +2150,13 @@ X(lswi)
     nb = cpu->cd.ppc.spr[SPR_XER] & 127;
     if (nb == 0) {
       // fprintf(stderr, "lswx: zero bytes\n");
-      cpu->cd.ppc.gpr[rt] = 0;
+      // cpu->cd.ppc.gpr[rt] = 0;
       return;
     }
     // fprintf(stderr, "lswx: %02x bytes from %08x at %08x\n", nb, (unsigned int)addr, (unsigned int)cpu->pc);
   }
 
-  uint64_t register_values[32];
+  uint64_t register_values[32] = { 0 };
   uint32_t start_rt = (rt + 31) & 31;
 
 	while (nb > 0) {
@@ -2153,7 +2164,6 @@ X(lswi)
 
 		if ((sub & 3) == 0) {
 			rt = (rt + (sub >> 2)) & 31;
-			register_values[rt] = 0;
 			sub = 0;
 		}
 
@@ -2177,7 +2187,7 @@ X(lswi)
       // fprintf(stderr, "lsw%c: r%02d = %08x\n", ix, rt, (unsigned int)register_values[rt]);
       cpu->cd.ppc.gpr[rt] = register_values[rt];
     }
-    rt--;
+    rt = (rt + 31) & 31;
   }
 }
 X(stswi)
@@ -2565,30 +2575,30 @@ X(subfco)
 DOT2(subfco)
 X(subfe)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+  int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = reg(ic->arg[1]) + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
   update_xer_arith<true, false>(cpu, tmp, c6);
-	reg(ic->arg[2]) = tmp;
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfe)
 X(subfeo)
 {
-	int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
+  int old_ca = (cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA)? 1 : 0;
   uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
   update_xer_arith<true, true>(cpu, tmp, c6);
-	reg(ic->arg[2]) = tmp;
+  reg(ic->arg[2]) = tmp;
 }
 DOT2(subfeo)
 X(subfme)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = 0xffffffffULL + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
@@ -2598,8 +2608,8 @@ X(subfme)
 DOT2(subfme)
 X(subfmeo)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = (uint32_t)~reg(ic->arg[0]);
   uint64_t tm2 = 0xffffffffULL + old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
@@ -2609,8 +2619,8 @@ X(subfmeo)
 DOT2(subfmeo)
 X(subfze)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = ~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = ~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   update_xer_arith<true, false>(cpu, tmp, c6);
@@ -2619,8 +2629,8 @@ X(subfze)
 DOT2(subfze)
 X(subfzeo)
 {
-	int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
-	uint64_t tmp = ~reg(ic->arg[0]);
+  int old_ca = cpu->cd.ppc.spr[SPR_XER] & PPC_XER_CA ? 1 : 0;
+  uint64_t tmp = ~reg(ic->arg[0]);
   uint64_t tm2 = old_ca;
   bool c6 = (tmp & 0x7fffffff) + (tm2 & 0x7fffffff) >> 31;
   tmp += tm2;
@@ -3039,18 +3049,18 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  // fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;
   uint64_t addr_page = reg(ic->arg[0]);
 
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 4; i++) {
     cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
     addr_page &= increment - 1;
     for (int i = 0; i < 16; i++) {
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR | INVALIDATE_INSTR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR);
       addr_page += increment;
     }
   }
@@ -3157,9 +3167,9 @@ X(dump_registers) {
     cpu->translation_readahead = old_readahead;
   }
 
-  auto iowait_exclusion = cpu->pc <= 0x150000 || cpu->pc > 0x160000;
+
   auto in_trace_region = (trace_low == trace_high) || (cpu->pc >= trace_low && cpu->pc < trace_high);
-  if (single_step || (iowait_exclusion && in_trace_region)) {
+  if (single_step || in_trace_region) {
     cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
     if (cpu->machine->register_dump) {
       ppc_cpu_register_dump(cpu, true, false);
@@ -3206,6 +3216,7 @@ X(to_be_translated)
                                              sizeof(ib), MEM_READ, CACHE_INSTRUCTION)) {
     fprintf(stderr, "%08x: translation failed\n", (unsigned int)addr);
     memcpy(ic, &nothing_call, sizeof(nothing_call));
+    low_pc = ~0ull;
     goto bad;
   }
 
@@ -3371,8 +3382,8 @@ X(to_be_translated)
 
 	case PPC_HI6_LHA:
   case PPC_HI6_LHAU:
+		rs = (iword >> 21) & 31; ra = (iword >> 16) & 31; rb = (iword >> 11) & 31;
     ic->f = instr(loose_lhaux);
-    rs = (iword >> 21) & 31; ra = (iword >> 16) & 31;
     ic->arg[0] = rs << 2 | lha_does_update(ra, rs, main_opcode == PPC_HI6_LHAU) << 1; // update or not.
     if (ra == 0) {
       ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
@@ -4078,8 +4089,8 @@ X(to_be_translated)
 
 		case PPC_31_LHAX:
 		case PPC_31_LHAUX:
-      ic->f = instr(loose_lhaux);
       rs = (iword >> 21) & 31; ra = (iword >> 16) & 31; rb = (iword >> 11) & 31;
+      ic->f = instr(loose_lhaux);
       ic->arg[0] = rs << 2 | lha_does_update(ra, rs, xo == PPC_31_LHAUX) << 1 | 1; // update or not, indexed.
       if (ra == 0) {
         ic->arg[1] = (size_t)(&cpu->cd.ppc.zero);
@@ -4628,6 +4639,7 @@ X(to_be_translated)
 					if (iword & (1 << (17+bi)))
 						ic->arg[1] |= 0xf;
 				}
+        ic->arg[2] = iword & 1;
 				break;
       case PPC_63_MTFSFI:
         if (rc) {
@@ -4637,7 +4649,7 @@ X(to_be_translated)
         }
 				ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rb]);
 				ic->arg[1] = (iword >> 24) & 7;
-        ic->arg[2] = (iword >> 12) & 15;
+        ic->arg[2] = ((iword >> 12) & 15) | ((iword & 1) ? 16 : 0);
         break;
       case PPC_63_MTFSB1x:
       case PPC_63_MTFSB0x:

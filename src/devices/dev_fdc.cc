@@ -80,6 +80,7 @@ struct fdc_data {
     int			command_bytes[16];
     int			seek_head, seek_track;
     int			read_sector, eot_sector;
+    int     current_drive;
     int			status_read;
     int     assumed_spt;
     bool    asserting_interrupt;
@@ -120,7 +121,7 @@ static void maybe_interrupt(struct fdc_data *d)
 
 static int st0_state(struct fdc_data *d)
 {
-    return (d->recent_seek ? 0x20 : 0) | (d->seek_head ? 4 : 0);
+    return (d->recent_seek ? 0x20 : 0) | (d->seek_head ? 4 : 0) | d->current_drive;
 }
 
 
@@ -202,6 +203,7 @@ DEVICE_ACCESS(fdc)
 						break;
 
 					case STATE_RECAL:
+            d->current_drive = d->command_bytes[0] & 3;
             d->recent_seek = true;
             d->seek_head = 0;
             d->seek_track = 0;
@@ -349,7 +351,7 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: sense interrupt ]\n");
 					d->command_size = 0;
 					d->command_result = 2;
-          d->command_bytes[1] = 0x20;
+          d->command_bytes[1] = 0x20 | d->current_drive;
           d->command_bytes[0] = d->seek_track;
           d->recent_seek = 0;
 					d->state = STATE_CMD_QUEUE | STATE_CMD_BUSY;
@@ -444,6 +446,14 @@ DEVICE_ACCESS(fdc)
       memory_writemax64(cpu, data, len, 0);
 		}
 		break;
+
+  case 0x1:
+    if (writeflag == MEM_READ) {
+      uint8_t result = 0xfb;
+      fprintf(stderr, "[ fdc: read from reg STB: %02x ]\n", result);
+      memory_writemax64(cpu, data, len, result);
+    }
+    break;
 
   case 0:
     if (writeflag == MEM_READ) {

@@ -188,36 +188,6 @@ void dev_fb_resize(struct vfb_data *d, int new_xsize, int new_ysize)
 
 
 /*
- *  dev_fb_setcursor():
- */
-void dev_fb_setcursor(struct vfb_data *d, int cursor_x, int cursor_y, int on,
-	int cursor_xsize, int cursor_ysize)
-{
-	if (cursor_x < 0)
-		cursor_x = 0;
-	if (cursor_y < 0)
-		cursor_y = 0;
-	if (cursor_x + cursor_xsize >= d->xsize)
-		cursor_x = d->xsize - cursor_xsize;
-	if (cursor_y + cursor_ysize >= d->ysize)
-		cursor_y = d->ysize - cursor_ysize;
-
-#ifdef WITH_X11
-	if (d->fb_window != NULL) {
-		d->fb_window->cursor_x      = cursor_x;
-		d->fb_window->cursor_y      = cursor_y;
-		d->fb_window->cursor_on     = on;
-		d->fb_window->cursor_xsize  = cursor_xsize;
-		d->fb_window->cursor_ysize  = cursor_ysize;
-	}
-#endif
-
-	/*  debug("dev_fb_setcursor(%i,%i, size %i,%i, on=%i)\n",
-	    cursor_x, cursor_y, cursor_xsize, cursor_ysize, on);  */
-}
-
-
-/*
  *  framebuffer_blockcopyfill():
  *
  *  This function should be used by devices that are capable of doing
@@ -402,6 +372,12 @@ void (*redraw[2 * 4 * 2])(struct vfb_data *, int, int, void *, int) = {
 #endif	/*  WITH_X11  */
 
 
+struct cursor_buffer {
+  int x, y, w;
+  std::vector<uint8_t> fb_data;
+};
+
+
 DEVICE_TICK(fb)
 {
 	struct vfb_data *d = (struct vfb_data *) extra;
@@ -411,13 +387,12 @@ DEVICE_TICK(fb)
 #ifdef WITH_X11
 	SDL_LockTexture(d->fb_window->fb_data, nullptr, &pixels, &pitch);
 	if (!pixels) {
-          return;
+    return;
 	}
 #endif
 
 #ifdef WITH_X11
 	int need_to_flush_x11 = 0;
-	int need_to_redraw_cursor = 0;
 #endif
 
 	if (!cpu->machine->x11_md.in_use)
@@ -489,59 +464,6 @@ DEVICE_TICK(fb)
 		}
 	} while (0);
 
-#ifdef WITH_X11
-	/*  Do we need to redraw the cursor?  */
-	if (d->fb_window->cursor_on != d->fb_window->OLD_cursor_on ||
-	    d->fb_window->cursor_x != d->fb_window->OLD_cursor_x ||
-	    d->fb_window->cursor_y != d->fb_window->OLD_cursor_y ||
-	    d->fb_window->cursor_xsize != d->fb_window->OLD_cursor_xsize ||
-	    d->fb_window->cursor_ysize != d->fb_window->OLD_cursor_ysize)
-		need_to_redraw_cursor = 1;
-
-	if (d->update_x2 != -1) {
-		if (((d->update_x1 >= d->fb_window->OLD_cursor_x &&
-		      d->update_x1 < (d->fb_window->OLD_cursor_x +
-		      d->fb_window->OLD_cursor_xsize)) ||
-		     (d->update_x2 >= d->fb_window->OLD_cursor_x &&
-		      d->update_x2 < (d->fb_window->OLD_cursor_x +
-		      d->fb_window->OLD_cursor_xsize)) ||
-		     (d->update_x1 <  d->fb_window->OLD_cursor_x &&
-		      d->update_x2 >= (d->fb_window->OLD_cursor_x +
-		      d->fb_window->OLD_cursor_xsize)) ) &&
-		   ( (d->update_y1 >= d->fb_window->OLD_cursor_y &&
-		      d->update_y1 < (d->fb_window->OLD_cursor_y +
-		      d->fb_window->OLD_cursor_ysize)) ||
-		     (d->update_y2 >= d->fb_window->OLD_cursor_y &&
-		      d->update_y2 < (d->fb_window->OLD_cursor_y +
-		      d->fb_window->OLD_cursor_ysize)) ||
-		     (d->update_y1 <  d->fb_window->OLD_cursor_y &&
-		      d->update_y2 >= (d->fb_window->OLD_cursor_y +
-		     d->fb_window->OLD_cursor_ysize)) ) )
-			need_to_redraw_cursor = 1;
-	}
-
-	if (0 && need_to_redraw_cursor) {
-		fprintf(stderr, "[ SDL: redraw cursor ]\n");
-    struct fb_window *fbwin = d->fb_window;
-
-    SDL_Rect cursor_rect;
-    cursor_rect.x = 0;
-    cursor_rect.y = 0;
-    cursor_rect.w = fbwin->OLD_cursor_xsize/fbwin->scaledown + 1;
-    cursor_rect.h = fbwin->OLD_cursor_ysize/fbwin->scaledown + 1;
-    SDL_Rect target_cursor_rect = cursor_rect;
-    target_cursor_rect.x = fbwin->OLD_cursor_x/fbwin->scaledown;
-    target_cursor_rect.y = fbwin->OLD_cursor_y/fbwin->scaledown;
-
-		/*  Remove old cursor, if any:  */
-    if (fbwin->x11_fb_window != nullptr && fbwin->OLD_cursor_on) {
-      // Make a cursor sized texture.
-      SDL_SetRenderTarget(fbwin->x11_fb_render, fbwin->cursor_reserve);
-      SDL_RenderCopy(fbwin->x11_fb_render, fbwin->fb_data, &cursor_rect, &target_cursor_rect);
-    }
-	}
-#endif
-
 	if (d->update_x2 != -1) {
 #ifdef WITH_X11
 		int y;
@@ -592,32 +514,72 @@ DEVICE_TICK(fb)
 	}
 
 #ifdef WITH_X11
-	if (0 && need_to_redraw_cursor) {
-		fprintf(stderr, "[ SDL: redraw cursor ]\n");
-		/*  Paint new cursor:  */
-		if (d->fb_window->cursor_on) {
-			x11_redraw_cursor(cpu->machine,
-			    d->fb_window->fb_number);
-			d->fb_window->OLD_cursor_on = d->fb_window->cursor_on;
-			d->fb_window->OLD_cursor_x = d->fb_window->cursor_x;
-			d->fb_window->OLD_cursor_y = d->fb_window->cursor_y;
-			d->fb_window->OLD_cursor_xsize = d->fb_window->
-			    cursor_xsize;
-			d->fb_window->OLD_cursor_ysize = d->fb_window->
-			    cursor_ysize;
-			need_to_flush_x11 = 1;
-		}
-	}
-#endif
-
-#ifdef WITH_X11
-  // Flush if needed
   SDL_Rect cursor_rect;
   cursor_rect.x = 0;
   cursor_rect.y = 0;
   cursor_rect.w = d->fb_window->x11_fb_winxsize;
   cursor_rect.h = d->fb_window->x11_fb_winysize;
   SDL_RenderCopy(d->fb_window->x11_fb_render, d->fb_window->fb_data, &cursor_rect, &cursor_rect);
+
+  for (auto c = d->fb_window->cursors.begin(); c != d->fb_window->cursors.end(); c++) {
+    // Handle cursor.
+    if (c->on && c->render) {
+      auto height = c->data.size() / c->width;
+
+      // Copy the window data to the cursor back buffer.
+      SDL_Rect dest_rect;
+      auto dest_x = c->render_x - c->center_x;
+      auto dest_y = c->render_y - c->center_y;
+      dest_rect.x = dest_x;
+      dest_rect.y = dest_y;
+      dest_rect.w = c->width;
+      dest_rect.h = height;
+
+      void *cpixels_void = nullptr;
+      uint8_t *cpixels;
+      int cpitch;
+      SDL_LockTexture(c->render, nullptr, &cpixels_void, &cpitch);
+      if (!cpixels) {
+        continue;
+      }
+
+      cpixels = (uint8_t *)cpixels_void;
+      // Draw the cursor itself onto its buffer texture.
+      for (int y = 0, row = 0; row < c->data.size(); y++, row += c->width) {
+        auto target_y = dest_y + y;
+        if (target_y >= 0 && target_y < cursor_rect.h) {
+          auto real_y_row = ((uint8_t *)pixels) + pitch * target_y;
+          auto skip = std::max(0, -std::max(dest_x, 0));
+          auto max_x = std::min(dest_x + 64, cursor_rect.w);
+          auto count = std::min(64, skip ? 64 - skip : max_x - dest_x);
+          memcpy(cpixels + y * cpitch + 4 * skip, real_y_row + (dest_x + skip) * 4, count * 4);
+        }
+        for (int x = 0; x < c->width; x++) {
+          auto cursor_color = c->data[row + x];
+          auto pixel_target = y * cpitch + x * 4;
+          if (cursor_color == c->invert_color) {
+            cpixels[pixel_target + 0] ^= 0xff;
+            cpixels[pixel_target + 1] ^= 0xff;
+            cpixels[pixel_target + 2] ^= 0xff;
+          } else {
+            auto real_color = c->palette[cursor_color];
+            if (!(real_color >> 24)) {
+              continue;
+            }
+            cpixels[pixel_target + 3] = real_color >> 24;
+            cpixels[pixel_target + 2] = real_color >> 16;
+            cpixels[pixel_target + 1] = real_color >> 8;
+            cpixels[pixel_target] = real_color;
+          }
+        }
+      }
+      SDL_UnlockTexture(c->render);
+
+      fprintf(stderr, "[ fb: cursor render to display coords %dx%d ]\n", dest_rect.x, dest_rect.y);
+      SDL_RenderCopy(d->fb_window->x11_fb_render, c->render, nullptr, &dest_rect);
+    }
+  }
+
   SDL_RenderPresent(d->fb_window->x11_fb_render);
   SDL_UnlockTexture(d->fb_window->fb_data);
 #endif
@@ -666,7 +628,7 @@ used to make movies, e.g. http://www.youtube.com/watch?v=Afh1ECLWac8
 
 				// Calculate scaledown:
 				int scaledown = 1;
-				
+
 				while (d->visible_xsize / scaledown > xsize ||
 					d->visible_ysize / scaledown > ysize)
 				{

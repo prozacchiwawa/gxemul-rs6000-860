@@ -196,12 +196,12 @@ DEVICE_ACCESS(eagle_8mb)
     fprintf(stderr, "[ eagle: discontiguous access on %x ]\n", (unsigned int)real_addr);
     d->discontiguous = 1;
   }
-  if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
+  if (d->discontiguous /* && !(real_addr >= 0xcf8 && real_addr <= 0xcff) */) {
     uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;
-    fprintf(stderr, "[ eagle: d-io %x %x ]\n", (unsigned int)page, (unsigned int)subaddr);
+    // fprintf(stderr, "[ eagle: d-io %x %x <- %08x ]\n", (unsigned int)page, (unsigned int)subaddr, (unsigned int)relative_addr);
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
-    fprintf(stderr, "[ eagle: non contig %" PRIx64 "x ]\n", real_addr);
+    // fprintf(stderr, "[ eagle: non contig %" PRIx64 " ]\n", real_addr);
   } else {
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
@@ -348,6 +348,22 @@ DEVICE_ACCESS(eagle_dma_1)
       if (writeflag == MEM_WRITE) {
         d->addr_low_high_latch = 0;
         d->len_low_high_latch = 0;
+      }
+      break;
+
+    case 2:
+      if (writeflag == MEM_WRITE) {
+        if (!d->addr_low_high_latch) {
+          eagle_comm.eagle_comm_area[16] = idata;
+        } else {
+          eagle_comm.eagle_comm_area[17] = idata;
+        }
+      } else {
+        if (!d->addr_low_high_latch) {
+          idata = eagle_comm.eagle_comm_area[16];
+        } else {
+          idata = eagle_comm.eagle_comm_area[17];
+        }
       }
       break;
 
@@ -565,7 +581,7 @@ DEVICE_ACCESS(eagle_200)
     break;
   }
 
-  fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
+  // fprintf(stderr, "[ unknown-200: %s %x -> %x (pc %08x) ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata, (unsigned int)cpu->pc);
 
   return 1;
 }
@@ -751,6 +767,33 @@ DEVICE_ACCESS(eagle_8a0)
     return 1;
 }
 
+DEVICE_ACCESS(eagle_d00)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0, odata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
+  }
+
+  switch (relative_addr) {
+  case 1:
+    if (cpu->machine->machine_subtype == MACHINE_PREP_IBM860) {
+      odata = 1;
+    } else {
+      odata = 0;
+    }
+    break;
+  }
+
+  fprintf(stderr, "[ unknown-d00: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, odata);
+
+  if (writeflag == MEM_READ)
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, odata);
+
+  return 1;
+}
+
 DEVICE_ACCESS(eagle_dma_scatter_gather) {
     struct eagle_data *d = (struct eagle_data *) extra;
     uint64_t idata = 0;
@@ -924,19 +967,23 @@ DEVINIT(eagle)
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "200",
-                           isa_portbase + 0x200, 16, dev_eagle_200_access, d,
-                           DM_DEFAULT, NULL);
-    
+        isa_portbase + 0x200, 16, dev_eagle_200_access, d,
+        DM_DEFAULT, NULL);
+
     memory_device_register(devinit->machine->memory, "830",
         isa_portbase + 0x830, 16, dev_eagle_830_access, d,
         DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "850",
-                           isa_portbase + 0x850, 4, dev_eagle_850_access, d,
-                           DM_DEFAULT, NULL);
+        isa_portbase + 0x850, 4, dev_eagle_850_access, d,
+        DM_DEFAULT, NULL);
 
     memory_device_register(devinit->machine->memory, "880",
         isa_portbase + 0x880, 16, dev_eagle_880_access, d,
+        DM_DEFAULT, NULL);
+
+    memory_device_register(devinit->machine->memory, "d00",
+        isa_portbase + 0xd00, 2, dev_eagle_d00_access, d,
         DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);

@@ -211,7 +211,7 @@ struct eagle_glob {
   uint8_t error_enabling_1, error_detection_1, bus_status_60x;
   uint8_t error_enabling_2, error_detection_2, bus_status_pci;
 
-  unsigned char eagle_comm_area[16];
+  unsigned char eagle_comm_area[32];
 
   uint16_t password_protect_1;
   uint16_t password_protect_2;

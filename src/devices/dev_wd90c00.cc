@@ -44,6 +44,7 @@
 #include "bus_isa.h"
 
 #include "vga.h"
+#include "x11.h"
 
 #define S_CRTC 0
 #define S_SEQ 1
@@ -1963,11 +1964,7 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >= d->font_height)
 		onoff = 0;
 
-	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+  x11_update_cursor(d->fb->fb_window, 0, onoff, d->cursor_x * d->font_width, d->cursor_y * d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]);
 }
 
 
@@ -2115,10 +2112,11 @@ DEVICE_ACCESS(wd_graphics)
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+  relative_addr &= d->gfx_mem_size - 1;
 
-	if (relative_addr + len >= d->gfx_mem_size) {
+  if (relative_addr + len >= d->gfx_mem_size) {
     fprintf(stderr, "[ vga: failed access at %08x+%x greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
-		return 0;
+    return 0;
   }
 
 	if (d->cur_mode != MODE_GRAPHICS)
@@ -2770,7 +2768,7 @@ void wd90c00_hack_start(struct vga_data *d) {
     d->bits_per_pixel = 8;
     d->pixel_repx = d->pixel_repy = 1;
 
-    d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
+    d->gfx_mem_size = 1 * 1024 * 1024; /*d->max_x * d->max_y /
                                          (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
 
     CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
@@ -2872,8 +2870,8 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
 	d->update_y2 = d->max_y - 1;
 	d->modified = 1;
 
-  // Used when window_mapped is true.
-  d->window_address = 0;
+        // Used when window_mapped is true.
+        d->window_address = 0;
 
 	machine_add_tickfunction(machine, dev_wd_tick, d, VGA_TICK_SHIFT);
 

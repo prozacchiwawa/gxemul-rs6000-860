@@ -108,7 +108,7 @@ struct pci_device {
 	int			cur_mapreg_offset;
 
 	/*  Function to handle device-specific cfg register writes:  */
-	int			(*cfg_reg_write)(struct pci_device *pd,
+	int			(*cfg_reg_write)(struct cpu *cpu, struct pci_device *pd,
 				    int reg, uint32_t value);
 	void			*extra;
 };

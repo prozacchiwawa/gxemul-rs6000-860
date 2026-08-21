@@ -42,7 +42,48 @@
 #include "memory.h"
 #include "misc.h"
 
-struct eagle_glob eagle_comm;
+/*  dev_eagle.c */
+struct eagle_data {
+	struct interrupt irq;
+
+	struct pci_data	*pci_data;
+
+	int stage;
+  int addr_low_high_latch;
+  int len_low_high_latch;
+
+  int fin_mask;
+
+  unsigned char dma_page[4];
+  unsigned char dma_high[4];
+
+  uint8_t err_reg[2];
+
+  int want_error;
+  int l2_cache;
+  int discontiguous;
+  int bg_data_8mb;
+
+  // cs4231
+  uint8_t cs4231_index;
+  uint8_t cs4231_status;
+  uint8_t cs4231_registers[0x20];
+
+  bool game_timer;
+
+  uint16_t pci_status;
+  uint16_t pci_command;
+
+  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
+
+  uint8_t dma_controller_1_status;
+  uint8_t dma_controller_1_scatter_gather;
+  uint32_t dma_channel_2_addr;
+  uint16_t dma_channel_2_len;
+
+  uint16_t password_protect_1;
+  uint16_t password_protect_2;
+};
 
 DEVICE_ACCESS(eagle)
 {
@@ -274,17 +315,17 @@ DEVICE_ACCESS(eagle_800)
 
     case 0x10:
         if (writeflag == MEM_READ) {
-            odata = eagle_comm.password_protect_1;
+            odata = d->password_protect_1;
         } else {
-            eagle_comm.password_protect_1 |= idata;
+            d->password_protect_1 |= idata;
         }
         break;
 
       case 0x12:
         if (writeflag == MEM_READ) {
-            odata = eagle_comm.password_protect_2;
+            odata = d->password_protect_2;
         } else {
-            eagle_comm.password_protect_2 |= idata;
+            d->password_protect_2 |= idata;
         }
         break;
 
@@ -354,16 +395,18 @@ DEVICE_ACCESS(eagle_dma_1)
     case 4:
       if (writeflag == MEM_WRITE) {
         if (!d->addr_low_high_latch) {
-            eagle_comm.eagle_comm_area[0] = idata;
+            d->dma_channel_2_addr &= ~0xff;
+            d->dma_channel_2_addr |= idata & 0xff;
         } else {
-            eagle_comm.eagle_comm_area[1] = idata;
+            d->dma_channel_2_addr &= ~0xff00;
+            d->dma_channel_2_addr |= (idata & 0xff) << 8;
         }
         d->addr_low_high_latch = !d->addr_low_high_latch;
       } else {
         if (!d->addr_low_high_latch) {
-            idata = eagle_comm.eagle_comm_area[0];
+            idata = d->dma_channel_2_addr & 0xff;
         } else {
-            idata = eagle_comm.eagle_comm_area[1];
+            idata = (d->dma_channel_2_addr >> 8) & 0xff;
         }
       }
       break;
@@ -371,16 +414,18 @@ DEVICE_ACCESS(eagle_dma_1)
     case 5:
       if (writeflag == MEM_WRITE) {
         if (!d->len_low_high_latch) {
-            eagle_comm.eagle_comm_area[4] = idata;
+            d->dma_channel_2_len &= ~0xff;
+            d->dma_channel_2_len |= idata & 0xff;
         } else {
-            eagle_comm.eagle_comm_area[5] = idata;
+            d->dma_channel_2_len &= ~0xff00;
+            d->dma_channel_2_len |= (idata & 0xff) << 8;
         }
         d->len_low_high_latch = !d->len_low_high_latch;
       } else {
         if (!d->len_low_high_latch) {
-          idata = eagle_comm.eagle_comm_area[4];
+          idata = d->dma_channel_2_len & 0xff;
         } else {
-          idata = eagle_comm.eagle_comm_area[5];
+          idata = d->dma_channel_2_len >> 8;
         }
       }
       break;
@@ -388,8 +433,8 @@ DEVICE_ACCESS(eagle_dma_1)
     case 8:
       if (writeflag != MEM_WRITE) {
         INTERRUPT_DEASSERT(d->irq);
-        idata = eagle_comm.eagle_comm_area[7] | d->fin_mask;
-        eagle_comm.eagle_comm_area[7] = 0;
+        idata = d->dma_controller_1_status | d->fin_mask;
+        d->dma_controller_1_status = 0;
         d->fin_mask = 0;
       }
       break;
@@ -430,7 +475,8 @@ DEVICE_ACCESS(eagle_dma_2)
       d->dma_page[relative_addr] = idata;
     }
     if (relative_addr == 1) {
-        eagle_comm.eagle_comm_area[2] = idata;
+      d->dma_channel_2_addr &= ~0xff0000;
+      d->dma_channel_2_addr |= (idata & 0xff) << 16;
     }
   }
 
@@ -449,7 +495,8 @@ DEVICE_ACCESS(eagle_dma_80)
     idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
     d->dma_page[relative_addr] = idata;
     if (relative_addr == 1) {
-        eagle_comm.eagle_comm_area[2] = idata;
+      d->dma_channel_2_addr &= ~0xff0000;
+      d->dma_channel_2_addr |= (idata & 0xff) << 16;
     }
   }
 
@@ -482,7 +529,8 @@ DEVICE_ACCESS(eagle_480)
         idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);
         d->dma_high[relative_addr] = idata;
         if (relative_addr == 1) {
-            eagle_comm.eagle_comm_area[3] = idata;
+          d->dma_channel_2_addr &= ~0xff000000;
+          d->dma_channel_2_addr |= (idata & 0xff) << 24;
         }
     } else {
         idata = d->dma_high[relative_addr];
@@ -785,8 +833,8 @@ DEVICE_ACCESS(eagle_dma_scatter_gather) {
     if (writeflag == MEM_WRITE) {
         // TODO
     } else {
-        idata = eagle_comm.eagle_comm_area[8];
-        eagle_comm.eagle_comm_area[8] = 0;
+        idata = d->dma_controller_1_scatter_gather;
+        d->dma_controller_1_scatter_gather = 0;
     }
 
     fprintf(stderr, "[ dma scatter gather: %s %x -> %x ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr, idata);
@@ -839,6 +887,48 @@ DEVICE_ACCESS(eagle_pci_config) {
 
   return 1;
 }
+
+
+// Allows peripherals to update and check the isa dma registers.
+// This is cooperative between the peripheral and the dma provider.
+DEVICE_ACCESS(eagle_private_dma) {
+  struct eagle_data *d = (struct eagle_data *) extra;
+  uint64_t idata = 0;
+
+	if (writeflag == MEM_WRITE)
+		idata = memory_readmax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN);  
+
+  switch (relative_addr) {
+  case 0:
+    idata = d->dma_channel_2_addr;
+    break;
+
+  case 4:
+    idata = d->dma_channel_2_len;
+    break;
+    
+  case 7:
+    if (writeflag == MEM_WRITE) {
+      d->dma_controller_1_status = idata;
+    } else {
+      idata = d->dma_controller_1_status;
+    }
+    break;
+
+  case 8:
+    if (writeflag == MEM_WRITE) {
+      d->dma_controller_1_scatter_gather = idata;
+    } else {
+      idata = d->dma_controller_1_scatter_gather;
+    }
+  }
+
+  if (writeflag == MEM_READ)
+    memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
+
+  return 1;
+}
+
 
 DEVICE_TICK(eagle) {
   struct eagle_data *d = (struct eagle_data *) extra;
@@ -1006,6 +1096,11 @@ DEVINIT(eagle)
       (devinit->machine->memory, "eagle_pci_config",
        DEV_PCI_CONFIG_EAGLE, DEV_PCI_CONFIG_CARD_SIZE,
        dev_eagle_pci_config_access, d, DM_DEFAULT, NULL);
+
+    memory_device_register
+      (devinit->machine->memory, "eagle_dma_internal",
+       EAGLE_ISA_DMA_REGS, 16, dev_eagle_private_dma_access, d,
+       DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
 

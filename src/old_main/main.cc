@@ -50,6 +50,9 @@
 #include "timer.h"
 #include "UnitTest.h"
 #include "debugger.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 extern uint64_t single_step;
 extern int force_debugger_at_exit;
@@ -386,10 +389,11 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 	char *type = NULL, *subtype = NULL;
 	int n_cpus_set = 0;
 	int msopts = 0;		/*  Machine-specific options used  */
+  char *stderr_redirect_log = nullptr;
 	struct machine *m = emul_add_machine(emul, NULL);
 
 	const char *opts =
-	    "BC:c:Dd:E:e:HhI:iJj:k:KM:Nn:Oo:p:QqRrSs:TtUVvW:@:"
+	    "BC:c:Dd:E:e:HhI:iJj:k:L:KM:Nn:Oo:p:QqRrSs:TtUVvW:@:"
 #ifdef WITH_X11
 	    "XxY:"
 #endif
@@ -471,6 +475,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 				exit(1);
 			}
 			break;
+    case 'L':
+      redirect_stderr_platform(optarg);
+      break;
 		case 'K':
 			force_debugger_at_exit = 1;
 			break;

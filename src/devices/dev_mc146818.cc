@@ -87,6 +87,8 @@ struct mc_data {
 
   time_t time;
   int   ticks;
+
+  int want_timer_int;
 };
 
 /*
@@ -158,9 +160,9 @@ DEVICE_TICK(mc146818)
 	struct mc_data *d = (struct mc_data *) extra;
 	int pti = d->pending_timer_interrupts;
 
-  if (eagle_comm.want_timer_int) {
-    fprintf(stderr, "mc146818: want timer int: %d\n", eagle_comm.want_timer_int);
-    if (--eagle_comm.want_timer_int == 0) {
+  if (d->want_timer_int) {
+    fprintf(stderr, "mc146818: want timer int: %d\n", d->want_timer_int);
+    if (--d->want_timer_int == 0) {
       pti++;
     }
   }

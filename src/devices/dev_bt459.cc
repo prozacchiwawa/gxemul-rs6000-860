@@ -142,6 +142,7 @@ static void bt459_update_X_cursor(struct cpu *cpu, struct bt459_data *d)
 	 *	BT459_REG_CCOLOR_2, 3 = reverse of color 1/2.
 	 */
 
+#if 0
 #ifdef WITH_X11
 	if (cpu->machine->x11_md.in_use && d->vfb_data->fb_window != NULL) {
 		for (y=0; y<=ymax; y++) {
@@ -189,6 +190,8 @@ printf("%i", color);
 printf("\n");
 #endif
 		}
+#endif
+
 #ifdef WITH_CURSOR_DEBUG
 printf("color 1,2,3 = 0x%02x, 0x%02x, 0x%02x\n",
     d->bt459_reg[BT459_REG_CCOLOR_1],
@@ -236,8 +239,7 @@ static void bt459_update_cursor_position(struct bt459_data *d,
 		if (d->cursor_xsize == 0 || d->cursor_ysize == 0)
 			on = 0;
 
-		dev_fb_setcursor(d->vfb_data, d->cursor_x, d->cursor_y,
-		    on, d->cursor_xsize, d->cursor_ysize);
+    x11_update_cursor(d->vfb_data->fb_window, 0, on, d->cursor_x, d->cursor_y);
 	}
 }
 

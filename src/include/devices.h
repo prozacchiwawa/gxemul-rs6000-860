@@ -172,6 +172,9 @@ void dev_deccca_init(struct memory *mem, uint64_t baseaddr);
 int dev_decxmi_access(struct cpu *cpu, struct memory *mem, uint64_t relative_addr, unsigned char *data, size_t len, int writeflag, void *);
 void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 
+#define DEV_PCI_CONFIG_AREA 0x1e00000000ull
+#define DEV_PCI_CONFIG_CARD_SIZE 0x100
+
 /*  dev_eagle.c */
 struct eagle_data {
 	struct interrupt irq;
@@ -198,15 +201,19 @@ struct eagle_data {
   uint8_t cs4231_index;
   uint8_t cs4231_status;
   uint8_t cs4231_registers[0x20];
+
+  bool game_timer;
+
+  uint16_t pci_status;
+  uint16_t pci_command;
+
+  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
 };
 
 struct eagle_glob {
-  uint16_t pci_status;
-  uint16_t pci_command;
   int want_error;
 
   /* 0xc0 */
-  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
   uint8_t error_enabling_2, error_detection_2, bus_status_pci;
 
   unsigned char eagle_comm_area[16];

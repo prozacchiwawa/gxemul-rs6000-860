@@ -152,7 +152,8 @@ DEVICE_ACCESS(8253)
 			default:fatal("[ 8253: huh? writing to counter"
 				    " %i but neither from msb nor lsb? ]\n",
 				    relative_addr);
-				exit(1);
+				// exit(1);
+				break;
 			}
 		} else {
 			switch (d->mode_byte & 0x30) {
@@ -166,7 +167,8 @@ DEVICE_ACCESS(8253)
 			default:fatal("[ 8253: huh? reading from counter"
 				    " %i but neither from msb nor lsb? ]\n",
 				    relative_addr);
-				exit(1);
+				// exit(1);
+				break;
 			}
 		}
 
@@ -207,7 +209,6 @@ DEVICE_ACCESS(8253)
 
 			if (idata & I8253_TIMER_BCD) {
 				fatal("[ 8253: BCD not yet implemented ]\n");
-				exit(1);
 			}
 		} else {
 			debug("[ 8253: read; can this actually happen? ]\n");
@@ -222,7 +223,7 @@ DEVICE_ACCESS(8253)
 			fatal("[ 8253: unimplemented read from address 0x%x "
 			    "]\n", (int)relative_addr);
 		}
-		exit(1);
+		break;
 	}
 
 	if (writeflag == MEM_READ)

@@ -44,6 +44,7 @@
 #include "bus_isa.h"
 
 #include "vga.h"
+#include "x11.h"
 
 #define S_CRTC 0
 #define S_SEQ 1
@@ -1369,11 +1370,11 @@ static struct register_name_table_t r_name_table[] = {
 
 #if VGA_DEBUG
 #define L(x) do { x; } while (0)
+#define G(x) do { if (d->window_mapped) { x; } } while (0)
 #else
 #define L(x) do { } while(0)
+#define G(x) do { } while(0)
 #endif
-
-#define G(x) do { if (d->window_mapped) { x; } } while (0)
 
 /*  For videomem -> framebuffer updates:  */
 #define	VGA_TICK_SHIFT		18
@@ -1455,6 +1456,8 @@ struct vga_data {
 	int		use_palette_per_line;
 	int64_t		n_is1_reads;
 
+  uint16_t  hend, vend, helast, velast;
+
 	/*  Misc.:  */
 	int		console_handle;
 
@@ -1470,21 +1473,27 @@ struct vga_data {
 
 	/* S3 */
   int   s3_pio_select;
-	int   s3_cur_x, s3_cur_y, s3_pix_x, s3_pix_y, s3_draw_width;
+  int   s3_src_x, s3_src_y;
+  int   s3_pix_x, s3_pix_y;
   int   s3_fg_color, s3_bg_color;
   int   s3_fg_color_mix, s3_bg_color_mix;
-  int   s3_v_dir, s3_h_dir;
-  bool  s3_y_major, s3_last_pof, s3_no_draw;
-  int   s3_rem_height;
-  int   s3_destx, s3_desty;
+  int   s3_v_dir, s3_h_dir, s3_pixel_bit;
+  bool  s3_y_major, s3_last_pof, s3_no_draw, s3_bit_order;
+  int   s3_rect_width, s3_rect_height;
+  int   s3_curr_x, s3_curr_y;
+  int   s3_dest_x, s3_dest_y;
   int   s3_current_command;
+  uint32_t s3_pixel_xfer;
   uint32_t s3_color_compare;
+  uint32_t s3_cursor_address;
 
   /* BEE8H */
   uint16_t bee8_regs[16];
 
   /* Command */
   int s3_cmd_mx, s3_cmd_bus_size, s3_cmd_swap, s3_cmd_pxtrans;
+  uint8_t s3_color_stack;
+  struct x11_cursor gfx_cursor;
 
   /* Ext sequencer */
   bool ext_seq_unlock;
@@ -1493,14 +1502,16 @@ struct vga_data {
   bool window_mapped;
   int window_address;
   int fifo_in_progress;
+  bool odd_fifo;
 
   uint32_t plane_read_mask, plane_write_mask;
-  uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
+  uint32_t adv_fun_4ae8, short_stroke_transfer;
+  uint16_t line_errorterm, line_axial_step, line_diagonal_step;
 
   uint8_t reg_ff00_data[0x100];
 };
 
-inline uint16_t get_le_16(bool already, uint64_t idata) {
+static inline uint16_t get_le_16(bool already, uint64_t idata) {
   if (already) {
     return idata;
   } else {
@@ -1508,11 +1519,22 @@ inline uint16_t get_le_16(bool already, uint64_t idata) {
   }
 }
 
-
-inline uint32_t get_le_32(bool already, uint64_t idata) {
+static inline uint32_t get_le_32(bool already, uint64_t idata) {
   if (already) {
     return idata;
   } else {
+    return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
+  }
+}
+
+static inline uint32_t get_le_swap(bool already, uint64_t idata, int len) {
+  if (already || len == 1) {
+    return idata;
+  }
+  else if (len == 2) {
+    return (get_le_16(false, idata >> 16) << 16) | get_le_16(false, idata);
+  }
+  else {
     return get_le_16(false, idata >> 16) | (get_le_16(false, idata) << 16);
   }
 }
@@ -1620,10 +1642,6 @@ static void register_reset(struct vga_data *d)
 	d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_END] = d->font_height - 1;
 
 	d->sequencer_reg[VGA_SEQ_MAP_MASK] = 0x0f;
-  d->sequencer_reg[0x61] = 0x63;
-  d->sequencer_reg[0x66] = 0;
-  d->sequencer_reg[0x69] = 0x57;
-  d->sequencer_reg[0x6e] = 0x22;
 	d->graphcontr_reg[VGA_GRAPHCONTR_MASK] = 0xff;
 
 	d->misc_output_reg = VGA_MISC_OUTPUT_IOAS;
@@ -1771,6 +1789,69 @@ static void vga_update_textmode(struct machine *machine,
 	/*  Restore the terminal's cursor position:  */
 	snprintf(s, sizeof(s), "\033[%i;%iH", d->cursor_y + 1, d->cursor_x + 1);
 	c_putstr(d, s);
+}
+
+
+static void update_cursor(struct machine *machine, struct vga_data *d)
+{
+  uint16_t origin_x = ((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_LOW];
+  uint16_t origin_y = ((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_LOW];
+  d->gfx_cursor.on = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE] & 1;
+  d->gfx_cursor.render_x = origin_x;
+  d->gfx_cursor.render_y = origin_y;
+  x11_update_cursor
+    (d->fb->fb_window,
+     1,
+     d->gfx_cursor.on,
+     d->gfx_cursor.render_x,
+     d->gfx_cursor.render_y
+     );
+}
+
+
+/*
+ * Fill in gfx_cursor from the data we have and update it in the display system.
+ *
+ * Based on whether windows or x11 mode is set, change the transparent and inverse colors in
+ * the palette.
+ *
+ * Read the bit masks and compose the cursor image.
+ *
+ * Set the center of the cursor image.
+ */
+static void compose_cursor(struct machine *machine, struct vga_data *d)
+{
+  bool x11_mode = !!(d->crtc_reg[VGA_CRTC_EXTENDED_RAMDAC_CONTROL] & 0x10);
+  auto alpha_mask = 0xff000000;
+  if (x11_mode) {
+    d->gfx_cursor.palette[0] &= ~alpha_mask;
+    d->gfx_cursor.palette[1] &= ~alpha_mask;
+    d->gfx_cursor.palette[2] |= alpha_mask;
+    d->gfx_cursor.palette[3] |= alpha_mask;
+    d->gfx_cursor.invert_color = -1;
+  } else { // windows
+    d->gfx_cursor.palette[2] &= ~alpha_mask;
+    d->gfx_cursor.palette[3] &= ~alpha_mask;
+    d->gfx_cursor.palette[0] |= alpha_mask;
+    d->gfx_cursor.palette[1] |= alpha_mask;
+    d->gfx_cursor.invert_color = 3;
+  }
+
+  for (int y = 0; y < 64; y++) {
+    uint32_t row = d->s3_cursor_address + 16 * y;
+    for (int x = 0; x < 64; x++) {
+      uint8_t word_pair = x >> 4;
+      uint8_t byte_off = (x >> 3) & 1;
+      uint8_t byte_0 = d->gfx_mem[row + word_pair * 4 + byte_off];
+      uint8_t byte_1 = d->gfx_mem[row + word_pair * 4 + 2 + byte_off];
+      uint8_t mask = 1 << (7 - (x & 7));
+      uint8_t color = (!!(byte_0 & mask) << 1) | !!(byte_1 & mask);
+      d->gfx_cursor.data[y * 64 + x] = color;
+    }
+  }
+
+  x11_set_cursor_data(d->fb->fb_window, 1, d->gfx_cursor);
+  update_cursor(machine, d);
 }
 
 
@@ -1959,11 +2040,7 @@ static void vga_update_cursor(struct machine *machine, struct vga_data *d)
 	if (d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START] >= d->font_height)
 		onoff = 0;
 
-	dev_fb_setcursor(d->fb,
-	    d->cursor_x * d->font_width * d->pixel_repx, (d->cursor_y *
-	    d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]) *
-	    d->pixel_repy, onoff, d->font_width * d->pixel_repx, height *
-	    d->pixel_repy);
+  x11_update_cursor(d->fb->fb_window, 0, onoff, d->cursor_x * d->font_width, d->cursor_y * d->font_height + d->crtc_reg[VGA_CRTC_CURSOR_SCANLINE_START]);
 }
 
 
@@ -1974,6 +2051,16 @@ DEVICE_TICK(s3)
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+
+  if (d->hend != d->helast || d->vend != d->velast) {
+    d->helast = d->hend;
+    d->velast = d->vend;
+    d->fb_max_x = d->helast;
+    d->fb_max_y = d->velast;
+    dev_fb_resize(d->fb, d->helast, d->velast);
+    d->fb_size = d->fb_max_x * d->fb_max_y * 3;
+    vga_update_graphics(cpu->machine, d, 0, 0, d->helast, d->velast);
+  }
 
 	vga_update_cursor(cpu->machine, d);
 
@@ -2039,10 +2126,10 @@ DEVICE_TICK(s3)
 
 		d->palette_modified = 0;
 		d->modified = 0;
-		d->update_x1 = 999999;
-		d->update_x2 = -1;
-		d->update_y1 = 999999;
-		d->update_y2 = -1;
+		d->update_x1 = 0;
+		d->update_y1 = 0;
+		d->update_x2 = d->fb_max_x;
+		d->update_y2 = d->fb_max_y;
 	}
 
 	if (d->n_is1_reads > N_IS1_READ_THRESHOLD)
@@ -2068,7 +2155,7 @@ DEVICE_ACCESS(s3_graphics)
 
   //                 0x38000000
   if (relative_addr >= 0x10a0000) {
-    fprintf(stderr, "Access S3d register %04x\n", relative_addr - 0x10a0000);
+    fprintf(stderr, "Access S3d register %04lx\n", relative_addr - 0x10a0000);
     return 0;
   }
   if (relative_addr >= 0x1008000) {
@@ -2081,11 +2168,11 @@ DEVICE_ACCESS(s3_graphics)
       memcpy(data_copy, data, len);
     }
     bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data_copy, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-    fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04x", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
+    L(fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04lx", writeflag == MEM_WRITE ? "write" : "read", relative_addr));
     for (i = 0; i < len; i++) {
-      fprintf(stderr, " %02x", data_copy[i]);
+      L(fprintf(stderr, " %02x", data_copy[i]));
     }
-    fprintf(stderr, " ]\n");
+    L(fprintf(stderr, " ]\n"));
     if (d->window_mapped && relative_addr != 0x1009ae8) {
       for (i = 0; i < len; i++) {
         data[len - i - 1] = data_copy[i];
@@ -2113,7 +2200,7 @@ DEVICE_ACCESS(s3_graphics)
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
 	if (relative_addr + len >= d->gfx_mem_size) {
-    fprintf(stderr, "[ vga: failed access at %08x+%x greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
+    fprintf(stderr, "[ vga: failed access at %08lx+%lx greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
 		return 0;
   }
 
@@ -2129,6 +2216,9 @@ DEVICE_ACCESS(s3_graphics)
 
 		if (writeflag == MEM_WRITE) {
 			memcpy(d->gfx_mem + relative_addr, data, len);
+      if (d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE] && ((relative_addr >> 10) == (d->s3_cursor_address >> 10))) {
+        compose_cursor(cpu->machine, d);
+      }
 			modified = 1;
 		} else
 			memcpy(data, d->gfx_mem + relative_addr, len);
@@ -2273,241 +2363,204 @@ DEVICE_ACCESS(s3)
 }
 
 
-void s3_hack_start(struct vga_data *d) {
-  if (d->cur_mode != MODE_GRAPHICS) {
-    d->cur_mode = MODE_GRAPHICS;
-    d->max_x = 800; d->max_y = 600;
-    d->graphics_mode = GRAPHICS_MODE_8BIT;
-    d->bits_per_pixel = 8;
-    d->pixel_repx = d->pixel_repy = 1;
+void s3_hack_start(struct machine *machine, struct vga_data *d) {
+  d->cur_mode = MODE_GRAPHICS;
+  d->max_x = d->hend = d->helast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 1024 : 800;
+  d->max_y = d->vend = d->velast =
+    machine->machine_subtype == MACHINE_PREP_IBM860 ? 768 : 600;
+  d->graphics_mode = GRAPHICS_MODE_8BIT;
+  d->bits_per_pixel = 8;
+  d->pixel_repx = d->pixel_repy = 1;
 
-    d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
-                                         (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
+  d->gfx_mem_size = 2 * 1024 * 1024; /*d->max_x * d->max_y /
+                                       (d->graphics_mode == GRAPHICS_MODE_8BIT? 1 : 2);*/
 
-    CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+  CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+}
 
-    /*  Clear screen and reset the palette:  */
-    memset(d->charcells_outputed, 0, d->charcells_size);
-    memset(d->charcells_drawn, 0, d->charcells_size);
-    memset(d->gfx_mem, 0, d->gfx_mem_size);
+static inline uint32_t pixtrans_lane_u32(uint32_t pixel_xfer, uint8_t bus_size, uint32_t lane)
+{
+  // bus_size: 0=8-bit, 1=16-bit, >=2=32-bit
+  int bs = (bus_size >= 2) ? 2 : bus_size;
+  const uint32_t lanes = 1u << bs;           // 1, 2, 4
+  lane &= (lanes - 1);
 
-    reset_palette(d, 0);
-    register_reset(d);
+  return (pixel_xfer >> (lane * 8)) & 0xff;
+}
 
-    d->bee8_regs[3] = 600;
-    d->bee8_regs[4] = 800;
-    d->s3_fg_color_mix = 0x27;
-    d->s3_bg_color_mix = 0x27;
+static inline uint32_t s3_color_mix(uint8_t mix_mode, uint32_t src, uint32_t dst)
+{
+  switch (mix_mode)
+  {
+    case 0x00: return ~dst;
+    case 0x01: return 0;
+    case 0x02: return ~0;
+    case 0x03: return dst;
+    case 0x04: return ~src;
+    case 0x05: return src ^ dst;
+    case 0x06: return ~(src ^ dst);
+    case 0x07: return src;
+    case 0x08: return ~(src & dst);
+    case 0x09: return (~src) | dst;
+    case 0x0a: return src | (~dst);
+    case 0x0b: return src | dst;
+    case 0x0c: return src & dst;
+    case 0x0d: return src & (~dst);
+    case 0x0e: return (~src) & dst;
+    case 0x0f: return ~(src | dst);
+    default:   return src;            // shouldn't reach here
   }
 }
 
-
-int do_color_mix(struct vga_data *d, int src_bits, int op_bits, int cpu, int bitmap) {
-  int src_color_1 = 0;
-  switch (src_bits) {
-  case 0:
-    src_color_1 = d->s3_bg_color;
-    break;
-
-  case 1:
-    src_color_1 = d->s3_fg_color;
-    break;
-
-  case 2:
-    src_color_1 = cpu;
-    break;
-
-  case 3:
-    src_color_1 = bitmap;
-    break;
-  }
-
-  int output = 0;
-  switch (op_bits) {
-  case 0:
-    output = ~bitmap;
-    break;
-
-  case 1:
-    output = 0;
-    break;
-
-  case 2:
-    output = ~0;
-    break;
-
-  case 3:
-    output = bitmap;
-    break;
-
-  case 4:
-    output = ~src_color_1;
-    break;
-
-  case 5:
-    output = src_color_1 ^ bitmap;
-    break;
-
-  case 6:
-    output = ~(src_color_1 ^ bitmap);
-    break;
-
-  case 7:
-    output = src_color_1;
-    break;
-
-  case 8:
-    output = ~src_color_1 | ~bitmap;
-    break;
-
-  case 9:
-    output = bitmap | ~src_color_1;
-    break;
-
-  case 10:
-    output = ~bitmap | src_color_1;
-    break;
-
-  case 11:
-    output = bitmap | src_color_1;
-    break;
-
-  case 12:
-    output = bitmap & src_color_1;
-    break;
-
-  case 13:
-    output = ~bitmap & src_color_1;
-    break;
-
-  case 14:
-    output = bitmap & ~src_color_1;
-    break;
-
-  case 15:
-    output = ~bitmap & ~src_color_1;
-    break;
-  }
-
-  if (d->bee8_regs[0xe] & 0x100) {
-    auto src_ne = d->bee8_regs[0xe] & 0x80;
-    if (!src_ne) {
-      if (output == d->s3_color_compare) {
-        output = bitmap;
-      }
-    } else {
-      if (output != d->s3_color_compare) {
-        output = bitmap;
-      }
-    }
-  }
-
-  return output;
-}
-
-int color_mix_function(struct vga_data *d, int mask_override, int cpu, int bitmap) {
-  bool mask_bit = 0;
-  if (mask_override != -1) {
-    mask_bit = mask_override;
-  } else {
-    switch ((d->bee8_regs[0x0a] >> 6) & 3) {
-    case 0:
-      mask_bit = 1;
-      break;
-
-    case 1:
-      mask_bit = 0;
-      break;
-
-    case 2:
-      mask_bit = cpu == 0xff;
-      break;
-
-    case 3:
-      mask_bit = bitmap == 0xff;
-      break;
-    }
-  }
-
-  int use_mix = mask_bit ? d->s3_fg_color_mix : d->s3_bg_color_mix;
-  int res = do_color_mix(d, (use_mix >> 5) & 3, use_mix & 15, cpu, bitmap);
-#if 0
-  fprintf
-    (stderr, "[ vga: color mix choice %d %x compare %x cpu %x bitmap %x (M %d) fg %x bg %x => %x %02x %02x ]\n",
-     d->bee8_regs[0x0a] >> 6,
-     use_mix,
-     d->s3_color_compare,
-     cpu,
-     bitmap,
-     mask_bit,
-     d->s3_fg_color,
-     d->s3_bg_color,
-     res,
-     d->s3_fg_color_mix,
-     d->s3_bg_color_mix
-     );
-#endif
-  
-  return res;
-}
-
-
-void pixel_transfer(cpu *cpu, struct vga_data *d, bool across_the_plane, uint8_t *pixel_p, int write_len) {
-  uint64_t target = 0;
-  int prev_pixel;
-  int nowrite;
-  uint8_t pixel = 0;
-  int pix;
-
+void s3_do_pixel(cpu* cpu, struct vga_data* d, bool use_fgmix)
+{
+  uint32_t lane;
+  int nowrite = 0;
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  write_len = std::min(write_len, d->s3_cur_x + d->s3_draw_width - d->s3_pix_x);
+  uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
+  uint64_t target = ((d->s3_pix_y * logical_width) + d->s3_pix_x) % d->gfx_mem_size;
 
-  /* Compute write target */
-  d->update_x1 = d->s3_pix_x;
-  d->update_x2 = d->s3_pix_x + write_len;
-  d->update_y1 = d->s3_pix_y;
-  d->update_y2 = d->s3_pix_y + write_len;
-  d->modified = 1;
+  // Step 1: Clipping — derive actual pixel coordinates for the scissors test.
+  nowrite = ((d->s3_pix_y < d->bee8_regs[1])||
+             (d->s3_pix_y > d->bee8_regs[3])||
+             (d->s3_pix_x < d->bee8_regs[2])||
+             (d->s3_pix_x > d->bee8_regs[4]));
 
-  if (d->s3_rem_height == 0) {
-    G(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0]));
-    return;
+  // Step 2: Select source color and mix mode
+  uint16_t mix_reg = use_fgmix ? d->s3_fg_color_mix : d->s3_bg_color_mix;
+  uint8_t sel = (mix_reg >> 5) & 3;                  // bits 6-5: CLR-SRC
+  uint8_t mix_mode = mix_reg & 0x0f;                 // bits 3-0: MIX type
+  uint32_t src_dat = 0, dst_dat = 0;
+
+  switch (sel)
+  {
+    case 0: // Background Color register
+      src_dat = d->s3_bg_color;
+      break;
+    case 1: // Foreground Color register
+      src_dat = d->s3_fg_color;
+      break;
+    case 2: // CPU data (pixel transfer register)
+      lane = (d->s3_pix_x >= d->s3_curr_x) ? (d->s3_pix_x - d->s3_curr_x) : (d->s3_curr_x - d->s3_pix_x);
+      src_dat = pixtrans_lane_u32(d->s3_pixel_xfer, d->s3_cmd_bus_size, lane);
+      break;
+    case 3: // Display memory (VRAM at source coords)
+      src_dat = d->gfx_mem[source];
+      break;
   }
 
-  for (pix = 0; pix < write_len; pix++) {
-    target = (d->s3_pix_y * logical_width) + d->s3_pix_x;
+  // Step 3: Read destination
+  dst_dat = d->gfx_mem[target];
 
-    nowrite =
-      ((d->s3_pix_y < d->bee8_regs[1]) &&
-       (d->s3_pix_y > d->bee8_regs[3]) &&
-       (d->s3_pix_x < d->bee8_regs[2]) &&
-       (d->s3_pix_x > d->bee8_regs[4])) ||
-      (target >= d->gfx_mem_size);
-
-    d->s3_pix_x += d->s3_h_dir;
-
-    prev_pixel = d->gfx_mem[target];
-    pixel = color_mix_function(d, across_the_plane ? pixel_p[pix] : -1, (!across_the_plane) ? pixel_p[pix] : (pixel_p[pix] ? d->s3_fg_color : d->s3_bg_color), prev_pixel);
-
-    if (!nowrite) {
-      d->gfx_mem[target] = pixel;
-    }
-
-    // G(fprintf(stderr, "[ vga write (%d,%d) %08" PRIx64 " = %04x clip %d,%d,%d,%d h %d rem %d mix %04x %04x ]\n", d->s3_pix_x, d->s3_pix_y, target, pixel, d->bee8_regs[1], d->bee8_regs[2], d->bee8_regs[3], d->bee8_regs[4], d->bee8_regs[0], d->s3_rem_height, d->s3_fg_color_mix, d->s3_bg_color_mix));
+  // Step 4: Color Compare gate
+  if (d->bee8_regs[0xe] & 0x100)
+  {
+    auto src_ne = d->bee8_regs[0xe] & 0x80;
+    bool match = (src_dat == d->s3_color_compare);
+    // SRC NE = 0: write only when source != compare (skip when match)
+    // SRC NE = 1: write only when source == compare (skip when no match)
+    if (src_ne ? !match : match) nowrite = 1; // color compare rejects this pixel
   }
 
-  if (d->s3_pix_x >= d->s3_cur_x + d->s3_draw_width) {
-    d->s3_pix_x = d->s3_cur_x;
-    d->s3_pix_y += d->s3_v_dir;
-    d->s3_rem_height -= 1;
-  }
+  // Step 5: Apply MIX
+  uint32_t pixel = s3_color_mix(mix_mode, src_dat, dst_dat);
 
-  vga_update_graphics(cpu->machine, d, d->update_x1,
-                      d->update_y1, d->update_x2, d->update_y2);
+  // Step 6: Write Mask merge
+  uint32_t wrt_mask = d->plane_write_mask;
+  pixel = (pixel & wrt_mask) | (dst_dat & ~wrt_mask);
+
+  // Step 7: Write to VRAM
+  if (!nowrite) d->gfx_mem[target] = pixel;
 }
 
+static inline void s3_write_fg(cpu* cpu, struct vga_data* d)
+{
+  s3_do_pixel(cpu, d, true);
+}
+
+static inline void s3_write_bg(cpu* cpu, struct vga_data* d)
+{
+  s3_do_pixel(cpu, d, false);
+}
+  
+void s3_pixel_write(cpu* cpu, struct vga_data* d)
+{
+  int data_size = 8;
+  uint32_t xfer;
+
+  auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
+  auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
+  uint64_t source = ((d->s3_src_y * logical_width) + d->s3_src_x) % d->gfx_mem_size;
+
+  switch (d->bee8_regs[0xa] & 0x00c0)
+  {
+    case 0x0000:  // Foreground Mix only
+      s3_write_fg(cpu, d);
+      break;
+    case 0x0040:  // fixed pattern (?)
+      // TODO
+      break;
+    case 0x0080:  // use pixel transfer register
+      if (d->s3_cmd_bus_size == 0)  // 8-bit
+        data_size = 8;
+      if (d->s3_cmd_bus_size == 1)  // 16-bit
+        data_size = 16;
+      if (d->s3_cmd_bus_size >= 2)  // 32-bit
+        data_size = 32;
+      xfer = d->s3_pixel_xfer;
+      if (d->s3_cmd_swap && (data_size != 8)) {
+        if (data_size == 16) {
+          xfer = ((xfer & 0x00ff) << 8) | ((xfer & 0xff00) >> 8);
+        }
+      else if (data_size == 32) {
+        xfer = ((xfer & 0x000000ff) << 24) |
+                ((xfer & 0x0000ff00) << 8) |
+                ((xfer & 0x00ff0000) >> 8) |
+                ((xfer & 0xff000000) >> 24);
+        }
+      }
+      if (d->s3_cmd_mx)
+      {
+        // Mono expand: bit order depends on CMD bit 3 (0x0008).
+        //  - 0x0008 clear: MSB-first
+        //  - 0x0008 set:   LSB-first
+        uint32_t bitpos;
+        if (d->s3_bit_order) {
+          bitpos = d->s3_pixel_bit;                     // LSB-first
+        }
+        else {
+          bitpos = (data_size - 1u) - d->s3_pixel_bit;  // MSB-first
+        }
+        const uint32_t mask = 1u << bitpos;
+        if (xfer & mask)
+          s3_write_fg(cpu, d);
+        else
+          s3_write_bg(cpu, d);
+      }
+      else
+      {
+        s3_write_fg(cpu, d);
+      }
+      d->s3_pixel_bit++;
+      if (d->s3_pixel_bit >= data_size)
+        d->s3_pixel_bit = 0;
+      break;
+    case 0x00c0:  // use source plane
+    {
+      uint32_t srcpix = d->gfx_mem[source];
+      // In Mix Select==11 mode the source plane (VRAM) selects between FG/BG mix.
+      // The Read Mask register chooses which bit(s) in the source byte are examined.
+      uint32_t readmask = d->plane_read_mask; // foreground only when all bits are set
+	  const bool use_fg = ((srcpix & readmask) == readmask); // always true if readmask = 0
+      if (use_fg) s3_write_fg(cpu, d);
+      else        s3_write_bg(cpu, d);
+      break;
+    }
+  }
+}
 
 void bitblt(cpu *cpu, struct vga_data *d) {
   int rectangle_height = d->bee8_regs[0];
@@ -2515,109 +2568,348 @@ void bitblt(cpu *cpu, struct vga_data *d) {
   int clipping_left = d->bee8_regs[2];
   int clipping_bottom = d->bee8_regs[3];
   int clipping_right = d->bee8_regs[4];
-  int copy_start = d->s3_destx;
-  int src_x = d->s3_cur_x;
-  if (copy_start < clipping_left) {
-    auto diff = clipping_left - d->s3_cur_x;
-    src_x += diff;
-    copy_start += diff;
-  }
-  int copy_end = std::min(copy_start + d->s3_draw_width, clipping_right);
-  int width_of_copy = copy_end - copy_start;
-  int rows = std::min(clipping_bottom - clipping_top, d->s3_rem_height);
-  int target_row = d->s3_desty;
+  int width = d->s3_rect_width;
+  int rows = d->s3_rect_height;
 
-  G(fprintf(stderr, "[ s3: BITBLT: R(%d,%d,%d,%d) SRC (%d,%d) ]\n", d->s3_destx, d->s3_desty, clipping_right, clipping_top + rows, src_x, d->s3_cur_y));
+  d->s3_src_y = d->s3_curr_y;
+  d->s3_pix_y = d->s3_dest_y;
 
   auto logical_width_high = (d->crtc_reg[0x51] >> 4) & 3;
   auto logical_width = (d->crtc_reg[0x13] + (logical_width_high << 8)) * 8;
 
-  for (; rows > 0; d->s3_cur_y++, rows--, target_row++) {
-    uint8_t *source = &d->gfx_mem[d->s3_cur_y * logical_width + src_x];
-    uint8_t *target = &d->gfx_mem[target_row * logical_width + d->s3_destx];
-    memmove(target, source, width_of_copy);
+  L(fprintf(stderr, "[ s3: bitblt x=%d-%d y=%d-%d ]\n", d->s3_curr_x, d->s3_curr_y, d->s3_dest_x, d->s3_dest_y));
+  
+  for (int y = 0; y <= rows; y++)
+  {
+    d->s3_src_x = d->s3_curr_x;
+    d->s3_pix_x = d->s3_dest_x;
+    for (int x = 0; x <= width; x++)
+    {
+      s3_pixel_write(cpu, d);
+      d->s3_src_x += d->s3_h_dir;
+      d->s3_pix_x += d->s3_h_dir;
+    }
+    d->s3_pixel_bit = 0;
+    d->s3_src_y += d->s3_v_dir;
+    d->s3_pix_y += d->s3_v_dir;
   }
-  vga_update_graphics
-    (cpu->machine, d,
-     clipping_left, clipping_top, clipping_right, clipping_bottom
-     );
 }
 
 
-void patblt(cpu *cpu, struct vga_data *d) {
+void patblt(cpu* cpu, struct vga_data* d) {
   int rectangle_height = d->bee8_regs[0];
   int clipping_top = d->bee8_regs[1];
   int clipping_left = d->bee8_regs[2];
   int clipping_bottom = d->bee8_regs[3];
   int clipping_right = d->bee8_regs[4];
-  auto start_row = std::max(d->s3_desty, clipping_top);
-  auto end_row = std::min(d->s3_desty + d->s3_rem_height, clipping_bottom);
-  auto start_column = std::max(d->s3_destx, clipping_left);
-  auto end_column = std::min(d->s3_destx + d->s3_draw_width, clipping_right);
+  auto height = d->s3_rect_height;
+  auto width = d->s3_rect_width;
 
-  auto src_x = d->s3_cur_x;
-  auto src_y = d->s3_cur_y;
+  d->s3_pix_x = d->s3_dest_x;
+  d->s3_pix_y = d->s3_dest_y;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
+  auto pattern_x = d->s3_dest_x & 7;
+  auto pattern_y = d->s3_dest_y & 7;
 
-  auto dest_end_y = d->s3_v_dir < 0 ? start_row : end_row;
-  auto dest_end_x = d->s3_h_dir < 0 ? start_column : end_column;
-
-  fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", start_column, end_column, start_row, end_row);
-
-  for (auto desty = start_row; desty != end_row; desty = std::min(desty + 8, end_row)) {
-    for (auto destx = start_column; destx != end_column; destx = std::min(destx + 8, end_column)) {
-      d->s3_desty = desty;
-      d->s3_destx = destx;
-      d->s3_cur_x = src_x;
-      d->s3_cur_y = src_y;
-      d->bee8_regs[1] = destx;
-      d->bee8_regs[2] = desty;
-      d->bee8_regs[3] = std::min(desty + 8, end_row);
-      d->bee8_regs[4] = std::min(destx + 8, end_column);
-      fprintf(stderr, "[ s3: patblt %d,%d ]\n", destx, desty);
-      bitblt(cpu, d);
+  L(fprintf(stderr, "[ s3: patblt x=%d-%d y=%d-%d ]\n", d->s3_curr_x, d->s3_curr_y, d->s3_dest_x, d->s3_dest_y));
+  
+  for (int y = 0; y <= height; y++)
+  {
+    for (int x = 0; x <= width; x++)
+    {
+      d->s3_src_x = start_x + pattern_x;
+      d->s3_src_y = start_y + pattern_y;
+      s3_pixel_write(cpu, d);
+      d->s3_pix_x += d->s3_h_dir;
+      pattern_x = (pattern_x + d->s3_h_dir) & 7;
     }
+    d->s3_pixel_bit = 0;
+    d->s3_pix_x = d->s3_dest_x;
+    d->s3_pix_y += d->s3_v_dir;
+    pattern_x = d->s3_dest_x & 7;
+    pattern_y = (pattern_y + d->s3_v_dir) & 7;
   }
 
-  d->bee8_regs[2] = clipping_top;
-  d->bee8_regs[1] = clipping_left;
-  d->bee8_regs[4] = clipping_right;
-  d->bee8_regs[3] = clipping_bottom;
-  d->s3_cur_x = src_x;
-  d->s3_cur_y = src_y;
-  d->s3_destx = dest_end_x;
-  d->s3_desty = start_row;
+  d->s3_curr_x = start_x;
+  d->s3_curr_y = start_y;
 }
 
 
 void fillrect(cpu *cpu, struct vga_data *d, uint16_t command) {
-  int leftmost_allowed = d->bee8_regs[0];
-  uint8_t transfer_color[2];
-  int color_source = (d->s3_fg_color_mix >> 5) & 3;
-  int mix_op = d->s3_fg_color_mix & 0xf;
-  int lines_written = 0;
-
-  switch (color_source) {
-  case 1:
-    memset(transfer_color, d->s3_fg_color, sizeof(transfer_color));
-    break;
-
-  default:
-    G(fprintf(stderr, "[ s3: unknown color source %d ]\n", color_source));
-    break;
-  }
+  int height = d->s3_rect_height;
+  int width = d->s3_rect_width;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
 
   if (command & 0x10) {
     // Actually draw
-    d->s3_v_dir = 1;
-    auto start_x = d->s3_cur_x;
-    auto start_y = d->s3_cur_y;
+    d->s3_src_x = d->s3_curr_x;
+    d->s3_pix_x = d->s3_curr_x;
+    d->s3_src_y = d->s3_curr_y;
+    d->s3_pix_y = d->s3_curr_y;
 
-    while (d->s3_rem_height > 0) {
-      pixel_transfer(cpu, d, false, transfer_color, sizeof(transfer_color));
+    for (int y = 0; y <= height; y++)
+    {
+      for (int x = 0; x <= width; x++)
+      {
+        s3_pixel_write(cpu, d);
+        d->s3_src_x += d->s3_h_dir;
+        d->s3_pix_x += d->s3_h_dir;
+      }
+      d->s3_pixel_bit = 0;
+      d->s3_src_y += d->s3_v_dir;
+      d->s3_pix_y += d->s3_v_dir;
+      d->s3_src_x = d->s3_curr_x;
+      d->s3_pix_x = d->s3_curr_x;
     }
 
-    d->s3_cur_x = start_x;
-    d->s3_cur_y = start_y;
+    d->s3_curr_x = d->s3_src_x;
+    d->s3_curr_y = d->s3_src_y;
+  }
+}
+
+void linedraw(cpu *cpu, struct vga_data *d, uint16_t command) {
+  int height = d->s3_rect_height;
+  int width = d->s3_rect_width;
+  auto start_x = d->s3_curr_x;
+  auto start_y = d->s3_curr_y;
+
+  d->s3_src_x = d->s3_curr_x;
+  d->s3_pix_x = d->s3_curr_x;
+  d->s3_src_y = d->s3_curr_y;
+  d->s3_pix_y = d->s3_curr_y;
+
+  if (command & 0x0008) 
+  {
+    uint32_t offset;
+    int x = 0;
+    bool last_pxof = (command & 0x04) != 0;  // CMD bit 2
+
+    while (x <= d->s3_rect_width) {
+      // skip last pixel if LAST_PXOF set
+      if (!(last_pxof && x == d->s3_rect_width)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      switch ((command & 0x00e0) >> 5) {
+        case 0:  // 0 degrees
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          break;
+        case 1:  // 45 degrees
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          break;
+        case 2:  // 90 degrees
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          break;
+        case 3:  // 135 degrees
+          d->s3_src_y--;
+          d->s3_pix_y--;
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          break;
+        case 4:  // 180 degrees
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          break;
+        case 5:  // 225 degrees
+          d->s3_src_x--;
+          d->s3_pix_x--;
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          break;
+        case 6:  // 270 degrees
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          break;
+        case 7:  // 315 degrees
+          d->s3_src_y++;
+          d->s3_pix_y++;
+          d->s3_src_x++;
+          d->s3_pix_x++;
+          break;
+      }
+      x++;
+    }
+  } else if (command & 0x0800) {
+    // ============================================================
+    // Trio64 CMD type 1001: Polyline / 2-Point Line
+    // (S3 Trio64 datasheet Section 13.3.3.11)
+    //
+    // Draws from (curr_x, curr_y) to (dest_x, dest_y).
+    // The hardware auto-computes direction, major axis, and
+    // Bresenham parameters from the endpoints.
+    //
+    // Register 8AE8h = ending Y coordinate (dest_y)
+    // Register 8EE8h = ending X coordinate (dest_x)
+    // ============================================================
+
+    int32_t x0 = (int16_t)d->s3_curr_x;
+    int32_t y0 = (int16_t)d->s3_curr_y;
+    int32_t x1 = (int16_t)d->s3_dest_x;
+    int32_t y1 = (int16_t)d->s3_dest_y;
+
+    int32_t dx = (x1 > x0) ? (x1 - x0) : (x0 - x1);
+    int32_t dy = (y1 > y0) ? (y1 - y0) : (y0 - y1);
+    int sx = (x1 >= x0) ? 1 : -1;
+    int sy = (y1 >= y0) ? 1 : -1;
+
+    bool steep = (dy > dx);
+    int count = steep ? dy : dx;
+    int err;
+    bool last_pxof = (command & 0x04) != 0;
+
+    if (steep)
+      err = 2 * dx - dy;
+    else
+      err = 2 * dy - dx;
+
+    for (int i = 0; i <= count; i++) {
+      d->s3_src_x = (int16_t)(x0 & 0xfff);
+      d->s3_pix_x = (int16_t)(x0 & 0xfff);
+      d->s3_src_y = (int16_t)(y0 & 0xfff);
+      d->s3_pix_y = (int16_t)(y0 & 0xfff);
+
+      if (!(last_pxof && i == count)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      if (steep) {
+        if (err >= 0) { x0 += sx; err -= 2 * dy; }
+        err += 2 * dx;
+        y0 += sy;
+      } else {
+        if (err >= 0) { y0 += sy; err -= 2 * dx; }
+        err += 2 * dy;
+        x0 += sx;
+      }
+    }
+
+    d->s3_curr_x = (int16_t)(x0 & 0xfff);
+    d->s3_curr_y = (int16_t)(y0 & 0xfff);
+  } else {
+    // ============================================================
+    // CMD type 0001: Draw Line (traditional Bresenham)
+    //
+    // Uses pre-programmed step constants:
+    //   8AE8h = Axial Step Constant (14-bit signed)
+    //   8EE8h = Diagonal Step Constant (14-bit signed)
+    //   92E8h = Error Term (14-bit signed)
+    //   96E8h = Major Axis Pixel Count
+    // Direction from CMD bits: INC_X (5), YMAJAXIS (6), INC_Y (7)
+    // ============================================================
+
+    int16_t err = d->line_errorterm;
+    int16_t axial_step = d->line_axial_step;
+    int16_t diag_step = d->line_diagonal_step;
+    int count = d->s3_rect_width;
+    bool last_pxof = (command & 0x04) != 0;
+
+    // Sign-extend 14-bit register values to 16-bit
+    if (err & 0x2000) err |= 0xC000;
+    if (axial_step & 0x2000) axial_step |= 0xC000;
+    if (diag_step & 0x2000) diag_step |= 0xC000;
+
+    // Direction bits
+    int sx = (command & 0x0020) ? 1 : -1;
+    int sy = (command & 0x0080) ? 1 : -1;
+    bool y_major = (command & 0x0040) != 0;
+
+    int32_t cx = d->s3_curr_x;
+    if (cx >= 0x800) cx |= ~0x7ff;
+    int32_t cy = d->s3_curr_y;
+    if (cy >= 0x800) cy |= ~0x7ff;
+
+    for (int i = 0; i <= count; i++) {
+      d->s3_src_x = cx & 0xfff;
+      d->s3_pix_x = cx & 0xfff;
+      d->s3_src_y = cy & 0xfff;
+      d->s3_pix_y = cy & 0xfff;
+
+      if (!(last_pxof && i == count)) {
+        s3_pixel_write(cpu, d);
+      }
+
+      if (err >= 0) {
+        err += diag_step;
+        if (y_major) cx += sx; else cy += sy;
+      } else {
+        err += axial_step;
+      }
+
+      if (y_major) cy += sy; else cx += sx;
+    }
+
+    // Update position registers
+    d->s3_curr_x = cx & 0xfff;
+    d->s3_curr_y = cy & 0xfff;
+  }
+}
+
+void pixel_wait_draw(cpu* cpu, struct vga_data* d, bool across_the_plane, int len)
+{
+  uint32_t height, width;
+  height = (d->s3_pix_y > d->s3_curr_y)?
+           (d->s3_pix_y - d->s3_curr_y):
+           (d->s3_curr_y - d->s3_pix_y);
+
+  if (height > d->s3_rect_height) {
+    L(fprintf(stderr, "[ s3: out of copy height (%d) ]\n", d->bee8_regs[0] + 1));
+    return;
+  }
+
+  if (across_the_plane)
+  {
+    // "across plane" mode
+    for (int x = 0; x < len * 8; x++)
+    {
+      s3_pixel_write(cpu, d);
+      d->s3_src_x += d->s3_h_dir;
+      d->s3_pix_x += d->s3_h_dir;
+
+      width = (d->s3_pix_x > d->s3_curr_x)?
+              (d->s3_pix_x - d->s3_curr_x):
+              (d->s3_curr_x - d->s3_pix_x);
+
+      if (width > d->s3_rect_width)
+      {
+        d->s3_src_x = d->s3_curr_x;
+        d->s3_pix_x = d->s3_curr_x;
+        d->s3_src_y += d->s3_v_dir;
+        d->s3_pix_y += d->s3_v_dir;
+        d->s3_pixel_bit = 0;
+        return;
+      }
+    }
+  }
+  else
+  {
+    // "through plane" mode (single pixel)
+    for (int x = 0; x < len * 8; x = x + 8)
+    {
+      s3_pixel_write(cpu, d);
+      d->s3_src_x += d->s3_h_dir;
+      d->s3_pix_x += d->s3_h_dir;
+
+      width = (d->s3_pix_x > d->s3_curr_x)?
+              (d->s3_pix_x - d->s3_curr_x):
+              (d->s3_curr_x - d->s3_pix_x);
+
+      if (width > d->s3_rect_width)
+      {
+        d->s3_src_x = d->s3_curr_x;
+        d->s3_pix_x = d->s3_curr_x;
+        d->s3_src_y += d->s3_v_dir;
+        d->s3_pix_y += d->s3_v_dir;
+        d->s3_pixel_bit = 0;
+        return;
+      }
+    }
   }
 }
 
@@ -2628,7 +2920,8 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
   REG_WRITE( 0x9ae8);
 
   if (writeflag != MEM_WRITE) {
-    uint16_t outval = d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
+    d->odd_fifo = !d->odd_fifo;
+    uint16_t outval = d->odd_fifo ? 0 : d->fifo_in_progress ? 0x08 : 0x04; // tell them all entries are clear?
     d->fifo_in_progress = false;
     if (len == 1) {
       outval >>= relative_addr * 8;
@@ -2636,34 +2929,38 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     memory_writemax64(cpu, data, len, outval);
   } else {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-    L(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
+    G(fprintf(stderr, "[ s3: command = %d (raw %04x) ]\n", (int)written, (int)written));
     d->s3_cmd_mx = !!(written & 2);
     d->s3_cmd_pxtrans = !!(written & 0x100);
     bool draws_up = written & (1 << 7);
-    d->s3_pix_x = d->s3_cur_x;
-    d->s3_pix_y = d->s3_cur_y;
+    d->s3_pix_x = d->s3_curr_x;
+    d->s3_pix_y = d->s3_curr_y;
     d->s3_v_dir = draws_up ? 1 : -1;
     bool draws_right = written & (1 << 5);
     d->s3_h_dir = draws_right ? 1 : -1;
     d->s3_y_major = written & (1 << 6);
     d->s3_last_pof = written & (1 << 2);
-    d->s3_cmd_bus_size = (written >> 9) & 3;
+    d->s3_bit_order = written & (1 << 3);
     d->s3_cmd_swap = (written >> 12) & 1;
     d->s3_no_draw = !(written & (1 << 4));
     d->s3_current_command = written >> 13;
 
     d->fifo_in_progress = true;
+    d->s3_pixel_bit = 0;
     if (d->s3_no_draw) {
       fprintf(stderr, "[ s3: just move not implemented ]\n");
-      d->s3_cur_x = d->s3_destx;
-      d->s3_cur_y = d->s3_desty;
+      d->s3_curr_x = d->s3_dest_x;
+      d->s3_curr_y = d->s3_dest_y;
     } else {
       switch (d->s3_current_command) {
       case 0: // Nop
         break;
 
       case 1: // Line draw
-        fprintf(stderr, "[ s3: line draw not implemented ]\n");
+        if (!(written & 0x100)) {
+          L(fprintf(stderr, "[ s3 linedraw ]\n"));
+          linedraw(cpu, d, written & 0x1fff);
+        } // Otherwise accept pixel fill below.
         break;
 
       case 2: // Rectangle Fill
@@ -2673,12 +2970,11 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
         } // Otherwise accept pixel fill below.
         break;
 
-      case 6: // BitBlt
+      case 6: // BitBLT
         bitblt(cpu, d);
         break;
 
       case 7: // PatBLT
-        fprintf(stderr, "[ s3: patblt not implemented ]\n");
         patblt(cpu, d);
         break;
 
@@ -2689,6 +2985,7 @@ DEVICE_ACCESS(vga_s3_control) { // 9ae8, CMD
     }
   }
 
+  d->modified = 1;
   return 1;
 }
 
@@ -2701,11 +2998,11 @@ DEVICE_ACCESS(vga_s3_curx) {
 
   if (writeflag == MEM_WRITE) {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    d->s3_cur_x = written;
+    d->s3_curr_x = written;
     G(fprintf(stderr, "[ s3: set pix x = %d (raw %04x) ]\n", (int)written, (int)written));
   } else {
     fprintf(stderr, "[ s3: get pix x ]\n");
-    memory_writemax64(cpu, data, len, d->s3_cur_x);
+    memory_writemax64(cpu, data, len, d->s3_curr_x);
   }
 
   return 1;
@@ -2720,11 +3017,11 @@ DEVICE_ACCESS(vga_s3_cury) {
 
   if (writeflag == MEM_WRITE) {
     written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    d->s3_cur_y = written;
+    d->s3_curr_y = written;
     G(fprintf(stderr, "[ s3: set pix y = %d (raw %04x) ]\n", (int)written, (int)written));
   } else {
     fprintf(stderr, "[ s3: get pix y ]\n");
-    memory_writemax64(cpu, data, len, d->s3_cur_y);
+    memory_writemax64(cpu, data, len, d->s3_curr_y);
   }
 
   return 1;
@@ -2808,8 +3105,9 @@ DEVICE_ACCESS(vga_s3_destx) {
   REG_WRITE( 0x8ee8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_destx = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    G(fprintf(stderr, "[ s3: set destx = %d (raw %04x) ]\n", (int)d->s3_destx, (int)written));
+    d->line_diagonal_step = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x3fff;
+    d->s3_dest_x = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x0fff;
+    G(fprintf(stderr, "[ s3: set destx = %d ]\n", (int)d->s3_dest_x));
   }
 
   return 1;
@@ -2823,8 +3121,9 @@ DEVICE_ACCESS(vga_s3_desty) {
   REG_WRITE( 0x8ae8);
 
   if (writeflag == MEM_WRITE) {
-    d->s3_desty = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x7ff;
-    G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_desty));
+    d->line_axial_step = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x3fff;
+    d->s3_dest_y = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len)) & 0x0fff;
+    G(fprintf(stderr, "[ s3: set desty = %d ]\n", (int)d->s3_dest_y));
   }
 
   return 1;
@@ -2838,9 +3137,8 @@ DEVICE_ACCESS(vga_s3_major_axis_len) {
   REG_WRITE( 0x96e8);
 
   if (writeflag == MEM_WRITE) {
-    written = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
-    d->s3_draw_width = written + 1;
-    G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_draw_width, (int)written));
+    d->s3_rect_width = get_le_16(d->window_mapped, memory_readmax64(cpu, data, len));
+    G(fprintf(stderr, "[ s3: set draw width %d (raw %04x) ]\n", d->s3_rect_width, (int)written));
   }
 
   return 1;
@@ -2875,22 +3173,16 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
     write_index = written >> 12;
     d->bee8_regs[write_index] = written & 0xfff;
 
-    fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff));
+    G(fprintf(stderr, "[ s3: bee8 write reg %x = %03x ]\n", write_index, (int)(written & 0xfff)));
 
     switch (write_index) {
     case 0:
-      d->s3_rem_height = d->bee8_regs[0] + 1;
+      d->s3_rect_height = d->bee8_regs[0] & 0x0fff;
       break;
-
-    case 13:
-      if ((written >> 8) & 15) { // apply command?
-        uint8_t command = written & 0xff;
-        if (command == 0x31) {
-        }
-      }
+    
+    default:
       break;
     }
-
   }
 
   return 1;
@@ -2898,40 +3190,38 @@ DEVICE_ACCESS(vga_s3_pio_cmd) {
 
 DEVICE_ACCESS(vga_s3_pix_transfer) {
   struct vga_data *d = (struct vga_data *) extra;
-  uint64_t idata;
   uint8_t to_write[4];
+  uint64_t idata;
 
   REG_WRITE( 0xe2e8);
 
   if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len);
+    d->s3_pixel_xfer = get_le_swap(!d->s3_cmd_swap, idata, len);
+    L(fprintf(stderr, "[ s3: set pixel transfer %08x (raw %08x) ]\n", (int)d->s3_pixel_xfer, (int)idata));
     int swizzle = d->s3_cmd_swap ? len - 1 : 0;
     for (int i = 0; i < len; i++) {
       to_write[i ^ swizzle] = idata >> (i * 8);
     }
 
-    int pxcount = std::max(8 + (8 * d->s3_cmd_bus_size), (int)(8 * len));
-    int old_fg_color_mix = d->s3_fg_color_mix;
-    uint8_t pixels[32];
+    d->s3_cmd_bus_size = len - 1;
 
     if (d->s3_cmd_mx) {
       // Transfer across the plane, 1bpp
-      L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_draw_width));
-      for (int i = 0; i < pxcount; i++) {
-        bool cpu = !!(to_write[i / 8] & (1 << ((7 - i) % 8)));
+      L(fprintf(stderr, "[ vga: transfer cross the plane (width %d) ", d->s3_rect_width + 1));
+      for (int i = 0; i < len * 8; i++) {
+        bool cpu = !!(to_write[i / 8] & (1 << (7 - (i % 8))));
         L(fprintf(stderr, "%c", cpu ? '#' : '.'));
-        pixels[i] = cpu ? 0xff : 0;
       }
       L(fprintf(stderr, " ]\n"));
-      // d->s3_fg_color_mix = 0x67;
-      pixel_transfer(cpu, d, true, pixels, pxcount);
-      d->s3_fg_color_mix = old_fg_color_mix;
+      pixel_wait_draw(cpu, d, true, len);
     } else {
-      G(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
-      pixel_transfer(cpu, d, false, to_write, 1 + d->s3_cmd_bus_size);
+      L(fprintf(stderr, "Pixel transfer, not s3_cmd_mx\n"));
+      pixel_wait_draw(cpu, d, false, len);
     }
   }
 
+  d->modified = 1;
   return 1;
 }
 
@@ -2967,6 +3257,69 @@ static void vga_crtc_reg_write(struct machine *machine, struct cpu *cpu, struct 
 	case VGA_CRTC_CURSOR_LOCATION_LOW:		/*  0x0f  */
 		recalc_cursor_position(d);
 		break;
+  case VGA_CRTC_VERTICAL_DISPLAY_END:
+  case VGA_CRTC_OVERFLOW_REGISTER: {
+    uint16_t vend_high = ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 5) & 2) | ((d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] >> 1) & 1);
+    uint16_t vend_low = d->crtc_reg[VGA_CRTC_VERTICAL_DISPLAY_END];
+    d->vend = ((vend_high << 8) | vend_low) + 1;
+    fprintf(stderr, "[ vga: vertical end %d ]\n", d->vend);
+    break;
+  }
+  case VGA_CRTC_HORIZONTAL_DISPLAY_END:
+  case VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW: {
+    uint16_t hend_high = (d->crtc_reg[VGA_CRTC_EXTENDED_HORIZONTAL_OVERFLOW] >> 1) & 1;
+    uint16_t hend_low = d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END];
+    d->hend = (((hend_high << 8) | hend_low) + 1) * 8;
+    fprintf(stderr, "[ vga: horizontal end %d ]\n", d->hend);
+    break;
+  }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_FG_COLOR_STACK:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_BG_COLOR_STACK: {
+    int fg = !(regnr & 1);
+    auto primary = d->s3_color_stack;
+    int shift = 8 * primary;
+    uint32_t mask = 0xff << shift;
+    // X11 and windows use opposing pairs of colors for the solid colors.
+    auto value = d->crtc_reg[regnr];
+    if (value == 1) {
+      // AIX writes 1 or 0 for white or black
+      value = 0xff;
+    }
+    d->gfx_cursor.palette[fg] = ((d->gfx_cursor.palette[fg] | mask) ^ mask) | (value << shift);
+    d->gfx_cursor.palette[fg + 2] = ((d->gfx_cursor.palette[fg] | mask) ^ mask) | (value << shift);
+    d->s3_color_stack = (d->s3_color_stack + 1) % 3;
+    compose_cursor(machine, d);
+    break;
+  }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_HIGH:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_LOW: {
+    uint32_t new_address = (((d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_HIGH] & 15) << 8) | d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_START_ADDRESS_LOW]) << 10;
+    if (d->s3_cursor_address != new_address) {
+      d->s3_cursor_address = new_address;
+      compose_cursor(machine, d);
+    }
+    break;
+  }
+  case VGA_CRTC_EXTENDED_RAMDAC_CONTROL:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_X:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_Y: {
+    d->gfx_cursor.center_x = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_X];
+    d->gfx_cursor.center_y = d->crtc_reg[VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_PATTERN_START_Y];
+    compose_cursor(machine, d);
+    break;
+  }
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE:
+    if (d->crtc_reg[regnr] != (d->gfx_cursor.on & 1)) {
+      compose_cursor(machine, d);
+    }
+    break;
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_LOW:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_X_HIGH:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_LOW:
+  case VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_ORIGIN_Y_HIGH: {
+    update_cursor(machine, d);
+    break;
+  }
 	case 0xff:
 		grayscale = 0;
 		switch (d->crtc_reg[0xff]) {
@@ -3259,7 +3612,7 @@ DEVICE_ACCESS(s3_ctrl)
 				    d->sequencer_reg_select];
 			else {
         d->sequencer_reg[d->sequencer_reg_select] = idata;
-        fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr));
+        L(fprintf(stderr, "[ dev_vga: sequencer %02x = %02x (%s) ]\n", d->sequencer_reg_select, (unsigned int)idata, vga_find_register_name(d, S_PRIMARY, relative_addr)));
         vga_sequencer_reg_write(cpu->machine, cpu, d, d->sequencer_reg_select, idata);
 			}
 			break;
@@ -3362,6 +3715,9 @@ DEVICE_ACCESS(s3_ctrl)
         if (d->crtc_reg_select != 0x30) {
           d->crtc_reg[d->crtc_reg_select] = idata;
         }
+        if (d->crtc_reg_select == VGA_CRTC_HARDWARE_GRAPHICS_CURSOR_MODE) {
+          d->s3_color_stack = 0;
+        }
 				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
 			}
@@ -3402,7 +3758,7 @@ DEVICE_ACCESS(s3_ctrl)
 		if (writeflag == MEM_READ)
 			data[i] = odata;
 
-    fprintf(stderr, "vga ctr at %08x [%04x] %s %02x (%s)\n", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i], vga_find_register_name(d, S_PRIMARY, relative_addr));
+    fprintf(stderr, "vga ctr at %08x [%04lx] %s %02x (%s)\n", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i], vga_find_register_name(d, S_PRIMARY, relative_addr));
 
 		/*  For multi-byte accesses:  */
 		relative_addr ++;
@@ -3442,9 +3798,9 @@ DEVICE_ACCESS(vga_s3_92e8) {
   REG_WRITE( 0x92e8);
 
   if (writeflag == MEM_WRITE) {
-		d->line_error_term = memory_readmax64(cpu, data, len);
+		d->line_errorterm = memory_readmax64(cpu, data, len);
   } else {
-    memory_writemax64(cpu, data, len, d->line_error_term);
+    memory_writemax64(cpu, data, len, d->line_errorterm);
   }
 
   return 1;
@@ -3511,7 +3867,7 @@ DEVICE_ACCESS(vga_s3_8100_range) {
     { 0x38, 0xbee8, 1 },
     { 0x3a, 0xbee8, 2 },
     { 0x3c, 0xbee8, 3 },
-    { 0xe3, 0xbee8, 4 },
+    { 0x3e, 0xbee8, 4 },
     { 0x40, 0xbee8, 0xa },
     { 0x42, 0xbee8, 0xd },
     { 0x44, 0xbee8, 0xe },
@@ -3536,6 +3892,10 @@ DEVICE_ACCESS(vga_s3_8100_range) {
         found = true;
         if (register_map[i][2] != -1) {
           d->bee8_regs[0xf] = register_map[i][2];
+          d->bee8_regs[0x1] = 0;
+          d->bee8_regs[0x2] = 0;
+          d->bee8_regs[0x3] = 0xfff;
+          d->bee8_regs[0x4] = 0xfff;
         }
         fprintf(stderr, "[ vga: write %04x via 8100 compressed area %02x %02x ]\n", register_map[i][1], dselect[0], dselect[1]);
         cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], dselect, amount, MEM_WRITE, PHYSICAL);
@@ -3558,7 +3918,7 @@ DEVICE_ACCESS(vga_s3_8100_range) {
         memset(data, 0, len);
         cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + register_map[i][1], data, 2, MEM_READ, PHYSICAL);
         fprintf(stderr, "[ vga: read %04x via 8100 compressed area yielding", register_map[i][1]);
-        for (int j = 0; j < len; i++) {
+        for (int j = 0; j < len; j++) {
           fprintf(stderr, " %02x", data[j]);
         }
         fprintf(stderr, "]\n");
@@ -3642,7 +4002,7 @@ DEVICE_ACCESS(vga_option_rom)
       result = rom_data[relative_addr % rom_size] | (rom_data[(relative_addr + 1) % rom_size] << 8) | (rom_data[(relative_addr + 2) % rom_size] << 16) | (rom_data[(relative_addr + 3) % rom_size] << 24);
     }
 
-    fprintf(stderr, "vga: access option rom: %08x @ %08x = %08x\n", relative_addr, cpu->pc, result);
+    fprintf(stderr, "vga: access option rom: %08lx @ %08lx = %08x\n", relative_addr, cpu->pc, result);
     memory_writemax64(cpu, data, len, result);
   }
   return 1;
@@ -3668,21 +4028,8 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	d->videomem_base  = videomem_base;
 	d->control_base   = control_base | VIRTUAL_ISA_PORTBASE;
-	d->max_x          = 100;
-	d->max_y          = 38;
-	d->cur_mode       = MODE_CHARCELL;
-	d->crtc_reg[0xff] = 0x03;
-	d->charcells_size = 0x8000;
-	d->gfx_mem_size   = 64;	/*  Nothing, as we start in text mode,
-			but size large enough to make gfx_mem aligned.  */
 	d->pixel_repx = d->pixel_repy = machine->x11_md.scaleup;
-
-	/*  Allocate in full pages, to make it possible to use dyntrans:  */
-	allocsize = ((d->charcells_size-1) | (machine->arch_pagesize-1)) + 1;
-	CHECK_ALLOCATION(d->charcells = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->charcells_outputed = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->charcells_drawn = (unsigned char *) malloc(d->charcells_size));
-	CHECK_ALLOCATION(d->gfx_mem = (unsigned char *) malloc(d->gfx_mem_size));
+  s3_hack_start(machine, d);
 
 	memset(d->charcells_drawn, 0, d->charcells_size);
 
@@ -3790,12 +4137,6 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 	memory_device_register(mem, "vga_s3_ff00_range", VIRTUAL_ISA_PORTBASE | 0x8000ff00, 0x80,
                          dev_vga_s3_ff00_range_access, d, DM_DEFAULT, NULL);
 
-	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
-	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
-	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
-
-	reset_palette(d, 0);
-
 	/*  This will force an initial redraw/resynch:  */
 	d->update_x1 = 0;
 	d->update_x2 = d->max_x - 1;
@@ -3808,8 +4149,22 @@ void dev_86mc64_init(struct machine *machine, struct memory *mem,
 
 	machine_add_tickfunction(machine, dev_s3_tick, d, VGA_TICK_SHIFT);
 
-	register_reset(d);
+	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
+                      d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "S3 VGA");
+	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
+
+  // text and graphic
+  x11_set_num_cursors(d->fb->fb_window, 2);
+  struct x11_cursor text_cursor;
+  text_cursor.block(1, d->font_width, d->font_height);
+  text_cursor.palette[1] = 0xffffff;
+  x11_set_cursor_data(d->fb->fb_window, 0, text_cursor);
+  d->gfx_cursor.width = 64;
+  for (int i = 0; i < 64 * 64; i++) {
+    d->gfx_cursor.data.push_back(0);
+  }
 
 	vga_update_cursor(machine, d);
-  s3_hack_start(d);
+  reset_palette(d, 0);
+  register_reset(d);
 }

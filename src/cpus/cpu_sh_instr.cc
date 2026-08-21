@@ -2143,7 +2143,7 @@ X(jmp_rn_trace)
 #if 0
 		/*  NOTE: Jmp works like both a return, and a subroutine
 		    call.  */
-		cpu_functioncall_trace_return(cpu);
+		cpu_functioncall_trace_return(cpu, cpu->pc);
 		cpu_functioncall_trace(cpu, cpu->pc);
 #endif
 		cpu->delay_slot = NOT_DELAYED;
@@ -2210,7 +2210,7 @@ X(rts_trace)
 	cpu->n_translated_instrs ++;
 	if (!(cpu->delay_slot & EXCEPTION_IN_DELAY_SLOT)) {
 		cpu->pc = target;
-		cpu_functioncall_trace_return(cpu, nullptr);
+		cpu_functioncall_trace_return(cpu, cpu->pc, nullptr);
 		cpu->delay_slot = NOT_DELAYED;
 		quick_pc_to_pointers(cpu);
 	} else

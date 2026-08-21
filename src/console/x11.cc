@@ -51,7 +51,6 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
     { return NULL; }
 void x11_check_event(struct emul *emul) { }
 
-
 #else	/*  WITH_X11  */
 /* SDL Library */
 #include <SDL.h>
@@ -144,49 +143,6 @@ KeysymAndKeyName x11_keys[] = {
   { SDL_SCANCODE_GRAVE, KeyNames::Backquote }
 };
 
-/*
- *  x11_redraw_cursor():
- *
- *  Redraw a framebuffer's X11 cursor.
- *
- *  NOTE: It is up to the caller to call XFlush.
- */
-void x11_redraw_cursor(struct machine *m, int i)
-{
-    int last_color_used = 0;
-    int n_colors_used = 0;
-    struct fb_window *fbwin = m->x11_md.fb_windows[i];
-
-    SDL_Rect cursor_back_source;
-    cursor_back_source.x = fbwin->OLD_cursor_x/fbwin->scaledown;
-    cursor_back_source.y = fbwin->OLD_cursor_y/fbwin->scaledown;
-    cursor_back_source.w = fbwin->OLD_cursor_xsize/fbwin->scaledown + 1;
-    cursor_back_source.h = fbwin->OLD_cursor_ysize/fbwin->scaledown + 1;
-    SDL_Rect cursor_back_dest = cursor_back_source;
-    cursor_back_dest.x = 0;
-    cursor_back_dest.y = 0;
-
-    /*  Remove old cursor, if any:  */
-    if (fbwin->x11_fb_window != nullptr && fbwin->OLD_cursor_on) {
-        // Make a cursor sized texture.
-        SDL_SetRenderTarget(fbwin->x11_fb_render, fbwin->cursor_reserve);
-        SDL_RenderCopy(fbwin->x11_fb_render, fbwin->fb_data, &cursor_back_source, &cursor_back_dest);
-        SDL_SetRenderTarget(fbwin->x11_fb_render, nullptr);
-    }
-
-    if (fbwin->x11_fb_window != NULL && fbwin->cursor_on) {
-        SDL_RenderCopy(fbwin->x11_fb_render, fbwin->host_cursor_pixmap, &cursor_back_dest, &cursor_back_source);
-
-        fbwin->OLD_cursor_on = fbwin->cursor_on;
-        fbwin->OLD_cursor_x = fbwin->cursor_x;
-        fbwin->OLD_cursor_y = fbwin->cursor_y;
-        fbwin->OLD_cursor_xsize =
-            fbwin->cursor_xsize;
-        fbwin->OLD_cursor_ysize =
-            fbwin->cursor_ysize;
-    }
-}
-
 
 /*
  *  x11_redraw():
@@ -261,6 +217,54 @@ void x11_init(struct machine *m)
     }
 
     m->x11_md.current_display_name_nr = 0;
+}
+
+
+x11_cursor::~x11_cursor() {
+  if (render) {
+    SDL_DestroyTexture(render);
+  }
+}
+
+
+void x11_set_num_cursors(struct fb_window *win, size_t n) {
+  while (win->cursors.size() > n) {
+    win->cursors.pop_back();
+  }
+  while (win->cursors.size() < n) {
+    win->cursors.emplace_back();
+  }
+}
+
+
+void x11_set_cursor_data(struct fb_window *win, size_t n, const struct x11_cursor &cursor) {
+  if (n >= win->cursors.size()) {
+    return;
+  }
+  if (win->cursors[n].render) {
+    SDL_DestroyTexture(win->cursors[n].render);
+  }
+  win->cursors[n] = cursor;
+  if (!cursor.width || !cursor.data.size()) {
+    win->cursors[n].render = nullptr;
+    return;
+  }
+  win->cursors[n].render = SDL_CreateTexture
+    (win->x11_fb_render,
+     SDL_PIXELFORMAT_RGBA32,
+     SDL_TEXTUREACCESS_STREAMING,
+     cursor.width,
+     cursor.data.size() / cursor.width
+     );
+}
+
+void x11_update_cursor(struct fb_window *win, size_t n, bool on, int x, int y) {
+  if (n >= win->cursors.size()) {
+    return;
+  }
+  win->cursors[n].on = on;
+  win->cursors[n].render_x = x;
+  win->cursors[n].render_y = y;
 }
 
 
@@ -383,6 +387,9 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
   );
   fbwin->window_id = SDL_GetWindowID(fbwin->x11_fb_window);
   fbwin->x11_fb_render = SDL_CreateRenderer(fbwin->x11_fb_window, -1, SDL_RENDERER_ACCELERATED);
+  if (!fbwin->x11_fb_render) {
+  	fbwin->x11_fb_render = SDL_CreateRenderer(fbwin->x11_fb_window, -1, 0);
+  }
 
 	/*  Make sure the window is mapped:  */
 	/*  Fill the ximage with black pixels:  */
@@ -403,13 +410,7 @@ struct fb_window *x11_fb_init(int xsize, int ysize, char *name,
 
 	x11_putimage_fb(m, fb_number);
 
-	/*  Fill the 64x64 "hardware" cursor with white pixels:  */
-	xsize = ysize = 64;
-
-	/*  Fill the cursor ximage with white pixels:  */
-	for (y=0; y<ysize; y++)
-		for (x=0; x<xsize; x++)
-			fbwin->cursor_pixels[y][x] = N_GRAYCOLORS-1;
+  SDL_EnableScreenSaver();
 
 	return fbwin;
 }
@@ -428,11 +429,14 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
 {
     int fb_nr;
     SDL_Event event;
+    SDL_Window* window;
 
     SDL_PumpEvents();
     while (SDL_PollEvent(&event) != 0) {
-        if (event.type == SDL_WINDOWEVENT) {
-            if (event.window.event == SDL_WINDOWEVENT_EXPOSED) {
+        switch (event.type) {
+        case SDL_WINDOWEVENT:
+            switch (event.window.event) {
+            case SDL_WINDOWEVENT_EXPOSED:
                 fprintf(stderr, "[ SDL: redraw ]\n");
                 for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                     if (m->x11_md.fb_windows[i]->window_id != event.window.windowID) {
@@ -440,18 +444,27 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                     x11_redraw(m, i);
                 }
-            } else if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
-                fprintf(stderr, "[ SDL: close ]\n");
+                break;
+            case SDL_WINDOWEVENT_CLOSE:
                 for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                     if (m->x11_md.fb_windows[i]->window_id != event.window.windowID) {
                         continue;
                     }
-                    for (int j = 0; j < m->ncpus; j++) {
+                    window = SDL_GetWindowFromID(event.window.windowID);
+                    if (SDL_GetWindowKeyboardGrab(window) == SDL_FALSE) {
+                      fprintf(stderr, "[ SDL: close ]\n");
+                      for (int j = 0; j < m->ncpus; j++) {
                         m->cpus[j]->running = false;
+                      }
                     }
                 }
+                break;
+            default:
+                break;
             }
-        } else if (event.type == SDL_MOUSEMOTION) {
+            break;
+
+        case SDL_MOUSEMOTION:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.motion.windowID) {
                     continue;
@@ -464,7 +477,9 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     i
                 );
             }
-        } else if (event.type == SDL_MOUSEBUTTONUP) {
+            break;
+
+        case SDL_MOUSEBUTTONUP:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.button.windowID) {
                     continue;
@@ -475,21 +490,34 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
             }
-        } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+            break;
+
+        case SDL_MOUSEBUTTONDOWN:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.button.windowID) {
                     continue;
                 }
+                window = SDL_GetWindowFromID(event.button.windowID);
+                SDL_SetWindowKeyboardGrab(window, SDL_TRUE);
+                SDL_SetWindowGrab(window, SDL_TRUE);
                 for (int j = 0; j < 3; j++) {
                     if (event.button.button & (1 << j)) {
                         console_mouse_button(j, 1);
                     }
                 }
             }
-        } else if (event.type == SDL_KEYDOWN) {
+            break;
+
+        case SDL_KEYDOWN:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.key.windowID) {
                     continue;
+                }
+                if (event.key.keysym.sym == SDLK_F10 && (event.key.keysym.mod & KMOD_CTRL))
+                {
+                    window = SDL_GetWindowFromID(event.key.windowID);
+                    SDL_SetWindowKeyboardGrab(window, SDL_FALSE);
+                    SDL_SetWindowGrab(window, SDL_FALSE);
                 }
                 for (int k = 0; k < sizeof(x11_keys) / sizeof(x11_keys[0]); k++) {
                     if (x11_keys[k].keysym == event.key.keysym.scancode) {
@@ -499,10 +527,12 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
 
-                fprintf(stderr, "[ SDL [DOWN]: unknown keysym %x ]\n", event.key.keysym);
+                fprintf(stderr, "[ SDL [DOWN]: unknown keysym %x ]\n", event.key.keysym.scancode);
                 return;
             }
-        } else if (event.type == SDL_KEYUP) {
+            break;
+
+        case SDL_KEYUP:
             for (int i = 0; i < m->x11_md.n_fb_windows; i++) {
                 if (m->x11_md.fb_windows[i]->window_id != event.key.windowID) {
                     continue;
@@ -515,9 +545,13 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                     }
                 }
 
-                fprintf(stderr, "[ SDL [UP]: unknown keysym %x ]\n", event.key.keysym);
+                fprintf(stderr, "[ SDL [UP]: unknown keysym %x ]\n", event.key.keysym.scancode);
                 return;
             }
+            break;
+
+        default:
+            break;
         }
     }
 }

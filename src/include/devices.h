@@ -175,6 +175,8 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define DEV_PCI_CONFIG_AREA 0x1e00000000ull
 #define DEV_PCI_CONFIG_CARD_SIZE 0x100
 
+#define DEV_PCI_CONFIG_EAGLE (DEV_PCI_CONFIG_AREA + DEV_PCI_CONFIG_CARD_SIZE)
+
 /*  dev_eagle.c */
 struct eagle_data {
 	struct interrupt irq;

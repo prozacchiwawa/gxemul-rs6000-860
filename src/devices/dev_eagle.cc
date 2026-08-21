@@ -1004,7 +1004,7 @@ DEVINIT(eagle)
 
     memory_device_register
       (devinit->machine->memory, "eagle_pci_config",
-       DEV_PCI_CONFIG_AREA + DEV_PCI_CONFIG_CARD_SIZE, DEV_PCI_CONFIG_CARD_SIZE,
+       DEV_PCI_CONFIG_EAGLE, DEV_PCI_CONFIG_CARD_SIZE,
        dev_eagle_pci_config_access, d, DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);

@@ -175,56 +175,13 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define DEV_PCI_CONFIG_AREA 0x1e00000000ull
 #define DEV_PCI_CONFIG_CARD_SIZE 0x100
 
-/*  dev_eagle.c */
-struct eagle_data {
-	struct interrupt irq;
+#define DEV_PCI_CONFIG_EAGLE (DEV_PCI_CONFIG_AREA + DEV_PCI_CONFIG_CARD_SIZE)
+#define EAGLE_ISA_DMA_REGS (DEV_PCI_CONFIG_AREA + 16 * DEV_PCI_CONFIG_CARD_SIZE)
 
-	struct pci_data	*pci_data;
-
-	int stage;
-  int addr_low_high_latch;
-  int len_low_high_latch;
-
-  int fin_mask;
-
-  unsigned char dma_page[4];
-  unsigned char dma_high[4];
-
-  uint8_t err_reg[2];
-
-  int want_error;
-  int l2_cache;
-  int discontiguous;
-  int bg_data_8mb;
-
-  // cs4231
-  uint8_t cs4231_index;
-  uint8_t cs4231_status;
-  uint8_t cs4231_registers[0x20];
-
-  bool game_timer;
-
-  uint16_t pci_status;
-  uint16_t pci_command;
-
-  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
-};
-
-struct eagle_glob {
-  int want_error;
-
-  /* 0xc0 */
-  uint8_t error_enabling_2, error_detection_2, bus_status_pci;
-
-  unsigned char eagle_comm_area[16];
-
-  uint16_t password_protect_1;
-  uint16_t password_protect_2;
-
-  int want_timer_int;
-};
-
-extern struct eagle_glob eagle_comm;
+#define EAGLE_ISA_DMA_C2_ADDR (EAGLE_ISA_DMA_REGS + 0)
+#define EAGLE_ISA_DMA_C2_LEN (EAGLE_ISA_DMA_REGS + 4)
+#define EAGLE_ISA_DMA_CONTROLLER_1_STATUS (EAGLE_ISA_DMA_REGS + 7)
+#define EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER (EAGLE_ISA_DMA_REGS + 8)
 
 /*  dev_fb.c:  */
 #define	DEV_FB_LENGTH		0x3c0000	/*  3c0000 to not colide with */

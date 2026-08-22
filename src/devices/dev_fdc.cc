@@ -131,7 +131,10 @@ DEVICE_ACCESS(fdc)
 	int oldstate = d->state;
 	size_t i;
   int was_interrupt = 0;
-  unsigned char eagle_dma_2[8], sector[512];
+  uint8_t dma_controller_1_status = 0, dma_controller_1_scatter_gather = 0;
+  uint32_t dma_channel_2_addr = 0;
+  uint16_t dma_channel_2_len = 0;
+  unsigned char sector[512];
 
   if (d->asserting_interrupt) {
     was_interrupt = 1;
@@ -270,17 +273,20 @@ DEVICE_ACCESS(fdc)
 						d->command_bytes[0] = 2;
 
             // Ask the DMA system where to send the data in memory.
-            memcpy(eagle_dma_2, eagle_comm.eagle_comm_area, 8);
-            eagle_comm.eagle_comm_area[7] = 4;
-            eagle_comm.eagle_comm_area[8] = 0xff;
+            fprintf(stderr, "[ fdc: setting dma scatter gather 0xff, controller status 4 ]\n");
+            dma_controller_1_scatter_gather = 0xff;
+            cpu->memory_rw(cpu, cpu->mem, EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER, &dma_controller_1_scatter_gather, 1, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+            dma_controller_1_status = 4;
+            cpu->memory_rw(cpu, cpu->mem, EAGLE_ISA_DMA_CONTROLLER_1_STATUS, &dma_controller_1_status, 1, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
 
             // Read addr programmed into DMA 2
             // Note: lower 16 bits are shifted left 1 because dma is in
             // 16 bit chunks.
-            low16_dma_addr = (eagle_dma_2[0] | (eagle_dma_2[1] << 8));
-            read_addr = (low16_dma_addr | (eagle_dma_2[2] << 16) | (eagle_dma_2[3] << 24)) & 0x7fffffff;
+            cpu->memory_rw(cpu, cpu->mem, EAGLE_ISA_DMA_C2_ADDR, (uint8_t *)&dma_channel_2_addr, sizeof(dma_channel_2_addr), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+            read_addr = dma_channel_2_addr & 0x7fffffff;
             // Read len programmed into DMA 2
-            read_len = (((eagle_dma_2[4] & 0xff) | ((eagle_dma_2[5] & 0xff) << 8)) + 1) & ~1;
+            cpu->memory_rw(cpu, cpu->mem, EAGLE_ISA_DMA_C2_LEN, (uint8_t *)&dma_channel_2_len, sizeof(dma_channel_2_len), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+            read_len = (1 + dma_channel_2_len) & ~1;
 
             fprintf(stderr, "[ fdc: read to %08" PRIx64" len %08" PRIx64" ]\n", read_addr, read_len);
             if (diskimage_exist(cpu->machine, 0, DISKIMAGE_FLOPPY)) {
@@ -305,11 +311,6 @@ DEVICE_ACCESS(fdc)
                 */
 
                 cpu->memory_rw(cpu, cpu->mem, read_addr, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
-
-                // XXX Check that we read it
-                cpu->memory_rw(cpu, cpu->mem, read_addr, eagle_dma_2, 8, MEM_READ, PHYSICAL | NO_EXCEPTIONS);
-                fprintf(stderr, "[ read back %02x %02x %02x %02x ... ]\n", eagle_dma_2[0], eagle_dma_2[1], eagle_dma_2[2], eagle_dma_2[3]);
-
                 read_addr += 512;
                 offset += 512;
                 read_len -= 512;

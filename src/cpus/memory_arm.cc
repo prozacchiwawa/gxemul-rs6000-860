@@ -263,7 +263,7 @@ exception_return:
 	if (instr)
 		arm_exception(cpu, ARM_EXCEPTION_PREF_ABT);
 	else {
-		cpu->cd.arm.far = vaddr;
+		cpu->cd.arm.far_ = vaddr;
 		cpu->cd.arm.fsr = (domain << 4) | fs;
 		arm_exception(cpu, ARM_EXCEPTION_DATA_ABT);
 	}

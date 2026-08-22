@@ -2498,6 +2498,7 @@ X(fsca_fpul_drn)
 X(fipr_fvm_fvn)
 {
 	struct ieee_float_value frn0, frn1, frn2, frn3;
+	
 	struct ieee_float_value frm0, frm1, frm2, frm3;
 
 	FLOATING_POINT_AVAILABLE_CHECK;

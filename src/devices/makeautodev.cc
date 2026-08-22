@@ -91,7 +91,7 @@ int main(int argc, char** argv)
         try
         {
             for (const std::filesystem::directory_entry& dir_entry : std::filesystem::directory_iterator(argv[1])) {
-                if (!dir_entry.is_directory() && dir_entry.path().extension() == ".cc" && std::string(dir_entry.path().filename()).substr(0, 4) == "dev_") {
+                if (!dir_entry.is_directory() && dir_entry.path().extension() == ".cc" && std::string(dir_entry.path().filename().string()).substr(0, 4) == "dev_") {
                     std::fstream in(dir_entry.path(), std::ios_base::in);
                     if (in.is_open()) {
                         for (std::string line; std::getline(in, line, '\n');)

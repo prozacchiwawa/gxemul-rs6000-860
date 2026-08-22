@@ -28,7 +28,11 @@
  *  SUCH DAMAGE.
  */
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <termios.h>
+#endif
 
 #include "UI.h"
 
@@ -145,8 +149,13 @@ private:
 
 private:
 	bool		m_consoleIsInitialized;
+#ifdef _WIN32
+	DWORD m_oldConsoleMode;
+	DWORD m_currentConsoleMode;
+#else
 	struct termios	m_oldTermios;
 	struct termios	m_currentTermios;
+#endif
 };
 
 

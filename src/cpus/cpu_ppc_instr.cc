@@ -3398,16 +3398,16 @@ X(to_be_translated)
 	case PPC_HI6_STH:
 	case PPC_HI6_STHU:
 	case PPC_HI6_LFS:
-  case PPC_HI6_LFSU:
+	case PPC_HI6_LFSU:
 	case PPC_HI6_LFD:
-  case PPC_HI6_LFDU:
+	case PPC_HI6_LFDU:
 	case PPC_HI6_STFS:
-  case PPC_HI6_STFSU:
+	case PPC_HI6_STFSU:
 	case PPC_HI6_STFD:
-  case PPC_HI6_STFDU:
+	case PPC_HI6_STFDU:
 	case PPC_HI6_LD:
-  case PPC_HI6_STD:
-		rs = (iword >> 21) & 31;
+	case PPC_HI6_STD:
+        	rs = (iword >> 21) & 31;
 		ra = (iword >> 16) & 31;
 		imm = (int16_t)iword;
 		load = 0; zero = 1; size = 0; update = 0; fp = 0;
@@ -3426,27 +3426,27 @@ X(to_be_translated)
 		case PPC_HI6_STW:  size=2; break;
 		case PPC_HI6_STWU: size=2; update=1; break;
 		case PPC_HI6_LFS:  load=1; size=2; fp=1;ic->f=instr(lfs);break;
-    case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs_update);break;
+		case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs_update);break;
 		case PPC_HI6_LFD:  load=1; size=3; fp=1;ic->f=instr(lfd);break;
-    case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd_update);break;
+		case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd_update);break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
 		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
 		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
-    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
+		case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
 		case PPC_HI6_LD:
-      fprintf(stderr, "ld doesn't differentiate its lower bits\n");
-      abort();
-      load=1; size=3;
-      break;
-    case PPC_HI6_STD:
-      fprintf(stderr, "No distinghising types of STD\n");
-      abort();
-      size=3;
-      break;
-    default:
-      fprintf(stderr, "unhandled irregular store case %08x\n", (unsigned int)iword);
-      abort();
-      break;
+			fprintf(stderr, "ld doesn't differentiate its lower bits iword %08x\n", (unsigned int)iword);
+			abort();
+			load=1; size=3;
+			break;
+		case PPC_HI6_STD:
+			fprintf(stderr, "No distinghising types of STD iword %08x\n", (unsigned int)iword);
+			abort();
+			size=3;
+			break;
+		default:
+			fprintf(stderr, "unhandled irregular store case %08x\n", (unsigned int)iword);
+			abort();
+			break;
 		}
 		if (ic->f == NULL) {
 			ic->f =

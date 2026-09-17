@@ -247,6 +247,18 @@ DEVICE_ACCESS(eagle_8mb)
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
 
+  // Query for pcmcia io space
+  uint32_t pcmcia_target = real_addr & 0xffff;
+  // Write the io claim addr
+  cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CLAIM_IO_ADDR, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+  // Examine the check register
+  cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CHECK_CLAIM, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+  if (~pcmcia_target) {
+    // Not all 1s, valid
+    real_addr = DEV_PCIC_CARD_0_SPACE + pcmcia_target;
+    fprintf(stderr, "[ eagle: pcmcia %s io addr %08x ]\n", writeflag ? "write" : "read", (unsigned int)real_addr);
+  }
+
   if (writeflag == MEM_READ) {
     cpu->memory_rw(cpu, cpu->mem, real_addr, (uint8_t *)&idata, len, MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     memory_writemax64(cpu, data, len|MEM_PCI_LITTLE_ENDIAN, idata);
@@ -262,7 +274,21 @@ DEVICE_ACCESS(eagle_mem_pass)
 {
     struct eagle_data *d = (struct eagle_data *) extra;
 
-    uint32_t real_addr = relative_addr;
+    uint64_t real_addr = relative_addr;
+    uint32_t pcmcia_target = real_addr & 0x3ffffff;
+
+    // Write the io claim addr
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CLAIM_MEM_ADDR, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+    // Examine the check register
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CHECK_CLAIM, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+    if (~pcmcia_target) {
+      // Not all 1s, valid
+      real_addr = DEV_PCIC_CARD_0_SPACE;
+      real_addr += pcmcia_target;
+      fprintf(stderr, "[ eagle: pcmcia %s mem addr %" PRIx64 " ]\n", writeflag ? "write" : "read", real_addr);
+      return cpu->memory_rw(cpu, cpu->mem, real_addr, data, len, writeflag, PHYSICAL | NO_EXCEPTIONS) == MEMORY_ACCESS_OK;
+    }
+    
     return io_pass(cpu, d, writeflag, false, real_addr, data, len);
 }
 

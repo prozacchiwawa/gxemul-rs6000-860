@@ -183,6 +183,31 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define EAGLE_ISA_DMA_CONTROLLER_1_STATUS (EAGLE_ISA_DMA_REGS + 7)
 #define EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER (EAGLE_ISA_DMA_REGS + 8)
 
+/* dev_pcic.cc */
+#define DEV_PCIC_PRIVATE_IO_AREA 0x2100000000ull
+#define DEV_PCIC_PRIVATE_IO_AREA_SIZE 16
+// 2 16mb regions
+// memory check space (read 32bits, value other than -1 yields a mem target)
+// io check space (read 32bits, value other than -1 yields an io target)
+
+// each pcmcia socket has a specific target where it finds a device if provided.
+#define DEV_PCIC_CARD_0_SPACE 0x2000000000ull
+#define DEV_PCIC_CARD_SIZE (256 * 1024 * 1024)
+#define DEV_PCIC_CARD_SPACE(n) (DEV_PCIC_CARD_0_SPACE + ((n) * DEV_PCIC_CARD_SIZE))
+
+// we can check for non-zeros in the card's description memory.
+#define DEV_PCIC_CARD_REG_SPACE(n) DEV_PCIC_CARD_SPACE(n)
+#define DEV_PCIC_CARD_IO_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (64 * 1024 * 1024))
+#define DEV_PCIC_CARD_MEM_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (128 * 1024 * 1024))
+#define DEV_PCIC_CARD_DEVICE_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (192 * 1024 * 1024))
+#define DEV_PCMCIA_IO_OFFSET (64 * 1024 * 1024)
+#define DEV_PCMCIA_MEM_OFFSET (128 * 1024 * 1024)
+#define DEV_PCMCIA_DEVICE_OFFSET (192 * 1024 * 1024)
+
+#define DEV_PCIC_CLAIM_IO_ADDR 0
+#define DEV_PCIC_CLAIM_MEM_ADDR 4
+#define DEV_PCIC_CHECK_CLAIM 8
+
 /*  dev_fb.c:  */
 #define	DEV_FB_LENGTH		0x3c0000	/*  3c0000 to not colide with */
 						/*  turbochannel rom,         */

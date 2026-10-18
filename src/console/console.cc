@@ -936,6 +936,7 @@ void console_init(void)
  */
 void console_deinit(void)
 {
+  console_platform_deinit();
 	settings_remove(console_settings, "allow_slaves");
 	settings_remove(global_settings, "console");
 }

@@ -158,6 +158,7 @@ extern int console_mouse_y;		/*  absolute y, 0-based  */
 extern int console_mouse_fb_nr;		/*  framebuffer number of
                                       host movement, 0-based  */
 extern int console_mouse_buttons;	/*  left=4, middle=2, right=1  */
+extern int console_port_nr;
 
 extern char *stderr_redirect_log;
 
@@ -205,5 +206,6 @@ int console_read_platform(int handle, uint8_t *buf, size_t len);
 void start_xterm_platform(int handle);
 int redirect_stderr_platform(const char *new_file);
 int console_makeavail_platform(int handle, int ch);
+void console_platform_deinit();
 
 #endif	/*  CONSOLE_H  */

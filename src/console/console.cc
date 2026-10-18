@@ -940,3 +940,12 @@ void console_deinit(void)
 	settings_remove(console_settings, "allow_slaves");
 	settings_remove(global_settings, "console");
 }
+
+/*
+ * If supported and if the target exists, move listeners to the main console to become listeners
+ * of the named console instead.  New listeners that connect after this, if supported will not be
+ * affected.
+ */
+void console_main_migrate(const char *name) {
+  console_platform_main_migrate(name);
+}

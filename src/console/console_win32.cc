@@ -75,6 +75,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
+#include <mutex>
 
 #include "console.h"
 #include "emul.h"
@@ -94,6 +95,7 @@ struct attending {
   std::vector<uint8_t> buf;
 };
 
+std::mutex con_mutex;
 extern char *progname;
 extern int verbose;
 extern uint64_t single_step;
@@ -119,9 +121,14 @@ struct console_handle_platform {
   HANDLE    relay_thread;
   DWORD     relay_thread_id;
 
+  bool connected;
+  bool main_console;
   int port;
   HANDLE inputd;
   HANDLE console_instance_outputd;
+
+  std::vector<struct attending> sockets_attending;
+  std::vector<uint8_t> stored;
 };
 
 
@@ -172,6 +179,7 @@ void start_xterm_platform(int handle)
 	 *  write to filedes[1], read from filedesB[0]
 	 */
 
+  platform->main_console = handle == MAIN_CONSOLE;
   platform->inputd = pipehandles[0];
   platform->console_instance_outputd = pipehandlesB[1];
   platform->w_descriptor = pipehandles[1];
@@ -365,8 +373,6 @@ DWORD WINAPI console_socket_thread(PVOID p) {
     die(std::string("couldn't accept relay socket"));
   }
 
-  std::vector<struct attending> sockets_attending;
-  std::vector<uint8_t> stored;
   bool finished = false;
 
   auto end_socket = [&buf](int socket) {
@@ -386,7 +392,7 @@ DWORD WINAPI console_socket_thread(PVOID p) {
     FD_ZERO(&writable);
     FD_ZERO(&error);
 
-    for (auto i = sockets_attending.begin(); i != sockets_attending.end(); i++) {
+    for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
       FD_SET(i->socket, &readable);
       FD_SET(i->socket, &error);
       if (i->buf.size()) {
@@ -413,6 +419,7 @@ DWORD WINAPI console_socket_thread(PVOID p) {
       continue;
     }
 
+    std::unique_lock _l(con_mutex);
     if (FD_ISSET(listen_socket, &readable)) {
       // Accept
       int accepted = accept(listen_socket, nullptr, nullptr);
@@ -420,10 +427,11 @@ DWORD WINAPI console_socket_thread(PVOID p) {
       ioctlsocket(accepted, FIONBIO, &nonblocking);
       struct attending a;
       a.socket = accepted;
-      if (stored.size()) {
-        std::swap(stored, a.buf);
+      if (platform->stored.size()) {
+        std::swap(platform->stored, a.buf);
       }
-      sockets_attending.push_back(a);
+      platform->connected = true;
+      platform->sockets_attending.push_back(a);
     }
     if (FD_ISSET(relay_read, &readable)) {
       // Data from gxemul
@@ -432,13 +440,15 @@ DWORD WINAPI console_socket_thread(PVOID p) {
         break;
       }
 
-      if (sockets_attending.size() == 0 && stored.size() < BMAX) {
-        std::vector<uint8_t> buf_vect(buf, buf + numberOfCharsRead);
-        stored.insert(std::end(stored), std::begin(buf_vect), std::end(buf_vect));
+      if (!platform->connected) {
+        if (platform->stored.size() < BMAX) {
+          std::vector<uint8_t> buf_vect(buf, buf + numberOfCharsRead);
+          platform->stored.insert(std::end(platform->stored), std::begin(buf_vect), std::end(buf_vect));
+        }
       } else {
-        for (auto i = sockets_attending.begin(); i != sockets_attending.end(); i++) {
+        for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
           if (i->buf.size() + numberOfCharsRead > BMAX) {
-            cleanup_attending.push_back(i - sockets_attending.begin());
+            cleanup_attending.push_back(i - platform->sockets_attending.begin());
             continue;
           }
           for (int j = 0; j < numberOfCharsRead; j++) {
@@ -448,11 +458,11 @@ DWORD WINAPI console_socket_thread(PVOID p) {
       }
     }
 
-    for (auto i = sockets_attending.begin(); i != sockets_attending.end(); i++) {
+    for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
       if (FD_ISSET(i->socket, &writable)) {
         int sent;
         if ((sent = send(i->socket, (const char *)&i->buf[0], i->buf.size(), 0)) < 0) {
-          cleanup_attending.push_back(i - sockets_attending.begin());
+          cleanup_attending.push_back(i - platform->sockets_attending.begin());
           continue;
         }
         if (sent >= i->buf.size()) {
@@ -465,7 +475,7 @@ DWORD WINAPI console_socket_thread(PVOID p) {
         // Data from attending
         int recv_result;
         if ((recv_result = recv(i->socket, (char *)buf, sizeof(buf), 0)) < 0) {
-          cleanup_attending.push_back(i - sockets_attending.begin());
+          cleanup_attending.push_back(i - platform->sockets_attending.begin());
           continue;
         }
         if (recv_result) {
@@ -478,9 +488,9 @@ DWORD WINAPI console_socket_thread(PVOID p) {
     }
 
     for (auto i = cleanup_attending.begin(); i != cleanup_attending.end(); i++) {
-      auto attending = &sockets_attending[*i];
+      auto attending = &platform->sockets_attending[*i];
       end_socket(attending->socket);
-      sockets_attending.erase(sockets_attending.begin() + *i);
+      platform->sockets_attending.erase(platform->sockets_attending.begin() + *i);
     }
 	}
 
@@ -488,7 +498,7 @@ DWORD WINAPI console_socket_thread(PVOID p) {
   closesocket(listen_socket);
 
   struct fd_set readable;
-  for (auto i = sockets_attending.begin(); i != sockets_attending.end(); i++) {
+  for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
     end_socket(i->socket);
   }
 
@@ -516,6 +526,8 @@ int console_new_handle_platform(int handle)
   chp->platform = p;
   p->port = console_port_nr++;
 
+  start_xterm_platform(handle);
+
   return 0;
 }
 
@@ -529,7 +541,6 @@ int console_init_main_platform(struct emul *emul)
 {
   allow_slaves = 1;
   console_new_handle_platform(MAIN_CONSOLE);
-  start_xterm_platform(MAIN_CONSOLE);
 
   auto platform = (struct console_handle_platform*)console_handles[MAIN_CONSOLE].platform;
   auto result = 0;
@@ -576,11 +587,28 @@ int redirect_stderr_platform(const char *new_name) {
 }
 
 void console_platform_deinit() {
+  std::unique_lock _l(con_mutex);
   for (int i = 0; i < n_console_handles; i++) {
     if (console_handles[i].platform) {
       auto platform = (struct console_handle_platform*)console_handles[i].platform;
       CloseHandle(platform->w_descriptor);
       CloseHandle(platform->r_descriptor);
+    }
+  }
+}
+
+void console_platform_main_migrate(const char *name) {
+  std::unique_lock _l(con_mutex);
+  auto main_platform = (struct console_handle_platform*)console_handles[MAIN_CONSOLE].platform;
+  for (int i = 0; i < n_console_handles; i++) {
+    if (!stricmp(console_handles[i].name, name)) {
+      auto platform = (struct console_handle_platform*)console_handles[i].platform;
+      for (auto j = main_platform->sockets_attending.begin(); j != main_platform->sockets_attending.end(); j++) {
+        platform->connected = true;
+        platform->sockets_attending.push_back(*j);
+      }
+      main_platform->sockets_attending.clear();
+      break;
     }
   }
 }

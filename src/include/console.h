@@ -194,6 +194,7 @@ int console_change_inputability(int handle, int inputability);
 void console_init_main(struct emul *);
 void console_debug_dump(struct machine *);
 void console_allow_slaves(int);
+void console_main_migrate(const char *name);
 
 void console_init(void);
 void console_deinit(void);
@@ -207,5 +208,6 @@ void start_xterm_platform(int handle);
 int redirect_stderr_platform(const char *new_file);
 int console_makeavail_platform(int handle, int ch);
 void console_platform_deinit();
+void console_platform_main_migrate(const char *name);
 
 #endif	/*  CONSOLE_H  */

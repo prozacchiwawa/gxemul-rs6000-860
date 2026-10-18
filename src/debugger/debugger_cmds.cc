@@ -1753,6 +1753,11 @@ static void debugger_cmd_want_sr1(struct machine *m, char *cmd_line) {
   fprintf(stderr, "want sr1 %s -> %08x\n", cmd_line, (unsigned int)required_sr1);
 }
 
+static void debugger_cmd_redirect_con(struct machine *m, char *cmd_line) {
+  console_main_migrate(cmd_line);
+  debugger_cmd_continue(m, "");
+}
+
 /****************************************************************************/
 
 
@@ -1877,6 +1882,7 @@ static struct cmd cmds[] = {
   { "trap", "", 0, debugger_cmd_e7, "Execute an exception 7" },
 
   { "wantsr1", "value", 0, debugger_cmd_want_sr1, "Step only along code that has a specific sr1 value" },
+  { "redirect", "con", 0, debugger_cmd_redirect_con, "Windows only, redirect main console" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

@@ -163,6 +163,9 @@ void start_xterm_platform(int handle)
 	HANDLE pipehandlesB[2];
 	SIZE_T bufferSize = 0;
 
+  struct sockaddr_in sa;
+  sa.sin_family = AF_INET;
+
 	if (!CreatePipe(&pipehandles[0], &pipehandles[1], NULL, 0)) {
 		fprintf(stderr, " [Failed to create pipe handle set 0]\n");
 		exit(1);
@@ -392,11 +395,14 @@ DWORD WINAPI console_socket_thread(PVOID p) {
     FD_ZERO(&writable);
     FD_ZERO(&error);
 
-    for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
-      FD_SET(i->socket, &readable);
-      FD_SET(i->socket, &error);
-      if (i->buf.size()) {
-        FD_SET(i->socket, &writable);
+    {
+      std::unique_lock _l(con_mutex);
+      for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
+        FD_SET(i->socket, &readable);
+        FD_SET(i->socket, &error);
+        if (i->buf.size()) {
+          FD_SET(i->socket, &writable);
+        }
       }
     }
 
@@ -474,15 +480,14 @@ DWORD WINAPI console_socket_thread(PVOID p) {
       if (FD_ISSET(i->socket, &readable)) {
         // Data from attending
         int recv_result;
-        if ((recv_result = recv(i->socket, (char *)buf, sizeof(buf), 0)) < 0) {
+        if ((recv_result = recv(i->socket, (char *)buf, sizeof(buf), 0)) <= 0) {
           cleanup_attending.push_back(i - platform->sockets_attending.begin());
           continue;
         }
-        if (recv_result) {
-          if (!WriteFile(console_instance_outputd, buf, recv_result, &len, nullptr) || !len) {
-            finished = true;
-            break;
-          }
+
+        if (!WriteFile(console_instance_outputd, buf, recv_result, &len, nullptr) || !len) {
+          finished = true;
+          break;
         }
       }
     }
@@ -605,6 +610,7 @@ void console_platform_main_migrate(const char *name) {
       auto platform = (struct console_handle_platform*)console_handles[i].platform;
       for (auto j = main_platform->sockets_attending.begin(); j != main_platform->sockets_attending.end(); j++) {
         platform->connected = true;
+        j->buf.clear();
         platform->sockets_attending.push_back(*j);
       }
       main_platform->sockets_attending.clear();

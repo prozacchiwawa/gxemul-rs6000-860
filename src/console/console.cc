@@ -672,8 +672,10 @@ int console_start_slave(struct machine *machine, const char *consolename,
 
 	CHECK_ALLOCATION(chp->name = strdup(consolename));
 
-	if (allow_slaves)
+  printf("start_slave with using_xterm = %d\n", chp->using_xterm);
+	if (allow_slaves && chp->using_xterm != USING_XTERM) {
 		chp->using_xterm = USING_XTERM_BUT_NOT_YET_OPEN;
+  }
 
 	return handle;
 }

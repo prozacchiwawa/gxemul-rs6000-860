@@ -55,6 +55,7 @@
 #define S_SEQ2 6
 #define S_CRT2 7
 #define S_BEE8 8
+#define S_BITBLT 9
 
 #define ON_READ 1
 #define ON_WRITE 2
@@ -77,6 +78,7 @@ static const char *group_names[] = {
   "Extended Sequencer",
   "Extended CRTC",
   "BEE8 Selector",
+  "BitBLT",
   nullptr
 };
 
@@ -267,10 +269,6 @@ static struct register_name_table_t r_name_table[] = {
     reg_index: 0x24,
     reg_name: "Attribute Controller Flag"
   },
-  { source: S_CRTC,
-    reg_index: 0x26,
-    reg_name: "Attribute Controller Index"
-  },
   { source: S_PRIMARY,
     reg_index: 0x0e,
     reg_name: "Graphics Controller Index"
@@ -313,7 +311,159 @@ static struct register_name_table_t r_name_table[] = {
   },
   { source: S_GR,
     reg_index: 0x09,
-    reg_name: "Bit Mask"
+    reg_name: "PR0A - Address Register Offset A"
+  },
+  { source: S_GR,
+    reg_index: 0x0a,
+    reg_name: "PR0B - Address Register Offset B"
+  },
+  { source: S_GR,
+    reg_index: 0x0b,
+    reg_name: "PR1 - Memory size"
+  },
+  { source: S_GR,
+    reg_index: 0x0c,
+    reg_name: "PR2 - Video Select Register"
+  },
+  { source: S_GR,
+    reg_index: 0x0d,
+    reg_name: "PR3 - CRT Lock Control Register"
+  },
+  { source: S_GR,
+    reg_index: 0x0e,
+    reg_name: "PR4 - Video Control Register"
+  },
+  { source: S_GR,
+    reg_index: 0x0f,
+    reg_name: "PR5 - General Purpose Status"
+  },
+  { source: S_SEQ,
+    reg_index: 0x29,
+    reg_name: "PR10 - Unlock"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2a,
+    reg_name: "PR11 - EGA Switches"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2b,
+    reg_name: "PR12 - Scratch Pad/LP Counter"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2c,
+    reg_name: "PR13 - Interlace H/2 Start"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2d,
+    reg_name: "PR14 - Interlace H/2 End"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2e,
+    reg_name: "PR15 - Misc Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x2f,
+    reg_name: "PR16 - Misc Control 2"
+  },
+  { source: S_SEQ,
+    reg_index: 0x30,
+    reg_name: "PR17 - Misc Control 3"
+  },
+  { source: S_SEQ,
+    reg_index: 0x10,
+    reg_name: "PR30A - Write Buffer and FIFO"
+  },
+  { source: S_SEQ,
+    reg_index: 0x11,
+    reg_name: "PR31 - System Interface"
+  },
+  { source: S_SEQ,
+    reg_index: 0x12,
+    reg_name: "PR32 - Misc Control 4"
+  },
+  { source: S_SEQ,
+    reg_index: 0x13,
+    reg_name: "PR33A - Dram Timing"
+  },
+  { source: S_SEQ,
+    reg_index: 0x14,
+    reg_name: "PR34A - Display Memory Map"
+  },
+  { source: S_SEQ,
+    reg_index: 0x15,
+    reg_name: "PR35A - Output Select"
+  },
+  { source: S_SEQ,
+    reg_index: 0x16,
+    reg_name: "PR45 - Video Signature Analyzer"
+  },
+  { source: S_SEQ,
+    reg_index: 0x17,
+    reg_name: "PR45A - Signature Analyzer I"
+  },
+  { source: S_SEQ,
+    reg_index: 0x18,
+    reg_name: "PR45B - Signature Analyzer II"
+  },
+  { source: S_SEQ,
+    reg_index: 0x19,
+    reg_name: "PR57 - Feature Register I"
+  },
+  { source: S_SEQ,
+    reg_index: 0x20,
+    reg_name: "PR58 - Feature Register II"
+  },
+  { source: S_SEQ,
+    reg_index: 0x26,
+    reg_name: "PR58A - Memory Map BLT"
+  },
+  { source: S_SEQ,
+    reg_index: 0x21,
+    reg_name: "PR59 - Memory Arbitration"
+  },
+  { source: S_SEQ,
+    reg_index: 0x25,
+    reg_name: "PR63 - R/W Frame Buffer Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x24,
+    reg_name: "PR62 - FR Timing"
+  },
+  { source: S_SEQ,
+    reg_index: 0x27,
+    reg_name: "PR64 - CRT Lock Control"
+  },
+  { source: S_SEQ,
+    reg_index: 0x28,
+    reg_name: "PR65 - Reserved"
+  },
+  { source: S_SEQ,
+    reg_index: 0x29,
+    reg_name: "PR66 - Feature Register III"
+  },
+  { source: S_SEQ,
+    reg_index: 0x31,
+    reg_name: "PR68 - Programmable Clock"
+  },
+  { source: S_SEQ,
+    reg_index: 0x32,
+    reg_name: "PR69 - Programmable VCLK"
+  },
+  { source: S_SEQ,
+    reg_index: 0x33,
+    reg_name: "PR70 - Mixed Voltage Override"
+  },
+  { source: S_SEQ,
+    reg_index: 0x34,
+    reg_name: "PR71 - Programmable Refresh Timing"
+  },
+  { source: S_SEQ,
+    reg_index: 0x35,
+    reg_name: "PR72 - Programmable Clock Unlock"
+  },
+  { source: S_SEQ,
+    reg_index: 0x36,
+    reg_name: "PR73 - VGA Status Detect"
   },
   { source: S_ATT,
     reg_index: 0x00,
@@ -1359,6 +1509,30 @@ static struct register_name_table_t r_name_table[] = {
     reg_name: "LPB Output FIFO",
     assert_fail_if_used: ON_RW
   },
+  { source: S_BITBLT,
+    reg_index: 0,
+    reg_name: "BITBLT Index Control Low"
+  },
+  { source: S_BITBLT,
+    reg_index: 1,
+    reg_name: "BITBLT Index Control High"
+  },
+  { source: S_BITBLT,
+    reg_index: 2,
+    reg_name: "BITBLT Register Access Low",
+  },
+  { source: S_BITBLT,
+    reg_index: 3,
+    reg_name: "BITBLT Register Access High"
+  },
+  { source: S_BITBLT,
+    reg_index: 4,
+    reg_name: "BITBLT IO Low"
+  },
+  { source: S_BITBLT,
+    reg_index: 5,
+    reg_name: "BITBLT IO High"
+  },
   { source: 0,
     reg_index: 0,
     reg_name: nullptr,
@@ -1366,7 +1540,7 @@ static struct register_name_table_t r_name_table[] = {
   }
 };
 
-#define VGA_DEBUG 0
+#define VGA_DEBUG 1
 
 #if VGA_DEBUG
 #define L(x) do { x; } while (0)
@@ -1392,9 +1566,26 @@ static struct register_name_table_t r_name_table[] = {
 #define	GRAPHICS_MODE_8BIT	1
 #define	GRAPHICS_MODE_4BIT	2
 
-#define S3_PIO_SEQ_LEN 11
-
 const char wd90c_rev[16] = "WD90C24AREV";
+
+#define WD90_23CX_SET_INDEX 0
+#define WD90_23CX_SET_VALUE 1
+#define WD90_23CX_SET_BITBLT 2
+
+#define WD90_23CX_INVALID_INDEX_BLOCK (1 << 13)
+#define WD90_23CX_NO_AUTOINC (1 << 12)
+#define WD90_23CX_INDEX_MASK (15 << 8)
+
+// bitblt index 0
+#define WD90_23CX_BITBLT_EXECUTE (1 << 11)
+#define WD90_23CX_BITBLT_DIRECTION (1 << 8)
+#define WD90_23CX_BITBLT_DEST_LINEAR (1 << 7)
+#define WD90_23CX_BITBLT_SOURCE_LINEAR (1 << 6)
+
+// bitblt index 1
+#define WD90_23CX_BITBLT_LINE_DRAW (1 << 11)
+#define WD90_23CX_BITBLT_QUICKSTART (1 << 7)
+#define WD90_23CX_BITBLT_DEST_UPDATE (1 << 6)
 
 struct vga_data {
 	uint64_t	videomem_base;
@@ -1455,6 +1646,8 @@ struct vga_data {
 	int		current_retrace_line;
 	int		input_status_1;
 
+  uint32_t read_latch;
+
 	/*  Palette per scanline during retrace:  */
 	unsigned char	*retrace_palette;
 	int		use_palette_per_line;
@@ -1473,24 +1666,6 @@ struct vga_data {
 	int		update_x2;
 	int		update_y2;
 
-	/* S3 */
-  int   s3_pio_select;
-	int   s3_cur_x, s3_cur_y, s3_pix_x, s3_pix_y, s3_draw_width;
-  int   s3_fg_color, s3_bg_color;
-  int   s3_fg_color_mix, s3_bg_color_mix;
-  int   s3_v_dir, s3_h_dir;
-  bool  s3_y_major, s3_last_pof, s3_no_draw;
-  int   s3_rem_height;
-  int   s3_destx, s3_desty;
-  int   s3_current_command;
-  uint32_t s3_color_compare;
-
-  /* BEE8H */
-  uint16_t bee8_regs[16];
-
-  /* Command */
-  int s3_cmd_mx, s3_cmd_bus_size, s3_cmd_swap, s3_cmd_pxtrans;
-
   /* Ext sequencer */
   bool ext_seq_unlock;
 
@@ -1499,10 +1674,17 @@ struct vga_data {
   int window_address;
   int fifo_in_progress;
 
-  uint32_t plane_read_mask, plane_write_mask;
-  uint32_t adv_fun_4ae8, line_error_term, short_stroke_transfer;
-
-  uint8_t reg_ff00_data[0x100];
+  uint8_t wd23cx_low, wd23cx_high;
+  bool wd23cx_bitblt_half;
+  uint32_t wd23cx_bitblt_data;
+  uint16_t wd23cx_index;
+  int wd23cx_operation;
+  uint16_t wd23cx_bitblt_regs[16];
+  uint32_t wd23cx_source_addr, wd23cx_target_addr;
+  uint32_t wd23cx_source_orig, wd23cx_target_orig;
+  uint16_t wd23cx_dim_x, wd23cx_dim_y;
+  uint16_t wd23cx_y;
+  int wd23cx_x;
 };
 
 inline uint16_t get_le_16(bool already, uint64_t idata) {
@@ -2050,6 +2232,242 @@ DEVICE_TICK(wd)
 		d->n_is1_reads = 0;
 }
 
+static void wd_bitblt_write(struct vga_data *d, int relative_addr, uint8_t data) {
+  d->wd23cx_operation = relative_addr / 2;
+  if (relative_addr & 1) {
+    d->wd23cx_high = data;
+  } else {
+    d->wd23cx_low = data;
+  }
+}
+
+static uint8_t wd_bitblt_read(struct vga_data *d, int relative_addr) {
+  int shift = (relative_addr & 1) ? 8 : 0;
+
+  switch (d->wd23cx_operation) {
+  case WD90_23CX_SET_INDEX:
+    return d->wd23cx_index >> shift;
+
+  case WD90_23CX_SET_VALUE:
+    if ((d->wd23cx_index & 0xff) == 1) {
+      uint8_t index = (d->wd23cx_index >> 8) & 15;
+      uint8_t data = d->wd23cx_bitblt_regs[index] >> shift;
+      if (shift) {
+        data = (index << 4) | (data & 15);
+      }
+      return data;
+    } else { // Others
+      return 0;
+    }
+
+  case WD90_23CX_SET_BITBLT:
+    return d->wd23cx_bitblt_data >> shift;
+
+  default:
+    return 0;
+  }
+}
+
+static inline uint32_t wd_data_read(struct vga_data *d, uint32_t addr) {
+  return d->gfx_mem[addr] |
+    (d->gfx_mem[addr + 1] << 8) |
+    (d->gfx_mem[addr + 2] << 16) |
+    (d->gfx_mem[addr + 3] << 24);
+}
+
+static inline void wd_data_write(struct vga_data *d, uint32_t addr, uint32_t data) {
+  d->gfx_mem[addr] = data;
+  d->gfx_mem[addr + 1] = data >> 8;
+  d->gfx_mem[addr + 2] = data >> 16;
+  d->gfx_mem[addr + 3] = data >> 24;
+}
+
+// Handle direction
+static void wd_bitblt_read32(struct vga_data *d) {
+  bool linear = d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_SOURCE_LINEAR;
+  d->wd23cx_bitblt_data = wd_data_read(d, d->wd23cx_source_addr);
+  // fprintf(stderr, "[ wd: bitblt read32 %08x = %08x ]\n", d->wd23cx_bitblt_data, d->wd23cx_source_addr);
+  d->wd23cx_source_addr += 4;
+}
+
+// Handle direction
+static void wd_bitblt_write32(struct vga_data *d) {
+  uint32_t mask = (d->wd23cx_x < 4) ? (1 << (8 * d->wd23cx_x)) - 1 : ~0;
+  uint32_t target_mask = ~mask;
+
+  d->wd23cx_bitblt_data = (d->wd23cx_bitblt_data & mask) | ((wd_data_read(d, d->wd23cx_target_addr) & target_mask));
+  bool finished = false;
+
+  if (((d->wd23cx_bitblt_regs[0] & 3) >> 4) != 2) {
+    wd_data_write(d, d->wd23cx_target_addr, d->wd23cx_bitblt_data);
+  }
+
+  // fprintf(stderr, "[ wd: bitblt write32 target %08x %dx%d smask %08x:%08x = %08x ]\n", d->wd23cx_target_addr, d->wd23cx_x, d->wd23cx_y, mask, target_mask, d->wd23cx_bitblt_data);
+
+  d->wd23cx_target_addr += 4;
+  d->wd23cx_x -= 4;
+
+  if (d->wd23cx_x < 4) {
+    bool dest_linear = d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_DEST_LINEAR;
+    bool source_linear = d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_SOURCE_LINEAR;
+    int row_pitch = d->wd23cx_bitblt_regs[8] & 0xfff;
+    if (!dest_linear) {
+      d->wd23cx_target_addr = d->wd23cx_target_orig = d->wd23cx_target_orig + row_pitch;
+    }
+    if (!source_linear) {
+      d->wd23cx_source_addr = d->wd23cx_source_orig = d->wd23cx_source_orig + row_pitch;
+    }
+    d->wd23cx_x = d->wd23cx_dim_x;
+    d->wd23cx_y -= 1;
+    if (d->wd23cx_y == 0) {
+      finished = true;
+    }
+  }
+
+  if (finished) {
+    d->wd23cx_bitblt_regs[0] &= ~WD90_23CX_BITBLT_EXECUTE;
+    if (d->wd23cx_bitblt_regs[1] & WD90_23CX_BITBLT_DEST_UPDATE) {
+      d->wd23cx_bitblt_regs[4] = (d->wd23cx_target_addr) & 0xfff;
+      d->wd23cx_bitblt_regs[5] = (d->wd23cx_target_addr >> 12) & 0xff;
+    }
+    d->update_x1 = 0;
+    d->update_y1 = 0;
+    d->update_x2 = d->max_x - 1;
+    d->update_y2 = d->max_y - 1;
+  }
+}
+
+static void wd_bitblt_step(struct vga_data *d) {
+  // Not running.
+  if (!d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_EXECUTE) {
+    return;
+  }
+
+  bool source_io = (d->wd23cx_bitblt_regs[0] & 3);
+  bool dest_io = ((d->wd23cx_bitblt_regs[0] >> 4) & 3);
+  uint8_t mask = d->wd23cx_bitblt_regs[14] & 0xff;
+  if (!source_io) {
+    if ((d->wd23cx_bitblt_regs[1] & WD90_23CX_BITBLT_LINE_DRAW)) {
+      // XXX draw line.
+      fprintf(stderr, "[ wd: no line draw support yet! ]\n");
+      d->wd23cx_bitblt_regs[0] &= ~WD90_23CX_BITBLT_EXECUTE;
+      return;
+    }
+
+    switch ((d->wd23cx_bitblt_regs[0] >> 2) & 3) {
+    case 2: {
+      uint8_t fgcolor = d->wd23cx_bitblt_regs[10] & 0xff;
+      d->wd23cx_bitblt_data = ((fgcolor & mask) << 24) | ((fgcolor & mask) << 16) | ((fgcolor & mask) << 8) | (fgcolor & mask);
+      break;
+    }
+    default:
+      wd_bitblt_read32(d);
+      break;
+    }
+  }
+}
+
+static void wd_bitblt_start(struct vga_data *d) {
+  d->wd23cx_bitblt_regs[0] |= WD90_23CX_BITBLT_EXECUTE;
+  d->wd23cx_source_addr = d->wd23cx_source_orig = (d->wd23cx_bitblt_regs[2] & 0xfff) | ((d->wd23cx_bitblt_regs[3] & 0xff) << 12);
+  d->wd23cx_target_addr = d->wd23cx_target_orig = (d->wd23cx_bitblt_regs[4] & 0xfff) | ((d->wd23cx_bitblt_regs[5] & 0xff) << 12);
+  d->wd23cx_x = d->wd23cx_dim_x = d->wd23cx_x = d->wd23cx_bitblt_regs[6] & 0xfff;
+  d->wd23cx_y = d->wd23cx_dim_y = d->wd23cx_y = d->wd23cx_bitblt_regs[7] & 0xfff;
+
+  fprintf(stderr, "[ wd: start bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y);
+
+  bool source_io = (d->wd23cx_bitblt_regs[0] & 3);
+  bool dest_io = ((d->wd23cx_bitblt_regs[0] >> 4) & 3);
+  // Not sourced from io
+  if (!source_io) {
+    wd_bitblt_step(d);
+  }
+  // Do the transfer if it isn't io based
+  fprintf(stderr, "[ wd: start? source_io %d dest_io %d command %04x ]\n", source_io, dest_io, d->wd23cx_bitblt_regs[0]);
+  while (!source_io && !dest_io && (d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_EXECUTE)) {
+    wd_bitblt_step(d);
+    wd_bitblt_write32(d);
+  }
+}
+
+// After read.
+static void wd_bitblt_next(struct vga_data *d) {
+  uint16_t value = d->wd23cx_low | (d->wd23cx_high << 8);
+
+  switch (d->wd23cx_operation) {
+  case WD90_23CX_SET_INDEX:
+    d->wd23cx_index = value & ~WD90_23CX_INVALID_INDEX_BLOCK;
+    if ((d->wd23cx_index & 0xff) > 2) {
+      d->wd23cx_index |= WD90_23CX_INVALID_INDEX_BLOCK;
+    }
+    break;
+
+  case WD90_23CX_SET_VALUE:
+    if (!(d->wd23cx_index & WD90_23CX_NO_AUTOINC)) {
+      d->wd23cx_index = (d->wd23cx_index & ~WD90_23CX_INDEX_MASK) | ((d->wd23cx_index + 0x100) & WD90_23CX_INDEX_MASK);
+    }
+    break;
+
+  case WD90_23CX_SET_BITBLT:
+    // Dest: system io
+    fprintf(stderr, "[ wd: next bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y);
+    if ((d->wd23cx_bitblt_regs[0] & 3) == 2) {
+      auto half = d->wd23cx_bitblt_half;
+      d->wd23cx_bitblt_half = !d->wd23cx_bitblt_half;
+      if (!half) {
+        wd_bitblt_step(d);
+      }
+    }
+    break;
+  }
+}
+
+// After write
+static void wd_bitblt_commit(struct vga_data *d) {
+  uint16_t value = d->wd23cx_low | (d->wd23cx_high << 8);
+  switch (d->wd23cx_operation) {
+  case WD90_23CX_SET_INDEX:
+    d->wd23cx_index = value;
+    if ((d->wd23cx_index & 0xff) > 2) {
+      d->wd23cx_index |= WD90_23CX_INVALID_INDEX_BLOCK;
+    } else {
+      d->wd23cx_index &= ~WD90_23CX_INVALID_INDEX_BLOCK;
+    }
+    fprintf(stderr, "[ wd: write 2c30 index %04x ]\n", d->wd23cx_index);
+    break;
+
+  case WD90_23CX_SET_VALUE:
+    // Implement cursor at page 2 and general at page 0
+    if ((d->wd23cx_index & 0xff) == 1) {
+      int index = (value >> 12) & 15;
+      d->wd23cx_bitblt_regs[index] = value;
+      if (index == 0 && (value & WD90_23CX_BITBLT_EXECUTE)) {
+        wd_bitblt_start(d);
+      } else if ((index == 2) && ((d->wd23cx_bitblt_regs[1] & (WD90_23CX_BITBLT_QUICKSTART | WD90_23CX_BITBLT_DEST_UPDATE)) == (WD90_23CX_BITBLT_QUICKSTART | WD90_23CX_BITBLT_DEST_UPDATE))) {
+        wd_bitblt_start(d);
+      } else if ((index == 4) && (d->wd23cx_bitblt_regs[1] & WD90_23CX_BITBLT_QUICKSTART)) {
+        wd_bitblt_start(d);
+      }
+    }
+    fprintf(stderr, "[ wd: write 23c0 page %d reg %x = %04x ]\n", d->wd23cx_index & 0xff, (value >> 12) & 15, value & 0xfff);
+    break;
+
+  case WD90_23CX_SET_BITBLT:
+    // Dest: system io
+    if ((d->wd23cx_bitblt_regs[0] & 3) == 2) {
+      d->wd23cx_bitblt_half = !d->wd23cx_bitblt_half;
+      auto half = d->wd23cx_bitblt_half;
+      d->wd23cx_bitblt_data <<= 16;
+      d->wd23cx_bitblt_data |= value;
+      if (!half) {
+        wd_bitblt_write32(d);
+      }
+      fprintf(stderr, "[ wd: write 23c0 bitblt %04x ]\n", value);
+    }
+    break;
+  }
+}
+
 /*
  *  Reads and writes to the VGA video memory (pixels).
  */
@@ -2059,53 +2477,53 @@ DEVICE_ACCESS(wd_graphics)
 	int j, x=0, y=0, x2=0, y2=0, modified = 0;
 	size_t i;
 
-  // fprintf(stderr, "@@@%08x", relative_addr);
+  fprintf(stderr, "@@@%08x", relative_addr);
   for (int ii = 0; ii < len; ii++) {
-    // fprintf(stderr, " %02x", data[ii]);
+    fprintf(stderr, " %02x", data[ii]);
   }
-  // fprintf(stderr, "\n");
+  fprintf(stderr, "\n");
 
-	// L(fprintf(stderr, "VGA: mode %d gfx %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->cur_mode, d->graphics_mode, relative_addr, len));
+	L(fprintf(stderr, "VGA: mode %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->graphcontr_reg[5], relative_addr, len));
 
-  //                 0x38000000
-  if (relative_addr >= 0x10a0000) {
-    fprintf(stderr, "Access S3d register %04x\n", relative_addr - 0x10a0000);
-    return 0;
-  }
-  if (relative_addr >= 0x1008000) {
-    uint8_t data_copy[8];
-    if (d->window_mapped) {
-      for (i = 0; i < len; i++) {
-        data_copy[len - i - 1] = data[i];
+  auto pr58a = d->sequencer_reg[VGA_WD_PR58A];
+  if (pr58a & 1) {
+    fprintf(stderr, "[ vga: pr58 (%02x) %s ]\n", d->sequencer_reg[VGA_WD_PR58A], writeflag == MEM_WRITE ? "write" : "read");
+    if (pr58a & 2) {
+      if (writeflag == MEM_WRITE) {
+        for (int i = 0; i < len; i++) {
+          wd_bitblt_write(d, 4 + (i & 1), data[i]);
+          if (i && !(i & 1)) {
+            wd_bitblt_commit(d);
+          }
+        }
+        wd_bitblt_commit(d);
+      } else {
+        for (int i = 0; i < len; i++) {
+          data[i] = wd_bitblt_read(d, 4 + (i & 1));
+          if (i && !(i & 1)) {
+            wd_bitblt_next(d);
+          }
+        }
+        wd_bitblt_next(d);
       }
     } else {
-      memcpy(data_copy, data, len);
-    }
-    bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr - 0x1000000, data_copy, len, writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-    fprintf(stderr, "[ vga: windowed, io address %s relative_addr %04x", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
-    for (i = 0; i < len; i++) {
-      fprintf(stderr, " %02x", data_copy[i]);
-    }
-    fprintf(stderr, " ]\n");
-    if (d->window_mapped && relative_addr != 0x1009ae8) {
-      for (i = 0; i < len; i++) {
-        data[len - i - 1] = data_copy[i];
+      if (writeflag == MEM_WRITE) {
+        for (int i = 0; i < len; i++) {
+          wd_bitblt_write(d, (relative_addr + i) & 7, data[i]);
+          if (i && !(i & 1)) {
+            wd_bitblt_commit(d);
+          }
+        }
+        wd_bitblt_commit(d);
+      } else {
+        for (int i = 0; i < len; i++) {
+          data[i] = wd_bitblt_read(d, (relative_addr + i) & 7);
+          if (i && !(i & 1)) {
+            wd_bitblt_next(d);
+          }
+        }
+        wd_bitblt_next(d);
       }
-    } else {
-      memcpy(data, data_copy, len);
-    }
-    return result;
-  }
-  if (relative_addr >= 0x1000000) {
-    // fprintf(stderr, "[ vga: windowed, pixel transfer? ]\n", relative_addr);
-    int size = len;
-    while (size > 0) {
-      bool result = cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + 0xe2e8, data, std::min(2, size), writeflag, PHYSICAL) == MEMORY_ACCESS_OK;
-      if (!result) {
-        return 0;
-      }
-      data += 2;
-      size -= 2;
     }
     return 1;
   }
@@ -2116,7 +2534,7 @@ DEVICE_ACCESS(wd_graphics)
 
   if (relative_addr + len >= d->gfx_mem_size) {
     fprintf(stderr, "[ vga: failed access at %08x+%x greater than %08x ]\n", relative_addr, len, d->gfx_mem_size);
-    return 0;
+    return 1;
   }
 
 	if (d->cur_mode != MODE_GRAPHICS)
@@ -2130,10 +2548,27 @@ DEVICE_ACCESS(wd_graphics)
 		x2 = (relative_addr+len-1) % logical_width;
 
 		if (writeflag == MEM_WRITE) {
-			memcpy(d->gfx_mem + relative_addr, data, len);
-			modified = 1;
-		} else
-			memcpy(data, d->gfx_mem + relative_addr, len);
+      switch (d->graphcontr_reg[5] & 3) {
+      case 0:
+        memcpy(d->gfx_mem + relative_addr, data, len);
+        modified = 1;
+        break;
+
+      default:
+        fprintf(stderr, "[ vga: unimplemented write mode i5 %08x ]\n", d->graphcontr_reg[5]);
+        break;
+      }
+		} else {
+      switch (d->graphcontr_reg[5] & 3) {
+      case 0:
+        memcpy(data, d->gfx_mem + relative_addr, len);
+        break;
+
+      default:
+        fprintf(stderr, "[ vga: unimplemented read mode i5 %08x ]\n", d->graphcontr_reg[5]);
+        break;
+      }
+    }
 		break;
 	case GRAPHICS_MODE_4BIT:
 		y = relative_addr * 8 / d->max_x;
@@ -2483,7 +2918,7 @@ static void vga_sequencer_reg_write(struct machine *machine, struct cpu *cpu, st
 	case VGA_SEQ_RESET:
 	case VGA_SEQ_MAP_MASK:
 	case VGA_SEQ_SEQUENCER_MEMORY_MODE:
-		debug("[ vga_sequencer_reg_write: select %i: TODO ]\n", regnr);
+		debug("[ vga_sequencer_reg_write: select %02x: TODO = %02x ]\n", regnr, idata);
 		break;
 	default:fatal("[ vga_sequencer_reg_write: select %i ]\n", regnr);
 		/*  cpu->running = 0;  */
@@ -2504,7 +2939,7 @@ static void vga_graphcontr_reg_write(struct machine *machine,
 	case VGA_GRAPHCONTR_GRAPHICSMODE:
 	case VGA_GRAPHCONTR_MISC:
 	case VGA_GRAPHCONTR_MASK:
-		debug("[ vga_graphcontr_reg_write: select %i: TODO ]\n", regnr);
+		debug("[ vga_graphcontr_reg_write: select %02x: TODO = %02x ]\n", regnr, idata);
 		break;
 	default:fatal("[ vga_graphcontr_reg_write: select %i ]\n", regnr);
 		/*  cpu->running = 0;  */
@@ -2760,6 +3195,35 @@ DEVICE_ACCESS(wd_ctrl)
 	return 1;
 }
 
+DEVICE_ACCESS(wd_bitblt)
+{
+	struct vga_data *d = (struct vga_data *) extra;
+	size_t i;
+	uint64_t idata = 0, odata = 0;
+
+  for (int i = 0; i < len; i++) {
+    auto target = (relative_addr + i) & 7;
+    if (writeflag == MEM_WRITE) {
+      wd_bitblt_write(d, target, data[i]);
+    } else {
+      data[i] = wd_bitblt_read(d, target);
+    }
+  }
+  if (writeflag == MEM_WRITE) {
+    wd_bitblt_commit(d);
+  } else {
+    wd_bitblt_next(d);
+  }
+
+  fprintf(stderr, "[ wd: bitblt at %08x [%04x] %s", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i]);
+  for (int i = 0; i < len; i++) {
+    fprintf(stderr, " %02x", data[i]);
+  }
+  fprintf(stderr, " ]\n");
+
+  return 1;
+}
+
 void wd90c00_hack_start(struct vga_data *d) {
   if (d->cur_mode != MODE_GRAPHICS) {
     d->cur_mode = MODE_GRAPHICS;
@@ -2780,11 +3244,6 @@ void wd90c00_hack_start(struct vga_data *d) {
 
     reset_palette(d, 0);
     register_reset(d);
-
-    d->bee8_regs[3] = 600;
-    d->bee8_regs[4] = 800;
-    d->s3_fg_color_mix = 0x27;
-    d->s3_bg_color_mix = 0x27;
   }
 }
 
@@ -2856,6 +3315,10 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
 
 	memory_device_register(mem, "wd_ctrl", control_base,
 	    32, dev_wd_ctrl_access, d, DM_DEFAULT, NULL);
+
+  auto io_space = d->control_base & ~0xffff;
+  memory_device_register(mem, "wd_bitblt", io_space | 0x23c0,
+      8, dev_wd_bitblt_access, d, DM_DEFAULT, NULL);
 
 	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,

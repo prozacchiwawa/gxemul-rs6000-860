@@ -48,7 +48,7 @@
 #define ABORT() do { fprintf(stderr, "ABORT %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 
 #if 0
-#define DEBUG(...) fprintf(stderr, __VA_ARGS__)
+#define DEBUG(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
 #else
 #define DEBUG(fmt, ...) do { } while(0)
 #endif
@@ -397,6 +397,7 @@ struct lsi53c895a_data {
     int msg_len;
     uint8_t msg[LSI_MAX_MSGIN_LEN];
     int waiting;
+    int show_dfe;
 
     SCSIBus bus;
 
@@ -1047,6 +1048,7 @@ static void lsi_soft_reset(LSIState *s)
     s->bus.qbus.parent = s;
     s->pending_bad = -1;
     s->pending_gen = -1;
+    s->show_dfe = true;
 
     s->msg_action = LSI_MSG_ACTION_COMMAND;
     s->msg_len = 0;
@@ -2401,7 +2403,12 @@ static uint8_t lsi_reg_readb(struct cpu *cpu, LSIState *s, int offset)
         ret = s->sbcl;
         break;
     case 0xc: /* DSTAT */
-        ret = s->dstat | LSI_DSTAT_DFE;
+        ret = s->dstat;
+        if (s->show_dfe) {
+            ret |= LSI_DSTAT_DFE;
+        } else {
+            s->show_dfe = true;
+        }
         if ((s->istat0 & LSI_ISTAT0_INTF) == 0)
             s->dstat = 0;
         lsi_update_irq(cpu, s);
@@ -2618,8 +2625,10 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
         }
         if (val & LSI_SCNTL1_RST) {
             if (!(s->sstat0 & LSI_SSTAT0_RST)) {
+                fprintf(stderr, "lsi_scsi: performing bus cold reset\n");
                 bus_cold_reset(s, BUS(s->bus));
                 s->sstat0 |= LSI_SSTAT0_RST;
+                s->show_dfe = false;
                 lsi_script_scsi_interrupt(cpu, s, LSI_SIST0_RST, 0);
             }
         } else {

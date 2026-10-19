@@ -92,10 +92,10 @@ DEVICE_ACCESS(pccmos)
     int r = 1;
 
     if (writeflag == MEM_WRITE) {
-        b = idata = memory_readmax64(cpu, data, len);
-        // fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
+      b = idata = memory_readmax64(cpu, data, len);
+      fprintf(stderr, "pccmos: write at relative addr %08" PRIx64 ": %08" PRIx64"\n", relative_addr, idata);
     } else {
-      // fprintf(stderr, "pccmos: read at relative_addr %08x selector %d\n", relative_addr, d->select);
+      fprintf(stderr, "pccmos: read at relative_addr %08x selector %d\n", relative_addr, d->select);
     }
 
     /*
@@ -106,14 +106,38 @@ DEVICE_ACCESS(pccmos)
     if (relative_addr == 1) {
         int register_map_13[][2] = {
             { 0, MC_SEC },
+            { 1, MC_ASEC },
             { 2, MC_MIN },
+            { 3, MC_AMIN },
             { 4, MC_HOUR },
+            { 5, MC_AHOUR },
+            { 6, MC_DOW },
             { 7, MC_DOM },
             { 8, MC_MONTH },
             { 9, MC_YEAR },
             { -1, -1 }
         };
-        if (d->select == 10) {
+        int i = 0;
+        for (i = 0; register_map_13[i][0] >= 0 && register_map_13[i][0] != d->select; i++);
+        auto mcreg = register_map_13[i][1];
+        if (mcreg != -1) {
+          fprintf(stderr, "[ pccmos mapped register %d to mc146818 register %d ]\n", d->select, mcreg);
+
+          if (writeflag == MEM_WRITE) {
+            r = cpu->memory_rw(cpu, cpu->mem,
+                               PCCMOS_MC146818_FAKE_ADDR + 4 * d->select, &b, 1,
+                               MEM_WRITE, PHYSICAL);
+          } else {
+            if (mcreg != -1) {
+              r = cpu->memory_rw(cpu, cpu->mem,
+                                 PCCMOS_MC146818_FAKE_ADDR + 4 * mcreg, &b, 1,
+                                 MEM_READ, PHYSICAL);
+            } else {
+              b = 0;
+            }
+            odata = b;
+          }
+        } else if (d->select == 10) {
             odata = 0x40;
             d->update_in_progress_cycle++;
             odata |= d->update_in_progress_cycle & 0x80;
@@ -123,20 +147,6 @@ DEVICE_ACCESS(pccmos)
             // No idea.
         } else if (d->select == 13) {
             odata = 0xff;
-        } else if (d->select <= 0x0d) {
-            if (writeflag == MEM_WRITE) {
-                r = cpu->memory_rw(cpu, cpu->mem,
-                                   PCCMOS_MC146818_FAKE_ADDR + 4 * d->select, &b, 1,
-                                   MEM_WRITE, PHYSICAL);
-            } else {
-                int i = 0;
-                for (i = 0; register_map_13[i][0] >= 0 && register_map_13[i][0] != d->select; i++);
-                // fprintf(stderr, "[ pccmos mapped register %d to mc146818 register %d ]\n", d->select, register_map_13[i][1]);
-                r = cpu->memory_rw(cpu, cpu->mem,
-                                   PCCMOS_MC146818_FAKE_ADDR + 4 * register_map_13[i][1], &b, 1,
-                                   MEM_READ, PHYSICAL);
-                odata = b;
-            }
         }
     } else if (relative_addr == 0 && writeflag == MEM_WRITE) {
         d->select = idata & 0x7f;
@@ -212,7 +222,7 @@ DEVICE_ACCESS(pccmos)
 
     if (writeflag == MEM_READ) {
         memory_writemax64(cpu, data, len, odata);
-        //fprintf(stderr, "pccmos: read at relative addr %08" PRIx64" (dselect %08x): %08" PRIx64"\n", relative_addr, d->select, odata);
+        fprintf(stderr, "pccmos: read at relative addr %08" PRIx64" (dselect %08x): %08" PRIx64"\n", relative_addr, d->select, odata);
     }
 
     return 1;

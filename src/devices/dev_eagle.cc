@@ -78,6 +78,7 @@ struct eagle_data {
 
   uint8_t dma_controller_1_status;
   uint8_t dma_controller_1_scatter_gather;
+  uint32_t dma_channel_1_addr;
   uint32_t dma_channel_2_addr;
   uint16_t dma_channel_2_len;
 
@@ -237,12 +238,12 @@ DEVICE_ACCESS(eagle_8mb)
     fprintf(stderr, "[ eagle: discontiguous access on %x ]\n", (unsigned int)real_addr);
     d->discontiguous = 1;
   }
-  if (d->discontiguous && !(real_addr >= 0xcf8 && real_addr <= 0xcff)) {
+  if (d->discontiguous /* && !(real_addr >= 0xcf8 && real_addr <= 0xcff) */) {
     uint64_t page = (relative_addr >> 12) & 0x1fff;
     uint64_t subaddr = relative_addr & 0x1f;
-    fprintf(stderr, "[ eagle: d-io %x %x ]\n", (unsigned int)page, (unsigned int)subaddr);
+    // fprintf(stderr, "[ eagle: d-io %x %x <- %08x ]\n", (unsigned int)page, (unsigned int)subaddr, (unsigned int)relative_addr);
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | (page << 5) | subaddr;
-    fprintf(stderr, "[ eagle: non contig %" PRIx64 "x ]\n", real_addr);
+    // fprintf(stderr, "[ eagle: non contig %" PRIx64 " ]\n", real_addr);
   } else {
     real_addr = VIRTUAL_ISA_PORTBASE | 0x80000000 | relative_addr;
   }
@@ -415,6 +416,24 @@ DEVICE_ACCESS(eagle_dma_1)
       if (writeflag == MEM_WRITE) {
         d->addr_low_high_latch = 0;
         d->len_low_high_latch = 0;
+      }
+      break;
+
+    case 2:
+      if (writeflag == MEM_WRITE) {
+        if (!d->addr_low_high_latch) {
+          d->dma_channel_1_addr &= ~0xff;
+          d->dma_channel_1_addr |= idata & 0xff;
+        } else {
+          d->dma_channel_1_addr &= ~0xff00;
+          d->dma_channel_1_addr |= (idata & 0xff) << 8;
+        }
+      } else {
+        if (!d->addr_low_high_latch) {
+          idata = d->dma_channel_1_addr & 0xff;
+        } else {
+          idata = (d->dma_channel_1_addr >> 8) & 0xff;
+        }
       }
       break;
 
@@ -1164,6 +1183,7 @@ DEVINIT(eagle)
 	}
 
 	devinit->return_ptr = d->pci_data;
+  d->dma_channel_1_addr = 0xffffffff;
   d->cs4231_registers[2] = 0x88;
   d->cs4231_registers[3] = 0x88;
   d->cs4231_registers[4] = 0x88;

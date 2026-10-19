@@ -1702,12 +1702,18 @@ static void debugger_cmd_e7(struct machine *m, char *cmd_line) {
   ppc_exception(m->cpus[0], PPC_EXCEPTION_PRG, 1 << 17);
 }
 
-static void debugger_cmd_want_sr1(struct machine *m, char *cmd_line) {
-  if (!*cmd_line) {
-    required_sr1 = 0;
+static void debugger_cmd_ee(struct machine *m, char *cmd_line) {
+  if (!strlen(cmd_line)) {
+    fprintf(stderr, "usage: ee <n>\n");
+    return;
   }
-  required_sr1 = strtoull(cmd_line, nullptr, 16);
-  fprintf(stderr, "want sr1 %s -> %08x\n", cmd_line, (unsigned int)required_sr1);
+  auto n = atoi(cmd_line);
+  m->isa_pic_data.last_int = n;
+  if (n < 8 && m->isa_pic_data.pic1) {
+    dev_8259_assert(m->isa_pic_data.pic1, n);
+  } else if (n >= 8 && m->isa_pic_data.pic2) {
+    dev_8259_assert(m->isa_pic_data.pic2, n - 8);
+  }
 }
 
 /****************************************************************************/
@@ -1832,8 +1838,7 @@ static struct cmd cmds[] = {
   { "ss", "filename", 0, debugger_cmd_screenshot, "Create a screenshot of the framebuffer content" },
 
   { "trap", "", 0, debugger_cmd_e7, "Execute an exception 7" },
-
-  { "wantsr1", "value", 0, debugger_cmd_want_sr1, "Step only along code that has a specific sr1 value" },
+  { "ee", "irq", 0, debugger_cmd_ee, "Raise irq n" },
 
 	/*  Note: NULL handler.  */
 	{ "x = expr", "", 0, NULL, "generic assignment" },

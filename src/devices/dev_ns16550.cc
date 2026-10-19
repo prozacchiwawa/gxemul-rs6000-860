@@ -233,7 +233,12 @@ DEVICE_TICK(ns16550)
 }
 
 static void data_output(struct ns_data *d, uint8_t data) {
-  console_putchar(d->console_handle, data);
+  if (d->reg[com_mcr] & 16) {
+    // loopback
+    console_makeavail(d->console_handle, data);
+  } else {
+    console_putchar(d->console_handle, data);
+  }
   if (fifo_ena(d)) {
     d->reg[com_lsr] |= LSR_TSRE;
     fifo_push(&d->send_f, data);
@@ -284,7 +289,7 @@ DEVICE_ACCESS(ns16550)
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata);
+    fprintf(stderr, "[ ns16550 (%s): write %02x <- %02x %" PRIx64 " ]\n", d->name, (unsigned int)relative_addr, (unsigned int)idata, cpu->ninstrs);
   }
 
   int dlab = !!(d->reg[com_lcr] & LCR_DLAB);

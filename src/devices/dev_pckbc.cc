@@ -548,11 +548,13 @@ DEVICE_TICK(pckbc)
   }
 
   console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
+  bool mouse_output_generated = false;
   if (d->mouse_ena && (d->in_use & 2) &&
       ((d->mouse_last_x != mouse_x) ||
        (d->mouse_last_y != mouse_y) ||
        (d->mouse_last_but != mouse_but))
       ) {
+    mouse_output_generated = true;
     int diff_x = mouse_x - d->mouse_last_x;
     int diff_y = -(mouse_y - d->mouse_last_y);
     int flags =
@@ -581,7 +583,7 @@ DEVICE_TICK(pckbc)
     return;
   }
 
-  for (int port = 0; port < 1; port++) {
+  for (int port = 0; port < (mouse_output_generated ? 1 : 2); port++) {
     if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
       fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port_int_enabled(port, d->cmdbyte)) {
@@ -721,6 +723,10 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
         pckbc_add_code(d, d->mouse_sample_rate, port_nr);
         break;
 
+      case 0xea:
+        pckbc_add_code(d, 0xfa, port_nr);
+        break;
+
       case 0xeb:
         pckbc_add_code(d, 0xfa, port_nr);
         pckbc_add_code(d, 8, port_nr);
@@ -844,7 +850,7 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr
 
 	case KBC_GETID:
 		/*  Get keyboard ID.  NOTE/TODO: Ugly hardcoded answer.  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
+		// pckbc_add_code(d, KBR_ACK, port_nr);
 		pckbc_add_code(d, 0xab, port_nr);
 		pckbc_add_code(d, 0x83, port_nr);
 		break;
@@ -1094,6 +1100,7 @@ DEVICE_ACCESS(pckbc)
 				fatal("[ pckbc: unknown CONTROL 0x%x ]\n",
 				    (int)idata);
 				d->state = STATE_NORMAL;
+        break;
 			}
 		}
 		break;

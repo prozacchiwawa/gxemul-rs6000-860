@@ -774,8 +774,16 @@ X(dcbz)
 	size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
 	size_t cleared = 0;
 
+  if (cpu->cd.ppc.zero) {
+    abort();
+  }
+
 	/*  Synchronize the PC first:  */
   sync_pc(cpu, ic);
+
+  if (!reg(ic->arg[0])) {
+    fprintf(stderr, "%08x: dcbz %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
+  }
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -1414,7 +1422,7 @@ X(loose_lhaux)
   /*  Synchronize the PC:  */
   sync_pc(cpu, ic);
 
-  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr ^ offset, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 
@@ -1693,10 +1701,10 @@ X(icbi)
 
 X(dcbt)
 {
-  sync_pc(cpu, ic);
-  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  uint64_t dummy;
-  cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
+  // sync_pc(cpu, ic);
+  // auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
+  // uint64_t dummy;
+  // cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
 }
 
 /*
@@ -3041,18 +3049,18 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  // fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;
   uint64_t addr_page = reg(ic->arg[0]);
 
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 4; i++) {
     cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
     addr_page &= increment - 1;
     for (int i = 0; i < 16; i++) {
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR | INVALIDATE_INSTR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR);
       addr_page += increment;
     }
   }
@@ -3159,9 +3167,9 @@ X(dump_registers) {
     cpu->translation_readahead = old_readahead;
   }
 
-  auto iowait_exclusion = cpu->pc <= 0x150000 || cpu->pc > 0x160000;
+
   auto in_trace_region = (trace_low == trace_high) || (cpu->pc >= trace_low && cpu->pc < trace_high);
-  if (single_step || (iowait_exclusion && in_trace_region)) {
+  if (single_step || in_trace_region) {
     cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
     if (cpu->machine->register_dump) {
       ppc_cpu_register_dump(cpu, true, false);

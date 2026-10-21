@@ -64,5 +64,17 @@ for the original firmware (-d R:...) and a copy of the nvram
 (-d n:...).  If one has these from somewhere, they can be used
 to boot into "Personal Power Firmware".
 
+I rewrote the tlb and physical page cache to fix some bugs,
+with the result that some in the wild operating systems now
+run.
+
+Future work
+===
+
+I made substantial changes to a few internal interfaces.  While
+CPU architectures other than powerpc still build, I have not
+tested them and especially my tlb rewrite probably breaks some
+things.  I intend to restore them to working at least as well
+as in the original gxemul evenutally.
 ![RS/6000 model 860 config screen](https://github.com/prozacchiwawa/gxemul-rs6000-860/blob/main/doc/2023-02-05-rs6000-860-firmware.png?raw=true)
 ![RS/6000 model 860 config screen](https://github.com/prozacchiwawa/gxemul-rs6000-860/blob/main/doc/2026-06-22-aix-help-viewer.png?raw=true)

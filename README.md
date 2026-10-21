@@ -9,6 +9,17 @@ To Build
     cmake -G "Unix Makefiles" -DCMAKE_CXX_FLAGS="-O3" .
     make
 
+Win32
+===
+
+On win32, the console and any serial ports are available via
+tcp ports (default port 8000).  You can set the start port with
+-P on windows.  Use putty or similar to connect to the console
+port to use the debugger and subsequent ports for the serial
+ports.  You can also connect to the main port and use the redirect
+command (for example, "redirect tty0") to move your connection to
+the named port.
+
 My focus was to be able to run the native firmware of the quirky
 RS/6000 model 860 and the operating systems released for it.  It's
 still got a ways to go.

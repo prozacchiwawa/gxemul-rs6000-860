@@ -355,6 +355,7 @@ static void usage(int longusage)
 	printf("  -q        quiet mode (don't print startup messages)\n");
 	printf("  -V        start up in the single-step debugger, paused\n");
 	printf("  -v        increase debug message verbosity\n");
+	printf("  -P        tcp port base\n");
   printf("  -@        memory hole passthrough\n");
 	printf("\n");
 	printf("If you are selecting a machine type to emulate directly "
@@ -393,7 +394,7 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 	struct machine *m = emul_add_machine(emul, NULL);
 
 	const char *opts =
-	    "BC:c:Dd:E:e:HhI:iJj:k:L:KM:Nn:Oo:p:QqRrSs:TtUVvW:@:"
+	    "BC:c:Dd:E:e:HhI:iJj:k:L:KM:Nn:Oo:p:P:QqRrSs:TtUVvW:@:"
 #ifdef WITH_X11
 	    "XxY:"
 #endif
@@ -475,9 +476,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 				exit(1);
 			}
 			break;
-    case 'L':
-      redirect_stderr_platform(optarg);
-      break;
+		case 'L':
+			redirect_stderr_platform(optarg);
+			break;
 		case 'K':
 			force_debugger_at_exit = 1;
 			break;
@@ -507,6 +508,11 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 			machine_add_breakpoint_string(m, optarg);
 			msopts = 1;
 			break;
+#ifdef WIN32
+		case 'P':
+			console_port_nr = atoi(optarg);
+			break;
+#endif
 		case 'Q':
 			m->prom_emulation = 0;
 			msopts = 1;
@@ -818,13 +824,12 @@ int main(int argc, char *argv[])
 	    SETTINGS_TYPE_INT, SETTINGS_FORMAT_YESNO, (void *)&quiet_mode);
 
 	/*  Initialize all emulator subsystems:  */
-	console_init();
 	cpu_init();
 	device_init();
 	machine_init();
 	timer_init();
 
-  GdblibSetup();
+	GdblibSetup();
 
 	/*  Create a simple emulation setup:  */
 	emul = emul_new(NULL);
@@ -832,6 +837,8 @@ int main(int argc, char *argv[])
 	    SETTINGS_TYPE_SUBSETTINGS, 0, emul->settings);
 
 	get_cmd_args(argc, argv, emul, &diskimages, &n_diskimages);
+
+	console_init();
 
 	if (!skip_srandom_call) {
 		struct timeval tv;

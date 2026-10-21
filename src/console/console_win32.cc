@@ -35,11 +35,11 @@
  *  allowed. As long as the number of input streams is <= 1, then everything
  *  can be done in the emulator's default terminal window.
  *
- *  If the number of inputs is more than 1, it is necessary to open up slave
+ *  If the number of inputs is more than 1, it is necessary to open up instance
  *  xterm windows for each input. (Otherwise the behaviour is undefined; i.e.
  *  which of two emulated serial controllers would get keyboard input?)
  *
- *  (If the -x command line option is NOT used, then slaves are not opened up.
+ *  (If the -x command line option is NOT used, then instances are not opened up.
  *  Instead, a warning message is printed, and input is not allowed.)
  *
  *  Note that console handles that _allow_ input but are not yet used for
@@ -75,6 +75,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
+#include <mutex>
 
 #include "console.h"
 #include "emul.h"
@@ -84,11 +85,23 @@
 
 using ssize_t = SSIZE_T;
 
+DWORD WINAPI console_socket_thread(PVOID handle);
+
+#define BSIZE 1024
+#define BMAX (256 * 1024)
+
+struct attending {
+  int socket;
+  std::vector<uint8_t> buf;
+};
+
+std::mutex con_mutex;
 extern char *progname;
 extern int verbose;
 extern uint64_t single_step;
 extern struct settings *global_settings;
 static int redirect_stderr;
+int console_port_nr = 8000;
 
 //static struct termios console_oldtermios;
 //static struct termios console_curtermios;
@@ -96,18 +109,26 @@ static int redirect_stderr;
 DWORD console_oldmode_in, console_oldmode_out;
 DWORD console_curmode_in, console_curmode_out;
 
-/*  For 'slave' mode:  */
-static HANDLE console_slave_outputd;
-
 static struct settings *console_settings = NULL;
 static int console_stdout_pending;
 
 struct console_handle_platform {
 	HANDLE		w_descriptor;
 	HANDLE		r_descriptor;
+  HANDLE    thread;
+  DWORD     thread_id;
 
-	PROCESS_INFORMATION proc_info;
-	bool                is_proc_info_valid;
+  HANDLE    relay_thread;
+  DWORD     relay_thread_id;
+
+  bool connected;
+  bool main_console;
+  int port;
+  HANDLE inputd;
+  HANDLE console_instance_outputd;
+
+  std::vector<struct attending> sockets_attending;
+  std::vector<uint8_t> stored;
 };
 
 
@@ -127,33 +148,23 @@ void console_deinit_main(void)
 
 void start_xterm_platform(int handle)
 {
+  auto platform = (struct console_handle_platform*)console_handles[handle].platform;
+  if (platform->thread) {
+    return;
+  }
+
+  // Previously code for starting an xterm was delayed until the hardware was used.
+  // Now ports are bound immediately.
+  //
+  // We also allocate ports here and start immediately since we're still using the subprocess
+  // model.
+
 	HANDLE pipehandles[2];
 	HANDLE pipehandlesB[2];
-	STARTUPINFOEXW startInfo = {{}, NULL};
-	LPPROC_THREAD_ATTRIBUTE_LIST thrdList = NULL;
 	SIZE_T bufferSize = 0;
-	HANDLE inheritableHandles[2];
-	//std::wstring str = L"GXemul: " + std::string(console_handles[handle].machine_name) + std::string(" ") + std::string(console_handles[handle].name);
 
-	wchar_t cmdline[4096] = { 0 };
-	wchar_t modulefile[4096] = { 0 };
-	wchar_t title[4096] = { 0 };
-
-  auto platform = (struct console_handle_platform*)console_handles[handle].platform;
-
-	swprintf(title, L"GXemul: %S %S", console_handles[handle].machine_name, console_handles[handle].name);
-	startInfo.StartupInfo.cb = sizeof(startInfo);
-	InitializeProcThreadAttributeList(NULL, 1, 0, &bufferSize);
-	if (!bufferSize) {
-		fprintf(stderr, "Failed to allocate attribute list\n");
-		exit(1);
-	}
-	thrdList = (LPPROC_THREAD_ATTRIBUTE_LIST)calloc(bufferSize, 1);
-	if (!InitializeProcThreadAttributeList(thrdList, 1, 0, &bufferSize)) {
-		fprintf(stderr, "Failed to initialize attribute list\n");
-		exit(1);
-	}
-	GetModuleFileNameW(GetModuleHandleW(NULL), modulefile, 4096);
+  struct sockaddr_in sa;
+  sa.sin_family = AF_INET;
 
 	if (!CreatePipe(&pipehandles[0], &pipehandles[1], NULL, 0)) {
 		fprintf(stderr, " [Failed to create pipe handle set 0]\n");
@@ -164,28 +175,6 @@ void start_xterm_platform(int handle)
 		fprintf(stderr, " [Failed to create pipe handle set 1]\n");
 		exit(1);
 	}
-	swprintf(cmdline, L"\"%s\" -WW@S%llu,%llu", modulefile, pipehandles[0], pipehandlesB[1]);
-	SetHandleInformation(pipehandles[0], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-	SetHandleInformation(pipehandlesB[1], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-
-	//HANDLE inheritableHandles[2] = { pipehandles[0], pipehandlesB[1] };
-	inheritableHandles[0] = pipehandles[0];
-	inheritableHandles[1] = pipehandlesB[1];
-	startInfo.StartupInfo.lpTitle = title;
-	startInfo.lpAttributeList = thrdList;
-
-	if (!UpdateProcThreadAttribute(thrdList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, (PVOID)inheritableHandles, sizeof(inheritableHandles), NULL, NULL)) {
-		fprintf(stderr, "Failed to update thread attributes\n");
-	}
-	PROCESS_INFORMATION info;
-	BOOL res = CreateProcessW(modulefile, cmdline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | CREATE_NEW_CONSOLE, NULL, NULL, &startInfo.StartupInfo, &platform->proc_info);
-	if (!res)
-	{
-		fprintf(stderr, "Failed to create slave terminals\n");
-		exit(1);
-	}
-
-	DeleteProcThreadAttributeList(thrdList);
 
 	console_handles[handle].using_xterm = USING_XTERM;
 
@@ -193,9 +182,13 @@ void start_xterm_platform(int handle)
 	 *  write to filedes[1], read from filedesB[0]
 	 */
 
+  platform->main_console = handle == MAIN_CONSOLE;
+  platform->inputd = pipehandles[0];
+  platform->console_instance_outputd = pipehandlesB[1];
   platform->w_descriptor = pipehandles[1];
   platform->r_descriptor = pipehandlesB[0];
-	platform->is_proc_info_valid = true;
+
+  platform->thread = CreateThread(nullptr, 0, console_socket_thread, (PVOID)platform, 0, &platform->thread_id);
 }
 
 #define AVAIL_RES_CTRL_C 1000
@@ -222,7 +215,7 @@ static int d_avail(HANDLE d)
       return -1;
     }
 
-    if (curbyte[0] == 0xff) {
+    if (curbyte[0] == 3) {
       return AVAIL_RES_CTRL_C;
     }
 
@@ -274,36 +267,57 @@ int console_putchar_platform(int handle, int ch) {
   return written;
 }
 
+void die(const std::string &msg) {
+  MessageBox(nullptr, msg.c_str(), "GXEmul console instance", MB_ICONHAND);
+  exit(1);
+}
 
-DWORD WINAPI console_thread(PVOID console_slave_outputd) {
+// Windows can't select on a named pipe
+DWORD WINAPI console_thread(PVOID p) {
+  auto platform = (struct console_handle_platform*)p;
+  auto port = platform->port;
+  auto inputd = platform->inputd;
+  
   DWORD len;
   char buf[1024];
 
-  auto conin = GetStdHandle(STD_INPUT_HANDLE);
-  auto conout = GetStdHandle(STD_OUTPUT_HANDLE);
+  struct sockaddr_in sa;
+  sa.sin_family = AF_INET;
+  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  sa.sin_port = htons((intptr_t)port);
 
-  for (;;) {
+  // We relay data from gxemul through this socket.
+  int relay_socket = socket(AF_INET, SOCK_STREAM, 0);
+  if (relay_socket < 0) {
+    die(std::string("couldn't make relay socket"));
+  }
+
+  if (connect(relay_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    die(std::string("couldn't connect relay socket"));
+  }
+
+  bool finished = false;
+  while (!finished) {
     DWORD numberOfCharsRead = 0;
-    if (!ReadConsole(conin, buf, sizeof(buf), &numberOfCharsRead, NULL)) {
+    if (!ReadFile(inputd, buf, sizeof(buf), &numberOfCharsRead, NULL)) {
+      finished = true;
       break;
     }
-    if (numberOfCharsRead) {
-      if (!WriteFile(console_slave_outputd, buf, numberOfCharsRead, &len, NULL) || !numberOfCharsRead) {
-        perror("error writing to console handle");
+    int written = 0;
+    while (written < numberOfCharsRead) {
+      int len;
+      if ((len = send(relay_socket, buf + written, numberOfCharsRead - written, 0)) < 1) {
+        finished = true;
         break;
       }
-    } else {
-      break;
+      written += len;
     }
   }
 
-  return 0;
-}
+  shutdown(relay_socket, 2);
+  closesocket(relay_socket);
 
-BOOL WINAPI console_ctrlc_handler(DWORD ctrl_type) {
-  DWORD len;
-  WriteFile(console_slave_outputd, "\xff", 1, &len, nullptr);
-  return TRUE;
+  return 0;
 }
 
 /*
@@ -314,58 +328,188 @@ BOOL WINAPI console_ctrlc_handler(DWORD ctrl_type) {
  */
 void console_slave(const char *arg)
 {
-	HANDLE inputd = 0;
+  exit(0);
+}
+
+DWORD WINAPI console_socket_thread(PVOID p) {
+  auto platform = (struct console_handle_platform*)p;
+  auto port = platform->port;
+  auto inputd = platform->inputd;
+  auto console_instance_outputd = platform->console_instance_outputd;
+
 	DWORD len = 0;
-	const char *p = 0;
-	char buf[16384] = { 0 };
+  uint8_t buf[BSIZE];
+  int relay_socket;
+  WSADATA wsadata;
+  memset(&wsadata, 0, sizeof(wsadata));
 
-  FreeConsole();
-  AllocConsole();
-
-  auto conin = GetStdHandle(STD_INPUT_HANDLE);
-  auto conout = GetStdHandle(STD_OUTPUT_HANDLE);
-
-  // Disable signal delivery.
-  SetConsoleCtrlHandler(console_ctrlc_handler, TRUE);
-
-	SetConsoleMode(conin, ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_PROCESSED_INPUT);
-	SetConsoleMode(conout, ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT);
+  WSAStartup(0x101, &wsadata);
 
 	/*  arg = '3,6' or similar, input and output descriptors  */
-	/*  printf("console_slave(): arg = '%s'\n", arg);  */
+	/*  printf("console_instance(): arg = '%s'\n", arg);  */
 
-	inputd = (HANDLE)strtoull(arg, nullptr, 0); //atoi(arg);
-	p = strchr(arg, ',');
-	if (p == NULL) {
-		printf("console_slave(): bad arg '%s'\n", arg);
-		Sleep(5);
-		exit(1);
-	}
-	console_slave_outputd = (HANDLE)strtoull(p+1, nullptr, 0);
-
-  DWORD thread_id;
-  HANDLE thread = CreateThread
-    (nullptr,
-     0,
-     console_thread,
-     console_slave_outputd,
-     0,
-     &thread_id);
-  if (!thread || thread == INVALID_HANDLE_VALUE) {
-    sprintf(buf, "thread error %d\n", GetLastError());
-    MessageBox(nullptr, buf, "Console Thread", MB_ICONERROR);
+  struct sockaddr_in sa;
+  memset(&sa, 0, sizeof(sa));
+  int listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+  if (listen_socket < 0) {
+    die(std::string("failed to create listen socket"));
   }
 
-  for (;;) {
-    auto res = ReadFile(inputd, (LPVOID)buf, sizeof(buf) - 1, &len, NULL);
-    if (!res || len == 0) {
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(port);
+  if (bind(listen_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    die(std::string("failed to bind listen socket"));
+  }
+
+  if (listen(listen_socket, 5) < 0) {
+    die(std::string("failed to listen"));
+  }
+
+  platform->relay_thread = CreateThread(nullptr, 0, console_thread, p, 0, &platform->relay_thread_id);
+  if (!platform->relay_thread_id || platform->relay_thread == INVALID_HANDLE_VALUE) {
+    die(std::string("couldn't create relay thread"));
+  }
+
+  // Start a thread and connect.  This socket will relay info from the pipe.
+  int relay_read = accept(listen_socket, nullptr, nullptr);
+  if (relay_read < 0) {
+    die(std::string("couldn't accept relay socket"));
+  }
+
+  bool finished = false;
+
+  auto end_socket = [&buf](int socket) {
+    while (recv(socket, (char *)buf, sizeof(buf), 0) > 0) {
+      ;
+    }
+
+    shutdown(socket, 2);
+    closesocket(socket);
+  };
+
+  while (!finished) {
+    std::vector<size_t> cleanup_attending;
+    struct fd_set readable, writable, error;
+
+    FD_ZERO(&readable);
+    FD_ZERO(&writable);
+    FD_ZERO(&error);
+
+    {
+      std::unique_lock _l(con_mutex);
+      for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
+        FD_SET(i->socket, &readable);
+        FD_SET(i->socket, &error);
+        if (i->buf.size()) {
+          FD_SET(i->socket, &writable);
+        }
+      }
+    }
+
+    FD_SET(listen_socket, &readable);
+    FD_SET(relay_read, &readable);
+    FD_SET(relay_read, &error);
+
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+    int select_result = select(0, &readable, &writable, &error, &tv);
+    int numberOfCharsRead = 0;
+
+    if (select_result < 0) {
       break;
     }
-    buf[len] = '\0';
-    WriteConsole(conout, buf, len, &len, nullptr);
+
+    if (select_result == 0) {
+      continue;
+    }
+
+    std::unique_lock _l(con_mutex);
+    if (FD_ISSET(listen_socket, &readable)) {
+      // Accept
+      int accepted = accept(listen_socket, nullptr, nullptr);
+      DWORD nonblocking = 1;
+      ioctlsocket(accepted, FIONBIO, &nonblocking);
+      struct attending a;
+      a.socket = accepted;
+      if (platform->stored.size()) {
+        std::swap(platform->stored, a.buf);
+      }
+      platform->connected = true;
+      platform->sockets_attending.push_back(a);
+    }
+    if (FD_ISSET(relay_read, &readable)) {
+      // Data from gxemul
+      if ((numberOfCharsRead = recv(relay_read, (char*)buf, sizeof(buf), 0)) < 0) {
+        finished = true;
+        break;
+      }
+
+      if (!platform->connected) {
+        if (platform->stored.size() < BMAX) {
+          std::vector<uint8_t> buf_vect(buf, buf + numberOfCharsRead);
+          platform->stored.insert(std::end(platform->stored), std::begin(buf_vect), std::end(buf_vect));
+        }
+      } else {
+        for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
+          if (i->buf.size() + numberOfCharsRead > BMAX) {
+            cleanup_attending.push_back(i - platform->sockets_attending.begin());
+            continue;
+          }
+          for (int j = 0; j < numberOfCharsRead; j++) {
+            i->buf.push_back(buf[j]);
+          }
+        }
+      }
+    }
+
+    for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
+      if (FD_ISSET(i->socket, &writable)) {
+        int sent;
+        if ((sent = send(i->socket, (const char *)&i->buf[0], i->buf.size(), 0)) < 0) {
+          cleanup_attending.push_back(i - platform->sockets_attending.begin());
+          continue;
+        }
+        if (sent >= i->buf.size()) {
+          i->buf.clear();
+        } else {
+          i->buf.erase(i->buf.begin(), i->buf.begin() + sent);
+        }
+      }
+      if (FD_ISSET(i->socket, &readable)) {
+        // Data from attending
+        int recv_result;
+        if ((recv_result = recv(i->socket, (char *)buf, sizeof(buf), 0)) <= 0) {
+          cleanup_attending.push_back(i - platform->sockets_attending.begin());
+          continue;
+        }
+
+        if (!WriteFile(console_instance_outputd, buf, recv_result, &len, nullptr) || !len) {
+          finished = true;
+          break;
+        }
+      }
+    }
+
+    for (auto i = cleanup_attending.begin(); i != cleanup_attending.end(); i++) {
+      auto attending = &platform->sockets_attending[*i];
+      end_socket(attending->socket);
+      platform->sockets_attending.erase(platform->sockets_attending.begin() + *i);
+    }
 	}
 
-  return;
+  end_socket(relay_read);
+  closesocket(listen_socket);
+
+  struct fd_set readable;
+  for (auto i = platform->sockets_attending.begin(); i != platform->sockets_attending.end(); i++) {
+    end_socket(i->socket);
+  }
+
+  WSACleanup();
+
+  return 0;
 }
 
 
@@ -379,8 +523,16 @@ void console_slave(const char *arg)
 int console_new_handle_platform(int handle)
 {
   struct console_handle *chp = &console_handles[handle];
+  if (chp->platform) {
+    return 0;
+  }
+
   auto p = (struct console_handle_platform *)calloc(sizeof(struct console_handle_platform), 1);
   chp->platform = p;
+  p->port = console_port_nr++;
+
+  start_xterm_platform(handle);
+
   return 0;
 }
 
@@ -394,7 +546,6 @@ int console_init_main_platform(struct emul *emul)
 {
   allow_slaves = 1;
   console_new_handle_platform(MAIN_CONSOLE);
-  start_xterm_platform(MAIN_CONSOLE);
 
   auto platform = (struct console_handle_platform*)console_handles[MAIN_CONSOLE].platform;
   auto result = 0;
@@ -438,4 +589,32 @@ int redirect_stderr_platform(const char *new_name) {
   }
 
   return 0;
+}
+
+void console_platform_deinit() {
+  std::unique_lock _l(con_mutex);
+  for (int i = 0; i < n_console_handles; i++) {
+    if (console_handles[i].platform) {
+      auto platform = (struct console_handle_platform*)console_handles[i].platform;
+      CloseHandle(platform->w_descriptor);
+      CloseHandle(platform->r_descriptor);
+    }
+  }
+}
+
+void console_platform_main_migrate(const char *name) {
+  std::unique_lock _l(con_mutex);
+  auto main_platform = (struct console_handle_platform*)console_handles[MAIN_CONSOLE].platform;
+  for (int i = 0; i < n_console_handles; i++) {
+    if (!stricmp(console_handles[i].name, name)) {
+      auto platform = (struct console_handle_platform*)console_handles[i].platform;
+      for (auto j = main_platform->sockets_attending.begin(); j != main_platform->sockets_attending.end(); j++) {
+        platform->connected = true;
+        j->buf.clear();
+        platform->sockets_attending.push_back(*j);
+      }
+      main_platform->sockets_attending.clear();
+      break;
+    }
+  }
 }

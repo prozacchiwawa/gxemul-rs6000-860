@@ -435,3 +435,9 @@ int redirect_stderr_platform(const char *new_name) {
 
   return 0;
 }
+
+void console_platform_deinit() {
+}
+
+void console_platform_main_migrate(const char *name) {
+}

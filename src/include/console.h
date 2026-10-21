@@ -158,6 +158,7 @@ extern int console_mouse_y;		/*  absolute y, 0-based  */
 extern int console_mouse_fb_nr;		/*  framebuffer number of
                                       host movement, 0-based  */
 extern int console_mouse_buttons;	/*  left=4, middle=2, right=1  */
+extern int console_port_nr;
 
 extern char *stderr_redirect_log;
 
@@ -193,6 +194,7 @@ int console_change_inputability(int handle, int inputability);
 void console_init_main(struct emul *);
 void console_debug_dump(struct machine *);
 void console_allow_slaves(int);
+void console_main_migrate(const char *name);
 
 void console_init(void);
 void console_deinit(void);
@@ -205,5 +207,7 @@ int console_read_platform(int handle, uint8_t *buf, size_t len);
 void start_xterm_platform(int handle);
 int redirect_stderr_platform(const char *new_file);
 int console_makeavail_platform(int handle, int ch);
+void console_platform_deinit();
+void console_platform_main_migrate(const char *name);
 
 #endif	/*  CONSOLE_H  */

@@ -672,8 +672,9 @@ int console_start_slave(struct machine *machine, const char *consolename,
 
 	CHECK_ALLOCATION(chp->name = strdup(consolename));
 
-	if (allow_slaves)
+	if (allow_slaves && chp->using_xterm != USING_XTERM) {
 		chp->using_xterm = USING_XTERM_BUT_NOT_YET_OPEN;
+  }
 
 	return handle;
 }
@@ -936,6 +937,16 @@ void console_init(void)
  */
 void console_deinit(void)
 {
+  console_platform_deinit();
 	settings_remove(console_settings, "allow_slaves");
 	settings_remove(global_settings, "console");
+}
+
+/*
+ * If supported and if the target exists, move listeners to the main console to become listeners
+ * of the named console instead.  New listeners that connect after this, if supported will not be
+ * affected.
+ */
+void console_main_migrate(const char *name) {
+  console_platform_main_migrate(name);
 }

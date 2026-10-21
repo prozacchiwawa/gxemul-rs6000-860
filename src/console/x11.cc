@@ -39,6 +39,8 @@
 #include "misc.h"
 #include "cpu.h"
 
+extern int quiet_mode, old_quiet_mode;
+
 #ifndef	WITH_X11
 
 
@@ -456,6 +458,8 @@ static void x11_check_events_machine(struct emul *emul, struct machine *m)
                       for (int j = 0; j < m->ncpus; j++) {
                         m->cpus[j]->running = false;
                       }
+                      quiet_mode = 1;
+                      old_quiet_mode = 1;
                     }
                 }
                 break;

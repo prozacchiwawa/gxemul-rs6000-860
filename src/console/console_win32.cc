@@ -357,6 +357,7 @@ DWORD WINAPI console_socket_thread(PVOID p) {
 
   sa.sin_family = AF_INET;
   sa.sin_port = htons(port);
+  fprintf(stderr, "port = %d\n", port);
   if (bind(listen_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
     die(std::string("failed to bind listen socket"));
   }

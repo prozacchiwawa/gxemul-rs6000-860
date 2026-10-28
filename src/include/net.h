@@ -31,9 +31,16 @@
  *  Emulated network support.  (See net.c for more info.)
  */
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <ws2def.h>
+#else
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#endif
 
 struct emul;
 struct ethernet_packet_link;

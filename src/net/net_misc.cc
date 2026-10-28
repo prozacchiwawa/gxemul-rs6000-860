@@ -32,9 +32,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <immintrin.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
 #include <unistd.h>
 
 #include "machine.h"
@@ -139,7 +145,7 @@ void send_udp(struct in_addr *addrp, int portnr, unsigned char *packet,
 	si.sin_addr = *addrp;
 	si.sin_port = htons(portnr);
 
-	if (sendto(s, packet, len, 0, (struct sockaddr *)&si,
+	if (sendto(s, (char*)packet, len, 0, (struct sockaddr *)&si,
 	    sizeof(si)) != (ssize_t)len) {
 		perror("send_udp(): sendto");
 	}

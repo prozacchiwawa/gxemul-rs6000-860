@@ -34,6 +34,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "ComponentFactory.h"
 #include "console.h"
@@ -49,6 +50,9 @@
 #include "timer.h"
 #include "UnitTest.h"
 #include "debugger.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 extern uint64_t single_step;
 extern int force_debugger_at_exit;
@@ -96,20 +100,25 @@ static void va_debug(va_list argp, const char *fmt)
 	buf[0] = buf[DEBUG_BUFSIZE] = 0;
 	vsnprintf(buf, DEBUG_BUFSIZE, fmt, argp);
 
+	std::string printbuf;
+	printbuf.reserve(DEBUG_BUFSIZE * 2);
+
 	s = buf;
 	while (*s) {
 		if (debug_currently_at_start_of_line) {
 			for (i=0; i<debug_indent; i++)
-				printf(" ");
+				printbuf += ' ';
 		}
 
-		printf("%c", *s);
+		//fprintf(stderr, "%c", *s);
+		printbuf += *s;
 
 		debug_currently_at_start_of_line = 0;
 		if (*s == '\n' || *s == '\r')
 			debug_currently_at_start_of_line = 1;
 		s++;
 	}
+	fprintf(stderr, "%s", buf);
 }
 
 
@@ -346,6 +355,7 @@ static void usage(int longusage)
 	printf("  -q        quiet mode (don't print startup messages)\n");
 	printf("  -V        start up in the single-step debugger, paused\n");
 	printf("  -v        increase debug message verbosity\n");
+	printf("  -P        tcp port base\n");
   printf("  -@        memory hole passthrough\n");
 	printf("\n");
 	printf("If you are selecting a machine type to emulate directly "
@@ -380,10 +390,11 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 	char *type = NULL, *subtype = NULL;
 	int n_cpus_set = 0;
 	int msopts = 0;		/*  Machine-specific options used  */
+  char *stderr_redirect_log = nullptr;
 	struct machine *m = emul_add_machine(emul, NULL);
 
 	const char *opts =
-	    "BC:c:Dd:E:e:HhI:iJj:k:KM:Nn:Oo:p:QqRrSs:TtUVvW:@:"
+	    "BC:c:Dd:E:e:HhI:iJj:k:L:KM:Nn:Oo:p:P:QqRrSs:TtUVvW:@:"
 #ifdef WITH_X11
 	    "XxY:"
 #endif
@@ -465,6 +476,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 				exit(1);
 			}
 			break;
+		case 'L':
+			redirect_stderr_platform(optarg);
+			break;
 		case 'K':
 			force_debugger_at_exit = 1;
 			break;
@@ -494,6 +508,11 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
 			machine_add_breakpoint_string(m, optarg);
 			msopts = 1;
 			break;
+#ifdef WIN32
+		case 'P':
+			console_port_nr = atoi(optarg);
+			break;
+#endif
 		case 'Q':
 			m->prom_emulation = 0;
 			msopts = 1;
@@ -754,6 +773,9 @@ int get_cmd_args(int argc, char *argv[], struct emul *emul,
  */
 int main(int argc, char *argv[])
 {
+#ifdef _WIN32
+	_set_fmode(_O_BINARY);
+#endif
 	/*  Setting constants:  */
 	int constant_yes = 1;
 	int constant_true = 1;
@@ -802,13 +824,12 @@ int main(int argc, char *argv[])
 	    SETTINGS_TYPE_INT, SETTINGS_FORMAT_YESNO, (void *)&quiet_mode);
 
 	/*  Initialize all emulator subsystems:  */
-	console_init();
 	cpu_init();
 	device_init();
 	machine_init();
 	timer_init();
 
-  GdblibSetup();
+	GdblibSetup();
 
 	/*  Create a simple emulation setup:  */
 	emul = emul_new(NULL);
@@ -816,6 +837,8 @@ int main(int argc, char *argv[])
 	    SETTINGS_TYPE_SUBSETTINGS, 0, emul->settings);
 
 	get_cmd_args(argc, argv, emul, &diskimages, &n_diskimages);
+
+	console_init();
 
 	if (!skip_srandom_call) {
 		struct timeval tv;

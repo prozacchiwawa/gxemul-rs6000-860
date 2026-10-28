@@ -821,7 +821,9 @@ void emul_run(struct emul *emul)
 	console_init_main(emul);
 
 	signal(SIGINT, debugger_activate);
+#ifndef _WIN32
 	signal(SIGCONT, console_sigcont);
+#endif
 
 	/*  Not in verbose mode? Then set quiet_mode.  */
 	if (!verbose) {

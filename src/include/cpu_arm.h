@@ -182,7 +182,7 @@ struct arm_cpu {
 	uint32_t		ttb;		/*  Translation Table Base  */
 	uint32_t		dacr;		/*  Domain Access Control  */
 	uint32_t		fsr;		/*  Fault Status Register  */
-	uint32_t		far;		/*  Fault Address Register  */
+	uint32_t		far_;		/*  Fault Address Register  */
 	uint32_t		pid;		/*  Process Id Register  */
 	uint32_t		cpar;		/*  CoProcessor Access Reg.  */
 

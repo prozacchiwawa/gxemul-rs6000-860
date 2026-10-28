@@ -82,7 +82,7 @@ static const char *group_names[] = {
   nullptr
 };
 
-#if 1
+#if 0
 #define REG_WRITE(R) do { \
   if (writeflag == MEM_WRITE) {                         \
     fprintf(stderr, "@@@o%08x", relative_addr + (R));     \
@@ -1540,7 +1540,7 @@ static struct register_name_table_t r_name_table[] = {
   }
 };
 
-#define VGA_DEBUG 1
+#define VGA_DEBUG 0
 
 #if VGA_DEBUG
 #define L(x) do { x; } while (0)
@@ -2349,7 +2349,7 @@ static void wd_bitblt_step(struct vga_data *d) {
   if (!source_io) {
     if ((d->wd23cx_bitblt_regs[1] & WD90_23CX_BITBLT_LINE_DRAW)) {
       // XXX draw line.
-      fprintf(stderr, "[ wd: no line draw support yet! ]\n");
+      L(fprintf(stderr, "[ wd: no line draw support yet! ]\n"));
       d->wd23cx_bitblt_regs[0] &= ~WD90_23CX_BITBLT_EXECUTE;
       return;
     }
@@ -2374,7 +2374,7 @@ static void wd_bitblt_start(struct vga_data *d) {
   d->wd23cx_x = d->wd23cx_dim_x = d->wd23cx_x = d->wd23cx_bitblt_regs[6] & 0xfff;
   d->wd23cx_y = d->wd23cx_dim_y = d->wd23cx_y = d->wd23cx_bitblt_regs[7] & 0xfff;
 
-  fprintf(stderr, "[ wd: start bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y);
+  L(fprintf(stderr, "[ wd: start bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y));
 
   bool source_io = (d->wd23cx_bitblt_regs[0] & 3);
   bool dest_io = ((d->wd23cx_bitblt_regs[0] >> 4) & 3);
@@ -2383,7 +2383,7 @@ static void wd_bitblt_start(struct vga_data *d) {
     wd_bitblt_step(d);
   }
   // Do the transfer if it isn't io based
-  fprintf(stderr, "[ wd: start? source_io %d dest_io %d command %04x ]\n", source_io, dest_io, d->wd23cx_bitblt_regs[0]);
+  L(fprintf(stderr, "[ wd: start? source_io %d dest_io %d command %04x ]\n", source_io, dest_io, d->wd23cx_bitblt_regs[0]));
   while (!source_io && !dest_io && (d->wd23cx_bitblt_regs[0] & WD90_23CX_BITBLT_EXECUTE)) {
     wd_bitblt_step(d);
     wd_bitblt_write32(d);
@@ -2410,7 +2410,7 @@ static void wd_bitblt_next(struct vga_data *d) {
 
   case WD90_23CX_SET_BITBLT:
     // Dest: system io
-    fprintf(stderr, "[ wd: next bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y);
+    L(fprintf(stderr, "[ wd: next bitblt source %08x target %08x %dx%d ]\n", d->wd23cx_source_addr, d->wd23cx_target_addr, d->wd23cx_dim_x, d->wd23cx_dim_y));
     if ((d->wd23cx_bitblt_regs[0] & 3) == 2) {
       auto half = d->wd23cx_bitblt_half;
       d->wd23cx_bitblt_half = !d->wd23cx_bitblt_half;
@@ -2433,7 +2433,7 @@ static void wd_bitblt_commit(struct vga_data *d) {
     } else {
       d->wd23cx_index &= ~WD90_23CX_INVALID_INDEX_BLOCK;
     }
-    fprintf(stderr, "[ wd: write 2c30 index %04x ]\n", d->wd23cx_index);
+    L(fprintf(stderr, "[ wd: write 2c30 index %04x ]\n", d->wd23cx_index));
     break;
 
   case WD90_23CX_SET_VALUE:
@@ -2449,7 +2449,7 @@ static void wd_bitblt_commit(struct vga_data *d) {
         wd_bitblt_start(d);
       }
     }
-    fprintf(stderr, "[ wd: write 23c0 page %d reg %x = %04x ]\n", d->wd23cx_index & 0xff, (value >> 12) & 15, value & 0xfff);
+    L(fprintf(stderr, "[ wd: write 23c0 page %d reg %x = %04x ]\n", d->wd23cx_index & 0xff, (value >> 12) & 15, value & 0xfff));
     break;
 
   case WD90_23CX_SET_BITBLT:
@@ -2462,7 +2462,7 @@ static void wd_bitblt_commit(struct vga_data *d) {
       if (!half) {
         wd_bitblt_write32(d);
       }
-      fprintf(stderr, "[ wd: write 23c0 bitblt %04x ]\n", value);
+      L(fprintf(stderr, "[ wd: write 23c0 bitblt %04x ]\n", value));
     }
     break;
   }
@@ -2476,12 +2476,6 @@ DEVICE_ACCESS(wd_graphics)
 	struct vga_data *d = (struct vga_data *) extra;
 	int j, x=0, y=0, x2=0, y2=0, modified = 0;
 	size_t i;
-
-  fprintf(stderr, "@@@%08x", relative_addr);
-  for (int ii = 0; ii < len; ii++) {
-    fprintf(stderr, " %02x", data[ii]);
-  }
-  fprintf(stderr, "\n");
 
 	L(fprintf(stderr, "VGA: mode %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->graphcontr_reg[5], relative_addr, len));
 
@@ -3214,12 +3208,6 @@ DEVICE_ACCESS(wd_bitblt)
   } else {
     wd_bitblt_next(d);
   }
-
-  fprintf(stderr, "[ wd: bitblt at %08x [%04x] %s", (unsigned int)cpu->pc, relative_addr, writeflag == MEM_READ ? "read" : "write", data[i]);
-  for (int i = 0; i < len; i++) {
-    fprintf(stderr, " %02x", data[i]);
-  }
-  fprintf(stderr, " ]\n");
 
   return 1;
 }

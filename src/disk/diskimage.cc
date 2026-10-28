@@ -37,6 +37,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "cpu.h"
 #include "diskimage.h"
@@ -169,6 +172,16 @@ void diskimage_recalc_size(struct diskimage *d)
 	int res;
 	off_t size = 0;
 
+#ifdef _WIN32
+	WIN32_FILE_ATTRIBUTE_DATA dat = {};
+	res = GetFileAttributesExA(d->fname, GetFileExInfoStandard, (LPVOID)&dat);
+	if (!res) {
+		fprintf(stderr, "[ diskimage_recalc_size(): could not stat "
+		    "'%s': 0x%08X ]\n", d->fname, GetLastError());
+		return;
+	}
+	size = (uint64_t)dat.nFileSizeLow | (((uint64_t)dat.nFileSizeHigh) << 32ull);
+#else
 	res = stat(d->fname, &st);
 	if (res) {
 		fprintf(stderr, "[ diskimage_recalc_size(): could not stat "
@@ -177,6 +190,7 @@ void diskimage_recalc_size(struct diskimage *d)
 	}
 
 	size = st.st_size;
+#endif
 
 	/*
 	 *  TODO:  CD-ROM devices, such as /dev/cd0c, how can one

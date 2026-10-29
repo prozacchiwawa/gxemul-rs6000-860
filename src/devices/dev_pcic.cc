@@ -209,7 +209,10 @@ int pcic_controller_access
     case PCIC_IOADDR1_STOP_LSB:
       if (writeflag == MEM_WRITE) {
         d->regs[socket_nr][regnr] = idata;
-        d->io_window[socket_nr][!!(regnr & 2)].low = idata;
+        uint16_t *p = (!!(regnr & 2)) ?
+          &d->io_window[socket_nr][!!(regnr & 4)].high : 
+          &d->io_window[socket_nr][!!(regnr & 4)].low;
+        *p = (*p & ~0xff) | (idata & 0xff);
       } else {
         odata = d->regs[socket_nr][regnr];
       }
@@ -221,7 +224,10 @@ int pcic_controller_access
     case PCIC_IOADDR1_STOP_MSB:
       if (writeflag == MEM_WRITE) {
         d->regs[socket_nr][regnr] = idata;
-        d->io_window[socket_nr][!!(regnr & 2)].high = idata;
+        uint16_t *p = (!!(regnr & 2)) ?
+          &d->io_window[socket_nr][!!(regnr & 4)].high : 
+          &d->io_window[socket_nr][!!(regnr & 4)].low;
+        *p = (*p & ~0xff00) | ((idata & 0xff) << 8);
       } else {
         odata = d->regs[socket_nr][regnr];
       }

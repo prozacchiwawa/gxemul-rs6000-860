@@ -48,7 +48,19 @@ DEVICE_ACCESS(ibm_ethernet_ii)
 
   fprintf(stderr, "[ ibmeth: pcmcia access %08x ]\n", (unsigned int)relative_addr);
   
-  if (relative_addr < DEV_PCIC_CARD_SIZE && !is_ethaddr) {
+  if (relative_addr < DEV_PCMCIA_IO_OFFSET) {
+    if (is_ethaddr) {
+      cpu->memory_rw
+        (cpu,
+         cpu->mem,
+         d->device_area + 32 + ((relative_addr & 0xfff) - 0xff0),
+         data,
+         len,
+         writeflag,
+         PHYSICAL | NO_EXCEPTIONS);
+      return 1;
+    }
+
     // Attribute rom.
     if (writeflag == MEM_READ) {
       auto idata = (relative_addr < d->attribute_rom_len * 2) ?
@@ -56,21 +68,12 @@ DEVICE_ACCESS(ibm_ethernet_ii)
       memory_writemax64(cpu, data, len, idata);
       fprintf(stderr, "[ ibmeth: pcmcia reg read %04x -> %08x ]\n", (unsigned int)relative_addr, (unsigned int)idata);
     }
-  } else if (is_ethaddr) {
-    cpu->memory_rw
-      (cpu,
-       cpu->mem,
-       d->device_area + 32 + ((relative_addr & 0xfff) - 0xff0),
-       data,
-       len,
-       writeflag,
-       PHYSICAL | NO_EXCEPTIONS);
   } else if (relative_addr < DEV_PCMCIA_MEM_OFFSET) {
     relative_addr -= DEV_PCMCIA_IO_OFFSET;
-    if (relative_addr > 32) {
-      return 1;
-    }
-    
+    fprintf(stderr, "[ ibmeth: io %s at %08x ]\n", writeflag == MEM_READ ? "read" : "write", (unsigned int)relative_addr);
+
+    relative_addr &= 0x1f;
+
     // Pass through io space.
     cpu->memory_rw
       (cpu,
@@ -82,7 +85,7 @@ DEVICE_ACCESS(ibm_ethernet_ii)
        PHYSICAL | NO_EXCEPTIONS);
   } else if (relative_addr < DEV_PCMCIA_DEVICE_OFFSET) {
     relative_addr -= DEV_PCMCIA_MEM_OFFSET;
-    fprintf(stderr, "[ ibmeth: memory %s at %08x ]\n", writeflag == MEM_READ ? "read" : "write");
+    fprintf(stderr, "[ ibmeth: memory %s at %08x ]\n", writeflag == MEM_READ ? "read" : "write", (unsigned int)relative_addr);
     cpu->memory_rw
       (cpu,
        cpu->mem,

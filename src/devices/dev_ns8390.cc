@@ -1450,6 +1450,7 @@ DEVINIT(ns8390)
     devinit->addr < DEV_PCIC_CARD_SPACE(4);
 
   d->dev = new bx_ne2k_c();
+  d->dev->parent = d;
   d->dev->s.physaddr[0] = 0x08;
   d->dev->s.physaddr[0] = 0x00;
   d->dev->s.physaddr[0] = 0x20;

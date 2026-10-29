@@ -585,7 +585,7 @@ DEVICE_TICK(pckbc)
 
   for (int port = 0; port < (mouse_output_generated ? 1 : 2); port++) {
     if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
-      fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
+      //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port_int_enabled(port, d->cmdbyte)) {
         if (port == 0) {
           INTERRUPT_ASSERT(d->irq_keyboard);

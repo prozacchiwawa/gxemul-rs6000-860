@@ -408,14 +408,14 @@ KeynameToPCKeyboard pc_type_3[] = {
   { KeyNames::RShift, 0, NONE, F0, 0x59 },
   { KeyNames::Space, 0, NONE, F0, 0x29 },
   { KeyNames::CapsLock, 0, NONE, F0, 0x14 },
-  { KeyNames::Home, 0, NONE, F0, 0x6c },
-  { KeyNames::Up, 0, NONE, F0, 0x75 },
-  { KeyNames::PgUp, 0, NONE, F0, 0x7d },
-  { KeyNames::Left, 0, NONE, F0, 0x6b },
-  { KeyNames::Right, 0, NONE, F0, 0x74 },
-  { KeyNames::End, 0, NONE, F0, 0x69 },
-  { KeyNames::Down, 0, NONE, F0, 0x72 },
-  { KeyNames::PgDn, 0, NONE, F0, 0x7a },
+  { KeyNames::Home, 0, NONE, F0, 0x6e },
+  { KeyNames::Up, 0, NONE, F0, 0x63 },
+  { KeyNames::Down, 0, NONE, F0, 0x60 },
+  { KeyNames::PgUp, 0, NONE, F0, 0x6f },
+  { KeyNames::PgDn, 0, NONE, F0, 0x6d },
+  { KeyNames::Left, 0, NONE, F0, 0x61 },
+  { KeyNames::Right, 0, NONE, F0, 0x6a },
+  { KeyNames::End, 0, NONE, F0, 0x65 },
   { }
 };
 

@@ -257,7 +257,7 @@ DEVICE_ACCESS(eagle_8mb)
   if (~pcmcia_target) {
     // Not all 1s, valid
     real_addr = DEV_PCIC_CARD_0_SPACE + pcmcia_target;
-    fprintf(stderr, "[ eagle: pcmcia %s io addr %08x ]\n", writeflag ? "write" : "read", (unsigned int)real_addr);
+    // fprintf(stderr, "[ eagle: pcmcia %s io addr %08x ]\n", writeflag ? "write" : "read", (unsigned int)real_addr);
   }
 
   if (writeflag == MEM_READ) {
@@ -286,7 +286,7 @@ DEVICE_ACCESS(eagle_mem_pass)
       // Not all 1s, valid
       real_addr = DEV_PCIC_CARD_0_SPACE;
       real_addr += pcmcia_target;
-      fprintf(stderr, "[ eagle: pcmcia %s mem addr %" PRIx64 " ]\n", writeflag ? "write" : "read", real_addr);
+      // fprintf(stderr, "[ eagle: pcmcia %s mem addr %" PRIx64 " ]\n", writeflag ? "write" : "read", real_addr);
       return cpu->memory_rw(cpu, cpu->mem, real_addr, data, len, writeflag, PHYSICAL | NO_EXCEPTIONS) == MEMORY_ACCESS_OK;
     }
     

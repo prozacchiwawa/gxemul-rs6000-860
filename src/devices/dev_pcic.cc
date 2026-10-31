@@ -121,17 +121,16 @@ int pcic_controller_access
 (struct cpu *cpu, int controller, struct pcic_data *c, struct pcic_controller *d, int relative_addr, uint8_t *data, int len, int writeflag)
 {
 	uint64_t idata = 0, odata = 0;
-	int socket_nr, regnr;
-  bool write_enable = false;
+	int socket_nr = d->regnr >= 0x40 ? 1 : 0;
+  int regnr = d->regnr & 0x3f;
+  bool write_enable = true;
 
-  /*
-  if (d->regnr >= 0x80) {
-    controller = 1;
-    d = &c->controller[1];
+  // Read 0xff at 0x80 and above
+  if (d->regnr >= 0x80 && writeflag == MEM_READ) {
+		odata = 0;
+    memory_writemax64(cpu, data, len, odata);
+    return 1;
   }
-  */
-	socket_nr = (controller > 0 || d->regnr >= 0x40) ? 1 : 0;
-  regnr = d->regnr & 0x3f;
 
   if (d->card_state[socket_nr] == 0) {
     // Detect card.
@@ -155,6 +154,13 @@ int pcic_controller_access
   
   if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
+    fprintf
+      (stderr, "[ pcic: socket %c write (%s) %d (index %02x) = %02x ]\n",
+       socket_nr ? 'B' : 'A',
+       write_enable ? "ENA" : "dis",
+       (int)relative_addr,
+       regnr,
+       (unsigned int)idata);
   }
 
 	switch (relative_addr) {
@@ -171,8 +177,8 @@ int pcic_controller_access
       // Read only.
     case PCIC_IDENT:
     case PCIC_IF_STATUS:
-    case PCIC_CIRRUS_PROD_ID:
       odata = d->regs[socket_nr][regnr];
+      fprintf(stderr, "[ pcic: read only access %d.%d = %x ]\n", socket_nr, regnr, (unsigned int)odata);
       break;
 
     case PCIC_CSC:
@@ -195,7 +201,7 @@ int pcic_controller_access
       break;
       
     case PCIC_PWRCTL:
-      write_enable = true;
+      // write_enable = true;
       if (writeflag == MEM_WRITE) {
         d->regs[socket_nr][regnr] = idata;
       } else {
@@ -291,17 +297,6 @@ int pcic_controller_access
        (int)relative_addr,
        regnr,
        (unsigned int)odata);
-  } else if (writeflag == MEM_WRITE) {
-    fprintf
-      (stderr, "[ pcic: socket %c write (%s) %d (index %02x) = %02x ]\n",
-       socket_nr ? 'B' : 'A',
-       write_enable ? "ENA" : "dis",
-       (int)relative_addr,
-       regnr,
-       (unsigned int)idata);
-    if (write_enable) {
-      d->regs[socket_nr][regnr] = idata;
-    }
   }
 
 	return 1;
@@ -342,7 +337,7 @@ int pcic_controller_private_access
 
     case DEV_PCIC_CLAIM_MEM_ADDR:
       // Check our mem range registers.
-      fprintf(stderr, "[ pcic: check for mem map at %08x.%d ]\n", (unsigned int)idata, len);
+      // fprintf(stderr, "[ pcic: check for mem map at %08x.%d ]\n", (unsigned int)idata, len);
       for (int c = 0; c < 2; c++) {
         for (int s = 0; s < 2; s++) {
           for (int i = 0; i < 5; i++) {
@@ -356,7 +351,7 @@ int pcic_controller_private_access
                 } else {
                   d->range_claim_check = DEV_PCIC_CARD_MEM_SPACE(2 * c + s) + ((idata + d->controller[c].mem_window[s][i].cardmem_add) & 0x3ffffff);
                 }
-                fprintf(stderr, "[ pcic: %d.%d.%d check mem %c %08x-%08x+%08x => %08x ]\n", c, s, i, d->controller[c].mem_window[s][i].regspace ? 'R' : 'm', (unsigned int)d->controller[c].mem_window[s][i].internal_low, (unsigned int)d->controller[c].mem_window[s][i].internal_high, d->controller[c].mem_window[s][i].cardmem_add, d->range_claim_check);
+                // fprintf(stderr, "[ pcic: %d.%d.%d check mem %c %08x-%08x+%08x => %08x ]\n", c, s, i, d->controller[c].mem_window[s][i].regspace ? 'R' : 'm', (unsigned int)d->controller[c].mem_window[s][i].internal_low, (unsigned int)d->controller[c].mem_window[s][i].internal_high, d->controller[c].mem_window[s][i].cardmem_add, d->range_claim_check);
                 break;
               }
             }
@@ -432,7 +427,7 @@ void pcic_socket_setup(struct pcic_data *d, struct pcic_controller *c, const cha
   auto regs = &c->regs[socket][0];
   char tmpstr[200];
   
-  regs[PCIC_IDENT] = 0x82; // Memory and IO, revision 0010
+  regs[PCIC_IDENT] = 0x83; // Memory and IO, revision 0011 (because 0010 has a special meaning for nt)
   // Ready, CD0, CD1 (CD0 = CD1 = 0 means card detected), battery good.  Power on.
   regs[PCIC_IF_STATUS] = 0x6f; 
   regs[PCIC_PWRCTL] = 0;

@@ -1887,6 +1887,7 @@ static struct cmd cmds[] = {
 
   { "trap", "", 0, debugger_cmd_e7, "Execute an exception 7" },
   { "ee", "irq", 0, debugger_cmd_ee, "Raise irq n" },
+
   { "redirect", "con", 0, debugger_cmd_redirect_con, "Windows only, redirect main console" },
 
 	/*  Note: NULL handler.  */

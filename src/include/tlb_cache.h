@@ -166,7 +166,7 @@ protected:
     host_load: host_page,
     host_store: writeflag? host_page : nullptr
     };
-		vaddr_to_tlbindex->insert(std::make_pair(index, r + 1));
+		vaddr_to_tlbindex->insert(std::make_pair(index, r));
   }
 
   void invalidate_tlb_entry(Cpu *cpu, uint64_t vaddr_page, int flags)
@@ -236,7 +236,7 @@ public:
 
     auto vf = vaddr_to_tlbindex->find(index);
     if (vf != vaddr_to_tlbindex->end()) {
-      found = (int)vf->second - 1;
+      found = (int)vf->second;
     }
 
     if (found < 0) {

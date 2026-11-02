@@ -1059,7 +1059,7 @@ static void lsi_soft_reset(LSIState *s)
     s->istat0 = 0;
     s->istat1 = 0;
     s->dcmd = 0x40;
-    s->dstat = 0;
+    s->dstat = LSI_DSTAT_DFE;
     s->dien = 0;
     s->sist0 = 0;
     s->sist1 = 0;
@@ -2400,9 +2400,13 @@ static uint8_t lsi_reg_readb(struct cpu *cpu, LSIState *s, int offset)
         ret = s->sbcl;
         break;
     case 0xc: /* DSTAT */
-        ret = s->dstat | LSI_DSTAT_DFE;
-        if ((s->istat0 & LSI_ISTAT0_INTF) == 0)
+        ret = s->dstat;
+        if (s->dstat & LSI_DSTAT_DFE) {
+            s->dstat &= ~LSI_DSTAT_DFE;
+        }
+        if ((s->istat0 & LSI_ISTAT0_INTF) == 0) {
             s->dstat = 0;
+        }
         lsi_update_irq(s);
         break;
     case 0x0d: /* SSTAT0 */
@@ -2619,6 +2623,7 @@ static void lsi_reg_writeb(struct cpu *cpu, LSIState *s, int offset, uint8_t val
             if (!(s->sstat0 & LSI_SSTAT0_RST)) {
                 bus_cold_reset(s, BUS(s->bus));
                 s->sstat0 |= LSI_SSTAT0_RST;
+                s->dstat &= ~LSI_DSTAT_DFE;
                 lsi_script_scsi_interrupt(s, LSI_SIST0_RST, 0);
             }
         } else {

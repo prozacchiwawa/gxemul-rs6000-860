@@ -117,7 +117,9 @@ DEVINIT(prep)
         bus_isa_init(devinit->machine, devinit->interrupt_path,
             BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC | BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000 | VIRTUAL_ISA_PORTBASE, 0xc0000000);
         snprintf(tmps, sizeof(tmps), "pcic addr="
-                 "0x8086800003e0"); // , devinit->interrupt_path);
+                 "0x8086800003e0 irq=%s.isa", devinit->interrupt_path);
+        device_add(devinit->machine, tmps);
+        snprintf(tmps, sizeof(tmps), "ibm_ethernet_ii addr=0x%" PRIx64 " irq=%s.isa.pcic[1].0", DEV_PCIC_CARD_SPACE(0), devinit->interrupt_path);
         device_add(devinit->machine, tmps);
         break;
     default:

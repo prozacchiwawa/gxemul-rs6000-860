@@ -183,7 +183,7 @@ int memory_points_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
   for (cur_length = 0; good_char;) {
     c = '\0';
     cpu->memory_rw(cpu, mem, addr+cur_length,
-                   &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                   &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
     if (c == 'M' && mz == 0) {
       mz++;
     }
@@ -225,7 +225,7 @@ char *memory_conv_to_string(struct cpu *cpu, struct memory *mem, uint64_t addr,
     for (cur_length = 0; good_char;) {
       c = '\0';
       cpu->memory_rw(cpu, mem, addr+cur_length,
-                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+                     &c, sizeof(c), MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
       if (c == 'M' && mz == 0) {
         mz++;
       }
@@ -685,7 +685,7 @@ void dump_mem_string(struct cpu *cpu, uint64_t addr)
 		unsigned char ch = '\0';
 
 		cpu->memory_rw(cpu, cpu->mem, addr + i, &ch, sizeof(ch),
-		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS);
+		    MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
 		if (ch == '\0')
 			return;
 		if (ch >= ' ' && ch < 126)

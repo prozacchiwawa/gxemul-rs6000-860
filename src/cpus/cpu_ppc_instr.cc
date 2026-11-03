@@ -774,16 +774,9 @@ X(dcbz)
 	size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
 	size_t cleared = 0;
 
-  if (cpu->cd.ppc.zero) {
-    abort();
-  }
 
 	/*  Synchronize the PC first:  */
-  sync_pc(cpu, ic);
-
-  if (!reg(ic->arg[0])) {
-    fprintf(stderr, "%08x: dcbz %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
-  }
+        sync_pc(cpu, ic);
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -791,7 +784,7 @@ X(dcbz)
 	while (cleared < cacheline_size) {
 		int to_clear = cacheline_size < sizeof(cacheline)?
 		    cacheline_size : sizeof(cacheline);
-    if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
+        if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
                                               to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;

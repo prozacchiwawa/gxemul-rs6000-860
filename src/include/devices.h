@@ -183,6 +183,16 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define EAGLE_ISA_DMA_CONTROLLER_1_STATUS (EAGLE_ISA_DMA_REGS + 7)
 #define EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER (EAGLE_ISA_DMA_REGS + 8)
 
+#define I8042_PRIVATE (EAGLE_ISA_DMA_REGS + 16)
+#define I8042_KEYBOARD_SEND 0
+#define I8042_MOUSE_SEND 1
+#define I8042_ACTION 2
+#define I8042_ACTION_RESET_KBD 1
+#define I8042_ACTION_RESET_MOUSE 2
+
+#define KEYBOARD_PRIVATE (I8042_PRIVATE + 16)
+#define MOUSE_PRIVATE (KEYBOARD_PRIVATE + 16)
+
 /* dev_pcic.cc */
 #define DEV_PCIC_PRIVATE_IO_AREA 0x2100000000ull
 #define DEV_PCIC_PRIVATE_IO_AREA_SIZE 16
@@ -354,7 +364,7 @@ int dev_pckbc_access(struct cpu *cpu, struct memory *mem,
 	int writeflag, void *);
 int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	uint64_t baseaddr, int type, char *keyboard_irqpath,
-	char *mouse_irqpath, int in_use, int pc_style_flag);
+	char *mouse_irqpath, int pc_style_flag);
 
 /*  dev_pmagja.c:  */
 #define	DEV_PMAGJA_LENGTH		0x3c0000

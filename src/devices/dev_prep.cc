@@ -119,6 +119,7 @@ DEVINIT(prep)
         snprintf(tmps, sizeof(tmps), "pcic addr="
                  "0x8086800003e0 irq=%s.isa", devinit->interrupt_path);
         device_add(devinit->machine, tmps);
+
         snprintf(tmps, sizeof(tmps), "ibm_ethernet_ii addr=0x%" PRIx64 " irq=%s.isa.pcic[1].0", DEV_PCIC_CARD_SPACE(0), devinit->interrupt_path);
         device_add(devinit->machine, tmps);
         break;

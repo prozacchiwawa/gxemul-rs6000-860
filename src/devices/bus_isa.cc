@@ -38,6 +38,7 @@
 #define BUS_ISA_C
 
 #include "bus_isa.h"
+#include "console.h"
 #include "device.h"
 #include "devices.h"
 #include "diskimage.h"
@@ -270,9 +271,12 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 
 	snprintf(tmpstr, sizeof(tmpstr), "%s.isa.1", interrupt_base_path);
   snprintf(tmpstr2, sizeof(tmpstr2), "%s.isa.12", interrupt_base_path);
-	tmp_handle = dev_pckbc_init(machine, machine->memory,
+
+  tmp_handle = console_start_slave_inputonly(machine, "pckbc", kbd_in_use);
+
+  dev_pckbc_init(machine, machine->memory,
 	    isa_portbase + 0x60, PCKBC_8042, tmpstr, tmpstr2,
-	    kbd_in_use, bus_isa_flags & BUS_ISA_PCKBC_NONPCSTYLE? 0 : 1);
+	    bus_isa_flags & BUS_ISA_PCKBC_NONPCSTYLE? 0 : 1);
 
 	if (kbd_in_use)
 		machine->main_console_handle = tmp_handle;

@@ -950,3 +950,16 @@ void console_deinit(void)
 void console_main_migrate(const char *name) {
   console_platform_main_migrate(name);
 }
+
+/*
+ * Find a console by name.  Return -1 if not found.
+ */
+int console_find(const char *name) {
+  for (int i=MAIN_CONSOLE+1; i<n_console_handles; i++) {
+    if (!strcmp(console_handles[i].name, name)) {
+      return i;
+    }
+  }
+
+  return -1;
+}

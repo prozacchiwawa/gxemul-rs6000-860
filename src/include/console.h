@@ -209,5 +209,6 @@ int redirect_stderr_platform(const char *new_file);
 int console_makeavail_platform(int handle, int ch);
 void console_platform_deinit();
 void console_platform_main_migrate(const char *name);
+int console_find(const char *name);
 
 #endif	/*  CONSOLE_H  */

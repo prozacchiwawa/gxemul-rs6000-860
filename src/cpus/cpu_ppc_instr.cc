@@ -769,30 +769,31 @@ X(cmplwi)
  */
 X(dcbz)
 {
-	MODE_uint_t addr = reg(ic->arg[0]) + reg(ic->arg[1]);
-	unsigned char cacheline[128];
-	size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
-	size_t cleared = 0;
+  MODE_uint_t addr = reg(ic->arg[0]) + reg(ic->arg[1]);
+  unsigned char cacheline[128];
+  size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
+  size_t cleared = 0;
 
 
-	/*  Synchronize the PC first:  */
-        sync_pc(cpu, ic);
+  /*  Synchronize the PC first:  */
+  sync_pc(cpu, ic);
 
-	addr &= ~(cacheline_size - 1);
-	memset(cacheline, 0, sizeof(cacheline));
+  addr &= ~(cacheline_size - 1);
+  memset(cacheline, 0, sizeof(cacheline));
 
-	while (cleared < cacheline_size) {
-		int to_clear = cacheline_size < sizeof(cacheline)?
-		    cacheline_size : sizeof(cacheline);
-        if (gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, addr, cacheline,
-                                              to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
+  while (cleared < cacheline_size) {
+    int to_clear = cacheline_size < sizeof(cacheline)?
+      cacheline_size : sizeof(cacheline);
+    if (gen_memory_rw<ppc_tc_physpage, false>
+        (cpu, cpu->mem, addr, cacheline,
+         to_clear, MEM_WRITE, CACHE_DATA) != MEMORY_ACCESS_OK) {
 			/*  exception  */
 			return;
 		}
 
-		cleared += to_clear;
-		addr += to_clear;
-	}
+    cleared += to_clear;
+    addr += to_clear;
+  }
 }
 
 
@@ -3037,9 +3038,9 @@ X(tlbia)
  */
 X(tlbie)
 {
-	/*  fatal("[ tlbie ]\n");  */
+  /*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  // fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;

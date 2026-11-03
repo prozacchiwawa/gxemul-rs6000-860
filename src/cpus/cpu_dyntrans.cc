@@ -382,10 +382,7 @@ int DYNTRANS_RUN_INSTR_DEF(struct cpu *cpu)
 
   auto instr_trace = [&cpu](struct DYNTRANS_IC *ic) {
 #ifdef DYNTRANS_PPC
-    extern uint32_t required_sr1;
-    if (!required_sr1 || (cpu->cd.ppc.sr[1] == required_sr1)) {
-      ppc_instr_dump_registers(cpu, ic);
-    }
+    ppc_instr_dump_registers(cpu, ic);
 #endif
     I;
   };

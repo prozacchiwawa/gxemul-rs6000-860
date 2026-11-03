@@ -774,8 +774,16 @@ X(dcbz)
 	size_t cacheline_size = 1 << cpu->cd.ppc.cpu_type.dlinesize;
 	size_t cleared = 0;
 
+  if (cpu->cd.ppc.zero) {
+    abort();
+  }
+
 	/*  Synchronize the PC first:  */
   sync_pc(cpu, ic);
+
+  if (!reg(ic->arg[0])) {
+    fprintf(stderr, "%08x: dcbz %08x\n", (unsigned int)cpu->pc, (unsigned int)addr);
+  }
 
 	addr &= ~(cacheline_size - 1);
 	memset(cacheline, 0, sizeof(cacheline));
@@ -1414,7 +1422,7 @@ X(loose_lhaux)
   /*  Synchronize the PC:  */
   sync_pc(cpu, ic);
 
-  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr, raw_value, 2, MEM_READ, CACHE_DATA)) {
+  if (!gen_memory_rw<ppc_tc_physpage, false>(cpu, cpu->mem, full_addr ^ offset, raw_value, 2, MEM_READ, CACHE_DATA)) {
     return; // exit(1);
   }
 
@@ -1691,12 +1699,9 @@ X(icbi)
   cpu->cd.ppc.msr = old_msr;
 }
 
+// DCBT is really a nop for us.
 X(dcbt)
 {
-  sync_pc(cpu, ic);
-  auto ea = reg(ic->arg[0]) + reg(ic->arg[1]);
-  uint64_t dummy;
-  cpu->translate_v2p(cpu, ea, &dummy, NO_EXCEPTIONS);
 }
 
 /*
@@ -3041,18 +3046,18 @@ X(tlbie)
 {
 	/*  fatal("[ tlbie ]\n");  */
   sync_pc(cpu, ic);
-  // fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
+  fprintf(stderr, "[ %08x: tlbie %08x %"PRIx64" ]\n", (unsigned int)cpu->pc, (unsigned int)reg(ic->arg[0]), cpu->ninstrs);
 
   auto msr = cpu->cd.ppc.msr;
   uint64_t increment = 0x10000000;
   uint64_t addr_page = reg(ic->arg[0]);
 
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 4; i++) {
     cpu->cd.ppc.msr = (msr & ~0x30) | (i * 0x30);
     addr_page &= increment - 1;
     for (int i = 0; i < 16; i++) {
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR | INVALIDATE_INSTR);
-      cpu->invalidate_translation_caches(cpu, reg(ic->arg[0]), INVALIDATE_VADDR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR | INVALIDATE_INSTR);
+      cpu->invalidate_translation_caches(cpu, addr_page, INVALIDATE_VADDR);
       addr_page += increment;
     }
   }
@@ -3159,9 +3164,9 @@ X(dump_registers) {
     cpu->translation_readahead = old_readahead;
   }
 
-  auto iowait_exclusion = cpu->pc <= 0x150000 || cpu->pc > 0x160000;
+
   auto in_trace_region = (trace_low == trace_high) || (cpu->pc >= trace_low && cpu->pc < trace_high);
-  if (single_step || (iowait_exclusion && in_trace_region)) {
+  if (single_step || in_trace_region) {
     cpu_disassemble_instr(cpu->machine, cpu, ic->instr, 1, ic->pc);
     if (cpu->machine->register_dump) {
       ppc_cpu_register_dump(cpu, true, false);
@@ -3398,16 +3403,16 @@ X(to_be_translated)
 	case PPC_HI6_STH:
 	case PPC_HI6_STHU:
 	case PPC_HI6_LFS:
-  case PPC_HI6_LFSU:
+	case PPC_HI6_LFSU:
 	case PPC_HI6_LFD:
-  case PPC_HI6_LFDU:
+	case PPC_HI6_LFDU:
 	case PPC_HI6_STFS:
-  case PPC_HI6_STFSU:
+	case PPC_HI6_STFSU:
 	case PPC_HI6_STFD:
-  case PPC_HI6_STFDU:
+	case PPC_HI6_STFDU:
 	case PPC_HI6_LD:
-  case PPC_HI6_STD:
-		rs = (iword >> 21) & 31;
+	case PPC_HI6_STD:
+        	rs = (iword >> 21) & 31;
 		ra = (iword >> 16) & 31;
 		imm = (int16_t)iword;
 		load = 0; zero = 1; size = 0; update = 0; fp = 0;
@@ -3426,27 +3431,27 @@ X(to_be_translated)
 		case PPC_HI6_STW:  size=2; break;
 		case PPC_HI6_STWU: size=2; update=1; break;
 		case PPC_HI6_LFS:  load=1; size=2; fp=1;ic->f=instr(lfs);break;
-    case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs_update);break;
+		case PPC_HI6_LFSU: load=1; size=2; update=1; fp=1; ic->f=instr(lfs_update);break;
 		case PPC_HI6_LFD:  load=1; size=3; fp=1;ic->f=instr(lfd);break;
-    case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd_update);break;
+		case PPC_HI6_LFDU: load=1; size=3; update=1; fp=1; ic->f=instr(lfd_update);break;
 		case PPC_HI6_STFS: size=2; fp=1; ic->f = instr(stfs); break;
 		case PPC_HI6_STFSU: size=2; fp=1; ic->f = instr(stfs_update); update = 1; break;
 		case PPC_HI6_STFD: size=3; fp=1; ic->f = instr(stfd); break;
-    case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
+		case PPC_HI6_STFDU: size=3; fp=1; ic->f = instr(stfd_update); update = 1; break;
 		case PPC_HI6_LD:
-      fprintf(stderr, "ld doesn't differentiate its lower bits\n");
-      abort();
-      load=1; size=3;
-      break;
-    case PPC_HI6_STD:
-      fprintf(stderr, "No distinghising types of STD\n");
-      abort();
-      size=3;
-      break;
-    default:
-      fprintf(stderr, "unhandled irregular store case %08x\n", (unsigned int)iword);
-      abort();
-      break;
+			fprintf(stderr, "ld doesn't differentiate its lower bits iword %08x\n", (unsigned int)iword);
+			abort();
+			load=1; size=3;
+			break;
+		case PPC_HI6_STD:
+			fprintf(stderr, "No distinghising types of STD iword %08x\n", (unsigned int)iword);
+			abort();
+			size=3;
+			break;
+		default:
+			fprintf(stderr, "unhandled irregular store case %08x\n", (unsigned int)iword);
+			abort();
+			break;
 		}
 		if (ic->f == NULL) {
 			ic->f =

@@ -175,56 +175,38 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define DEV_PCI_CONFIG_AREA 0x1e00000000ull
 #define DEV_PCI_CONFIG_CARD_SIZE 0x100
 
-/*  dev_eagle.c */
-struct eagle_data {
-	struct interrupt irq;
+#define DEV_PCI_CONFIG_EAGLE (DEV_PCI_CONFIG_AREA + DEV_PCI_CONFIG_CARD_SIZE)
+#define EAGLE_ISA_DMA_REGS (DEV_PCI_CONFIG_AREA + 16 * DEV_PCI_CONFIG_CARD_SIZE)
 
-	struct pci_data	*pci_data;
+#define EAGLE_ISA_DMA_C2_ADDR (EAGLE_ISA_DMA_REGS + 0)
+#define EAGLE_ISA_DMA_C2_LEN (EAGLE_ISA_DMA_REGS + 4)
+#define EAGLE_ISA_DMA_CONTROLLER_1_STATUS (EAGLE_ISA_DMA_REGS + 7)
+#define EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER (EAGLE_ISA_DMA_REGS + 8)
 
-	int stage;
-  int addr_low_high_latch;
-  int len_low_high_latch;
+/* dev_pcic.cc */
+#define DEV_PCIC_PRIVATE_IO_AREA 0x2100000000ull
+#define DEV_PCIC_PRIVATE_IO_AREA_SIZE 16
+// 2 16mb regions
+// memory check space (read 32bits, value other than -1 yields a mem target)
+// io check space (read 32bits, value other than -1 yields an io target)
 
-  int fin_mask;
+// each pcmcia socket has a specific target where it finds a device if provided.
+#define DEV_PCIC_CARD_0_SPACE 0x2000000000ull
+#define DEV_PCIC_CARD_SIZE (256 * 1024 * 1024)
+#define DEV_PCIC_CARD_SPACE(n) (DEV_PCIC_CARD_0_SPACE + ((n) * DEV_PCIC_CARD_SIZE))
 
-  unsigned char dma_page[4];
-  unsigned char dma_high[4];
+// we can check for non-zeros in the card's description memory.
+#define DEV_PCIC_CARD_REG_SPACE(n) DEV_PCIC_CARD_SPACE(n)
+#define DEV_PCIC_CARD_IO_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (64 * 1024 * 1024))
+#define DEV_PCIC_CARD_MEM_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (128 * 1024 * 1024))
+#define DEV_PCIC_CARD_DEVICE_SPACE(n) (DEV_PCIC_CARD_SPACE(n) + (192 * 1024 * 1024))
+#define DEV_PCMCIA_IO_OFFSET (64 * 1024 * 1024)
+#define DEV_PCMCIA_MEM_OFFSET (128 * 1024 * 1024)
+#define DEV_PCMCIA_DEVICE_OFFSET (192 * 1024 * 1024)
 
-  uint8_t err_reg[2];
-
-  int want_error;
-  int l2_cache;
-  int discontiguous;
-  int bg_data_8mb;
-
-  // cs4231
-  uint8_t cs4231_index;
-  uint8_t cs4231_status;
-  uint8_t cs4231_registers[0x20];
-
-  bool game_timer;
-
-  uint16_t pci_status;
-  uint16_t pci_command;
-
-  uint8_t error_enabling_1, error_detection_1, bus_status_60x;
-};
-
-struct eagle_glob {
-  int want_error;
-
-  /* 0xc0 */
-  uint8_t error_enabling_2, error_detection_2, bus_status_pci;
-
-  unsigned char eagle_comm_area[16];
-
-  uint16_t password_protect_1;
-  uint16_t password_protect_2;
-
-  int want_timer_int;
-};
-
-extern struct eagle_glob eagle_comm;
+#define DEV_PCIC_CLAIM_IO_ADDR 0
+#define DEV_PCIC_CLAIM_MEM_ADDR 4
+#define DEV_PCIC_CHECK_CLAIM 8
 
 /*  dev_fb.c:  */
 #define	DEV_FB_LENGTH		0x3c0000	/*  3c0000 to not colide with */

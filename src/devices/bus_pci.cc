@@ -1623,15 +1623,15 @@ int eagle_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg,
 
 	switch (reg) {
   case 0x04: {
-    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_AREA + 4, (uint8_t *)&value, sizeof(value), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
-    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_AREA + 4, (uint8_t *)&value, sizeof(value), MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_EAGLE + 4, (uint8_t *)&value, sizeof(value), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_EAGLE + 4, (uint8_t *)&value, sizeof(value), MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     PCI_SET_DATA(reg, value);
   }
     return 1;
 
   case 0xc0: {
-    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_AREA + 0xc0, (uint8_t *)&value, sizeof(value), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
-    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_AREA + 0xc0, (uint8_t *)&value, sizeof(value), MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_EAGLE + 0xc0, (uint8_t *)&value, sizeof(value), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
+    cpu->memory_rw(cpu, cpu->mem, DEV_PCI_CONFIG_EAGLE + 0xc0, (uint8_t *)&value, sizeof(value), MEM_READ, PHYSICAL | NO_EXCEPTIONS | CACHE_NONE);
     PCI_SET_DATA(reg, value);
   }
     return 1;

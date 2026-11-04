@@ -43,6 +43,7 @@
 
 #include "console.h"
 #include "cpu.h"
+#include "device.h"
 #include "devices.h"
 #include "machine.h"
 #include "memory.h"
@@ -50,8 +51,6 @@
 #include "debugger.h"
 
 #include "thirdparty/kbdreg.h"
-
-std::deque<keyboard_event_t> keyboard_debug_events;
 
 /*  #define PCKBC_DEBUG  */
 /*  #define debug fatal  */
@@ -89,9 +88,6 @@ static inline bool port_int_enabled(int port, int cmdbyte) {
 }
 
 struct pckbc_data {
-	int		console_handle;
-	int		in_use;
-
 	int		reg[DEV_PCKBC_LENGTH];
 
 	struct interrupt irq_keyboard;
@@ -100,354 +96,34 @@ struct pckbc_data {
 	int		type;
 	int		pc_style_flag;
 
-	/*  TODO: one of these for each port?  */
-	int		clocksignal;
-	int		rx_int_enable;
-	int		tx_int_enable;
-
-	int		keyscanning_enabled;
-	int		translation_table;
 	int		state;
 	int		cmdbyte;
 	int		output_byte;
-	int		last_scancode;
+  int   last_byte;
 
 	unsigned	key_queue[2][MAX_8042_QUEUELEN];
 	int		head[2], tail[2];
 
   int mouse_cmd;
 
-  int flex_id;
-  int flex_code;
-
-  int mouse_remote, mouse_reporting;
-  int mouse_scaling, mouse_resolution, mouse_sample_rate;
-
-  int mouse_ena;
-  int mouse_last_x, mouse_last_y, mouse_last_but;
-
-  int mouse_timeout;
   int rst_order;
 };
 
 #define	STATE_NORMAL			0
 #define	STATE_LDCMDBYTE			1
 #define	STATE_RDCMDBYTE			2
-#define	STATE_WAITING_FOR_TRANSLTABLE	3
-#define	STATE_WAITING_FOR_RATE		4
-#define	STATE_WAITING_FOR_ONEKEY_MB	5
 #define	STATE_WAITING_FOR_AUX		6
 #define	STATE_WAITING_FOR_AUX_OUT	7
 #define	STATE_LDOUTPUT			8
 #define	STATE_RDOUTPUT			9
-#define STATE_WAITING_FOR_LEDS 10
 
-const char *NONE = "";
-const char *E0 = "\xe0";
-const char *F0 = "\xf0";
-const char *E0F0 = "\xe0\xf0";
-
-struct KeynameToPCKeyboard {
-  int keyname_idx;
-  int high_bit_break;
-  const char *make_prefix;
-  const char *break_prefix;
-  int native_code;
-};
-
-KeynameToPCKeyboard pc_type_1[] = {
-  { KeyNames::F1, 0, NONE, F0, 0x3b },
-  { KeyNames::F2, 0, NONE, F0, 0x3c },
-  { KeyNames::F3, 0, NONE, F0, 0x3d },
-  { KeyNames::F4, 0, NONE, F0, 0x3e },
-  { KeyNames::F5, 0, NONE, F0, 0x3f },
-  { KeyNames::F6, 0, NONE, F0, 0x40 },
-  { KeyNames::F7, 0, NONE, F0, 0x41 },
-  { KeyNames::F8, 0, NONE, F0, 0x42 },
-  { KeyNames::F9, 0, NONE, F0, 0x43 },
-  { KeyNames::F10, 0, NONE, F0, 0x44 },
-  { KeyNames::F11, 0, NONE, F0, 0x57 },
-  { KeyNames::F12, 0, NONE, F0, 0x58 },
-  { KeyNames::ESC, 1, NONE, NONE, 0x01 },
-  { KeyNames::N1, 1, NONE, NONE, 0x02 },
-  { KeyNames::N2, 1, NONE, NONE, 0x03 },
-  { KeyNames::N3, 1, NONE, NONE, 0x04 },
-  { KeyNames::N4, 1, NONE, NONE, 0x05 },
-  { KeyNames::N5, 1, NONE, NONE, 0x06 },
-  { KeyNames::N6, 1, NONE, NONE, 0x07 },
-  { KeyNames::N7, 1, NONE, NONE, 0x08 },
-  { KeyNames::N8, 1, NONE, NONE, 0x09 },
-  { KeyNames::N9, 1, NONE, NONE, 0x0a },
-  { KeyNames::N0, 1, NONE, NONE, 0x0b },
-  { KeyNames::Minus, 1, NONE, NONE, 0x0c },
-  { KeyNames::Equals, 1, NONE, NONE, 0x0d },
-  { KeyNames::Backspace, 1, NONE, NONE, 0x0e },
-  { KeyNames::Tab, 1, NONE, NONE, 0x0f },
-  { KeyNames::Q, 1, NONE, NONE, 0x10 },
-  { KeyNames::W, 1, NONE, NONE, 0x11 },
-  { KeyNames::E, 1, NONE, NONE, 0x12 },
-  { KeyNames::R, 1, NONE, NONE, 0x13 },
-  { KeyNames::T, 1, NONE, NONE, 0x14 },
-  { KeyNames::Y, 1, NONE, NONE, 0x15 },
-  { KeyNames::U, 1, NONE, NONE, 0x16 },
-  { KeyNames::I, 1, NONE, NONE, 0x17 },
-  { KeyNames::O, 1, NONE, NONE, 0x18 },
-  { KeyNames::P, 1, NONE, NONE, 0x19 },
-  { KeyNames::LBrace, 1, NONE, NONE, 0x1a },
-  { KeyNames::RBrace, 1, NONE, NONE, 0x1b },
-  { KeyNames::Return, 1, NONE, NONE, 0x1c },
-  { KeyNames::Ctrl, 1, NONE, NONE, 0x1d },
-  { KeyNames::A, 1, NONE, NONE, 0x1e },
-  { KeyNames::S, 1, NONE, NONE, 0x1f },
-  { KeyNames::D, 1, NONE, NONE, 0x20 },
-  { KeyNames::F, 1, NONE, NONE, 0x21 },
-  { KeyNames::G, 1, NONE, NONE, 0x22 },
-  { KeyNames::H, 1, NONE, NONE, 0x23 },
-  { KeyNames::J, 1, NONE, NONE, 0x24 },
-  { KeyNames::K, 1, NONE, NONE, 0x25 },
-  { KeyNames::L, 1, NONE, NONE, 0x26 },
-  { KeyNames::Semicolon, 1, NONE, NONE, 0x27 },
-  { KeyNames::Quote, 1, NONE, NONE, 0x28 },
-  { KeyNames::Backquote, 1, NONE, NONE, 0x29 },
-  { KeyNames::LShift, 1, NONE, NONE, 0x2a },
-  { KeyNames::Backslash, 1, NONE, NONE, 0x2b },
-  { KeyNames::Z, 1, NONE, NONE, 0x2c },
-  { KeyNames::X, 1, NONE, NONE, 0x2d },
-  { KeyNames::C, 1, NONE, NONE, 0x2e },
-  { KeyNames::V, 1, NONE, NONE, 0x2f },
-  { KeyNames::B, 1, NONE, NONE, 0x30 },
-  { KeyNames::N, 1, NONE, NONE, 0x31 },
-  { KeyNames::M, 1, NONE, NONE, 0x32 },
-  { KeyNames::Comma, 1, NONE, NONE, 0x33 },
-  { KeyNames::Dot, 1, NONE, NONE, 0x34 },
-  { KeyNames::Slash, 1, NONE, NONE, 0x35 },
-  { KeyNames::RShift, 1, NONE, NONE, 0x36 },
-  { KeyNames::Space, 1, NONE, NONE, 0x39 },
-  { KeyNames::CapsLock, 1, NONE, NONE, 0x3a },
-  { KeyNames::F1, 1, NONE, NONE, 0x3b },
-  { KeyNames::F2, 1, NONE, NONE, 0x3c },
-  { KeyNames::F3, 1, NONE, NONE, 0x3d },
-  { KeyNames::F4, 1, NONE, NONE, 0x3e },
-  { KeyNames::F5, 1, NONE, NONE, 0x3f },
-  { KeyNames::F6, 1, NONE, NONE, 0x40 },
-  { KeyNames::F7, 1, NONE, NONE, 0x41 },
-  { KeyNames::F8, 1, NONE, NONE, 0x42 },
-  { KeyNames::F9, 1, NONE, NONE, 0x43 },
-  { KeyNames::F10, 1, NONE, NONE, 0x44 },
-  { KeyNames::Home, 1, NONE, NONE, 0x47 },
-  { KeyNames::Up, 1, NONE, NONE, 0x48 },
-  { KeyNames::PgUp, 1, NONE, NONE, 0x49 },
-  { KeyNames::Left, 1, NONE, NONE, 0x4b },
-  { KeyNames::Right, 1, NONE, NONE, 0x4d },
-  { KeyNames::End, 1, NONE, NONE, 0x4f },
-  { KeyNames::Down, 1, NONE, NONE, 0x50 },
-  { KeyNames::PgDn, 1, NONE, NONE, 0x51 },
-  { }
-};
-
-// https://www.scs.stanford.edu/10wi-cs140/pintos/specs/kbd/scancodes-9.html
-// 9.6 Table, Set 2
-KeynameToPCKeyboard pc_type_2[] = {
-  { KeyNames::F1, 0, NONE, F0, 0x05 },
-  { KeyNames::F2, 0, NONE, F0, 0x06 },
-  { KeyNames::F3, 0, NONE, F0, 0x04 },
-  { KeyNames::F4, 0, NONE, F0, 0x0c },
-  { KeyNames::F5, 0, NONE, F0, 0x03 },
-  { KeyNames::F6, 0, NONE, F0, 0x0b },
-  { KeyNames::F7, 0, NONE, F0, 0x83 },
-  { KeyNames::F8, 0, NONE, F0, 0x0a },
-  { KeyNames::F9, 0, NONE, F0, 0x01 },
-  { KeyNames::F10, 0, NONE, F0, 0x09 },
-  { KeyNames::F11, 0, NONE, F0, 0x78 },
-  { KeyNames::F12, 0, NONE, F0, 0x07 },
-  { KeyNames::ESC, 0, NONE, F0, 0x76 },
-  { KeyNames::N1, 0, NONE, F0, 0x16 },
-  { KeyNames::N2, 0, NONE, F0, 0x1e },
-  { KeyNames::N3, 0, NONE, F0, 0x26 },
-  { KeyNames::N4, 0, NONE, F0, 0x25 },
-  { KeyNames::N5, 0, NONE, F0, 0x2e },
-  { KeyNames::N6, 0, NONE, F0, 0x36 },
-  { KeyNames::N7, 0, NONE, F0, 0x3d },
-  { KeyNames::N8, 0, NONE, F0, 0x4e },
-  { KeyNames::N9, 0, NONE, F0, 0x46 },
-  { KeyNames::N0, 0, NONE, F0, 0x45 },
-  { KeyNames::Minus, 0, NONE, F0, 0x4e },
-  { KeyNames::Equals, 0, NONE, F0, 0x55 },
-  { KeyNames::Backspace, 0, NONE, F0, 0x66 },
-  { KeyNames::Tab, 0, NONE, F0, 0x0d },
-  { KeyNames::Q, 0, NONE, F0, 0x15 },
-  { KeyNames::W, 0, NONE, F0, 0x1d },
-  { KeyNames::E, 0, NONE, F0, 0x24 },
-  { KeyNames::R, 0, NONE, F0, 0x2d },
-  { KeyNames::T, 0, NONE, F0, 0x2c },
-  { KeyNames::Y, 0, NONE, F0, 0x35 },
-  { KeyNames::U, 0, NONE, F0, 0x3c },
-  { KeyNames::I, 0, NONE, F0, 0x43 },
-  { KeyNames::O, 0, NONE, F0, 0x44 },
-  { KeyNames::P, 0, NONE, F0, 0x4d },
-  { KeyNames::LBrace, 0, NONE, F0, 0x54 },
-  { KeyNames::RBrace, 0, NONE, F0, 0x5b },
-  { KeyNames::Return, 0, NONE, F0, 0x5a },
-  { KeyNames::Ctrl, 0, NONE, F0, 0x14 },
-  { KeyNames::A, 0, NONE, F0, 0x1c },
-  { KeyNames::S, 0, NONE, F0, 0x1b },
-  { KeyNames::D, 0, NONE, F0, 0x23 },
-  { KeyNames::F, 0, NONE, F0, 0x2b },
-  { KeyNames::G, 0, NONE, F0, 0x34 },
-  { KeyNames::H, 0, NONE, F0, 0x33 },
-  { KeyNames::J, 0, NONE, F0, 0x3b },
-  { KeyNames::K, 0, NONE, F0, 0x42 },
-  { KeyNames::L, 0, NONE, F0, 0x4b },
-  { KeyNames::Semicolon, 0, NONE, F0, 0x4c },
-  { KeyNames::Quote, 0, NONE, F0, 0x52 },
-  { KeyNames::Backquote, 0, NONE, F0, 0x0e },
-  { KeyNames::LShift, 0, NONE, F0, 0x12 },
-  { KeyNames::Backslash, 0, NONE, F0, 0x5d },
-  { KeyNames::Z, 0, NONE, F0, 0x1a },
-  { KeyNames::X, 0, NONE, F0, 0x22 },
-  { KeyNames::C, 0, NONE, F0, 0x21 },
-  { KeyNames::V, 0, NONE, F0, 0x2a },
-  { KeyNames::B, 0, NONE, F0, 0x32 },
-  { KeyNames::N, 0, NONE, F0, 0x31 },
-  { KeyNames::M, 0, NONE, F0, 0x3a },
-  { KeyNames::Comma, 0, NONE, F0, 0x41 },
-  { KeyNames::Dot, 0, NONE, F0, 0x49 },
-  { KeyNames::Slash, 0, NONE, F0, 0x4a },
-  { KeyNames::RShift, 0, NONE, F0, 0x59 },
-  { KeyNames::Space, 0, NONE, F0, 0x29 },
-  { KeyNames::CapsLock, 0, NONE, F0, 0x58 },
-  { KeyNames::F1, 0, NONE, F0, 0x05 },
-  { KeyNames::F2, 0, NONE, F0, 0x06 },
-  { KeyNames::F3, 0, NONE, F0, 0x04 },
-  { KeyNames::F4, 0, NONE, F0, 0x0c },
-  { KeyNames::F5, 0, NONE, F0, 0x03 },
-  { KeyNames::F6, 0, NONE, F0, 0x0b },
-  { KeyNames::F7, 0, NONE, F0, 0x83 },
-  { KeyNames::F8, 0, NONE, F0, 0x0a },
-  { KeyNames::F9, 0, NONE, F0, 0x01 },
-  { KeyNames::F10, 0, NONE, F0, 0x09 },
-  { KeyNames::F11, 0, NONE, F0, 0x78 },
-  { KeyNames::F12, 0, NONE, F0, 0x07 },
-  { KeyNames::Home, 0, E0, E0F0, 0x6c },
-  { KeyNames::Up, 0, E0, E0F0, 0x75 },
-  { KeyNames::PgUp, 0, E0, E0F0, 0x7d },
-  { KeyNames::Left, 0, E0, E0F0, 0x6b },
-  { KeyNames::Right, 0, E0, E0F0, 0x74 },
-  { KeyNames::End, 0, E0, E0F0, 0x69 },
-  { KeyNames::Down, 0, E0, E0F0, 0x72 },
-  { KeyNames::PgDn, 0, E0, E0F0, 0x7a },
-  { }
-};
-
-KeynameToPCKeyboard pc_type_3[] = {
-  { KeyNames::F1, 0, NONE, F0, 0x07 },
-  { KeyNames::F2, 0, NONE, F0, 0x0f },
-  { KeyNames::F3, 0, NONE, F0, 0x17 },
-  { KeyNames::F4, 0, NONE, F0, 0x1f },
-  { KeyNames::F5, 0, NONE, F0, 0x27 },
-  { KeyNames::F6, 0, NONE, F0, 0x2f },
-  { KeyNames::F7, 0, NONE, F0, 0x37 },
-  { KeyNames::F8, 0, NONE, F0, 0x3f },
-  { KeyNames::F9, 0, NONE, F0, 0x47 },
-  { KeyNames::F10, 0, NONE, F0, 0x4f },
-  { KeyNames::F11, 0, NONE, F0, 0x56 },
-  { KeyNames::F12, 0, NONE, F0, 0x5e },
-  { KeyNames::ESC, 0, NONE, F0, 0x08 },
-  { KeyNames::N1, 0, NONE, F0, 0x16 },
-  { KeyNames::N2, 0, NONE, F0, 0x1e },
-  { KeyNames::N3, 0, NONE, F0, 0x26 },
-  { KeyNames::N4, 0, NONE, F0, 0x25 },
-  { KeyNames::N5, 0, NONE, F0, 0x2e },
-  { KeyNames::N6, 0, NONE, F0, 0x36 },
-  { KeyNames::N7, 0, NONE, F0, 0x3d },
-  { KeyNames::N8, 0, NONE, F0, 0x3e },
-  { KeyNames::N9, 0, NONE, F0, 0x46 },
-  { KeyNames::N0, 0, NONE, F0, 0x45 },
-  { KeyNames::Minus, 0, NONE, F0, 0x4e },
-  { KeyNames::Equals, 0, NONE, F0, 0x55 },
-  { KeyNames::Backspace, 0, NONE, F0, 0x66 },
-  { KeyNames::Tab, 0, NONE, F0, 0x0d },
-  { KeyNames::Q, 0, NONE, F0, 0x15 },
-  { KeyNames::W, 0, NONE, F0, 0x1d },
-  { KeyNames::E, 0, NONE, F0, 0x24 },
-  { KeyNames::R, 0, NONE, F0, 0x2d },
-  { KeyNames::T, 0, NONE, F0, 0x2c },
-  { KeyNames::Y, 0, NONE, F0, 0x35 },
-  { KeyNames::U, 0, NONE, F0, 0x3c },
-  { KeyNames::I, 0, NONE, F0, 0x43 },
-  { KeyNames::O, 0, NONE, F0, 0x44 },
-  { KeyNames::P, 0, NONE, F0, 0x4d },
-  { KeyNames::LBrace, 0, NONE, F0, 0x54 },
-  { KeyNames::RBrace, 0, NONE, F0, 0x5b },
-  { KeyNames::Backslash, 0, NONE, F0, 0x5c },
-  { KeyNames::Return, 0, NONE, F0, 0x5a },
-  { KeyNames::Ctrl, 0, NONE, F0, 0x11 },
-  { KeyNames::A, 0, NONE, F0, 0x1c },
-  { KeyNames::S, 0, NONE, F0, 0x1b },
-  { KeyNames::D, 0, NONE, F0, 0x23 },
-  { KeyNames::F, 0, NONE, F0, 0x2b },
-  { KeyNames::G, 0, NONE, F0, 0x34 },
-  { KeyNames::H, 0, NONE, F0, 0x33 },
-  { KeyNames::J, 0, NONE, F0, 0x3b },
-  { KeyNames::K, 0, NONE, F0, 0x42 },
-  { KeyNames::L, 0, NONE, F0, 0x4b },
-  { KeyNames::Semicolon, 0, NONE, F0, 0x4c },
-  { KeyNames::Quote, 0, NONE, F0, 0x52 },
-  { KeyNames::Backquote, 0, NONE, F0, 0x0e },
-  { KeyNames::LShift, 0, NONE, F0, 0x12 },
-  { KeyNames::Z, 0, NONE, F0, 0x1a },
-  { KeyNames::X, 0, NONE, F0, 0x22 },
-  { KeyNames::C, 0, NONE, F0, 0x21 },
-  { KeyNames::V, 0, NONE, F0, 0x2a },
-  { KeyNames::B, 0, NONE, F0, 0x32 },
-  { KeyNames::N, 0, NONE, F0, 0x31 },
-  { KeyNames::M, 0, NONE, F0, 0x3a },
-  { KeyNames::Comma, 0, NONE, F0, 0x41 },
-  { KeyNames::Dot, 0, NONE, F0, 0x49 },
-  { KeyNames::Slash, 0, NONE, F0, 0x4a },
-  { KeyNames::RShift, 0, NONE, F0, 0x59 },
-  { KeyNames::Space, 0, NONE, F0, 0x29 },
-  { KeyNames::CapsLock, 0, NONE, F0, 0x14 },
-  { KeyNames::Home, 0, NONE, F0, 0x6e },
-  { KeyNames::Up, 0, NONE, F0, 0x63 },
-  { KeyNames::Down, 0, NONE, F0, 0x60 },
-  { KeyNames::PgUp, 0, NONE, F0, 0x6f },
-  { KeyNames::PgDn, 0, NONE, F0, 0x6d },
-  { KeyNames::Left, 0, NONE, F0, 0x61 },
-  { KeyNames::Right, 0, NONE, F0, 0x6a },
-  { KeyNames::End, 0, NONE, F0, 0x65 },
-  { }
-};
-
-typedef struct {
-  int type;
-  KeynameToPCKeyboard *table;
-} KeynameToPCKeyboardTable;
-
-KeynameToPCKeyboardTable translation_tables[] = {
-  { 1, pc_type_1 },
-  { 2, pc_type_2 },
-  { 3, pc_type_3 },
-  { }
-};
-
-/*
- *  pckbc_add_code():
- *
- *  Adds a byte to the data queue.
- */
-void pckbc_add_code(struct pckbc_data *d, int code, int port)
-{
-  fprintf(stderr, "[ pckbc: %s enqueue %02x (asserted %d) ]\n", port ? "mouse" : "kbd", (uint8_t)code, d->currently_asserted[port]);
-	/*  Add at the head, read at the tail:  */
-	d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
-	if (d->head[port] == d->tail[port])
-		fatal("[ pckbc: queue overrun, port %i! ]\n", port);
-
-	d->key_queue[port][d->head[port]] = code;
-  if (port_enabled(port, d->cmdbyte) && !d->currently_asserted[port]) {
-    fprintf(stderr, "[ pckbc: interrupt port %d ]\n", port);
-    if (port_int_enabled(port, d->cmdbyte)) {
+static void interrupt_check(struct pckbc_data *d) {
+  for (int port = 0; port < 2; port++) {
+    if (port_enabled(port, d->cmdbyte) &&
+        port_int_enabled(port, d->cmdbyte) &&
+        (d->head[port] != d->tail[port]) &&
+        !d->currently_asserted[port]) {
+      //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port == 0) {
         INTERRUPT_ASSERT(d->irq_keyboard);
       } else {
@@ -456,6 +132,18 @@ void pckbc_add_code(struct pckbc_data *d, int code, int port)
       d->currently_asserted[port] = true;
     }
   }
+}
+
+void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int port) {
+  /*  Add at the head, read at the tail:  */
+  d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
+  if (d->head[port] == d->tail[port]) {
+    fatal("[ pckbc: queue overrun, port %i! ]\n", port);
+  }
+
+  d->key_queue[port][d->head[port]] = code;
+  d->output_byte = (d->output_byte & ~0x30) | (port ? 0x30 : 0x10);
+  interrupt_check(d);
 }
 
 /*
@@ -477,420 +165,30 @@ int pckbc_get_code(struct pckbc_data *d, int port)
       INTERRUPT_DEASSERT(d->irq_keyboard);
     }
     d->currently_asserted[port] = false;
-  } else if (port_enabled(port, d->cmdbyte)) {
-    if (port_int_enabled(port, d->cmdbyte)) {
-      if (port) {
-        INTERRUPT_ASSERT(d->irq_mouse);
-      } else {
-        INTERRUPT_ASSERT(d->irq_keyboard);
-      }
-      d->currently_asserted[port] = true;
-    }
+  } else {
+    interrupt_check(d);
   }
 
 	return d->key_queue[port][d->tail[port]];
 }
 
+static void dev_pckbc_send_command(struct cpu *cpu, struct pckbc_data *d, uint8_t cmd, int port_nr) {
+  uint64_t location = port_nr ? MOUSE_PRIVATE : KEYBOARD_PRIVATE;
+  cpu->memory_rw
+    (cpu,
+     cpu->mem,
+     location,
+     &cmd,
+     sizeof(cmd),
+     MEM_WRITE,
+     PHYSICAL | NO_EXCEPTIONS);
+}
 
 DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
-	int key, release, ints_enabled;
-  int mouse_x, mouse_y, mouse_but, fb_nr;
-  KeynameToPCKeyboard *table = nullptr;
-  KeynameToPCKeyboard *found = nullptr;
-
-	ints_enabled = d->rx_int_enable;
-
-  while (keyboard_debug_events.size()) {
-    auto event = keyboard_debug_events.front();
-    pckbc_add_code(d, event.code, 0);
-    keyboard_debug_events.pop_front();
-  }
-
-  if ((d->in_use & 1) && console_charavail(d->console_handle)) {
-    auto ch = console_readchar(d->console_handle);
-    if (ch >= 0x100) {
-      key = (ch >> 8) & 0xff;
-      release = ch & KEY_RELEASE;
-
-      for (int t = 0; translation_tables[t].table; t++) {
-        if (translation_tables[t].type == d->translation_table) {
-          fprintf(stderr, "[ pckbc: using table %d (%d) ]\n", t, d->translation_table);
-          table = translation_tables[t].table;
-          for (int i = 0; table[i].make_prefix; i++) {
-            if (table[i].keyname_idx == key) {
-              fprintf(stderr, "[ pckbc: using table entry %d ]\n", i);
-              found = &table[i];
-              break;
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  if (found) {
-    fprintf(stderr, "sending key %c%d -> %s\n", release ? '^' : '.', key, keynames[key]);
-    int or_break_code = 0;
-    if (release) {
-      for (int j = 0; found->break_prefix[j]; j++) {
-        pckbc_add_code(d, found->break_prefix[j], 0);
-      }
-      or_break_code = found->high_bit_break ? 0x80 : 0;
-    } else {
-      for (int j = 0; found->make_prefix[j]; j++) {
-        pckbc_add_code(d, found->make_prefix[j], 0);
-      }
-    }
-    pckbc_add_code(d, found->native_code | or_break_code, 0);
-  }
-
-  console_getmouse(&mouse_x, &mouse_y, &mouse_but, &fb_nr);
-  if (d->mouse_ena && (d->in_use & 2) &&
-      ((d->mouse_last_x != mouse_x) ||
-       (d->mouse_last_y != mouse_y) ||
-       (d->mouse_last_but != mouse_but))
-      ) {
-    int diff_x = mouse_x - d->mouse_last_x;
-    int diff_y = -(mouse_y - d->mouse_last_y);
-    int flags =
-      ((diff_x < 0) ? 0x10 : 0) |
-      ((diff_y < 0) ? 0x20 : 0) |
-      8 |
-      (mouse_but & 7);
-    if (d->mouse_last_x != -1) {
-      pckbc_add_code(d, flags, 1);
-      pckbc_add_code(d, diff_x, 1);
-      pckbc_add_code(d, diff_y, 1);
-      // pckbc_add_code(d, 0, 1);
-      // pckbc_add_code(d, 0, 1);
-    }
-
-    d->mouse_last_x = mouse_x;
-    d->mouse_last_y = mouse_y;
-    d->mouse_last_but = mouse_but;
-  }
-
-  if (d->cmdbyte & KC8_KDISABLE) {
-    ints_enabled = 0;
-  }
-
-  if (!ints_enabled) {
-    return;
-  }
-
-  for (int port = 0; port < 1; port++) {
-    if (port_enabled(port, d->cmdbyte) && (d->head[port] != d->tail[port])) {
-      fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
-      if (port_int_enabled(port, d->cmdbyte)) {
-        if (port == 0) {
-          INTERRUPT_ASSERT(d->irq_keyboard);
-        } else {
-          INTERRUPT_ASSERT(d->irq_mouse);
-        }
-        d->currently_asserted[port] = true;
-      }
-    }
-  }
-}
-
-
-/*
- *  dev_pckbc_command():
- *
- *  Handle commands to the 8048 in the emulated keyboard.
- */
-static void dev_pckbc_command(struct cpu *cpu, struct pckbc_data *d, int port_nr)
-{
-	int cmd = d->reg[PC_CMD];
-
-	if (d->type == PCKBC_8242)
-		cmd = d->reg[PS2_TXBUF];
-
-  if (d->state == STATE_WAITING_FOR_LEDS) {
-    debug("[ pckbc: leds: %x ]\n", cmd);
-    d->state = STATE_NORMAL;
-		pckbc_add_code(d, KBR_ACK, port_nr);
-    return;
-  }
-
-	if (d->state == STATE_WAITING_FOR_TRANSLTABLE) {
-		debug("[ pckbc: (port %i) switching to translation table "
-		    "0x%02x ]\n", port_nr, cmd);
-		switch (cmd) {
-    case 1:
-		case 2:
-		case 3:	d->translation_table = cmd;
-			break;
-		default:fatal("[ pckbc: (port %i) translation table "
-			    "0x%02x is NOT YET IMPLEMENTED ]\n",
-			    port_nr, cmd);
-		}
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_NORMAL;
-		return;
-	}
-
-	if (d->state == STATE_WAITING_FOR_RATE) {
-		debug("[ pckbc: (port %i) received Typematic Rate data: "
-		    "0x%02x ]\n", port_nr, cmd);
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_NORMAL;
-		return;
-	}
-
-	if (d->state == STATE_WAITING_FOR_ONEKEY_MB) {
-		debug("[ pckbc: (port %i) received One-key make/break data: "
-		    "0x%02x ]\n", port_nr, cmd);
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_NORMAL;
-		return;
-	}
-
-	if (d->state == STATE_WAITING_FOR_AUX_OUT) {
-    port_nr = 1;
-    debug("[ pckbc: (port %i) sending to mouse: "
-          "0x%02x cmd %02x (pc %08x) ]\n", port_nr, cmd, d->mouse_cmd, (unsigned int)cpu->pc);
-    switch (d->mouse_cmd) {
-    case 0:
-      switch (cmd) {
-      case 0xff:
-        d->mouse_cmd = 0;
-        d->mouse_sample_rate = 100;
-        d->mouse_resolution = 2;
-        d->mouse_scaling = 0;
-        d->mouse_remote = 0;
-        d->mouse_ena = 1;
-
-        d->head[port_nr] = d->tail[port_nr] = 0;
-        pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0xaa, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        break;
-
-      case 0xf6:
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xf5:
-        d->mouse_reporting = 0;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xf4:
-        d->mouse_reporting = 1;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xf3:
-        d->mouse_cmd = 0xf3;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xf2:
-        pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 0x00, port_nr);
-        break;
-
-      case 0xe2:
-        pckbc_add_code(d, 0xfa, port_nr);
-        d->mouse_cmd = 0xe2;
-        break;
-
-      case 0xe6:
-        d->mouse_scaling = 0;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xe7:
-        d->mouse_scaling = 1;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0xe8:
-        pckbc_add_code(d, 0xfa, port_nr);
-        d->mouse_cmd = 0xe8;
-        break;
-
-      case 0xe9:
-        pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, d->mouse_remote << 6 | d->mouse_reporting << 5 | d->mouse_scaling << 4, port_nr);
-        pckbc_add_code(d, d->mouse_resolution, port_nr);
-        pckbc_add_code(d, d->mouse_sample_rate, port_nr);
-        break;
-
-      case 0xeb:
-        pckbc_add_code(d, 0xfa, port_nr);
-        pckbc_add_code(d, 8, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        pckbc_add_code(d, 0, port_nr);
-        break;
-
-      default:
-        fprintf(stderr, "[ pckbc: unknown command %02x to mouse ]\n", cmd);
-      }
-      break;
-
-    case 0xf3:
-      d->mouse_cmd = 0;
-      d->mouse_sample_rate = cmd;
-      pckbc_add_code(d, 0xfa, port_nr);
-      break;
-
-    case 0xe8:
-      d->mouse_cmd = 0;
-      d->mouse_resolution = cmd;
-      pckbc_add_code(d, 0xfa, port_nr);
-      break;
-
-    case 0xe2:
-      switch (cmd) {
-      case 0x40:
-        d->mouse_cmd = 0;
-        d->mouse_remote = 0;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      case 0x41:
-        d->mouse_cmd = 0;
-        d->mouse_remote = 1;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-
-      default:
-        d->mouse_cmd = 0;
-        pckbc_add_code(d, 0xfa, port_nr);
-        break;
-      }
-      break;
-
-    default:
-      pckbc_add_code(d, 0xfa, port_nr);
-      d->mouse_cmd = 0;
-      break;
-    }
-
-		d->state = STATE_NORMAL;
-		return;
-	}
-
-	switch (cmd) {
-	case 0x00:
-		/*
-		 *  TODO: What does this do? This is possibly due to an
-		 *  error in the handling of some other command code.
-		 */
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-  case 0x11:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x12:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x14:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x19:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x21:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x58:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x59:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-  case 0x76:
-    pckbc_add_code(d, 0xfa, port_nr);
-    break;
-
-	case KBC_MODEIND:	/*  Set LEDs  */
-		/*  Just ACK, no LEDs are actually set.  */
-    d->state = STATE_WAITING_FOR_LEDS;
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-	case KBC_SETTABLE:
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_WAITING_FOR_TRANSLTABLE;
-		break;
-
-	case KBC_ENABLE:
-		d->keyscanning_enabled = 1;
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-	case KBC_DISABLE:
-		d->keyscanning_enabled = 0;
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-	case KBC_SETDEFAULT:
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-	case KBC_GETID:
-		/*  Get keyboard ID.  NOTE/TODO: Ugly hardcoded answer.  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		pckbc_add_code(d, 0xab, port_nr);
-		pckbc_add_code(d, 0x83, port_nr);
-		break;
-
-	case KBC_TYPEMATIC:
-		/*  Set typematic (auto-repeat) delay/speed:  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_WAITING_FOR_RATE;
-		break;
-
-	case KBC_ALLKEYS_TMB:
-		/*  "Make all keys typematic/make/break"  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		break;
-
-	case KBC_ONEKEY_MB:
-		/*  "Make one key typematic/make/break"  */
-		pckbc_add_code(d, KBR_ACK, port_nr);
-		d->state = STATE_WAITING_FOR_ONEKEY_MB;
-		break;
-
-  case KBC_GETTABLE:
-		pckbc_add_code(d, 0xfa, port_nr);
-		pckbc_add_code(d, 0xb1, port_nr);
-    pckbc_add_code(d, 0xbf, port_nr);
-    break;
-
-	case KBC_RESET:
-    d->head[0] = d->tail[0] = 0;
-    pckbc_add_code(d, KBR_ACK, port_nr);
-    pckbc_add_code(d, KBR_RSTDONE, port_nr);
-    pckbc_add_code(d, 0xb2, port_nr);
-
-		/*
-		 *  Disable interrupts during reset, or Linux 2.6
-		 *  prints warnings about spurious interrupts.
-		 */
-		d->rx_int_enable = 0;
-		break;
-
-	default:
-		fatal("[ pckbc: (port %i) UNIMPLEMENTED 8048 command"
-		    " 0x%02x ]\n", port_nr, cmd);
-		// exit(1);
-    break;
-	}
+  interrupt_check(d);
+  d->currently_asserted[0] = d->currently_asserted[1] = false;
 }
 
 
@@ -967,15 +265,26 @@ DEVICE_ACCESS(pckbc)
 				d->state = STATE_NORMAL;
 				break;
 
-			default: if (d->head[0] != d->tail[0]) {
+			default: {
+        if (d->head[0] != d->tail[0]) {
 					odata = pckbc_get_code(d, 0);
-					d->last_scancode = odata;
+					d->last_byte = odata;
 				} else if (d->head[1] != d->tail[1]) {
           odata = pckbc_get_code(d, 1);
         } else {
-					odata = d->last_scancode;
-					d->last_scancode |= 0x80;
+					odata = d->last_byte;
+					d->last_byte |= 0x80;
 				}
+				d->state = STATE_NORMAL;
+
+        d->output_byte &= ~0x30;
+        if (d->head[0] != d->tail[0]) {
+          d->output_byte |= 0x10;
+        } else if (d->head[1] != d->tail[1]) {
+          d->output_byte |= 0x30;
+        }
+        break;
+      }
 			}
 
 			/*  debug("[ pckbc: read from DATA: 0x%02x ]\n",
@@ -988,17 +297,23 @@ DEVICE_ACCESS(pckbc)
 
 			switch (d->state) {
 			case STATE_LDCMDBYTE:
+        d->state = STATE_NORMAL;
 				d->cmdbyte = idata;
-				d->rx_int_enable = d->cmdbyte &
-				    (KC8_KENABLE | KC8_MENABLE) ? 1 : 0;
-				d->state = STATE_NORMAL;
 				break;
 			case STATE_LDOUTPUT:
+        d->state = STATE_NORMAL;
 				d->output_byte = idata;
-				d->state = STATE_NORMAL;
 				break;
-			default:d->reg[relative_addr] = idata;
-				dev_pckbc_command(cpu, d, port_nr);
+      case STATE_WAITING_FOR_AUX_OUT:
+        d->state = STATE_NORMAL;
+        d->reg[relative_addr] = idata;
+				dev_pckbc_send_command(cpu, d, d->reg[relative_addr], 1);
+        break;
+
+			default:
+        d->state = STATE_NORMAL;
+        d->reg[relative_addr] = idata;
+				dev_pckbc_send_command(cpu, d, d->reg[relative_addr], 0);
         break;
 			}
 		}
@@ -1008,25 +323,16 @@ DEVICE_ACCESS(pckbc)
 			odata = 0;
 
 			/*  "Data in buffer" bit  */
-      if (d->head[0] != d->tail[0] ||
+      if ((d->head[0] != d->tail[0]) ||
           d->state == STATE_RDCMDBYTE ||
           d->state == STATE_RDOUTPUT) {
-        odata |= KBS_DIB;
         fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[0], d->tail[0]);
+        odata |= KBS_DIB;
       } else if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
       }
 
-			if (d->state == STATE_RDCMDBYTE) {
-				// odata |= KBS_OCMD;
-      }
-
-			// odata |= KBS_NOSEC;
-
-      if (d->mouse_timeout) {
-        d->mouse_timeout--;
-      }
       if (odata != 0) {
         debug("[ pckbc: read from CTL status port: "
               "0x%02x (pc %08x) ]\n", (int)odata, (unsigned int)cpu->pc);
@@ -1057,14 +363,14 @@ DEVICE_ACCESS(pckbc)
 				d->cmdbyte &= ~KC8_MDISABLE;
 				break;
 			case 0xa9:	/*  test auxiliary port  */
-        pckbc_add_code(d, 0x00, 0);
+        pckbc_add_code(cpu, d, 0x00, 0);
 				break;
 			case 0xaa:	/*  keyboard self-test  */
         d->head[0] = d->tail[0] = d->head[1] = d->tail[1] = 0;
-				pckbc_add_code(d, 0x55, port_nr);
+				pckbc_add_code(cpu, d, 0x55, port_nr);
 				break;
 			case 0xab:	/*  keyboard interface self-test  */
-				pckbc_add_code(d, 0x00, port_nr);
+				pckbc_add_code(cpu, d, 0x00, port_nr);
 				break;
 			case 0xad:
 				d->cmdbyte |= KC8_KDISABLE;
@@ -1083,17 +389,16 @@ DEVICE_ACCESS(pckbc)
 					    output buffer  */
 				debug("[ pckbc: send data to kbd ]\n");
 				d->state = STATE_WAITING_FOR_AUX;
-				d->in_use |= 2;
 				break;
 			case 0xd4:	/*  write to auxiliary port  */
 				debug("[ pckbc: send data to mouse ]\n");
 				d->state = STATE_WAITING_FOR_AUX_OUT;
-				d->in_use |= 2;
 				break;
 			default:
 				fatal("[ pckbc: unknown CONTROL 0x%x ]\n",
 				    (int)idata);
 				d->state = STATE_NORMAL;
+        break;
 			}
 		}
 		break;
@@ -1113,13 +418,13 @@ DEVICE_ACCESS(pckbc)
 
 			/*  Handle keyboard commands:  */
 			d->reg[PS2_TXBUF] = idata;
-			dev_pckbc_command(cpu, d, port_nr);
+			dev_pckbc_send_command(cpu, d, d->reg[PS2_TXBUF], port_nr);
 		}
 		break;
 
 	case PS2 + PS2_RXBUF:
 		if (writeflag==MEM_READ) {
-			/*  TODO: What should be returned if no data 
+			/*  TODO: What should be returned if no data
 			    is available?  */
 			odata = random() & 0xff;
 			if (d->head[port_nr] != d->tail[port_nr])
@@ -1139,22 +444,18 @@ DEVICE_ACCESS(pckbc)
 		} else {
 			debug("[ pckbc: write to port %i, PS2_CONTROL:"
 			    " 0x%llx ]\n", port_nr, (long long)idata);
-			d->clocksignal = (idata & 0x10) ? 1 : 0;
-			d->rx_int_enable = (idata & 0x08) ? 1 : 0;
-			d->tx_int_enable = (idata & 0x04) ? 1 : 0;
 		}
 		break;
 
 	case PS2 + PS2_STATUS:
 		if (writeflag==MEM_READ) {
 			/* 0x08 = transmit buffer empty  */
-			odata = d->clocksignal + 0x08;
+			odata = port_enabled(0, d->cmdbyte) + 0x08;
 
 			if (d->head[port_nr] != d->tail[port_nr]) {
 				/*  0x10 = receicer data available (?)  */
-				// odata |= 0x10;
+				odata |= 0x10;
 			}
-
 			debug("[ pckbc: read from port %i, PS2_STATUS: "
 			    "0x%llx ]\n", port_nr, (long long)odata);
 		} else {
@@ -1192,6 +493,35 @@ DEVICE_ACCESS(pckbc)
 }
 
 
+DEVICE_ACCESS(pckbc_private)
+{
+	struct pckbc_data *d = (struct pckbc_data *) extra;
+	uint64_t idata = 0;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
+
+    switch (relative_addr) {
+    case I8042_ACTION:
+      if (idata & I8042_ACTION_RESET_KBD) {
+        d->head[0] = d->tail[0] = 0;
+      }
+      if (idata & I8042_ACTION_RESET_MOUSE) {
+        d->head[1] = d->tail[1] = 0;
+      }
+      break;
+    default:
+      pckbc_add_code(cpu, d, idata, relative_addr & 1);
+      break;
+    }
+  } else {
+    memory_writemax64(cpu, data, len, idata);
+  }
+
+  return 1;
+}
+
+
 /*
  *  dev_pckbc_init():
  *
@@ -1199,7 +529,7 @@ DEVICE_ACCESS(pckbc)
  */
 int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	uint64_t baseaddr, int type, char *keyboard_irqpath,
-	char *mouse_irqpath, int in_use, int pc_style_flag)
+	char *mouse_irqpath, int pc_style_flag)
 {
 	struct pckbc_data *d;
 	int len = DEV_PCKBC_LENGTH;
@@ -1219,25 +549,24 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 	INTERRUPT_CONNECT(mouse_irqpath, d->irq_mouse);
 
 	d->type              = type;
-	d->in_use            = in_use;
 	d->pc_style_flag     = pc_style_flag;
-	d->translation_table = 2;
-	d->rx_int_enable     = 1;
 	d->output_byte       = 0x02;	/*  A20 enable on PCs  */
 
-  d->flex_id           = -1;
-  d->mouse_last_x      = -1;
-  d->mouse_last_y      = -1;
-  d->mouse_last_but    = -1;
+	memory_device_register
+    (mem, "pckbc", baseaddr,
+     len, dev_pckbc_access, d, DM_DEFAULT, NULL);
+  memory_device_register
+    (mem, "pckbc internal", I8042_PRIVATE,
+     16, dev_pckbc_private_access, d, DM_DEFAULT, NULL);
 
-	d->console_handle = console_start_slave_inputonly(
-	    machine, "pckbc", d->in_use);
+  char tmps[300];
+  snprintf(tmps, sizeof(tmps), "pckeyboard addr=0x%" PRIx64, KEYBOARD_PRIVATE);
+  device_add(machine, tmps);
+  snprintf(tmps, sizeof(tmps), "ps2mouse addr=0x%" PRIx64, MOUSE_PRIVATE);
+  device_add(machine, tmps);
 
-	memory_device_register(mem, "pckbc", baseaddr,
-	    len, dev_pckbc_access, d, DM_DEFAULT, NULL);
 	machine_add_tickfunction(machine, dev_pckbc_tick, d,
-	    PCKBC_TICKSHIFT);
+                           PCKBC_TICKSHIFT);
 
-	return d->console_handle;
+	return 1;
 }
-

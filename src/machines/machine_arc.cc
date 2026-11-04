@@ -135,8 +135,7 @@ MACHINE_SETUP(arc)
 		    "%s.cpu[%i].jazz.7", machine->path,
 		    machine->bootstrap_cpu);
 		i = dev_pckbc_init(machine, mem, 0x80005000ULL,
-		    PCKBC_JAZZ, tmpstr, tmpstr2,
-		    machine->x11_md.in_use, 0);
+		    PCKBC_JAZZ, tmpstr, tmpstr2, 0);
 
 		/*  Serial controllers at JAZZ irq 8 and 9:  */
 		snprintf(tmpstr, sizeof(tmpstr),

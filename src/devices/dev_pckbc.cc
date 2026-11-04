@@ -96,11 +96,6 @@ struct pckbc_data {
 	int		type;
 	int		pc_style_flag;
 
-	/*  TODO: one of these for each port?  */
-	int		clocksignal;
-	int		rx_int_enable;
-	int		tx_int_enable;
-
 	int		state;
 	int		cmdbyte;
 	int		output_byte;
@@ -126,7 +121,8 @@ static void interrupt_check(struct pckbc_data *d) {
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) &&
         port_int_enabled(port, d->cmdbyte) &&
-        (d->head[port] != d->tail[port])) {
+        (d->head[port] != d->tail[port]) &&
+        !d->currently_asserted[port]) {
       //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       if (port == 0) {
         INTERRUPT_ASSERT(d->irq_keyboard);
@@ -146,6 +142,7 @@ void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int por
   }
 
   d->key_queue[port][d->head[port]] = code;
+  d->output_byte = (d->output_byte & ~0x30) | (port ? 0x30 : 0x10);
   interrupt_check(d);
 }
 
@@ -190,20 +187,8 @@ static void dev_pckbc_send_command(struct cpu *cpu, struct pckbc_data *d, uint8_
 DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
-	int ints_enabled;
-  int mouse_x, mouse_y, mouse_but, fb_nr;
-
-	ints_enabled = d->rx_int_enable;
-
-  if (d->cmdbyte & KC8_KDISABLE) {
-    ints_enabled = 0;
-  }
-
-  if (!ints_enabled) {
-    return;
-  }
-
   interrupt_check(d);
+  d->currently_asserted[0] = d->currently_asserted[1] = false;
 }
 
 
@@ -280,7 +265,8 @@ DEVICE_ACCESS(pckbc)
 				d->state = STATE_NORMAL;
 				break;
 
-			default: if (d->head[0] != d->tail[0]) {
+			default: {
+        if (d->head[0] != d->tail[0]) {
 					odata = pckbc_get_code(d, 0);
 					d->last_byte = odata;
 				} else if (d->head[1] != d->tail[1]) {
@@ -289,6 +275,16 @@ DEVICE_ACCESS(pckbc)
 					odata = d->last_byte;
 					d->last_byte |= 0x80;
 				}
+				d->state = STATE_NORMAL;
+
+        d->output_byte &= ~0x30;
+        if (d->head[0] != d->tail[0]) {
+          d->output_byte |= 0x10;
+        } else if (d->head[1] != d->tail[1]) {
+          d->output_byte |= 0x30;
+        }
+        break;
+      }
 			}
 
 			/*  debug("[ pckbc: read from DATA: 0x%02x ]\n",
@@ -301,24 +297,25 @@ DEVICE_ACCESS(pckbc)
 
 			switch (d->state) {
 			case STATE_LDCMDBYTE:
+        d->state = STATE_NORMAL;
 				d->cmdbyte = idata;
-				d->rx_int_enable = d->cmdbyte &
-				    (KC8_KENABLE | KC8_MENABLE) ? 1 : 0;
 				break;
 			case STATE_LDOUTPUT:
+        d->state = STATE_NORMAL;
 				d->output_byte = idata;
 				break;
       case STATE_WAITING_FOR_AUX_OUT:
+        d->state = STATE_NORMAL;
         d->reg[relative_addr] = idata;
 				dev_pckbc_send_command(cpu, d, d->reg[relative_addr], 1);
         break;
 
 			default:
+        d->state = STATE_NORMAL;
         d->reg[relative_addr] = idata;
 				dev_pckbc_send_command(cpu, d, d->reg[relative_addr], 0);
         break;
 			}
-      d->state = STATE_NORMAL;
 		}
 		break;
 	case 1:		/*  control  */
@@ -326,21 +323,15 @@ DEVICE_ACCESS(pckbc)
 			odata = 0;
 
 			/*  "Data in buffer" bit  */
-      if (d->head[0] != d->tail[0] ||
+      if ((d->head[0] != d->tail[0]) ||
           d->state == STATE_RDCMDBYTE ||
           d->state == STATE_RDOUTPUT) {
-        odata |= KBS_DIB;
         fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[0], d->tail[0]);
+        odata |= KBS_DIB;
       } else if (d->head[1] != d->tail[1]) {
         fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
         odata |= KBS_DIB | 0x20;
       }
-
-			if (d->state == STATE_RDCMDBYTE) {
-				// odata |= KBS_OCMD;
-      }
-
-			// odata |= KBS_NOSEC;
 
       if (odata != 0) {
         debug("[ pckbc: read from CTL status port: "
@@ -453,22 +444,12 @@ DEVICE_ACCESS(pckbc)
 		} else {
 			debug("[ pckbc: write to port %i, PS2_CONTROL:"
 			    " 0x%llx ]\n", port_nr, (long long)idata);
-			d->clocksignal = (idata & 0x10) ? 1 : 0;
-			d->rx_int_enable = (idata & 0x08) ? 1 : 0;
-			d->tx_int_enable = (idata & 0x04) ? 1 : 0;
 		}
 		break;
 
 	case PS2 + PS2_STATUS:
 		if (writeflag==MEM_READ) {
 			/* 0x08 = transmit buffer empty  */
-			odata = d->clocksignal + 0x08;
-
-			if (d->head[port_nr] != d->tail[port_nr]) {
-				/*  0x10 = receicer data available (?)  */
-				// odata |= 0x10;
-			}
-
 			debug("[ pckbc: read from port %i, PS2_STATUS: "
 			    "0x%llx ]\n", port_nr, (long long)odata);
 		} else {
@@ -563,7 +544,6 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 
 	d->type              = type;
 	d->pc_style_flag     = pc_style_flag;
-	d->rx_int_enable     = 1;
 	d->output_byte       = 0x02;	/*  A20 enable on PCs  */
 
 	memory_device_register

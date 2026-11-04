@@ -450,6 +450,12 @@ DEVICE_ACCESS(pckbc)
 	case PS2 + PS2_STATUS:
 		if (writeflag==MEM_READ) {
 			/* 0x08 = transmit buffer empty  */
+			odata = port_enabled(0, d->cmdbyte) + 0x08;
+
+			if (d->head[port_nr] != d->tail[port_nr]) {
+				/*  0x10 = receicer data available (?)  */
+				odata |= 0x10;
+			}
 			debug("[ pckbc: read from port %i, PS2_STATUS: "
 			    "0x%llx ]\n", port_nr, (long long)odata);
 		} else {

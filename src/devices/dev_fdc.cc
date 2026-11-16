@@ -73,6 +73,11 @@
 #define STATE_READ_NORMAL_DATA 0x06
 #define STATE_ENH_CHECK 0x18
 
+#define REG_DOR 2
+
+#define DOR_RESET 4
+#define DOR_IGATE 8
+
 struct fdc_data {
     uint8_t	reg[DEV_FDC_LENGTH];
     int     state;
@@ -91,7 +96,6 @@ struct fdc_data {
     bool    asserting_interrupt;
     bool    recent_seek;
     bool    recal_interrupt;
-    bool    dor_reset;
     bool    motor;
 	struct interrupt	irq;
 };
@@ -119,8 +123,8 @@ static void deassert_interrupt(struct fdc_data *d)
 
 static void maybe_interrupt(struct fdc_data *d)
 {
-    fprintf(stderr, "[ fdc: %s interrupt ]\n", (d->reg[2] & 8) ? "will" : "wont");
-    if (d->reg[2] & 8) {
+    fprintf(stderr, "[ fdc: %s interrupt ]\n", (d->reg[REG_DOR] & DOR_IGATE) ? "will" : "wont");
+    if (d->reg[REG_DOR] & DOR_IGATE) {
         assert_interrupt(d);
     }
     d->reg[0] |= 0x80;
@@ -156,7 +160,6 @@ DEVICE_ACCESS(fdc)
 
 	if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len);
-		d->reg[relative_addr] = (uint8_t)idata;
     fprintf(stderr, "[ fdc: %x <- %x ]\n", relative_addr, (unsigned int)idata);
   }
 
@@ -200,7 +203,7 @@ DEVICE_ACCESS(fdc)
           int low16_dma_addr;
 
 					oldstate = (oldstate & ~STATE_CMD_BYTES) | STATE_CMD_BUSY;
-					fprintf(stderr, "execute command %02x (reg2 %02x)\n", oldstate & 0xff, d->reg[2] & 0xff);
+					fprintf(stderr, "execute command %02x (reg2 %02x)\n", oldstate & 0xff, d->reg[REG_DOR] & 0xff);
 					switch (command) {
 					case STATE_SEEK:
             d->recent_seek = true;
@@ -227,12 +230,12 @@ DEVICE_ACCESS(fdc)
             d->command_result = 0;
 						d->state = STATE_CMD_BUSY;
             if (!(d->command_bytes[1] & 1)) {
-              d->reg[2] &= ~8;
+              d->reg[REG_DOR] &= ~DOR_IGATE;
               d->pending_interrupt = 0;
               d->asserting_interrupt = 0;
               d->recal_interrupt = 0;
             } else {
-              d->reg[2] |= 8;
+              d->reg[REG_DOR] |= DOR_IGATE;
             }
             maybe_interrupt(d);
 						break;
@@ -447,28 +450,25 @@ DEVICE_ACCESS(fdc)
 
 	case 0x02:
 		if (writeflag == MEM_WRITE) {
-      fprintf(stderr, "[ fdc: DOR write %02x ]\n", (int)idata);
+      fprintf(stderr, "[ fdc: DOR write %02x (was %02x) ]\n", (int)idata, d->reg[REG_DOR]);
       d->motor = idata & 0x10;
       d->drive_sel = idata & 3;
-      d->reg[2] = (idata & ~8) | (d->reg[2] & 8);
-      d->command_size = 0;
-      if (idata & 4) {
-        if (d->dor_reset) {
-          fprintf(stderr, "[ fdc: DOR reset done ]\n");
-          d->state = STATE_EMPTY;
-					maybe_interrupt(d);
-        } else {
-          d->state = oldstate;
-        }
-        d->dor_reset = false;
-      } else {
-        d->dor_reset = true;
+      auto prev_reg_dor = d->reg[REG_DOR];
+      d->reg[REG_DOR] = (idata & ~DOR_IGATE) | (d->reg[REG_DOR] & DOR_IGATE);
+      if ((d->reg[REG_DOR] & DOR_RESET) && !(prev_reg_dor & DOR_RESET)) {
+        fprintf(stderr, "[ fdc: DOR reset done ]\n");
+        d->state = STATE_EMPTY;
+        d->pending_interrupt = 0;
+        deassert_interrupt(d);
+        maybe_interrupt(d);
+      } else if (!(d->reg[REG_DOR] & DOR_RESET)) {
+        d->command_size = 0;
         d->state = STATE_EMPTY;
       }
 		} else {
 			d->state = oldstate;
       fprintf(stderr, "[ fdc: read DOR ]\n");
-      memory_writemax64(cpu, data, len, d->reg[2]);
+      memory_writemax64(cpu, data, len, d->reg[REG_DOR]);
 		}
 		break;
 
@@ -496,11 +496,6 @@ DEVICE_ACCESS(fdc)
 			for (i=0; i<len; i++)
 				fatal(" %02x", data[i]);
 			fatal(" ]\n");
-			d->reg[relative_addr] = idata;
-    // } else {
-		// 	fatal("[ fdc: read from reg %i: %02x ]\n",
-    //         (int)relative_addr, d->reg[relative_addr]);
-		// 	memory_writemax64(cpu, data, len, d->reg[relative_addr]);
 		}
 		break;
 	}

@@ -380,7 +380,7 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: version ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x90;
-					d->state = STATE_CMD_EMPTY;
+					d->state = STATE_EMPTY;
 					// maybe_interrupt(d);
 					break;
 
@@ -412,7 +412,7 @@ DEVICE_ACCESS(fdc)
           fprintf(stderr, "[ fdc: enh controller check ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x80;
-					d->state = STATE_CMD_EMPTY;
+					d->state = STATE_EMPTY;
 					// maybe_interrupt(d);
           break;
 

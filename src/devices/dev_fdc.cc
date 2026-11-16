@@ -144,7 +144,6 @@ DEVICE_ACCESS(fdc)
 {
 	struct fdc_data *d = (struct fdc_data *) extra;
 	uint64_t idata = 0, read_addr = 0, read_len = 0, offset = 0;
-	int oldstate = d->state;
 	size_t i;
   uint8_t dma_controller_1_status = 0, dma_controller_1_scatter_gather = 0;
   uint32_t dma_channel_2_addr = 0;
@@ -156,8 +155,6 @@ DEVICE_ACCESS(fdc)
   }
 
   deassert_interrupt(d);
-	d->state = 0;
-
 
 	if (writeflag == MEM_WRITE) {
     idata = memory_readmax64(cpu, data, len);
@@ -178,12 +175,12 @@ DEVICE_ACCESS(fdc)
 		if (writeflag == MEM_WRITE) {
 			fprintf(stderr, "[ fdc: Status write %02x ]\n", (int)idata);
 		} else {
-			if (oldstate & STATE_CMD_QUEUE) {
+			if (d->state & STATE_CMD_QUEUE) {
 				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
-				idata = 0x80 | ((oldstate & STATE_CMD_BUSY) ? 0x10 : ((oldstate & STATE_CMD_BYTES) ? 0x40 : 0)) | ((oldstate & STATE_CMD_DMA) ? 0x20 : 0);
+				idata = 0x80 | ((d->state & STATE_CMD_BUSY) ? 0x10 : ((d->state & STATE_CMD_BYTES) ? 0x40 : 0)) | ((d->state & STATE_CMD_DMA) ? 0x20 : 0);
 			}
-			d->state = oldstate & ~(STATE_CMD_BUSY | STATE_CMD_DMA);
+			d->state &= ~(STATE_CMD_BUSY | STATE_CMD_DMA);
 			if (d->status_read != (int)idata) {
 				fprintf(stderr, "[ fdc: Status read %02x ]\n", (int)idata);
         d->status_read = idata;
@@ -195,16 +192,16 @@ DEVICE_ACCESS(fdc)
 
 	case 0x05:
 		if (writeflag == MEM_WRITE) {
-			fprintf(stderr, "[ fdc: FIFO write %02x cq %d state %04x ]\n", (int)idata, d->command_size, oldstate);
-			if (oldstate & STATE_CMD_BYTES) {
+			fprintf(stderr, "[ fdc: FIFO write %02x cq %d state %04x ]\n", (int)idata, d->command_size, d->state);
+			if (d->state & STATE_CMD_BYTES) {
 				d->command_size--;
 				d->command_bytes[d->command_size] = idata;
 				if (!d->command_size) {
-					int command = oldstate & 0xff;
+					int command = d->state & 0xff;
           int low16_dma_addr;
 
-					oldstate = (oldstate & ~STATE_CMD_BYTES) | STATE_CMD_BUSY;
-					fprintf(stderr, "execute command %02x (reg2 %02x)\n", oldstate & 0xff, d->reg[REG_DOR] & 0xff);
+					d->state = (d->state & ~STATE_CMD_BYTES) | STATE_CMD_BUSY;
+					fprintf(stderr, "execute command %02x (reg2 %02x)\n", d->state & 0xff, d->reg[REG_DOR] & 0xff);
 					switch (command) {
 					case STATE_SEEK:
             d->recent_seek = true;
@@ -339,7 +336,7 @@ DEVICE_ACCESS(fdc)
             break;
 					}
 				} else {
-					d->state = oldstate | STATE_CMD_BUSY;
+					d->state |= STATE_CMD_BUSY;
 				}
 			} else {
 				// New command
@@ -426,21 +423,19 @@ DEVICE_ACCESS(fdc)
 				}
 			}
 		} else {
-			if (oldstate & STATE_CMD_QUEUE) {
+			if (d->state & STATE_CMD_QUEUE) {
 				d->command_result--;
 				idata = d->command_bytes[d->command_result];
 				memory_writemax64(cpu, data, len, idata);
 				fprintf(stderr, "[ fdc: command result %02x (rem %02x) from %d ]\n", (int)idata, d->command_result, d->state & 0xff);
 				if (!d->command_result) {
-          if ((oldstate & 0xff) == STATE_READ_NORMAL_DATA) {
+          if ((d->state & 0xff) == STATE_READ_NORMAL_DATA) {
             d->state = STATE_READ_NORMAL_DATA | STATE_CMD_DMA | STATE_CMD_BUSY;
-          } else if ((oldstate & 0xff) == STATE_SEEK) {
+          } else if ((d->state & 0xff) == STATE_SEEK) {
             d->state = STATE_EMPTY | STATE_CMD_BUSY;
           } else {
             d->state = STATE_EMPTY;
           }
-				} else {
-					d->state = oldstate;
 				}
         return 1;
 			} else {
@@ -467,7 +462,6 @@ DEVICE_ACCESS(fdc)
         d->state = STATE_EMPTY;
       }
 		} else {
-			d->state = oldstate;
       fprintf(stderr, "[ fdc: read DOR ]\n");
       memory_writemax64(cpu, data, len, d->reg[REG_DOR]);
 		}
@@ -485,7 +479,6 @@ DEVICE_ACCESS(fdc)
     if (writeflag == MEM_READ) {
       int result = d->reg[REG_STA] | STA_INT;
       d->reg[REG_STA] &= ~STA_INT;
-      d->state = oldstate;
       fatal("[ fdc: read from reg STA: %02x ]\n", result);
 			memory_writemax64(cpu, data, len, result);
       return 1;

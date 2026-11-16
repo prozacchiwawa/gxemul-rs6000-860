@@ -55,7 +55,6 @@
 #define FDC_TICK_SHIFT   20
 #define	DEV_FDC_LENGTH		6	/*  TODO 8, but collision with wdc  */
 
-#define STATE_CMD_DMA 0x2000
 #define STATE_CMD_BUSY 0x1000
 #define STATE_EMPTY 0
 #define STATE_VERSION_RES 1
@@ -99,6 +98,7 @@ struct fdc_data {
     bool    recent_seek;
     bool    recal_interrupt;
     bool    motor;
+    bool    dma;
 	struct interrupt	irq;
 };
 
@@ -177,9 +177,10 @@ DEVICE_ACCESS(fdc)
 			if (d->command_result) {
 				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
-				idata = 0x80 | ((d->state & STATE_CMD_BUSY) ? 0x10 : (d->command_size ? 0x40 : 0)) | ((d->state & STATE_CMD_DMA) ? 0x20 : 0);
+				idata = 0x80 | ((d->state & STATE_CMD_BUSY) ? 0x10 : (d->command_size ? 0x40 : 0)) | (d->dma ? 0x20 : 0);
 			}
-			d->state &= ~(STATE_CMD_BUSY | STATE_CMD_DMA);
+			d->state = STATE_EMPTY;
+      d->dma = false;
 			if (d->status_read != (int)idata) {
 				fprintf(stderr, "[ fdc: Status read %02x ]\n", (int)idata);
         d->status_read = idata;
@@ -270,7 +271,8 @@ DEVICE_ACCESS(fdc)
 
 					case STATE_READ_NORMAL_DATA:
             d->recent_seek = true;
-						d->state = STATE_CMD_DMA;
+						d->state = STATE_EMPTY;
+            d->dma = true;
 						d->seek_track = d->command_bytes[6];
 						d->seek_head = d->command_bytes[5];
 						d->read_sector = d->command_bytes[4];
@@ -428,13 +430,8 @@ DEVICE_ACCESS(fdc)
 				memory_writemax64(cpu, data, len, idata);
 				fprintf(stderr, "[ fdc: command result %02x (rem %02x) from %d ]\n", (int)idata, d->command_result, d->state & 0xff);
 				if (!d->command_result) {
-          if ((d->state & 0xff) == STATE_READ_NORMAL_DATA) {
-            d->state = STATE_READ_NORMAL_DATA | STATE_CMD_DMA | STATE_CMD_BUSY;
-          } else if ((d->state & 0xff) == STATE_SEEK) {
-            d->state = STATE_EMPTY | STATE_CMD_BUSY;
-          } else {
-            d->state = STATE_EMPTY;
-          }
+          d->state = STATE_EMPTY;
+          d->dma = false;
 				}
         return 1;
 			} else {

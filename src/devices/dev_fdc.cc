@@ -73,7 +73,10 @@
 #define STATE_READ_NORMAL_DATA 0x06
 #define STATE_ENH_CHECK 0x18
 
+#define REG_STA 0
 #define REG_DOR 2
+
+#define STA_INT 0x80
 
 #define DOR_RESET 4
 #define DOR_IGATE 8
@@ -105,7 +108,7 @@ static void assert_interrupt(struct fdc_data *d)
 {
     if (!d->asserting_interrupt) {
         d->asserting_interrupt = true;
-        d->reg[0] |= 0x80;
+        d->reg[REG_STA] |= STA_INT;
         //INTERRUPT_ASSERT(d->irq);
         d->pending_interrupt = 2;
     }
@@ -127,7 +130,7 @@ static void maybe_interrupt(struct fdc_data *d)
     if (d->reg[REG_DOR] & DOR_IGATE) {
         assert_interrupt(d);
     }
-    d->reg[0] |= 0x80;
+    d->reg[REG_STA] |= STA_INT;
 }
 
 
@@ -143,14 +146,12 @@ DEVICE_ACCESS(fdc)
 	uint64_t idata = 0, read_addr = 0, read_len = 0, offset = 0;
 	int oldstate = d->state;
 	size_t i;
-  int was_interrupt = 0;
   uint8_t dma_controller_1_status = 0, dma_controller_1_scatter_gather = 0;
   uint32_t dma_channel_2_addr = 0;
   uint16_t dma_channel_2_len = 0;
   unsigned char sector[512];
 
   if (d->asserting_interrupt) {
-    was_interrupt = 1;
     fprintf(stderr, "[ fdc: %s (%x) access while interrupt asserted ]\n", writeflag == MEM_WRITE ? "write" : "read", relative_addr);
   }
 
@@ -482,8 +483,8 @@ DEVICE_ACCESS(fdc)
 
   case 0:
     if (writeflag == MEM_READ) {
-      int result = d->reg[0] | 0x80; // (was_interrupt ? 0x80 : 0);
-      d->reg[0] &= 0x7f;
+      int result = d->reg[REG_STA] | STA_INT;
+      d->reg[REG_STA] &= ~STA_INT;
       d->state = oldstate;
       fatal("[ fdc: read from reg STA: %02x ]\n", result);
 			memory_writemax64(cpu, data, len, result);

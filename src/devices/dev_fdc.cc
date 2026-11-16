@@ -208,7 +208,6 @@ DEVICE_ACCESS(fdc)
             d->command_bytes[1] = 0x20;
             d->command_bytes[0] = d->seek_track;
             d->command_result = 0;
-            d->busy = true;
             maybe_interrupt(d);
 						break;
 
@@ -218,13 +217,11 @@ DEVICE_ACCESS(fdc)
             d->seek_head = 0;
             d->seek_track = 0;
             d->command_result = 0;
-            d->busy = true;
             maybe_interrupt(d);
 						break;
 
 					case STATE_SPECIFY:
             d->command_result = 0;
-            d->busy = true;
             if (!(d->command_bytes[1] & 1)) {
               d->reg[REG_DOR] &= ~DOR_IGATE;
               d->pending_interrupt = 0;
@@ -342,22 +339,20 @@ DEVICE_ACCESS(fdc)
         fprintf(stderr, "[ fdc: new command %02x ]\n", idata);
 
         d->command = idata & 0x1f;
+        d->busy = true;
 				switch (d->command) {
 				case STATE_SPECIFY:
 					fprintf(stderr, "[ fdc: specify ]\n");
 					d->command_size = 2;
-          d->busy = true;
 					break;
 
         case STATE_CHECK_DRIVE_STATUS:
           fprintf(stderr, "[ fdc: check drive status ]\n");
           d->command_size = 1;
-          d->busy = true;
           break;
 
 				case STATE_RECAL:
 					fprintf(stderr, "[ fdc: recalibrate ]\n");
-          d->busy = true;
 					d->command_size = 1;
 					break;
 
@@ -368,12 +363,10 @@ DEVICE_ACCESS(fdc)
           d->command_bytes[1] = 0x20 | d->current_drive;
           d->command_bytes[0] = d->seek_track;
           d->recent_seek = 0;
-          d->busy = true;
 					break;
 
 				case STATE_SEEK:
 					fprintf(stderr, "[ fdc: seek ]\n");
-          d->busy = true;
 					d->command_size = 2;
 					break;
 
@@ -388,25 +381,21 @@ DEVICE_ACCESS(fdc)
 				case STATE_CONFIGURE:
 					fprintf(stderr, "[ fdc: configure ]\n");
 					d->command_size = 3;
-          d->busy = true;
 					break;
 
 				case STATE_READ_ID:
 					fprintf(stderr, "[ fdc: read id ]\n");
 					d->command_size = 1;
-          d->busy = true;
 					break;
 
         case STATE_PERPMODE:
           fprintf(stderr, "[ fdc: perpendicular mode ]\n");
           d->command_size = 1;
-          d->busy = true;
           break;
 
 				case STATE_READ_NORMAL_DATA:
 					fprintf(stderr, "[ fdc: read normal data ]\n");
 					d->command_size = 8;
-          d->busy = true;
 					break;
 
         case STATE_ENH_CHECK:

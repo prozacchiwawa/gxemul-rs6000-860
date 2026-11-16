@@ -84,6 +84,7 @@
 struct fdc_data {
     uint8_t	reg[DEV_FDC_LENGTH];
     int     state;
+    int     command;
     int     command_size;
     int			command_result;
     int			command_bytes[16];
@@ -197,12 +198,11 @@ DEVICE_ACCESS(fdc)
 				d->command_size--;
 				d->command_bytes[d->command_size] = idata;
 				if (!d->command_size) {
-					int command = d->state & 0xff;
           int low16_dma_addr;
 
 					d->state = (d->state & ~STATE_CMD_BYTES) | STATE_CMD_BUSY;
 					fprintf(stderr, "execute command %02x (reg2 %02x)\n", d->state & 0xff, d->reg[REG_DOR] & 0xff);
-					switch (command) {
+					switch (d->command) {
 					case STATE_SEEK:
             d->recent_seek = true;
 						d->seek_head = (d->command_bytes[1] >> 1) & 1;
@@ -342,22 +342,23 @@ DEVICE_ACCESS(fdc)
 				// New command
         fprintf(stderr, "[ fdc: new command %02x ]\n", idata);
 
-				switch (idata & 0x1f) {
+        d->command = idata & 0x1f;
+				switch (d->command) {
 				case STATE_SPECIFY:
 					fprintf(stderr, "[ fdc: specify ]\n");
 					d->command_size = 2;
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SPECIFY;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					break;
 
         case STATE_CHECK_DRIVE_STATUS:
           fprintf(stderr, "[ fdc: check drive status ]\n");
           d->command_size = 1;
-          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_CHECK_DRIVE_STATUS;
+          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
           break;
 
 				case STATE_RECAL:
 					fprintf(stderr, "[ fdc: recalibrate ]\n");
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_RECAL;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					d->command_size = 1;
 					break;
 
@@ -373,7 +374,7 @@ DEVICE_ACCESS(fdc)
 
 				case STATE_SEEK:
 					fprintf(stderr, "[ fdc: seek ]\n");
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_SEEK;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					d->command_size = 2;
 					break;
 
@@ -381,39 +382,39 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: version ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x90;
-					d->state = STATE_VERSION | STATE_CMD_QUEUE;
+					d->state = STATE_CMD_QUEUE;
 					// maybe_interrupt(d);
 					break;
 
 				case STATE_CONFIGURE:
 					fprintf(stderr, "[ fdc: configure ]\n");
 					d->command_size = 3;
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_CONFIGURE;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					break;
 
 				case STATE_READ_ID:
 					fprintf(stderr, "[ fdc: read id ]\n");
 					d->command_size = 1;
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_READ_ID;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					break;
 
         case STATE_PERPMODE:
           fprintf(stderr, "[ fdc: perpendicular mode ]\n");
           d->command_size = 1;
-          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_PERPMODE;
+          d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
           break;
 
 				case STATE_READ_NORMAL_DATA:
 					fprintf(stderr, "[ fdc: read normal data ]\n");
 					d->command_size = 8;
-					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY | STATE_READ_NORMAL_DATA;
+					d->state = STATE_CMD_BYTES | STATE_CMD_BUSY;
 					break;
 
         case STATE_ENH_CHECK:
           fprintf(stderr, "[ fdc: enh controller check ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x80;
-					d->state = STATE_ENH_CHECK | STATE_CMD_QUEUE;
+					d->state = STATE_CMD_QUEUE;
 					// maybe_interrupt(d);
           break;
 

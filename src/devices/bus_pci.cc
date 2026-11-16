@@ -494,6 +494,13 @@ int s3_virge_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg, uint
     return 1;
   }
 
+  case 0x14: {
+    fprintf(stderr, "vga: set BAR1 to %08x\n", value);
+    uint32_t mem_stride = 0xffffff00;
+    PCI_SET_DATA(reg, value & mem_stride);
+    return 1;
+  }
+
   case 0x30:
     fprintf(stderr, "vga: set option rom address to %08x\n", value);
     // PCI_SET_DATA(reg, value & 0xffff8000);
@@ -529,8 +536,15 @@ PCIINIT(s3_virge)
   assoc->size = 32 * 1024 * 1024;
   assoc->id = id_code;
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+  auto gfx_space = assoc->allocated_space;
 
-	dev_86mc64_init(machine, mem, assoc->allocated_space,
+  assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 1;
+  assoc->size = 0x20;
+  assoc->id = id_code;
+  assoc->allocated_space = (long long)(VIRTUAL_ISA_PORTBASE + 0x3c0);
+
+	dev_86mc64_init(machine, mem, gfx_space,
                pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
@@ -547,6 +561,13 @@ int wd_90c00_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg, uint
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
     uint32_t mem_stride = 0xff000000;
     PCI_SET_DATA(reg, value & mem_stride);
+    return 1;
+  }
+
+  case 0x14: {
+    fprintf(stderr, "vga: set BAR1 to %08x\n", value);
+    uint32_t io_stride = 0xffffff00;
+    PCI_SET_DATA(reg, value & io_stride);
     return 1;
   }
 
@@ -585,9 +606,16 @@ PCIINIT(wd90c00)
   assoc->size = 16 * 1024 * 1024;
   assoc->id = id_code;
   assoc->allocated_space = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x30000000);
+  auto gfx_space = assoc->allocated_space;
+
+  assoc = &pci_io_allocation[pci_io_target++];
+  assoc->io_space = 1;
+  assoc->size = 0x20;
+  assoc->id = id_code;
+  assoc->allocated_space = (long long)(VIRTUAL_ISA_PORTBASE + 0x3c0);
 
   dev_wd90c00_init
-    (machine, mem, assoc->allocated_space,
+    (machine, mem, gfx_space,
      pd->pcibus->isa_portbase + 0x3c0, machine->machine_name);
 }
 
@@ -1033,7 +1061,7 @@ int i82378zb_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg, uint
 PCIINIT(i82378zb)
 {
 	PCI_SET_DATA(PCI_ID_REG, PCI_ID_CODE(PCI_VENDOR_INTEL,
-	    PCI_PRODUCT_INTEL_SIO));
+	    PCI_PRODUCT_INTEL_SIO + 1));
 
 	PCI_SET_DATA(PCI_CLASS_REG, PCI_CLASS_CODE(PCI_CLASS_BRIDGE,
 	    PCI_SUBCLASS_BRIDGE_ISA, 0) + 0x43);

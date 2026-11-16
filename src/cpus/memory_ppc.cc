@@ -345,6 +345,44 @@ void stwbrx_remember(uint32_t addr) {
   stwbrx_cache[pl1][pl2][word] |= 1 << bit;
 }
 
+struct mem_name {
+  uint32_t addr;
+  uint32_t target;
+  const char *name;
+  const char *funname;
+  const char *code;
+};
+
+static struct mem_name mem_names[] = {
+  { 0xe01b79b4, 0xe71f1a74, "c_curunit", "fdc_select", "fcp->c_curunit = unit" },
+  { 0xe01b79c0, 0xe71f1b18, "fj_flags", "fdc_select", "fjp->fj_flags |= FUNIT_CHAROK;" },
+  { 0xe01b88e0, 0xe71f1b0a, "c_config", "encode", "*rcode = tablep->code;" },
+  { 0xe01b8d94, 0xe71f1b0f, "??", "fdcquiesce", "fcp->c_digout |= FD_RSETZ;" },
+  { 0xe01b7a08, 0xe71f1b08, "c_digout", "fdc_select", "fcp->c_digout = (fcp->c_digout & ~FD_DRSEL) | (~unit & FD_DRSEL);" },
+  { 0xe01b93ac, 0xe71f1b08, "c_digout", "fdc_motorsm", "fcp->c_digout |= motorbit;" },
+  { 0xe01b7a84, 0xe71f1ae9, "csb_drive", "fdc_select", "fcp->c_csb.csb_drive = (uchar_t)unit;" },
+  { 0xe01b8c18, 0xe71f1b18, "fj_flags", "fdcsense_drv", "if (senser & S3_WPROT)\n  fcp->c_unit[unit]->fj_flags |= FUNIT_WPROT;\nelse\n  fcp->c_unit[unit]->fj_flags &= ~FUNIT_WPROT;" },
+  { 0xe01b983c, 0xe71f1ae8, "csb_npcyl", "fdc_exec", "csb->csb_npcyl = csb->csb_cmd[2] * fjp->fj_chars->fdc_steps;" },
+  { 0xe01b8058, 0xe71f1af3, "csb_cmd[0]", "fdrw", "*csb->csb_cmd = FO_MT | FO_MFM | FO_SK | FO_RDDAT;" },
+  { 0xe01b8068, 0xe71f1af4, "csb_cmd[1]", "fdrw", "csb->csb_cmd[1] = (uchar_t)(unit | ((head & 0x1) << 2));" },
+  { 0xe01b806c, 0xe71f1af5, "csb_cmd[2]", "fdrw", "sb->csb_cmd[2] = (uchar_t)cyl;" },
+  { 0xe01b80e4, 0xe71f1aee, "csb_maxretry", "fdrw", "if (rw == FDRDONE)\n  csb->csb_maxretry = 1;\nelse\n  csb->csb_maxretry = rwretry;" },
+  { 0xe01b9850, 0xe71f1ae0, "csb_xstate", "fdc_exec", "csb->csb_xstate = FXS_START;" },
+  { 0xe01b9860, 0xe71f1aef, "csb_retrys", "fdc_exec", "csb->csb_retrys = 0;" },
+  { 0xe01b99a0, 0xe71f1a74, "c_curunit", "fdc_exec", "retry:\nfcp->c_curunit = unit;" },
+  { 0xe01b99b0, 0xe71f1b18, "fj_flags", "fdc_exec", "retry:\nfcp->c_curunit = unit;\nfjp->fj_flags |= FUNIT_CHAROK;" },
+  { 0xe01b8db0, 0xe71f1b10, "c_hlt", "fdcspecify", "pecifycmd[2] = fcp->c_hlt = hlt << 1;	/* make room for DMA bit */" },
+  { 0xe01b9b64, 0xe71f1af2, "csv_cmdstat", "fdc_exec", "sb->csb_cmdstat = 0;" },
+  { 0xe01ba894, 0xe71f1ae4, "csb_oldxs", "fdc_statemach", "sb->csb_oldxs = csb->csb_xstate;" },
+  { 0xe01ba950, 0xe71f1a78, "c_timeid", "fdc_statemach", "fcp->c_timeid = timeout(fdwatch, (void *)fcp, time);" },
+  { 0xe01b9c14, 0xe71f1a3c, "c_flags", "fdc_exec", "fcp->c_flags |= FCFLG_WAITING;" },
+  { 0xe01b92e0, 0xe71f1a8c, "c_motort[unit]", "fdc_motorsm", "fcp->c_motort[unit] = 0;" },
+  { 0xe01b927c, 0xe71f1a9c, "c_mtrstate[unit]", "fdc_motorsm", "fcp->c_mtrstate[unit] = FMS_KILLST;" },
+  { 0xe01ba9bc, 0xe71f1abc, "c_sekdir", "fdc_statemach", "case FXS_MTRON: fcp->c_sekdir[unit] = 0;" },
+  { 0xe01ba8a8, 0xe71f1ae0, "csb_xstate", "fdc_statemach", "csb->csb_xstate = FXS_RCAL;" },
+  { }
+};
+
 void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size, int write_rev) {
   if (write) {
     if (!cpu->cd.ppc.bytelane_swap_latch) {
@@ -353,12 +391,33 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
   }
 
   if (write) {
-    if ((addr >= 0xfe050000) && (addr <= 0xfe080000)) {
-      fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
+    if ((addr >= 0xe71f1a00) && (addr <= 0xe71f1d00)) {
+      // Check for match on pc.
+      int found = -1;
+      bool pc_match = false;
+      for (int i = 0; mem_names[i].name; i++) {
+        if (cpu->pc == mem_names[i].addr) {
+          found = i;
+          pc_match = true;
+        } else if (addr == mem_names[i].target && !pc_match) {
+          found = i;
+        }
+      }
+      if (found >= 0 && pc_match) {
+        fprintf(stderr, "%" PRIx64 "@ %08x: %08x %s: %s <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr, mem_names[found].funname, mem_names[found].name);
+      } else if (found >= 0) {
+        fprintf(stderr, "%" PRIx64 "@ %08x: %08x %s <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr, mem_names[found].name);
+      } else {
+        fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
+      }
       for (int i = 0; i < size; i++) {
         fprintf(stderr, " %02x", ((uint8_t *)data)[i]);
       }
-      fprintf(stderr, "\n");
+      if (pc_match) {
+        fprintf(stderr, "\n>> %s\n", mem_names[found].code);
+      } else {
+        fprintf(stderr, "\n");
+      }
     }
   }
 }

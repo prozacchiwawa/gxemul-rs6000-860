@@ -39,66 +39,88 @@
 #include "settings.h"
 #include "timer.h"
 
-
+#define STORED_REGS 0x10
 extern size_t dyntrans_cache_size;
 extern uint32_t required_sr1;
 extern uint64_t trace_low, trace_high;
 
 static struct cpu_family *first_cpu_family = NULL;
 int stored_syscall;
-constexpr int STORED_REGS = 5;
-constexpr int STORED_SYSCALL_IOCTL = 1;
-constexpr int STORED_SYSCALL_READ = 2;
-constexpr int STORED_SYSCALL_ODM_GET_OBJ = 3;
-constexpr int STORED_SYSCALL_WRITE = 4;
-constexpr int STORED_SYSCALL_EXECV = 5;
-constexpr int STORED_CALL_CHKTYPE = 6;
-constexpr int STORED_SYSCALL_SCDISK_CONFIG = 7;
-constexpr int STORED_CALL_CMPKMCH = 8;
-constexpr int STORED_CALL_CFGSCCD_ODM_GET_OBJ_PROXY = 9;
-constexpr int STORED_CALL_QUERY_VPD = 10;
-constexpr int STORED_CALL_ODM_GET_LIST = 11;
-constexpr int STORED_CALL_ODM_ADD_OBJ_PROXY = 12;
-constexpr int STORED_CALL_DEVWRITE = 13;
-constexpr int STORED_CALL_VNOP_RDWR = 14;
-constexpr int STORED_CALL_FIND_ISA_INFO = 15;
-// constexpr int STORED_SYSCALL_LOG_ERROR = 5;
-// constexpr int STORED_SYSCALL_LOG_MESSAGE = 6;
-// constexpr int STORED_CALL_DEVSWQRY = 7;
-// constexpr int STORED_CALL_DEVSWADD = 8;
-// constexpr int STORED_CALL_DEVSWDEL = 9;
-// constexpr int STORED_CALL_DEVSWCHG = 10;
+constexpr int STORED_CALL_DEVICE_CALL_METHOD = 1;
+constexpr int STORED_CALL_FDC_MOTORSM = 4;
+constexpr int STORED_CALL_FDC_FDRW = 5;
+constexpr int STORED_CALL_FDC_DOCMD = 6;
+constexpr int STORED_CALL_CNPUTS = 7;
 
 struct match_functions_t {
   const char *name;
   uint32_t dump_regs;
   uint64_t return_addr1;
   uint64_t return_addr2;
+  bool skip;
   uint64_t stored[STORED_REGS];
+};
+
+#define IO_PORT_OFFSET 0x24
+
+const char *fdc_motorsm_input[] = {
+  "FMI_TIMER",
+  "FMI_STARTCMD",
+  "FMI_RSTARTCMD",
+  "FMI_DELAYCMD",
+  "FMI_IDLECMD",
+};
+
+const char *fdc_mtrstate[] = {
+	"FXS_START",
+	"FXS_MTRON",
+	"FXS_RCAL",
+	"FXS_DKCHGX",
+	"FXS_RESTART",
+	"FXS_RESEEK",
+	"FXS_SEEK",
+	"FXS_HDST",
+	"FXS_RDID",
+	"FXS_DOIT",
+	"FXS_DOWT",
+	"FXS_KILL",
+	"FXS_RESET",
+	"FXS_END"
+};
+
+const char *fdc_c_flags[] = {
+  "FCFLG_BUSY",
+  "FCFLG_WANT",
+  nullptr,
+  nullptr,
+  "FCFLG_WAITMR",
+  "FCFLG_WAITING",
+  nullptr,
+  "FCFLG_TIMEOUT",
+  "FCFLG_DSOUT",
+  nullptr,
+  nullptr,
+  "FCFLG_3DMODE"
 };
 
 struct match_functions_t trace_functions[] = {
   { "not used" },
-  { "__ioctl", 1 << 5, 0xd0007300 },
-  { "read_sc", 0, 0xd0008b80, 0xd0008cc0 },
-  { "odm_get_obj", 1 << 5, 0xd00f78c8, 0xd00f6acc },
-  { "write", 0, 0xd0016360 },
-  { "execv" },
-  { "chktype", 0, 0x10006fa4 },
-  { "sccd_proxy_scdisk_config", 0, 0x3868, 0x385c },
-  { "cmpkmch", 0, 0xd00fa07c },
-  { "cfgsccd_odm_get_obj_proxy", 1 << 5, 0xd000d610 },
-  { "query_vpd", (1 << 3) | (1 << 4) | (1 << 6) },
-  { "odm_get_list_proxy", (1 << 4), 0xd00f8110, 0xd00f8114 },
-  { "odm_add_obj_proxy", (1 << 5) },
-  { "devwrite", (1 << 3) | (1 << 4) },
-  { "vnop_rdwr", (1 << 4) },
-  { "find_isa_info", (1 << 3) | (1 << 4), 0x10001720, 0x1000171c },
-//  { "devswqry", 1 << 4, 0x57a34, 0x57864 },
-//  { "devswadd", 1 << 4, 0xfbfbc },
-//   { "devswdel", 1 << 4, 0xfbdd8 },
-//  { "devswchg", 0, 0xfbbe0 },
-//   { "odm_get_first", 1 << 5, 0xd00f8188 },
+  { "device_call_method", (1 << 3) | (1 << 4), 0xfe019e4c },
+  { "get_tbu", 0, 0xfe010648, 0, true },
+  { "get_tbl", 0, 0xfe010638, 0, true },
+  { "fdc_motorsm" },
+  { "fdrw" },
+  { "fdc_docmd", (1 << 4) },
+  { "cnputs" },
+  { "fdcspecify" },
+  { "fdc_exec" },
+  { "fdc_intr" },
+  { "fdmotort" },
+  { "fdc_result" },
+  { "fdrecalseek" },
+  { "fdcspdchange" },
+  { "fdcsense_int" },
+  { "fdc_statemach" },
   { }
 };
 
@@ -290,6 +312,48 @@ bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result) {
   return true;
 }
 
+bool load_uint32_le(struct cpu *cpu, uint32_t addr, uint32_t &result) {
+  uint8_t buf[sizeof(uint32_t)] = { };
+  auto r = cpu->memory_rw(cpu, cpu->mem, addr, &buf[0], sizeof(buf), MEM_READ, CACHE_NONE | NO_EXCEPTIONS | HOST_ACCESS);
+  if (r == MEMORY_ACCESS_FAILED) {
+    return false;
+  }
+  result = buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0];
+  return true;
+}
+
+void cpu_trace_method_call(struct cpu *cpu) {
+  auto r3 = cpu->cd.ppc.gpr[3];
+  auto r4 = cpu->cd.ppc.gpr[4];
+  fprintf(stderr, "device_call_method\n");
+  uint32_t name_ptr = 0, dev_ptr = 0, attr_ptr = 0, aname_ptr = 0, value_ptr = 0, value_len = 0;
+  if (!load_uint32_le(cpu, r3, name_ptr)) {
+    return;
+  }
+  if (!load_uint32_le(cpu, r3 + 4, dev_ptr)) {
+    return;
+  }
+  fprintf(stderr, "device ptr %08x\n", (unsigned int)dev_ptr);
+  attr_ptr = dev_ptr + 0x40;
+  if (!load_uint32_le(cpu, attr_ptr + 4, aname_ptr)) {
+    return;
+  }
+  if (!load_uint32_le(cpu, attr_ptr + 16, value_ptr)) {
+    return;
+  }
+  if (aname_ptr >= 0xfe050000) {
+    fprintf(stderr, "name_ptr %08x\n", (unsigned int)aname_ptr);
+    debug_mem_hexdump(cpu, cpu->mem, aname_ptr, aname_ptr + 0x10);
+    fprintf(stderr, "value_ptr %08x\n", (unsigned int)value_ptr);
+    debug_mem_hexdump(cpu, cpu->mem, value_ptr, value_ptr + 0x10);
+  } else {
+    fprintf(stderr, "device %08x\n", (unsigned int)dev_ptr);
+    debug_mem_hexdump(cpu, cpu->mem, dev_ptr, dev_ptr + 0x100);
+  }
+  fprintf(stderr, "name\n");
+  debug_mem_hexdump(cpu, cpu->mem, name_ptr, name_ptr + 0x10);
+}
+
 /*
  *  cpu_functioncall_trace():
  *
@@ -316,12 +380,90 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
                                       f, &offset, &n_args);
 
   auto matched = try_match_function(cpu, f, symbol);
-  if (matched) {
+  if (matched && matched->name) {
+    auto which = matched - trace_functions;
     trace_match = matched;
-  }
 
-  if (matched - trace_functions == STORED_CALL_CMPKMCH) {
-    return;
+    uint32_t controller = cpu->cd.ppc.gpr[3];
+    uint32_t csb = cpu->cd.ppc.gpr[3];
+    uint32_t value[3];
+    const char *value_names[] = {
+      "c_chip",
+      "c_mode",
+      "c_flags",
+      nullptr,
+    };
+    
+    switch (strncmp(matched->name, "fd", 2)) {
+    case 0:
+      fprintf(stderr, "call %s:\n  controller = %08x\n", matched->name, (unsigned int)controller);
+      if (which == STORED_CALL_FDC_MOTORSM || which == STORED_CALL_FDC_FDRW) {
+        if (!load_uint32_le(cpu, cpu->cd.ppc.gpr[3] + 0x2c, controller)) {
+          break;
+        }
+      } else {
+        if (!load_uint32_le(cpu, controller + 0x7c, csb)) {
+          break;
+        }
+      }
+    
+      fprintf(stderr, "  csb state\n");
+      debug_mem_hexdump(cpu, cpu->mem, csb + 0x20, csb + 0x40);
+      for (int i = 0; value_names[i]; i++) {
+        if (load_uint32_le(cpu, controller + 0x34 + i * 4, value[i])) {
+          fprintf(stderr, "  %s = %08x\n", value_names[i], (unsigned int)value[i]);
+        }
+      }
+      for (int i = 0; i < 12; i++) {
+        if (value[2] & (1 << i)) {
+          auto flag_name = fdc_c_flags[i];
+          if (flag_name) {
+            fprintf(stderr, " %s", flag_name);
+          } else {
+            fprintf(stderr, " ?flg %03x", (1 << i));
+          }
+        }
+      }
+      fprintf(stderr, "\n");
+      
+      uint32_t mtrstate, oldmtr;
+      if (load_uint32_le(cpu, controller + 0xe0, mtrstate) &&
+          load_uint32_le(cpu, controller + 0xe4, oldmtr)) {
+        if (mtrstate < 14) {
+          fprintf(stderr, "  mtrstate %s\n", fdc_mtrstate[mtrstate]);
+        } else {
+          fprintf(stderr, "  mtrstate %x\n", (unsigned int)mtrstate);
+        }
+        if (oldmtr < 14) {
+          fprintf(stderr, "  oldstate %s\n", fdc_mtrstate[oldmtr]);
+        } else {
+          fprintf(stderr, "  oldstate %x\n", (unsigned int)oldmtr);
+        }
+      }
+
+      uint32_t reg1, reg2;
+      if (load_uint32_le(cpu, controller + 0x108, reg1) &&
+          load_uint32_le(cpu, controller + 0x10c, reg2)) {
+        fprintf(stderr, "  registers DOR %02x DRATE %02x CFG %02x MSTAT %02x DATA %02x DIR %02x\n",
+                (uint8_t)reg1,
+                (uint8_t)(reg1 >> 8),
+                (uint8_t)(reg1 >> 16),
+                (uint8_t)(reg1 >> 24),
+                (uint8_t)reg2,
+                (uint8_t)(reg2 >> 8)
+                );
+      }
+      
+      switch (which) {
+      case STORED_CALL_FDC_MOTORSM:
+        const char *motorsm_input = cpu->cd.ppc.gpr[4] < 5 ? fdc_motorsm_input[cpu->cd.ppc.gpr[4]] : "unk";
+        fprintf(stderr, "  input %s (%d)\n", motorsm_input, (int)cpu->cd.ppc.gpr[4]);
+        fprintf(stderr, "  on? %d\n", (int)cpu->cd.ppc.gpr[5]);
+        break;
+      }
+      debug_mem_hexdump(cpu, cpu->mem, controller + 0x20, controller + 0x110);
+      break;
+    }
   }
 
 	/*  Special hack for M88K userspace:  */
@@ -329,6 +471,7 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
 		show_symbolic_function_name = 0;
 
+  /*
   if (cpu->machine->ncpus > 1)
 		fatal("cpu%i:\t", cpu->cpu_id);
 
@@ -359,65 +502,20 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
   if (matched) {
     cpu_register_dump(cpu->machine, cpu, 1, 0);
   }
+  */
 
   switch (matched - trace_functions) {
-  case STORED_SYSCALL_WRITE:
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + matched->stored[5 - 3]);
+  case STORED_CALL_DEVICE_CALL_METHOD:
+    cpu_trace_method_call(cpu);
     break;
 
-  case STORED_SYSCALL_EXECV: {
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x100);
-    uint32_t addr;
-    uint32_t r4 = matched->stored[4 - 3];
-    while (load_uint32(cpu, r4, addr) && addr) {
-      debug_mem_hexdump(cpu, cpu->mem, addr, addr + 0x20);
-      r4 += 4;
-    }
-    break;
-  }
-
-  case STORED_CALL_CHKTYPE:
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x100);
+  case STORED_CALL_FDC_DOCMD:
+    debug_mem_hexdump(cpu, cpu->mem, cpu->cd.ppc.gpr[4], cpu->cd.ppc.gpr[4] + 16);
     break;
 
-  case STORED_SYSCALL_SCDISK_CONFIG: {
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x100);
-    uint32_t uio_addr;
-    if (load_uint32(cpu, matched->stored[4 - 3] + 12, uio_addr)) {
-      debug_mem_hexdump(cpu, cpu->mem, uio_addr, uio_addr + 0x100);
-    }
-    break;
-  }
-    
-  case STORED_CALL_QUERY_VPD:
-    fprintf(stderr, "r3\n");
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x200);
-    fprintf(stderr, "r4\n");
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x200);
-    fprintf(stderr, "r6\n");
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[6 - 3], matched->stored[6 - 3] + 0x200);
-    break;
-
-  case STORED_CALL_ODM_ADD_OBJ_PROXY:
-    fprintf(stderr, "r3\n");
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[3 - 3], matched->stored[3 - 3] + 0x100);
-    fprintf(stderr, "r4\n");
-    debug_mem_hexdump(cpu, cpu->mem, matched->stored[4 - 3], matched->stored[4 - 3] + 0x200);
-    break;
-
-  case STORED_CALL_FIND_ISA_INFO: {
-    auto r3 = cpu->cd.ppc.gpr[3];
-    auto r4 = cpu->cd.ppc.gpr[4];
-    fprintf(stderr, "find_isa_info r3\n");
-    debug_mem_hexdump(cpu, cpu->mem, r3, r3 + 0x200);
-    uint32_t target_addr;
-    if (load_uint32(cpu, r3, target_addr)) {
-      fprintf(stderr, "inner buf\n");
-      debug_mem_hexdump(cpu, cpu->mem, target_addr, target_addr + 0x200);
-    }
-    fprintf(stderr, "find_isa_info r4\n");
-    debug_mem_hexdump(cpu, cpu->mem, r4, r4 + 0x200);
-  }
+  case STORED_CALL_CNPUTS:
+    fprintf(stderr, "call cnputs\n");
+    debug_mem_hexdump(cpu, cpu->mem, cpu->cd.ppc.gpr[3], cpu->cd.ppc.gpr[3] + 0x40);
     break;
   }
 
@@ -443,14 +541,13 @@ void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *retur
     return;
   }
 
-  if (trace_match - trace_functions == STORED_CALL_CMPKMCH) {
-    trace_match = nullptr;
-    return;
-  }
-
   if (required_sr1 && (cpu->cd.ppc.sr[1] != required_sr1)) {
     return;
   }
+
+  //if (cpu->pc == 0xe001f6b0) {
+    return;
+  //}
 
   if (trace_match && ((trace_match->return_addr1 == cpu->pc) || (trace_match->return_addr2 == cpu->pc))) {
     auto ioctl = trace_match->stored[4 - 3];
@@ -458,102 +555,6 @@ void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *retur
     fprintf(stderr, "return from %s\n", trace_match->name);
     cpu_register_dump(cpu->machine, cpu, 1, 0);
     switch (trace_match - trace_functions) {
-    case STORED_SYSCALL_READ: {
-      uint32_t read_addr = 0, len = 0;
-      uint32_t *ptrs[] = { &read_addr, &len };
-      for (auto i = 0; i < 2; i++) {
-        if (!load_uint32(cpu, trace_match->stored[4 - 3] + 4 * i, *ptrs[i])) {
-          break;
-        }
-      }
-      if (read_addr && len) {
-        debug_mem_hexdump(cpu, cpu->mem, read_addr, read_addr + len);
-      }
-      break;
-    }
-
-    case STORED_SYSCALL_IOCTL:
-      fprintf(stderr, "ioctl %d %08x\n", (int)trace_match->stored[4 - 3], (unsigned int)trace_match->stored[4 - 3]);
-      if (ioctl == 5 || ioctl == 14 || ioctl == 12 || ioctl == 16 || ioctl == 20 || ioctl == 21 || ioctl == 25 || ioctl == 26 || ioctl == 27 || ioctl == 32 || ioctl == 39 || ioctl == 42 || ioctl == 44 || ioctl == 46 || ioctl == 49) { // IOCTL 14 MIPLCB
-        uint32_t md_read[6] = { };
-
-        debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[5 - 3], trace_match->stored[5 - 3] + 24);
-
-        for (int i = 0; i < sizeof(md_read) / sizeof(md_read[0]); i++) {
-          if (!load_uint32(cpu, trace_match->stored[5 - 3] + 4 * i, md_read[i])) {
-            fprintf(stderr, "read failed for entry %d of md_ioctl\n", i);
-            break;
-          }
-        }
-
-        if (md_read[3]) {
-          fprintf(stderr, "md_data\n");
-          debug_mem_hexdump(cpu, cpu->mem, md_read[3], md_read[3] + 0x100);
-        }
-        if (md_read[5]) {
-          fprintf(stderr, "md_length\n");
-          debug_mem_hexdump(cpu, cpu->mem, md_read[5], md_read[5] + 0x100);
-        }
-      } else if (ioctl == 996) {
-        uint32_t md_read = 0;
-
-        debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[5 - 3], trace_match->stored[5 - 3] + 24);
-
-        if (!load_uint32(cpu, trace_match->stored[5 - 3] + 4, md_read)) {
-          fprintf(stderr, "read failed for scsi inq ioctl\n");
-          break;
-        }
-
-        fprintf(stderr, "inq result\n");
-        debug_mem_hexdump(cpu, cpu->mem, md_read, md_read + 256);
-      } else if (ioctl == 0xff01) {
-	fprintf(stderr, "device info\n");
-	debug_mem_hexdump(cpu, cpu->mem, trace_match->stored[5 - 3], trace_match->stored[5 - 3] + 0x200);
-      } else {
-        fprintf(stderr, "don't know ioctl type\n");
-      }
-      break;
-
-      /*
-    case STORED_CALL_VERIFY_TAG: {
-      uint32_t pointer = 0;
-      if (!load_uint32(trace_match->stored[4 - 3] + 16, pointer)) {
-        fprintf(stderr, "read failed for verify tag p1\n");
-        break;
-      }
-      if (!load_uint32(pointer + 108, pointer)) {
-        fprintf(stderr, "read failed for verify tag p2\n");
-        break;
-      }
-      if (!load_uint32(pointer + 8, pointer)) {
-        fprintf(stderr, "read failed for verify tag p3\n");
-        break;
-      }
-      fprintf(stderr, "verify tag: want DSP between %08x and %08x\n", pointer + 256, pointer + 3436);
-      break;
-    }
-      */
-
-    case STORED_CALL_ODM_GET_LIST:
-      {
-        auto r5 = trace_match->stored[5 - 3];
-        auto r3 = cpu->cd.ppc.gpr[3];
-        fprintf(stderr, "listinfo:\n");
-        debug_mem_hexdump(cpu, cpu->mem, r5, r5 + 0x400);
-        uint32_t valid, num_returned;
-        if (!load_uint32(cpu, r5 + 256 + 256 + 4, valid) || !load_uint32(cpu, r5 + 256 + 256, num_returned)) {
-          fprintf(stderr, "read failed for odm get list\n");
-          break;
-        }
-        if (valid) {
-          fprintf(stderr, "valid result, %d objects returned\n", (int)num_returned);
-          debug_mem_hexdump(cpu, cpu->mem, r3, r3 + num_returned * 256);
-        } else {
-          fprintf(stderr, "no valid result returned\n");
-        }
-      }
-      break;
-
     default:
       for (auto i = 3; i < 3 + STORED_REGS; i++) {
         if (trace_match->dump_regs & (1 << i)) {
@@ -567,11 +568,13 @@ void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *retur
     trace_match = nullptr;
   }
 
-	if (return_reg) {
-		for (int i=0; i<cpu->trace_tree_depth; i++)
-			fatal("  ");
-		fatal("<%08x return %08x from %08x %08x >\n", (uint32_t)pc, (uint32_t)*return_reg, (uint32_t)cpu->pc, (uint32_t)cpu->cd.ppc.sr[1]);
-	}
+  for (int i=0; i<cpu->trace_tree_depth; i++)
+    fatal("  ");
+  fatal("<%08x ", (uint32_t)pc);
+  if (return_reg) {
+    fatal("return %08x ", (uint32_t)*return_reg);
+  }
+  fatal("from %08x %08x >\n", (uint32_t)cpu->pc, (uint32_t)cpu->cd.ppc.sr[1]);
 
 	cpu->trace_tree_depth --;
 	if (cpu->trace_tree_depth < 0)

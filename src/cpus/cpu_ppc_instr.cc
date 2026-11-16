@@ -457,7 +457,7 @@ X(bla)
 	quick_pc_to_pointers(cpu);
 }
 
-
+extern void cpu_trace_method_call(struct cpu *cpu);
 extern bool load_uint32(struct cpu *cpu, uint32_t addr, uint32_t &result);
 
 /*
@@ -1846,6 +1846,10 @@ X(mtspr) {
       cpu->invalidate_translation_caches(cpu, addr, INVALIDATE_VADDR | (sprbank ? 0 : INVALIDATE_INSTR));
     }
     // fprintf(stderr, "%sBAT%d%s CHANGE %08x:%08x <= %08x\n", sprbank ? "D" : "I", regnr, lower ? "L" : "U", (unsigned int)old_upper, (unsigned int)old_lower, (unsigned int)reg(ic->arg[0]));
+  } else if (spr == SPR_SPRG2) {
+    // fprintf(stderr, "[ %08x SPRG2 %08x (sprg3 %08x) %" PRIx64 " ]\n", (unsigned int)cpu->pc, reg(ic->arg[0]), spr0[1], cpu->ninstrs);
+  } else if (spr == SPR_SPRG3) {
+    // fprintf(stderr, "[ %08x SPRG3 %08x (sprg2 %08x) %" PRIx64 " ]\n", (unsigned int)cpu->pc, reg(ic->arg[0]), spr0[-1], cpu->ninstrs);
   } else if (spr == SPR_SDR1) {
     fprintf(stderr, "SDR1 CHANGE\n");
     cpu->invalidate_translation_caches(cpu, cpu->pc, INVALIDATE_ALL);
@@ -1854,9 +1858,6 @@ X(mtspr) {
 }
 X(mtxer) {
   reg(ic->arg[1]) = reg(ic->arg[0]) & 0xe000007f;
-}
-X(mtspr_sprg2) {
-	reg(ic->arg[1]) = reg(ic->arg[0]);
 }
 X(mtlr) {
 	cpu->cd.ppc.spr[SPR_LR] = reg(ic->arg[0]);
@@ -3806,9 +3807,6 @@ X(to_be_translated)
 				break;
 			case SPR_CTR:
 				ic->f = instr(mtctr);
-				break;
-			case SPR_SPRG2:
-				ic->f = instr(mtspr_sprg2);
 				break;
       case SPR_DEC:
         ic->f = instr(mtdec);

@@ -102,7 +102,7 @@ static void assert_interrupt(struct fdc_data *d)
     if (!d->asserting_interrupt) {
         d->asserting_interrupt = true;
         d->reg[0] |= 0x80;
-        // INTERRUPT_ASSERT(d->irq);
+        //INTERRUPT_ASSERT(d->irq);
         d->pending_interrupt = 2;
     }
 }
@@ -175,7 +175,7 @@ DEVICE_ACCESS(fdc)
 			fprintf(stderr, "[ fdc: Status write %02x ]\n", (int)idata);
 		} else {
 			if (oldstate & STATE_CMD_QUEUE) {
-				idata = 0xd0 | (1 << d->current_drive);
+				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
 				idata = 0x80 | ((oldstate & STATE_CMD_BUSY) ? 0x10 : ((oldstate & STATE_CMD_BYTES) ? 0x40 : 0)) | ((oldstate & STATE_CMD_DMA) ? 0x20 : 0);
 			}
@@ -204,7 +204,6 @@ DEVICE_ACCESS(fdc)
 					switch (command) {
 					case STATE_SEEK:
             d->recent_seek = true;
-            d->current_drive = d->command_bytes[1] & 3;
 						d->seek_head = (d->command_bytes[1] >> 1) & 1;
 						d->seek_track = d->command_bytes[0];
             d->command_bytes[1] = 0x20;
@@ -235,11 +234,12 @@ DEVICE_ACCESS(fdc)
             } else {
               d->reg[2] |= 8;
             }
+            maybe_interrupt(d);
 						break;
 
           case STATE_CHECK_DRIVE_STATUS:
             d->command_result = 1;
-            d->command_bytes[0] = ((d->seek_track == 0) << 4) | (d->seek_head << 2) | d->current_drive;
+            d->command_bytes[1] = 0x28 | (d->command_bytes[1] & 7);
             d->state = STATE_CHECK_DRIVE_STATUS | STATE_CMD_QUEUE;
             break;
 
@@ -251,11 +251,11 @@ DEVICE_ACCESS(fdc)
           case STATE_PERPMODE:
             d->command_result = 0;
             d->state = STATE_EMPTY;
+            // maybe_interrupt(d);
             break;
 
 					case STATE_READ_ID:
             fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
-            d->current_drive = d->command_bytes[0] & 3;
             d->seek_head = !!(d->command_bytes[0] & 4);
 						d->state = STATE_READ_ID | STATE_CMD_QUEUE;
 						d->command_result = 7;
@@ -381,6 +381,7 @@ DEVICE_ACCESS(fdc)
 					d->command_result = 1;
 					d->command_bytes[0] = 0x90;
 					d->state = STATE_VERSION | STATE_CMD_QUEUE;
+					// maybe_interrupt(d);
 					break;
 
 				case STATE_CONFIGURE:
@@ -412,6 +413,7 @@ DEVICE_ACCESS(fdc)
 					d->command_result = 1;
 					d->command_bytes[0] = 0x80;
 					d->state = STATE_ENH_CHECK | STATE_CMD_QUEUE;
+					// maybe_interrupt(d);
           break;
 
         default:
@@ -511,9 +513,6 @@ DEVICE_ACCESS(fdc)
 	return 1;
 }
 
-static int high_rate[] = {
-  1, 0, 0, 1
-};
 
 DEVICE_ACCESS(fdc_3f7)
 {
@@ -528,7 +527,7 @@ DEVICE_ACCESS(fdc_3f7)
       d->drate = idata & 3;
       d->configuration = idata;
 	} else {
-      idata = (15 << 3) | ((d->configuration & 3) << 1) | high_rate[d->configuration & 3];
+      idata = ((d->configuration & 3) << 1) | 1;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);
 	    memory_writemax64(cpu, data, len, idata);
 	}

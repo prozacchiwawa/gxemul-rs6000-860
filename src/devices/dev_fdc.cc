@@ -55,7 +55,6 @@
 #define FDC_TICK_SHIFT   20
 #define	DEV_FDC_LENGTH		6	/*  TODO 8, but collision with wdc  */
 
-#define STATE_CMD_QUEUE 0x4000
 #define STATE_CMD_DMA 0x2000
 #define STATE_CMD_BUSY 0x1000
 #define STATE_EMPTY 0
@@ -175,7 +174,7 @@ DEVICE_ACCESS(fdc)
 		if (writeflag == MEM_WRITE) {
 			fprintf(stderr, "[ fdc: Status write %02x ]\n", (int)idata);
 		} else {
-			if (d->state & STATE_CMD_QUEUE) {
+			if (d->command_result) {
 				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
 				idata = 0x80 | ((d->state & STATE_CMD_BUSY) ? 0x10 : (d->command_size ? 0x40 : 0)) | ((d->state & STATE_CMD_DMA) ? 0x20 : 0);
@@ -240,7 +239,7 @@ DEVICE_ACCESS(fdc)
           case STATE_CHECK_DRIVE_STATUS:
             d->command_result = 1;
             d->command_bytes[1] = 0x28 | (d->command_bytes[1] & 7);
-            d->state = STATE_CHECK_DRIVE_STATUS | STATE_CMD_QUEUE;
+            d->state = STATE_EMPTY;
             break;
 
 					case STATE_CONFIGURE:
@@ -257,7 +256,7 @@ DEVICE_ACCESS(fdc)
 					case STATE_READ_ID:
             fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
             d->seek_head = !!(d->command_bytes[0] & 4);
-						d->state = STATE_READ_ID | STATE_CMD_QUEUE;
+						d->state = STATE_EMPTY;
 						d->command_result = 7;
 						d->command_bytes[6] = st0_state(d);
             d->command_bytes[5] = 0;
@@ -271,7 +270,7 @@ DEVICE_ACCESS(fdc)
 
 					case STATE_READ_NORMAL_DATA:
             d->recent_seek = true;
-						d->state = STATE_READ_NORMAL_DATA | STATE_CMD_QUEUE | STATE_CMD_DMA;
+						d->state = STATE_CMD_DMA;
 						d->seek_track = d->command_bytes[6];
 						d->seek_head = d->command_bytes[5];
 						d->read_sector = d->command_bytes[4];
@@ -368,7 +367,7 @@ DEVICE_ACCESS(fdc)
           d->command_bytes[1] = 0x20 | d->current_drive;
           d->command_bytes[0] = d->seek_track;
           d->recent_seek = 0;
-					d->state = STATE_CMD_QUEUE | STATE_CMD_BUSY;
+					d->state = STATE_CMD_BUSY;
 					break;
 
 				case STATE_SEEK:
@@ -381,7 +380,7 @@ DEVICE_ACCESS(fdc)
 					fprintf(stderr, "[ fdc: version ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x90;
-					d->state = STATE_CMD_QUEUE;
+					d->state = STATE_CMD_EMPTY;
 					// maybe_interrupt(d);
 					break;
 
@@ -413,7 +412,7 @@ DEVICE_ACCESS(fdc)
           fprintf(stderr, "[ fdc: enh controller check ]\n");
 					d->command_result = 1;
 					d->command_bytes[0] = 0x80;
-					d->state = STATE_CMD_QUEUE;
+					d->state = STATE_CMD_EMPTY;
 					// maybe_interrupt(d);
           break;
 
@@ -423,7 +422,7 @@ DEVICE_ACCESS(fdc)
 				}
 			}
 		} else {
-			if (d->state & STATE_CMD_QUEUE) {
+			if (d->command_result) {
 				d->command_result--;
 				idata = d->command_bytes[d->command_result];
 				memory_writemax64(cpu, data, len, idata);

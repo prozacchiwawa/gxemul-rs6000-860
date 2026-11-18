@@ -65,17 +65,25 @@
 #define STATE_VERSION 0x10
 #define STATE_PERPMODE 0x12
 #define STATE_CONFIGURE 0x13
+#define STATE_VERIFY 0x16
 #define STATE_READ_ID 0x0a
 #define STATE_READ_NORMAL_DATA 0x06
 #define STATE_ENH_CHECK 0x18
 
 #define REG_STA 0
 #define REG_DOR 2
+#define REG_TDR 3
+
+#define ST1_BAD_DATA 0x21
+#define ST2_BAD_DATA 0x25
+#define ST2_END_TRACK 0x80
 
 #define STA_INT 0x80
 
 #define DOR_RESET 4
 #define DOR_IGATE 8
+
+#define MFM_144_DRATE 0
 
 struct fdc_data {
     uint8_t	reg[DEV_FDC_LENGTH];
@@ -98,6 +106,7 @@ struct fdc_data {
     bool    motor;
     bool    dma;
     bool    busy;
+    bool    drate_fail;
 	struct interrupt	irq;
 };
 
@@ -106,8 +115,7 @@ static void assert_interrupt(struct fdc_data *d)
 {
     if (!d->asserting_interrupt) {
         d->asserting_interrupt = true;
-        d->reg[REG_STA] |= STA_INT;
-        //INTERRUPT_ASSERT(d->irq);
+        // INTERRUPT_ASSERT(d->irq);
         d->pending_interrupt = 2;
     }
 }
@@ -125,16 +133,16 @@ static void deassert_interrupt(struct fdc_data *d)
 static void maybe_interrupt(struct fdc_data *d)
 {
     fprintf(stderr, "[ fdc: %s interrupt ]\n", (d->reg[REG_DOR] & DOR_IGATE) ? "will" : "wont");
+    d->reg[REG_STA] |= STA_INT;
     if (d->reg[REG_DOR] & DOR_IGATE) {
         assert_interrupt(d);
     }
-    d->reg[REG_STA] |= STA_INT;
-}
+} 
 
 
 static int st0_state(struct fdc_data *d)
 {
-    return (d->recent_seek ? 0x20 : 0) | (d->seek_head ? 4 : 0) | d->current_drive;
+  return (d->drate_fail ? 0x40 : 0) | (d->recent_seek ? 0x20 : 0) | (d->seek_head ? 4 : 0) | d->current_drive;
 }
 
 
@@ -163,9 +171,12 @@ DEVICE_ACCESS(fdc)
     // TDR
   case 0x03:
     if (writeflag == MEM_READ) {
-      idata = 0x80;
+      idata = d->reg[REG_TDR];
       fprintf(stderr, "[ fdc: read %02x from TDR ]\n", (unsigned int)idata);
       memory_writemax64(cpu, data, len, idata);
+    } else {
+      fprintf(stderr, "[ fdc: write %02x to TDR ]\n", (unsigned int)idata);
+      d->reg[REG_TDR] = idata;
     }
     break;
 
@@ -176,16 +187,14 @@ DEVICE_ACCESS(fdc)
 			if (d->command_result) {
 				idata = 0xd0; /* STATUS_DIR | STATUS_READY | STATUS_BUSY */
 			} else {
-				idata = 0x80 | (d->busy ? 0x10 : (d->command_size ? 0x40 : 0)) | (d->dma ? 0x20 : 0);
+				idata = 0x80 | (d->busy ? 0x10 : (d->command_size ? 0x50 : (d->dma ? 0x20 : 0)));
 			}
       d->busy = false;
       d->dma = false;
-			if (d->status_read != (int)idata) {
+			if (d->status_read != (int)idata || (cpu->pc >= 0xe0000000 && cpu->pc < 0xe1000000)) {
 				fprintf(stderr, "[ fdc: Status read %02x ]\n", (int)idata);
         d->status_read = idata;
 			}
-			memory_writemax64(cpu, data, len, idata);
-      return 1;
 		}
 		break;
 
@@ -208,6 +217,7 @@ DEVICE_ACCESS(fdc)
             d->command_bytes[1] = 0x20;
             d->command_bytes[0] = d->seek_track;
             d->command_result = 0;
+            d->busy = false;
             maybe_interrupt(d);
 						break;
 
@@ -217,6 +227,7 @@ DEVICE_ACCESS(fdc)
             d->seek_head = 0;
             d->seek_track = 0;
             d->command_result = 0;
+            d->busy = false;
             maybe_interrupt(d);
 						break;
 
@@ -230,7 +241,6 @@ DEVICE_ACCESS(fdc)
             } else {
               d->reg[REG_DOR] |= DOR_IGATE;
             }
-            maybe_interrupt(d);
 						break;
 
           case STATE_CHECK_DRIVE_STATUS:
@@ -253,19 +263,21 @@ DEVICE_ACCESS(fdc)
 					case STATE_READ_ID:
             fprintf(stderr, "[ fdc: read id with spt = %d ]\n", d->assumed_spt);
             d->seek_head = !!(d->command_bytes[0] & 4);
-            d->busy = false;
 						d->command_result = 7;
 						d->command_bytes[6] = st0_state(d);
-            d->command_bytes[5] = 0;
-						d->command_bytes[4] = 0;
+            d->command_bytes[5] = d->drate_fail ? ST1_BAD_DATA : 0;
+						d->command_bytes[4] = d->drate_fail ? ST2_BAD_DATA : 0;
+            d->drate_fail = false;
 						d->command_bytes[3] = d->seek_track;
 						d->command_bytes[2] = d->seek_head;
 						d->command_bytes[1] = 1;
 						d->command_bytes[0] = 2;
+            d->busy = false;
             maybe_interrupt(d);
 						break;
 
-					case STATE_READ_NORMAL_DATA:
+          case STATE_VERIFY:
+					case STATE_READ_NORMAL_DATA: {
             d->recent_seek = true;
             d->busy = false;
             d->dma = true;
@@ -273,16 +285,21 @@ DEVICE_ACCESS(fdc)
 						d->seek_head = d->command_bytes[5];
 						d->read_sector = d->command_bytes[4];
 						d->eot_sector = d->command_bytes[2];
-						fprintf(stderr, "[ fdc: read C%d H%d S%d ]\n", d->seek_track, d->seek_head, d->read_sector);
+            d->drate_fail |= d->read_sector > d->assumed_spt;
+						fprintf(stderr, "[ fdc: read C%d H%d S%d->%d spt = %d ]\n", d->seek_track, d->seek_head, d->read_sector, d->eot_sector, d->assumed_spt);
 						d->command_result = 7;
 						d->command_bytes[6] = st0_state(d);
-						d->command_bytes[5] = 0;
-						d->command_bytes[4] = 0;
+						d->command_bytes[5] = d->drate_fail ? ST1_BAD_DATA : 0;
+						d->command_bytes[4] = d->drate_fail ? ST2_BAD_DATA : 0;
+            if (d->eot_sector > d->assumed_spt || d->read_sector > d->assumed_spt) {
+              d->command_bytes[4] |= ST2_END_TRACK;
+            }
+            d->drate_fail = false;
 						d->command_bytes[3] = d->seek_track;
 						d->command_bytes[2] = d->seek_head;
-						d->command_bytes[1] = d->read_sector;
 						d->command_bytes[0] = 2;
 
+            maybe_interrupt(d);
             // Ask the DMA system where to send the data in memory.
             fprintf(stderr, "[ fdc: setting dma scatter gather 0xff, controller status 4 ]\n");
             dma_controller_1_scatter_gather = 0xff;
@@ -304,6 +321,7 @@ DEVICE_ACCESS(fdc)
               // LBA = (cylinder * number_of_heads + head) * sectors_per_track + sector - 1
               // offset = 512 * ((((d->seek_track * 2) + d->seek_head) * 18) + d->read_sector - 1);
               offset = 512 * ((((d->seek_track * 2) + d->seek_head) * d->assumed_spt) + (d->read_sector - 1));
+              d->read_sector += 1;
 
               while (read_len > 0) {
                 fprintf(stderr, "[ fdc: read diskette from %08x to addr %08" PRIx64" len %08" PRIx64" ]\n", offset, read_addr, read_len);
@@ -321,15 +339,17 @@ DEVICE_ACCESS(fdc)
                 }
                 */
 
-                cpu->memory_rw(cpu, cpu->mem, read_addr, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+                if (d->command == STATE_READ_NORMAL_DATA) {
+                    cpu->memory_rw(cpu, cpu->mem, read_addr, sector, 512, MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+                }
+                
                 read_addr += 512;
                 offset += 512;
                 read_len -= 512;
-                d->command_bytes[1] += 1;
+                d->command_bytes[1] = d->read_sector;
               }
             }
-            maybe_interrupt(d);
-            break;
+          } break;
 					}
 				} else {
           d->busy = true;
@@ -386,6 +406,7 @@ DEVICE_ACCESS(fdc)
 				case STATE_READ_ID:
 					fprintf(stderr, "[ fdc: read id ]\n");
 					d->command_size = 1;
+          d->drate_fail = d->drate != MFM_144_DRATE;
 					break;
 
         case STATE_PERPMODE:
@@ -393,9 +414,11 @@ DEVICE_ACCESS(fdc)
           d->command_size = 1;
           break;
 
+        case STATE_VERIFY:
 				case STATE_READ_NORMAL_DATA:
 					fprintf(stderr, "[ fdc: read normal data ]\n");
 					d->command_size = 8;
+          d->drate_fail = d->drate != MFM_144_DRATE;
 					break;
 
         case STATE_ENH_CHECK:
@@ -415,13 +438,11 @@ DEVICE_ACCESS(fdc)
 			if (d->command_result) {
 				d->command_result--;
 				idata = d->command_bytes[d->command_result];
-				memory_writemax64(cpu, data, len, idata);
 				fprintf(stderr, "[ fdc: command result %02x (rem %02x) from %d ]\n", (int)idata, d->command_result, d->command);
 				if (!d->command_result) {
           d->busy = false;
           d->dma = false;
 				}
-        return 1;
 			} else {
 				fprintf(stderr, "[ fdc: FIFO READ ]\n");
 			}
@@ -447,25 +468,22 @@ DEVICE_ACCESS(fdc)
       }
 		} else {
       fprintf(stderr, "[ fdc: read DOR ]\n");
-      memory_writemax64(cpu, data, len, d->reg[REG_DOR]);
+      idata = d->reg[REG_DOR];
 		}
 		break;
 
   case 0x1:
     if (writeflag == MEM_READ) {
-      uint8_t result = 0xd8 | ((d->drive_sel & 3) << 5) | (d->drive_sel == 0 ? d->motor : 0);
-      fprintf(stderr, "[ fdc: read from reg STB: %02x ]\n", result);
-      memory_writemax64(cpu, data, len, result);
+      idata = 0xd8 | ((d->drive_sel & 3) << 5) | (d->drive_sel == 0 ? d->motor : 0);
+      fprintf(stderr, "[ fdc: read from reg STB: %02x ]\n", (unsigned int)idata);
     }
     break;
 
   case 0:
     if (writeflag == MEM_READ) {
-      int result = d->reg[REG_STA] | STA_INT;
+      idata = d->reg[REG_STA] | STA_INT;
       d->reg[REG_STA] &= ~STA_INT;
-      fatal("[ fdc: read from reg STA: %02x ]\n", result);
-			memory_writemax64(cpu, data, len, result);
-      return 1;
+      fatal("[ fdc: read from reg STA: %02x ]\n", idata);
     }
     break;
 
@@ -496,11 +514,10 @@ DEVICE_ACCESS(fdc_3f7)
 
 	if (writeflag == MEM_WRITE) {
       fprintf(stderr, "[ fdc: write 3f7 %02x ]\n", (int)idata);
-      d->assumed_spt = (idata & 3) == 3 ? 36 : 18;
       d->drate = idata & 3;
       d->configuration = idata;
 	} else {
-      idata = ((d->configuration & 3) << 1) | 1;
+      idata = 0;
 	    fprintf(stderr, "[ fdc: read 3f7 -> %02x ]\n", (int)idata);
 	    memory_writemax64(cpu, data, len, idata);
 	}
@@ -525,8 +542,9 @@ DEVINIT(fdc)
 	CHECK_ALLOCATION(d = (struct fdc_data *) malloc(sizeof(struct fdc_data)));
 	memset(d, 0, sizeof(struct fdc_data));
 
-  d->assumed_spt = 36;
+  d->assumed_spt = 18;
   d->drate = 2;
+  d->reg[REG_TDR] = 0;
 
 	INTERRUPT_CONNECT(devinit->interrupt_path, d->irq);
 

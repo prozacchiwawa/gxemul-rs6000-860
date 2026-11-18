@@ -51,6 +51,7 @@ constexpr int STORED_CALL_FDC_MOTORSM = 4;
 constexpr int STORED_CALL_FDC_FDRW = 5;
 constexpr int STORED_CALL_FDC_DOCMD = 6;
 constexpr int STORED_CALL_CNPUTS = 7;
+constexpr int STORED_CALL_FDCSPECIFY = 8;
 
 struct match_functions_t {
   const char *name;
@@ -71,7 +72,7 @@ const char *fdc_motorsm_input[] = {
   "FMI_IDLECMD",
 };
 
-const char *fdc_mtrstate[] = {
+const char *fdc_xstate[] = {
 	"FXS_START",
 	"FXS_MTRON",
 	"FXS_RCAL",
@@ -88,6 +89,15 @@ const char *fdc_mtrstate[] = {
 	"FXS_END"
 };
 
+const char *fdc_mtrstate[] = {
+	"FMS_OFF",
+	"FMS_START",
+	"FMS_KILLST",
+	"FMS_ON",
+	"FMS_DELAY",
+	"FMS_IDLE"
+};
+
 const char *fdc_c_flags[] = {
   "FCFLG_BUSY",
   "FCFLG_WANT",
@@ -101,6 +111,14 @@ const char *fdc_c_flags[] = {
   nullptr,
   nullptr,
   "FCFLG_3DMODE"
+};
+
+const char *drate_mfm[] = {
+  "250k/s (config 2) 720k",
+  "300k/s (config 1)",
+  "417k/s (config 0)",
+  "500k/s (config 0) 1.44M",
+  "1m/s (config 3) 2.88M"
 };
 
 struct match_functions_t trace_functions[] = {
@@ -121,6 +139,7 @@ struct match_functions_t trace_functions[] = {
   { "fdcspdchange" },
   { "fdcsense_int" },
   { "fdc_statemach" },
+  { "fdwatch" },
   { }
 };
 
@@ -426,18 +445,35 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
       }
       fprintf(stderr, "\n");
       
-      uint32_t mtrstate, oldmtr;
-      if (load_uint32_le(cpu, controller + 0xe0, mtrstate) &&
-          load_uint32_le(cpu, controller + 0xe4, oldmtr)) {
-        if (mtrstate < 14) {
-          fprintf(stderr, "  mtrstate %s\n", fdc_mtrstate[mtrstate]);
+      uint32_t xstate, oldstate;
+      uint32_t mtrstate;
+      uint32_t fcu_ptr, chars_ptr;
+      if (load_uint32_le(cpu, controller + 0xe0, xstate) &&
+          load_uint32_le(cpu, controller + 0xe4, oldstate)) {
+        if (xstate < 14) {
+          fprintf(stderr, "  xstate %s\n", fdc_xstate[xstate]);
         } else {
-          fprintf(stderr, "  mtrstate %x\n", (unsigned int)mtrstate);
+          fprintf(stderr, "  xstate %x\n", (unsigned int)xstate);
         }
-        if (oldmtr < 14) {
-          fprintf(stderr, "  oldstate %s\n", fdc_mtrstate[oldmtr]);
+        if (oldstate < 14) {
+          fprintf(stderr, "  oldstate %s\n", fdc_xstate[oldstate]);
         } else {
-          fprintf(stderr, "  oldstate %x\n", (unsigned int)oldmtr);
+          fprintf(stderr, "  oldstate %x\n", (unsigned int)oldstate);
+        }
+      }
+
+      if (load_uint32_le(cpu, controller + 0x9c, mtrstate)) {
+        if (mtrstate < 6) {
+          fprintf(stderr, "  mtrstate[unit] %s\n", fdc_mtrstate[mtrstate]);
+        } else {
+          fprintf(stderr, "  mtrstate[unit] %x\n", (unsigned int)mtrstate);
+        }
+      }
+
+      if (load_uint32_le(cpu, controller + 0x7c, fcu_ptr)) {
+        if (load_uint32_le(cpu, fcu_ptr + 0x14, chars_ptr)) {
+          fprintf(stderr, "  fd_chars %08x -> %08x\n", (unsigned int)fcu_ptr, (unsigned int)chars_ptr);
+          debug_mem_hexdump(cpu, cpu->mem, chars_ptr, chars_ptr + 28);
         }
       }
 
@@ -463,6 +499,14 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
       }
       debug_mem_hexdump(cpu, cpu->mem, controller + 0x20, controller + 0x110);
       break;
+
+    case STORED_CALL_FDCSPECIFY:
+      if (cpu->cd.ppc.gpr[4] < 5) {
+        fprintf(stderr, "  data rate %s\n", drate_mfm[cpu->cd.ppc.gpr[4]]);
+      } else {
+        fprintf(stderr, "  data rate %x\n", (unsigned int)cpu->cd.ppc.gpr[4]);
+      }
+      break;
     }
   }
 
@@ -471,7 +515,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
 	    !(cpu->cd.m88k.cr[M88K_CR_PSR] & M88K_PSR_MODE))
 		show_symbolic_function_name = 0;
 
-  /*
   if (cpu->machine->ncpus > 1)
 		fatal("cpu%i:\t", cpu->cpu_id);
 
@@ -502,7 +545,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
   if (matched) {
     cpu_register_dump(cpu->machine, cpu, 1, 0);
   }
-  */
 
   switch (matched - trace_functions) {
   case STORED_CALL_DEVICE_CALL_METHOD:
@@ -545,9 +587,9 @@ void cpu_functioncall_trace_return(struct cpu *cpu, uint64_t pc, uint64_t *retur
     return;
   }
 
-  //if (cpu->pc == 0xe001f6b0) {
+  if (cpu->pc == 0xe001f6b0) {
     return;
-  //}
+  }
 
   if (trace_match && ((trace_match->return_addr1 == cpu->pc) || (trace_match->return_addr2 == cpu->pc))) {
     auto ioctl = trace_match->stored[4 - 3];

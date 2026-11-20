@@ -961,7 +961,7 @@ DEVICE_ACCESS(eagle_private_dma) {
 
   case 16:
     if (writeflag == MEM_WRITE) {
-      fprintf(stderr, "[ eagle: last int %d ]\n", d->last_int);
+      fprintf(stderr, "[ eagle: last int %05x ]\n", d->last_int);
       d->last_int = idata;
     } else {
       idata = d->last_int;
@@ -994,6 +994,7 @@ void pci_assert_interrupt(struct interrupt *i) {
 void pci_deassert_interrupt(struct interrupt *i) {
   struct eagle_data *d = (struct eagle_data *)i->extra;
   unsigned int mask = (1 << i->line);
+
   if (d->asserted_mask & mask) {
     // fprintf(stderr, "[ eagle: pci side interrupt %d v ]\n", i->line);
     d->asserted_mask &= ~mask;
@@ -1011,17 +1012,13 @@ DEVICE_ACCESS(eagle_pci_interrupt)
 		idata = memory_readmax64(cpu, data, len);
 		// fatal("[ prep: write to interrupt register? ]\n");
   } else if (writeflag == MEM_READ) {
-    // fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", d->last_int);
+    fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", d->last_int);
     if (d->last_int & 0x10000) {
       d->last_int &= 0xffff;
       if (d->last_int & 4) {
         for (int i = 8; i < 16; i++) {
           if (d->last_int & (1 << i)) {
-            // fprintf(stderr, "deassert int %d on pci ack\n", i);
-            auto mask = 1 << i;
-            d->asserted_mask &= ~mask;
-            INTERRUPT_DEASSERT(d->irq_forward[i]);
-
+            fprintf(stderr, "deassert int %d on pci ack\n", i);
             odata = i;
             break;
           }
@@ -1032,11 +1029,7 @@ DEVICE_ACCESS(eagle_pci_interrupt)
             continue;
           }
 
-          // fprintf(stderr, "deassert int %d on pci ack\n", i);
-          auto mask = 1 << i;
-          d->asserted_mask &= ~mask;
-          INTERRUPT_DEASSERT(d->irq_forward[i]);
-
+          fprintf(stderr, "deassert int %d on pci ack\n", i);
           if (d->last_int & (1 << i)) {
             odata = i;
             break;
@@ -1048,7 +1041,11 @@ DEVICE_ACCESS(eagle_pci_interrupt)
     if (cpu->machine->show_trace_tree) {
       fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
     }
-    cpu->cd.ppc.irq_asserted = false;
+
+    uint8_t cmd = (3 << 5) | (odata & 7);
+
+    cpu->memory_rw(cpu, cpu->mem, PIC_PRIVATE + (odata & ~7), &cmd, sizeof(cmd), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+    
     memory_writemax64(cpu, data, len, odata);
 	}
 

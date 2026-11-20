@@ -47,7 +47,7 @@
 
 #define	DEV_8259_LENGTH		2
 
-// #define DEV_8259_DEBUG
+#define DEV_8259_DEBUG
 
 #ifdef DEV_8259_DEBUG
 #define L(x) do { \
@@ -154,12 +154,10 @@ void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t
     return;
   }
 
-  if (!d->isr) {
 #ifdef DEV_8259_DEBUG
-    L(fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled));
+  L(fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled));
 #endif
-    do_deassert(cpu, d);
-  }
+  do_deassert(cpu, d);
 }
 
 void dev_8259_assert(struct cpu *cpu, struct pic8259_data *d, int line) {
@@ -389,6 +387,18 @@ DEVICE_ACCESS(8259)
 	return 1;
 }
 
+DEVICE_ACCESS(8259_private)
+{
+	struct pic8259_data *d = (struct pic8259_data *) extra;
+  uint64_t idata;
+
+  if (writeflag == MEM_WRITE) {
+    idata = memory_readmax64(cpu, data, len);
+    write_ocw2(cpu, d, idata);
+  }
+
+  return 1;
+}
 
 /*
  *  devinit_8259():
@@ -424,10 +434,16 @@ DEVINIT(8259)
 
   assert(devinit->addr > 0x808680000000ull);
 
-	memory_device_register(devinit->machine->memory, name2,
-	    devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,
-	    DM_DEFAULT, NULL);
+	memory_device_register
+    (devinit->machine->memory, name2,
+     devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,
+     DM_DEFAULT, NULL);
 
+	memory_device_register
+    (devinit->machine->memory, name2,
+     PIC_PRIVATE + d->irq_base, 8, dev_8259_private_access, d,
+     DM_DEFAULT, NULL);
+  
 	devinit->return_ptr = d;
 	return 1;
 }

@@ -188,7 +188,6 @@ DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
   interrupt_check(d);
-  d->currently_asserted[0] = d->currently_asserted[1] = false;
 }
 
 

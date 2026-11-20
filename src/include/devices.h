@@ -193,6 +193,7 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 
 #define KEYBOARD_PRIVATE (I8042_PRIVATE + 16)
 #define MOUSE_PRIVATE (KEYBOARD_PRIVATE + 16)
+#define PIC_PRIVATE (MOUSE_PRIVATE + 16)
 
 /* dev_pcic.cc */
 #define DEV_PCIC_PRIVATE_IO_AREA 0x2100000000ull

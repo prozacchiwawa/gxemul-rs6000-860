@@ -433,7 +433,7 @@ void ppc_exception(struct cpu *cpu, int exception_nr, int exn_extra)
   if (exception_nr == 9) {
 		//fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" (dec %08x) ]\n",
     //  exception_nr, cpu->pc, (unsigned int)cpu->cd.ppc.spr[SPR_DEC]);
-  } else if (!quiet_mode && exception_nr != 5) {
+  } else if ((!quiet_mode && exception_nr != 5) || cpu->machine->show_trace_tree) {
     fatal("[ PPC Exception 0x%x; pc=0x%" PRIx64" %" PRIx64 " ]\n",
           exception_nr, cpu->pc, cpu->ninstrs);
   }
@@ -689,7 +689,9 @@ void ppc_cpu_tlbdump(struct machine *m, int x, int rawflag)
 void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
-  // fprintf(stderr, "ppc irq raised\n");
+  if (cpu->machine->show_trace_tree) {
+    fprintf(stderr, "ppc irq raised\n");
+  }
 	cpu->cd.ppc.irq_asserted = 1;
 }
 
@@ -700,7 +702,9 @@ void ppc_irq_interrupt_assert(struct interrupt *interrupt)
 void ppc_irq_interrupt_deassert(struct interrupt *interrupt)
 {
 	struct cpu *cpu = (struct cpu *) interrupt->extra;
-  // fprintf(stderr, "ppc irq lowered\n");
+  if (cpu->machine->show_trace_tree) {
+    fprintf(stderr, "ppc irq lowered\n");
+  }
 	cpu->cd.ppc.irq_asserted = 0;
 }
 

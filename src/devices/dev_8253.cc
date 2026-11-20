@@ -56,7 +56,7 @@
 #define	DEV_8253_LENGTH		4
 #define	TICK_SHIFT		14
 #define INTERRUPT_TICK_COUNT 20000
-// #define PIT_8259_DEBUG
+#define PIT_8259_DEBUG
 
 struct pit8253_data {
 	int		in_use;

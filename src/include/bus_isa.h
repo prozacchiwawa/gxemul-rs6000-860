@@ -37,6 +37,7 @@
 #ifdef BUS_ISA_C
 
 struct bus_isa_data {
+  struct machine *machine;
 	struct interrupt irq;
 
 	struct pic8259_data* pic1;

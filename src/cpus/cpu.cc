@@ -554,11 +554,6 @@ void cpu_functioncall_trace(struct cpu *cpu, uint64_t f)
   case STORED_CALL_FDC_DOCMD:
     debug_mem_hexdump(cpu, cpu->mem, cpu->cd.ppc.gpr[4], cpu->cd.ppc.gpr[4] + 16);
     break;
-
-  case STORED_CALL_CNPUTS:
-    fprintf(stderr, "call cnputs\n");
-    debug_mem_hexdump(cpu, cpu->mem, cpu->cd.ppc.gpr[3], cpu->cd.ppc.gpr[3] + 0x40);
-    break;
   }
 
 #ifdef PRINT_MEMORY_CHECKSUM

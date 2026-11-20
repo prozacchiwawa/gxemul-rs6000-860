@@ -45,7 +45,7 @@ struct prep_data {
 	uint32_t		int_status;
 };
 
-void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr);
+void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t old_isr);
 
 DEVICE_ACCESS(prep)
 {
@@ -64,8 +64,8 @@ DEVICE_ACCESS(prep)
           if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
             if ((i == 13 || i == 12) && cpu->machine->isa_pic_data.pic2) {
               // fprintf(stderr, "deassert int %d on pci ack\n", i);
-              dev_8259_deassert(cpu->machine->isa_pic_data.pic2, i - 8);
-              dev_8259_deassert(cpu->machine->isa_pic_data.pic1, 2);
+              dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic2, i - 8);
+              dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic1, 2);
             }
 
             odata = i;
@@ -80,7 +80,7 @@ DEVICE_ACCESS(prep)
 
           if ((i == 4 || i == 1) && cpu->machine->isa_pic_data.pic1) {
             // fprintf(stderr, "deassert int %d on pci ack\n", i);
-            dev_8259_deassert(cpu->machine->isa_pic_data.pic1, i);
+            dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic1, i);
           }
 
           if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
@@ -91,8 +91,10 @@ DEVICE_ACCESS(prep)
       }
     }
 
+    if (cpu->machine->show_trace_tree) {
+      fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    }
     cpu->cd.ppc.irq_asserted = false;
-    // fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
     memory_writemax64(cpu, data, len, odata);
 	}
 

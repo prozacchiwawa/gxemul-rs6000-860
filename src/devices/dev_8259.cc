@@ -47,8 +47,14 @@
 
 #define	DEV_8259_LENGTH		2
 
-// #define DEV_8259_DEBUG
+#define DEV_8259_DEBUG
 
+#define L(x) do { \
+  if (cpu->machine->show_trace_tree) { \
+    x; \
+  } \
+} while (0)
+    
 #define N -1
 static int pri_lut[] = {
   N,0,1,0,2,0,1,0,3,0,1,0,2,0,1,0,
@@ -84,35 +90,35 @@ static int get_best_interrupt(int rotation, uint8_t imask) {
   return (raw_priority + 8 - (rotation & 7)) & 7;
 }
 
-static void do_deassert(struct pic8259_data *d) {
+static void do_deassert(struct cpu *cpu, struct pic8259_data *d) {
   if (d->chained_to) {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): chained deassert\n", d->irq_base);
+    L(fprintf(stderr, "8259(%d): chained deassert\n", d->irq_base));
 #endif
-    dev_8259_deassert(d->chained_to, d->chained_int_line);
+    dev_8259_deassert(cpu, d->chained_to, d->chained_int_line);
   } else {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): deassert\n", d->irq_base);
+    L(fprintf(stderr, "8259(%d): deassert\n", d->irq_base));
 #endif
     INTERRUPT_DEASSERT(d->irq);
   }
 }
 
-static void do_assert(struct pic8259_data *d) {
+static void do_assert(struct cpu *cpu, struct pic8259_data *d) {
   if (d->chained_to) {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): chained assert\n", d->irq_base);
+    L(fprintf(stderr, "8259(%d): chained assert\n", d->irq_base));
 #endif
-    dev_8259_assert(d->chained_to, d->chained_int_line);
+    dev_8259_assert(cpu, d->chained_to, d->chained_int_line);
   } else {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): assert\n", d->irq_base);
+    L(fprintf(stderr, "8259(%d): assert\n", d->irq_base));
 #endif
     INTERRUPT_ASSERT(d->irq);
   }
 }
 
-void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
+void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t old_isr) {
   // isr frozen when poll_cmd.
   if (d->poll_cmd) {
     return;
@@ -121,51 +127,51 @@ void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
   uint8_t unmasked = d->irr & ~(d->ier | d->isr);
   int pri_enabled = get_best_interrupt(d->rotation_pri, unmasked);
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d): new pri %d have irr %02x ier %02x isr %02x\n", d->irq_base, pri_enabled, d->irr, d->ier, d->isr);
+  L(fprintf(stderr, "8259(%d): new pri %d have irr %02x ier %02x isr %02x\n", d->irq_base, pri_enabled, d->irr, d->ier, d->isr));
 #endif
-
+  
   if (pri_enabled >= 0 && !d->isr) {
     uint8_t pri_mask = 1 << pri_enabled;
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): new interrupt %d\n", d->irq_base, pri_enabled);
+    L(fprintf(stderr, "8259(%d): new interrupt %d\n", d->irq_base, pri_enabled));
 #endif
 
     d->isr |= pri_mask;
 
     *d->last_int &= ~(0xff << d->irq_base);
     *d->last_int |= 0x10000 | (pri_mask << d->irq_base);
-    // fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr);
+    // L(fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr));
 
-    do_assert(d);
+    do_assert(cpu, d);
     return;
   }
 
   if (!d->isr) {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled);
+    L(fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled));
 #endif
-    do_deassert(d);
+    do_deassert(cpu, d);
   }
 }
 
-void dev_8259_assert(struct pic8259_data *d, int line) {
+void dev_8259_assert(struct cpu *cpu, struct pic8259_data *d, int line) {
   d->irr |= 1 << line;
 
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d): assert(%d)\n", d->irq_base, line);
+  L(fprintf(stderr, "8259(%d): assert(%d)\n", d->irq_base, line));
 #endif
 
-  dev_8259_recalc_interrupts(d, d->isr);
+  dev_8259_recalc_interrupts(cpu, d, d->isr);
 }
 
-void dev_8259_deassert(struct pic8259_data *d, int line) {
+void dev_8259_deassert(struct cpu *cpu, struct pic8259_data *d, int line) {
   d->irr &= ~(1 << line);
 
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d): deassert(%d)\n", d->irq_base, line);
+  L(fprintf(stderr, "8259(%d): deassert(%d)\n", d->irq_base, line));
 #endif
 
-  dev_8259_recalc_interrupts(d, d->isr);
+  dev_8259_recalc_interrupts(cpu, d, d->isr);
 }
 
 static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
@@ -174,7 +180,7 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
   int to_ack, old_isr = d->isr;
 
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d): ocw2 rse %d level %d\n", d->irq_base, rse, level);
+  L(fprintf(stderr, "8259(%d): ocw2 rse %d level %d\n", d->irq_base, rse, level));
 #endif
 
   switch (rse) {
@@ -182,13 +188,13 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
     to_ack = get_best_interrupt(d->rotate, d->isr);
     if (to_ack != -1) {
       d->isr &= ~(1 << to_ack);
-      dev_8259_recalc_interrupts(d, old_isr);
+      dev_8259_recalc_interrupts(cpu, d, old_isr);
     }
     break;
 
   case 3: // Specific eoi
     d->isr &= ~(1 << level);
-    dev_8259_recalc_interrupts(d, old_isr);
+    dev_8259_recalc_interrupts(cpu, d, old_isr);
     break;
 
   case 5: // Rotate on non specific eoi
@@ -196,7 +202,7 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
     d->rotation_pri = to_ack;
     if (to_ack != -1) {
       d->isr &= ~(1 << to_ack);
-      dev_8259_recalc_interrupts(d, old_isr);
+      dev_8259_recalc_interrupts(cpu, d, old_isr);
     }
     break;
 
@@ -214,9 +220,9 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
     d->rotation_pri = level;
     d->isr &= ~(1 << level);
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): rotate on specific eoi: %d new isr %02x\n", d->irq_base, d->rotation_pri, d->isr);
+    L(fprintf(stderr, "8259(%d): rotate on specific eoi: %d new isr %02x\n", d->irq_base, d->rotation_pri, d->isr));
 #endif
-    dev_8259_recalc_interrupts(d, old_isr);
+    dev_8259_recalc_interrupts(cpu, d, old_isr);
     break;
 
   case 6: // Set priority command
@@ -237,9 +243,9 @@ static void write_ocw3(struct cpu *cpu, struct pic8259_data *d, int idata) {
   if (!d->poll_cmd) {
     to_ack = get_best_interrupt(d->rotation_pri, d->irr);
     if (to_ack != -1) {
-      dev_8259_recalc_interrupts(d, d->isr);
+      dev_8259_recalc_interrupts(cpu, d, d->isr);
     } else {
-      do_deassert(d);
+      do_deassert(cpu, d);
     }
   }
 
@@ -254,7 +260,7 @@ static void write_ocw3(struct cpu *cpu, struct pic8259_data *d, int idata) {
 
 static void write_init_start(struct cpu *cpu, struct pic8259_data *d, int idata) {
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d): write init start (%02x)\n", d->irq_base, idata);
+  L(fprintf(stderr, "8259(%d): write init start (%02x)\n", d->irq_base, idata));
 #endif
   d->icw[0] = idata;
   d->init_state = 1;
@@ -268,9 +274,9 @@ static int doing_init(struct pic8259_data *d) {
   return d->init_state >= 0;
 }
 
-static void finish_init(struct pic8259_data *d) {
+static void finish_init(struct cpu *cpu, struct pic8259_data *d) {
 #ifdef DEV_8259_DEBUG
-  fprintf(stderr, "8259(%d) finish init\n", d->irq_base);
+  L(fprintf(stderr, "8259(%d) finish init\n", d->irq_base));
 #endif
   d->init_state = -1;
 }
@@ -278,7 +284,7 @@ static void finish_init(struct pic8259_data *d) {
 static void command_write(struct cpu *cpu, struct pic8259_data *d, int idata) {
   if (doing_init(d)) {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): write init (%02x) with state %d\n", d->irq_base, idata, d->init_state);
+    L(fprintf(stderr, "8259(%d): write init (%02x) with state %d\n", d->irq_base, idata, d->init_state));
 #endif
     d->icw[d->init_state] = idata;
     d->init_state += 1;
@@ -287,7 +293,7 @@ static void command_write(struct cpu *cpu, struct pic8259_data *d, int idata) {
       d->init_state = 3;
     }
     if (d->init_state >= 3 + (d->icw[0] & 1)) {
-      finish_init(d);
+      finish_init(cpu, d);
     }
     return;
   }
@@ -316,8 +322,8 @@ DEVICE_ACCESS(8259)
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
 #ifdef DEV_8259_DEBUG
-    fatal("[ 8259(%d): write to 0x%x: 0x%x ]\n",
-          d->irq_base, (int)relative_addr, (int)idata);
+    L(fatal("[ 8259(%d): write to 0x%x: 0x%x ]\n",
+            d->irq_base, (int)relative_addr, (int)idata));
 #endif
 
     switch (relative_addr) {
@@ -333,10 +339,10 @@ DEVICE_ACCESS(8259)
 
       // OCW1
 #ifdef DEV_8259_DEBUG
-      fprintf(stderr, "8259(%d): ier = %02x\n", d->irq_base, idata);
+      L(fprintf(stderr, "8259(%d): ier = %02x\n", d->irq_base, idata));
 #endif
       d->ier = idata;
-      dev_8259_recalc_interrupts(d, d->isr);
+      dev_8259_recalc_interrupts(cpu, d, d->isr);
       break;
     }
   } else {
@@ -366,8 +372,8 @@ DEVICE_ACCESS(8259)
     }
 
 #ifdef DEV_8259_DEBUG
-		fatal("[ 8259(%d): read from 0x%x: 0x%x ]\n",
-          d->irq_base, (int)relative_addr, (int)odata);
+		L(fatal("[ 8259(%d): read from 0x%x: 0x%x ]\n",
+            d->irq_base, (int)relative_addr, (int)odata));
 #endif
 		memory_writemax64(cpu, data, len, odata);
   }
@@ -408,7 +414,7 @@ DEVINIT(8259)
 		d->irq_base = 8;
 	}
 
-  	assert(devinit->addr > 0x808680000000ull);
+  assert(devinit->addr > 0x808680000000ull);
 
 	memory_device_register(devinit->machine->memory, name2,
 	    devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,

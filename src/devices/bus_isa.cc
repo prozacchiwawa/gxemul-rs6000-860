@@ -54,9 +54,9 @@ void isa_interrupt_common(struct bus_isa_data *d, int line, int assert_int)
   struct pic8259_data *pic_ptr = ((line > 7) && d->pic2) ? d->pic2 : d->pic1;
 
 	if (assert_int) {
-    dev_8259_assert(pic_ptr, line & 7);
+    dev_8259_assert(d->machine->cpus[0], pic_ptr, line & 7);
   } else {
-    dev_8259_deassert(pic_ptr, line & 7);
+    dev_8259_deassert(d->machine->cpus[0], pic_ptr, line & 7);
   }
 }
 
@@ -144,6 +144,7 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 	CHECK_ALLOCATION(d = (struct bus_isa_data *) malloc(sizeof(struct bus_isa_data)));
 	memset(d, 0, sizeof(struct bus_isa_data));
 
+  d->machine      = machine;
 	d->isa_portbase = isa_portbase;
 	d->isa_membase  = isa_membase;
 

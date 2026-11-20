@@ -84,8 +84,8 @@ struct pic8259_data {
   int *last_int;
 };
 
-void dev_8259_assert(struct pic8259_data *d, int line);
-void dev_8259_deassert(struct pic8259_data *d, int line);
+void dev_8259_assert(struct cpu *cpu, struct pic8259_data *d, int line);
+void dev_8259_deassert(struct cpu *cpu, struct pic8259_data *d, int line);
 
 /*  dev_dec_ioasic.c:  */
 #define	DEV_DEC_IOASIC_LENGTH		0x80100

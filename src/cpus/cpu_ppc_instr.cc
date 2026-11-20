@@ -480,6 +480,9 @@ X(bl)
 	/*  Find the new physical page and update the translation pointers:  */
 	quick_pc_to_pointers(cpu);
 
+  if (cpu->pc == 0xe001ab08) {
+    debug_mem_hexdump(cpu, cpu->mem, cpu->cd.ppc.gpr[4], cpu->cd.ppc.gpr[4] + cpu->cd.ppc.gpr[5]);
+  }
   /*
   if (cpu->pc == 0xd2b38) {
     uint32_t uio_addr;

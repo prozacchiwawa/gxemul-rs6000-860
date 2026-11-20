@@ -43,16 +43,17 @@ struct bus_isa_data {
 	struct pic8259_data* pic1;
 	struct pic8259_data* pic2;
 	int		*ptr_to_pending_timer_interrupts;
-	int		*ptr_to_last_int;
 
 	uint64_t	isa_portbase;
 	uint64_t	isa_membase;
+
+  int   pending_timer_interrupts;
 };
 
 #endif	/*  BUS_ISA_C  */
 
 struct bus_isa_data *bus_isa_init(struct machine *machine,
-	char *interrupt_base_path, uint32_t bus_isa_flags,
+  char *interrupt_base_path, char *interrupt_device_path, uint32_t bus_isa_flags,
 	uint64_t isa_portbase, uint64_t isa_membase);
 
 #define VIRTUAL_ISA_PORTBASE 0x808600000000ull

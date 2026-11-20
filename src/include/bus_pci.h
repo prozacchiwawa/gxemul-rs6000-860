@@ -84,6 +84,8 @@ struct pci_data {
 	int		cur_bus, cur_device, cur_func, cur_reg;
 	int		last_was_write_ffffffff;
 
+  struct interrupt pci_interrupts[16];
+
 	struct pci_device *first_device;
 };
 

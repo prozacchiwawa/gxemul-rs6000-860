@@ -69,7 +69,7 @@ MACHINE_SETUP(evbmips)
 		/*  ISA bus at MIPS irq 2:  */
 		snprintf(tmpstr, sizeof(tmpstr), "%s.cpu[%i].2",
 		    machine->path, machine->bootstrap_cpu);
-		bus_isa_init(machine, tmpstr, 0, 0x18000000, 0x10000000);
+		bus_isa_init(machine, tmpstr, tmpstr, 0, 0x18000000, 0x10000000);
 
 		snprintf(tmpstr, sizeof(tmpstr), "ns16550 irq=%s.cpu[%i].4 "
 		    "addr=0x%x name2=tty2 in_use=0", machine->path,

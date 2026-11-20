@@ -47,7 +47,7 @@
 #define ARRAY_SIZE(a) ((sizeof(a))/sizeof(a[0]))
 #define ABORT() do { fprintf(stderr, "ABORT %s:%d\n", __FILE__, __LINE__); abort(); } while(0)
 
-#if 0
+#if 1
 #define DEBUG(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
 #else
 #define DEBUG(fmt, ...) do { } while(0)

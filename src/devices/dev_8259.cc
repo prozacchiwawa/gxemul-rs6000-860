@@ -49,11 +49,15 @@
 
 #define DEV_8259_DEBUG
 
+#ifdef DEV_8259_DEBUG
 #define L(x) do { \
-  if (cpu->machine->show_trace_tree) { \
+  if (1 || cpu->machine->show_trace_tree) { \
     x; \
   } \
 } while (0)
+#else
+#define L(x) do { } while(0)
+#endif
     
 #define N -1
 static int pri_lut[] = {
@@ -138,15 +142,19 @@ void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t
 
     d->isr |= pri_mask;
 
-    *d->last_int &= ~(0xff << d->irq_base);
-    *d->last_int |= 0x10000 | (pri_mask << d->irq_base);
-    // L(fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr));
+    // Set last int.
+    // Mimics the bus transaction emitted by the 8259, which can be snooped by other devices.
+    auto last_int = d->chained_to ? &d->chained_to->last_int : &d->last_int;
+    *last_int &= ~(0xff << d->irq_base);
+    *last_int |= 0x10000 | (pri_mask << d->irq_base);
+    cpu->memory_rw(cpu, cpu->mem, EAGLE_ISA_DMA_REGS + 16, (uint8_t *)last_int, sizeof(*last_int), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+    L(fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*last_int, d->isr));
 
     do_assert(cpu, d);
     return;
   }
 
-  if (!d->isr) {
+  if (!(d->isr & ~d->ier)) {
 #ifdef DEV_8259_DEBUG
     L(fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled));
 #endif

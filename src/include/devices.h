@@ -81,7 +81,7 @@ struct pic8259_data {
   // was masked before coming from that PIC.  Raise it if it becomes unblocked.
   struct pic8259_data *chained_to;
   int chained_int_line;
-  int *last_int;
+  uint32_t last_int;
 };
 
 void dev_8259_assert(struct cpu *cpu, struct pic8259_data *d, int line);
@@ -176,6 +176,7 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define DEV_PCI_CONFIG_CARD_SIZE 0x100
 
 #define DEV_PCI_CONFIG_EAGLE (DEV_PCI_CONFIG_AREA + DEV_PCI_CONFIG_CARD_SIZE)
+#define EAGLE_ISA_DMA_SIZE 32
 #define EAGLE_ISA_DMA_REGS (DEV_PCI_CONFIG_AREA + 16 * DEV_PCI_CONFIG_CARD_SIZE)
 
 #define EAGLE_ISA_DMA_C2_ADDR (EAGLE_ISA_DMA_REGS + 0)
@@ -183,7 +184,7 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 #define EAGLE_ISA_DMA_CONTROLLER_1_STATUS (EAGLE_ISA_DMA_REGS + 7)
 #define EAGLE_ISA_DMA_CONTROLLER_1_SCATTER_GATHER (EAGLE_ISA_DMA_REGS + 8)
 
-#define I8042_PRIVATE (EAGLE_ISA_DMA_REGS + 16)
+#define I8042_PRIVATE (EAGLE_ISA_DMA_REGS + EAGLE_ISA_DMA_SIZE)
 #define I8042_KEYBOARD_SEND 0
 #define I8042_MOUSE_SEND 1
 #define I8042_ACTION 2

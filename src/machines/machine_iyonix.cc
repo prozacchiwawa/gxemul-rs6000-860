@@ -79,7 +79,7 @@ MACHINE_SETUP(iyonix)
 	/*  TODO: actual irq on the i80321!  */
 	snprintf(tmpstr, sizeof(tmpstr), "%s.cpu[%i].irq.i80321.1",
 	    machine->path, machine->bootstrap_cpu);
-	bus_isa_init(machine, tmpstr, 0, 0x90000000ULL, 0x98000000ULL);
+	bus_isa_init(machine, tmpstr, tmpstr, 0, 0x90000000ULL, 0x98000000ULL);
 
 	if (!machine->prom_emulation)
 		return;

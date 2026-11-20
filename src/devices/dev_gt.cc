@@ -152,7 +152,9 @@ DEVICE_ACCESS(gt)
 		break;
 
 	case GT_PCI0_INTR_ACK:
-		odata = cpu->machine->isa_pic_data.last_int;
+    // XXX replace as in dev_eagle.
+		// odata = cpu->machine->isa_pic_data.last_int;
+    abort();
 		/*  TODO: Actually ack the interrupt?  */
 		break;
 

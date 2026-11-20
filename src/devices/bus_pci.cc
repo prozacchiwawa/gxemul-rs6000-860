@@ -677,8 +677,8 @@ PCIINIT(lsi53c895a)
 
 	pd->cfg_reg_write = lsi53c895a_cfg_reg_write;
 
-  snprintf(irqstr, sizeof(irqstr), "%s.isa.%i",
-           pd->pcibus->irq_path_isa, irq);
+  snprintf(irqstr, sizeof(irqstr), "%s.%i",
+           pd->pcibus->irq_path_pci, irq);
 
   auto first_alloc = (long long)(BUS_PCI_IO_NATIVE_SPACE + 0x20000000);
   struct pci_space_association *assoc = &pci_io_allocation[pci_io_target++];
@@ -725,7 +725,7 @@ PCIINIT(ali_m1543)
 
 	switch (machine->machine_type) {
 	case MACHINE_CATS:
-		bus_isa_init(machine, pd->pcibus->irq_path_isa,
+		bus_isa_init(machine, pd->pcibus->irq_path_isa, pd->pcibus->irq_path_isa,
 		    BUS_ISA_PCKBC_FORCE_USE | BUS_ISA_PCKBC_NONPCSTYLE,
 		    0x7c000000, 0x80000000);
 		break;
@@ -1372,7 +1372,7 @@ PCIINIT(symphony_83c553)
 
 	switch (machine->machine_type) {
 	case MACHINE_NETWINDER:
-		bus_isa_init(machine, pd->pcibus->irq_path_isa,
+		bus_isa_init(machine, pd->pcibus->irq_path_isa, pd->pcibus->irq_path_isa,
 		    0, 0x7c000000, 0x80000000);
 		break;
 	default:fatal("symphony_83c553 init: unimplemented machine type\n");

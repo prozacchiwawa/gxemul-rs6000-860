@@ -75,7 +75,7 @@ MACHINE_SETUP(algor)
 
 	snprintf(tmpstr, sizeof(tmpstr), "%s.cpu[%i].v3",
 	    machine->path, machine->bootstrap_cpu);
-	bus_isa_init(machine, tmpstr, BUS_ISA_EXTERNAL_PIC | BUS_ISA_FDC,
+	bus_isa_init(machine, tmpstr, tmpstr, BUS_ISA_EXTERNAL_PIC | BUS_ISA_FDC,
 	    0x1d000000, 0x10000000);
 
 	/*  bus_pci_add(machine, pci_bus, machine->memory, 0, 0, 0,

@@ -42,65 +42,7 @@
 
 
 struct prep_data {
-	uint32_t		int_status;
 };
-
-void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t old_isr);
-
-DEVICE_ACCESS(prep)
-{
-	/*  struct prep_data *d = extra;  */
-	uint64_t idata = 0, odata = 0xff;
-
-	if (writeflag == MEM_WRITE) {
-		idata = memory_readmax64(cpu, data, len);
-		fatal("[ prep: write to interrupt register? ]\n");
-  } else if (writeflag == MEM_READ) {
-    // fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
-    if (cpu->machine->isa_pic_data.last_int & 0x10000) {
-      cpu->machine->isa_pic_data.last_int &= 0xffff;
-      if (cpu->machine->isa_pic_data.last_int & 4) {
-        for (int i = 8; i < 16; i++) {
-          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
-            if ((i == 13 || i == 12) && cpu->machine->isa_pic_data.pic2) {
-              // fprintf(stderr, "deassert int %d on pci ack\n", i);
-              dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic2, i - 8);
-              dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic1, 2);
-            }
-
-            odata = i;
-            break;
-          }
-        }
-      } else {
-        for (int i = 0; i < 8; i++) {
-          if (i == 2) {
-            continue;
-          }
-
-          if ((i == 4 || i == 1) && cpu->machine->isa_pic_data.pic1) {
-            // fprintf(stderr, "deassert int %d on pci ack\n", i);
-            dev_8259_deassert(cpu, cpu->machine->isa_pic_data.pic1, i);
-          }
-
-          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
-            odata = i;
-            break;
-          }
-        }
-      }
-    }
-
-    if (cpu->machine->show_trace_tree) {
-      fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
-    }
-    cpu->cd.ppc.irq_asserted = false;
-    memory_writemax64(cpu, data, len, odata);
-	}
-
-	return 1;
-}
-
 
 DEVINIT(prep)
 {
@@ -110,24 +52,20 @@ DEVINIT(prep)
 	CHECK_ALLOCATION(d = (struct prep_data *) malloc(sizeof(struct prep_data)));
 	memset(d, 0, sizeof(struct prep_data));
 
-	memory_device_register(devinit->machine->memory, devinit->name,
-	    0xbffffff0, 0x10, dev_prep_access, d, DM_DEFAULT, NULL);
-
-    switch (devinit->machine->machine_subtype) {
+  switch (devinit->machine->machine_subtype) {
     case MACHINE_PREP_IBM860:
     case MACHINE_PREP_IBM850:
-        bus_isa_init(devinit->machine, devinit->interrupt_path,
-            BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC | BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000 | VIRTUAL_ISA_PORTBASE, 0xc0000000);
         snprintf(tmps, sizeof(tmps), "pcic addr="
-                 "0x8086800003e0 irq=%s.isa", devinit->interrupt_path);
+                 "0x8086800003e0 irq=%s.pci", devinit->interrupt_path);
         device_add(devinit->machine, tmps);
 
-        snprintf(tmps, sizeof(tmps), "ibm_ethernet_ii addr=0x%" PRIx64 " irq=%s.isa.pcic[1].0", DEV_PCIC_CARD_SPACE(0), devinit->interrupt_path);
+        snprintf(tmps, sizeof(tmps), "ibm_ethernet_ii addr=0x%" PRIx64 " irq=%s.pci.pcic[0].0", DEV_PCIC_CARD_SPACE(0), devinit->interrupt_path);
         device_add(devinit->machine, tmps);
         break;
     default:
+        snprintf(tmps, sizeof(tmps), "%s.pci", devinit->interrupt_path);
         /*  This works for at least the IBM 6050:  */
-        bus_isa_init(devinit->machine, devinit->interrupt_path,
+        bus_isa_init(devinit->machine, devinit->interrupt_path, tmps,
             BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000, 0xc0000000);
         break;
     }

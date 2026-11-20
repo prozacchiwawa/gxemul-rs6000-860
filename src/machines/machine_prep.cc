@@ -77,6 +77,10 @@ MACHINE_SETUP(prep)
 		if (machine->emulated_hz == 0)
 			machine->emulated_hz = 20000000;
 
+		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
+             machine->path, machine->bootstrap_cpu);
+		pci_data = (struct pci_data *) device_add(machine, tmpstr);
+
 		snprintf(tmpstr, sizeof(tmpstr), "prep irq=%s.cpu[%i]",
 		    machine->path, machine->bootstrap_cpu);
 		device_add(machine, tmpstr);
@@ -86,11 +90,6 @@ MACHINE_SETUP(prep)
     //device_add(machine, tmpstr);
 
     device_add(machine, "ibm_carerra addr=0x808680004100");
-
-		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
-		    machine->path, machine->bootstrap_cpu);
-
-		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
 		bus_pci_add(machine, pci_data, machine->memory, 0, 12, 0, "lsi53c895a");
 
@@ -103,8 +102,8 @@ MACHINE_SETUP(prep)
          "wd90c00");
 		}
 
-        bus_pci_add(machine, pci_data, machine->memory,
-            0, 11, 0, "ibm_isa");
+    bus_pci_add(machine, pci_data, machine->memory,
+                0, 11, 0, "ibm_isa");
 
     // Locate rom image and load it.
     rom_image = find_rom_disk(machine);
@@ -136,6 +135,10 @@ MACHINE_SETUP(prep)
 		if (machine->emulated_hz == 0)
 			machine->emulated_hz = 20000000;
 
+		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
+             machine->path, machine->bootstrap_cpu);
+		pci_data = (struct pci_data *) device_add(machine, tmpstr);
+
 		snprintf(tmpstr, sizeof(tmpstr), "prep irq=%s.cpu[%i]",
 		    machine->path, machine->bootstrap_cpu);
 		device_add(machine, tmpstr);
@@ -143,10 +146,6 @@ MACHINE_SETUP(prep)
         snprintf(tmpstr, sizeof(tmpstr), "rtc irq=%s.cpu[%i]",
             machine->path, machine->bootstrap_cpu);
         device_add(machine, tmpstr);
-
-		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
-		    machine->path, machine->bootstrap_cpu);
-		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
 		if (machine->x11_md.in_use) {
 			bus_pci_add(machine, pci_data, machine->memory,
@@ -160,13 +159,13 @@ MACHINE_SETUP(prep)
 		/*  TODO: _EXACT_ model name for mvme2400?  */
 		model_name = "MOT MVME2400";
 
+		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
+             machine->path, machine->bootstrap_cpu);
+		pci_data = (struct pci_data *) device_add(machine, tmpstr);
+
 		snprintf(tmpstr, sizeof(tmpstr), "prep irq=%s.cpu[%i]",
 		    machine->path, machine->bootstrap_cpu);
 		device_add(machine, tmpstr);
-
-		snprintf(tmpstr, sizeof(tmpstr), "eagle irq=%s.cpu[%i]",
-		    machine->path, machine->bootstrap_cpu);
-		pci_data = (struct pci_data *) device_add(machine, tmpstr);
 
 		break;
 

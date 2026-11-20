@@ -192,12 +192,15 @@ DEVICE_ACCESS(footbridge_isa)
 		fatal("[ footbridge_isa: WARNING/TODO: write! ]\n");
 	}
 
+  /* XXX replace as in dev_eagle.
 	x = cpu->machine->isa_pic_data.last_int;
 	if (x < 8)
 		odata = cpu->machine->isa_pic_data.pic1->irq_base + x;
 	else
 		odata = cpu->machine->isa_pic_data.pic2->irq_base + x - 8;
-
+  */
+  abort();
+  
 	if (writeflag == MEM_READ)
 		memory_writemax64(cpu, data, len, odata);
 

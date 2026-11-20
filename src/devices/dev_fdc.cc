@@ -115,7 +115,6 @@ static void assert_interrupt(struct fdc_data *d)
 {
     if (!d->asserting_interrupt) {
         d->asserting_interrupt = true;
-        // INTERRUPT_ASSERT(d->irq);
         d->pending_interrupt = 2;
     }
 }

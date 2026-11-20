@@ -84,6 +84,10 @@ struct eagle_data {
 
   uint16_t password_protect_1;
   uint16_t password_protect_2;
+
+  uint32_t last_int;
+  uint32_t asserted_mask;
+  struct interrupt irq_forward[16];
 };
 
 DEVICE_ACCESS(eagle)
@@ -282,6 +286,7 @@ DEVICE_ACCESS(eagle_mem_pass)
     cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CLAIM_MEM_ADDR, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
     // Examine the check register
     cpu->memory_rw(cpu, cpu->mem, DEV_PCIC_PRIVATE_IO_AREA + DEV_PCIC_CHECK_CLAIM, (uint8_t *)&pcmcia_target, sizeof(pcmcia_target), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+    
     if (~pcmcia_target) {
       // Not all 1s, valid
       real_addr = DEV_PCIC_CARD_0_SPACE;
@@ -477,25 +482,11 @@ DEVICE_ACCESS(eagle_dma_1)
 
     case 8:
       if (writeflag != MEM_WRITE) {
-        INTERRUPT_DEASSERT(d->irq);
+        INTERRUPT_DEASSERT(d->irq_forward[6]);
         idata = d->dma_controller_1_status | d->fin_mask;
         d->dma_controller_1_status = 0;
         d->fin_mask = 0;
       }
-      break;
-
-    case 10:
-      /*
-      if (writeflag == MEM_WRITE) {
-        if (idata & 4) {
-          eagle_comm_area[7] = 0;
-        } else {
-          if (eagle_comm_area[7]) {
-            INTERRUPT_ASSERT(d->irq);
-          }
-        }
-      }
-      */
       break;
     }
 
@@ -966,6 +957,16 @@ DEVICE_ACCESS(eagle_private_dma) {
     } else {
       idata = d->dma_controller_1_scatter_gather;
     }
+    break;
+
+  case 16:
+    if (writeflag == MEM_WRITE) {
+      fprintf(stderr, "[ eagle: last int %d ]\n", d->last_int);
+      d->last_int = idata;
+    } else {
+      idata = d->last_int;
+    }
+    break;
   }
 
   if (writeflag == MEM_READ)
@@ -979,6 +980,80 @@ DEVICE_TICK(eagle) {
   struct eagle_data *d = (struct eagle_data *) extra;
 }
 
+void pci_assert_interrupt(struct interrupt *i) {
+  struct eagle_data *d = (struct eagle_data *)i->extra;
+  unsigned int mask = (1 << i->line);
+
+  if (!(d->asserted_mask & mask)) {
+    // fprintf(stderr, "[ eagle: pci side interrupt %d ^ ]\n", i->line);
+    d->asserted_mask |= mask;
+    INTERRUPT_ASSERT(d->irq_forward[i->line]);
+  }
+}
+
+void pci_deassert_interrupt(struct interrupt *i) {
+  struct eagle_data *d = (struct eagle_data *)i->extra;
+  unsigned int mask = (1 << i->line);
+  if (d->asserted_mask & mask) {
+    // fprintf(stderr, "[ eagle: pci side interrupt %d v ]\n", i->line);
+    d->asserted_mask &= ~mask;
+    INTERRUPT_DEASSERT(d->irq_forward[i->line]);
+  }
+}
+
+DEVICE_ACCESS(eagle_pci_interrupt)
+{
+  struct eagle_data *d = (struct eagle_data *) extra;
+
+	uint64_t idata = 0, odata = 0xff;
+
+	if (writeflag == MEM_WRITE) {
+		idata = memory_readmax64(cpu, data, len);
+		// fatal("[ prep: write to interrupt register? ]\n");
+  } else if (writeflag == MEM_READ) {
+    // fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", d->last_int);
+    if (d->last_int & 0x10000) {
+      d->last_int &= 0xffff;
+      if (d->last_int & 4) {
+        for (int i = 8; i < 16; i++) {
+          if (d->last_int & (1 << i)) {
+            // fprintf(stderr, "deassert int %d on pci ack\n", i);
+            auto mask = 1 << i;
+            d->asserted_mask &= ~mask;
+            INTERRUPT_DEASSERT(d->irq_forward[i]);
+
+            odata = i;
+            break;
+          }
+        }
+      } else {
+        for (int i = 0; i < 8; i++) {
+          if (i == 2) {
+            continue;
+          }
+
+          // fprintf(stderr, "deassert int %d on pci ack\n", i);
+          auto mask = 1 << i;
+          d->asserted_mask &= ~mask;
+          INTERRUPT_DEASSERT(d->irq_forward[i]);
+
+          if (d->last_int & (1 << i)) {
+            odata = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (cpu->machine->show_trace_tree) {
+      fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    }
+    cpu->cd.ppc.irq_asserted = false;
+    memory_writemax64(cpu, data, len, odata);
+	}
+
+	return 1;
+}
 
 DEVINIT(eagle)
 {
@@ -1033,11 +1108,24 @@ DEVINIT(eagle)
 		    devinit->interrupt_path);
 		break; */
 	default:
-		snprintf(pci_irq_base, sizeof(pci_irq_base), "%s",
+		snprintf(pci_irq_base, sizeof(pci_irq_base), "%s.pci",
 		    devinit->interrupt_path);
-		snprintf(isa_irq_base, sizeof(isa_irq_base), "%s",
+		snprintf(isa_irq_base, sizeof(isa_irq_base), "%s.isa",
 		    devinit->interrupt_path);
 	}
+
+  char buf[300];
+  for (int i = 0; i < 16; i++) {
+    snprintf(buf, sizeof(buf), "%s.%i", pci_irq_base, i);
+    fprintf(stderr, "[ eagle: register interrupt %s ]\n", buf);
+    struct interrupt templ;
+    templ.interrupt_assert = pci_assert_interrupt;
+    templ.interrupt_deassert = pci_deassert_interrupt;
+    templ.line = i;
+    templ.name = buf;
+    templ.extra = d;
+    interrupt_handler_register(&templ);
+  }
 
 	/*  Create a PCI bus:  */
 	d->pci_data = bus_pci_init(devinit->machine, devinit->interrupt_path,
@@ -1048,6 +1136,9 @@ DEVINIT(eagle)
 	/*  Add the PCI glue for the controller itself:  */
 	bus_pci_add(devinit->machine, d->pci_data,
 	    devinit->machine->memory, 0, 0, 0, "eagle");
+
+	memory_device_register(devinit->machine->memory, devinit->name,
+                         0xbffffff0, 0x10, dev_eagle_pci_interrupt_access, d, DM_DEFAULT, NULL);
 
   // Address space areas designated by the eagle
   memory_device_register(devinit->machine->memory, "isa 8mb window",
@@ -1144,7 +1235,7 @@ DEVINIT(eagle)
 
     memory_device_register
       (devinit->machine->memory, "eagle_dma_internal",
-       EAGLE_ISA_DMA_REGS, 16, dev_eagle_private_dma_access, d,
+       EAGLE_ISA_DMA_REGS, EAGLE_ISA_DMA_SIZE, dev_eagle_private_dma_access, d,
        DM_DEFAULT, NULL);
 
     machine_add_tickfunction(devinit->machine, dev_eagle_tick, d, 19);
@@ -1159,12 +1250,16 @@ DEVINIT(eagle)
 		break; */
 
 	case MACHINE_PREP:
-        bus_pci_add(devinit->machine, d->pci_data,
-            devinit->machine->memory, 0, 13, 0, "i82378zb");
-        break;
+    snprintf(buf, sizeof(buf), "%s.pci", devinit->interrupt_path);
+    bus_isa_init(devinit->machine, devinit->interrupt_path, buf,
+                 BUS_ISA_LPTBASE_3BC | BUS_ISA_FDC | BUS_ISA_IDE0 | BUS_ISA_IDE1, 0x80000000 | VIRTUAL_ISA_PORTBASE, 0xc0000000);
 
+    bus_pci_add(devinit->machine, d->pci_data,
+                devinit->machine->memory, 0, 13, 0, "i82378zb");
+    break;
+    
 	case MACHINE_MVMEPPC:
-		bus_isa_init(devinit->machine, isa_irq_base,
+		bus_isa_init(devinit->machine, isa_irq_base, isa_irq_base,
 		    BUS_ISA_LPTBASE_3BC, isa_portbase, isa_membase);
 
 		switch (devinit->machine->machine_subtype) {
@@ -1181,6 +1276,13 @@ DEVINIT(eagle)
 	default:fatal("unimplemented machine type for eagle\n");
 		exit(1);
 	}
+
+  for (int i = 0; i < 16; i++) {
+    if (i != 2) {
+      snprintf(buf, sizeof(buf), "%s.%i", isa_irq_base, i);
+      INTERRUPT_CONNECT(buf, d->irq_forward[i]);
+    }
+  }
 
 	devinit->return_ptr = d->pci_data;
   d->dma_channel_1_addr = 0xffffffff;

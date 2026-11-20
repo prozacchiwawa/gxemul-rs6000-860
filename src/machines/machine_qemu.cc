@@ -56,7 +56,7 @@ MACHINE_SETUP(qemu_mips)
 	 */
 	snprintf(tmpstr, sizeof(tmpstr), "%s.cpu[%i].2",
 	    machine->path, machine->bootstrap_cpu);
-	bus_isa_init(machine, tmpstr, BUS_ISA_IDE0 | BUS_ISA_IDE1,
+	bus_isa_init(machine, tmpstr, tmpstr, BUS_ISA_IDE0 | BUS_ISA_IDE1,
 	    0x14000000ULL, 0x10000000ULL);
 
 	if (!machine->prom_emulation)

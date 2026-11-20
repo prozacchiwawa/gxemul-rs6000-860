@@ -373,7 +373,7 @@ DEVINIT(lca)
 	interrupt_template.interrupt_deassert = lca_interrupt_deassert;
 	interrupt_handler_register(&interrupt_template);
 
-	bus_isa_init(devinit->machine, interrupt_path,
+	bus_isa_init(devinit->machine, interrupt_path, interrupt_path,
 	    BUS_ISA_IDE0 | BUS_ISA_IDE1, LCA_ISA_BASE, LCA_ISA_MEMBASE);
 
 	return 1;

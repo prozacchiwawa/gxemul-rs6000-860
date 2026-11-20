@@ -61,6 +61,7 @@ struct v3_data {
 
 	struct pci_data		*pci_data;
 	uint16_t		lb_map0;
+  int pending_timer_interrupts;
 };
 
 
@@ -292,14 +293,13 @@ DEVINIT(v3)
 	/*  Register two 8259 PICs:  */
 	snprintf(tmpstr, sizeof(tmpstr), "8259 irq=%s.v3.isa.16 addr=0x%llx",
 	    devinit->interrupt_path, (long long)(isa_port_base + 0x20));
-	d->pic1 = devinit->machine->isa_pic_data.pic1 = (struct pic8259_data *)
+	d->pic1 = (struct pic8259_data *)
 	    device_add(devinit->machine, tmpstr);
-	d->ptr_to_pending_timer_interrupts =
-	    devinit->machine->isa_pic_data.pending_timer_interrupts;
+	d->ptr_to_pending_timer_interrupts = &d->pending_timer_interrupts;
 
 	snprintf(tmpstr, sizeof(tmpstr), "8259 irq=%s.v3.isa.2 addr=0x%llx",
 	    devinit->interrupt_path, (long long)(isa_port_base + 0xa0));
-	d->pic2 = devinit->machine->isa_pic_data.pic2 = (struct pic8259_data *)
+	d->pic2 = (struct pic8259_data *)
 	    device_add(devinit->machine, tmpstr);
 
 	snprintf(isa_irq_base, sizeof(isa_irq_base), "%s.v3",

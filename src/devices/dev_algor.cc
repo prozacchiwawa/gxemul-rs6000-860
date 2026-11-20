@@ -87,17 +87,24 @@ DEVICE_ACCESS(algor)
 			if (((++ x) & 0xffff) == 0)
 				odata |= LOCINT_RTC;
 
+      /* XXX fix like dev_eagle and/or using internal io.
 			if (cpu->machine->isa_pic_data.pic1->irr &
 			    ~cpu->machine->isa_pic_data.pic1->ier & 0x10)
 				odata |= LOCINT_COM1;
 			if (cpu->machine->isa_pic_data.pic1->irr &
 			    ~cpu->machine->isa_pic_data.pic1->ier & 0x08)
 				odata |= LOCINT_COM2;
+      */
+      abort();
 
 			/*  Read => ack:  */
+      /*
 			cpu->machine->isa_pic_data.pic1->irr &= ~0x18;
 			INTERRUPT_DEASSERT(d->mips_irq_4);
+      */
 		} else {
+      abort();
+      /*
 			if (idata & LOCINT_COM1)
 				cpu->machine->isa_pic_data.pic1->ier &= ~0x10;
 			else
@@ -106,6 +113,7 @@ DEVICE_ACCESS(algor)
 				cpu->machine->isa_pic_data.pic1->ier &= ~0x08;
 			else
 				cpu->machine->isa_pic_data.pic1->ier |= 0x08;
+      */
 		}
 		break;
 
@@ -139,6 +147,8 @@ DEVICE_ACCESS(algor)
 		 */
 		n = "P5064_ISAINT";
 		if (writeflag == MEM_WRITE) {
+      abort();
+      /*
 			if (idata & ISAINT_IDE0)
 				cpu->machine->isa_pic_data.pic2->ier &= ~0x40;
 			else
@@ -157,8 +167,10 @@ DEVICE_ACCESS(algor)
 				odata |= ISAINT_IDE1;
 
 			/*  Read => ack:  */
+      /*
 			cpu->machine->isa_pic_data.pic2->irr &= ~0xc0;
 			INTERRUPT_DEASSERT(d->mips_irq_2);
+      */
 		}
 		break;
 

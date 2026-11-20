@@ -68,7 +68,7 @@ MACHINE_SETUP(cobalt)
 	/*  ISA bus at MIPS irq 6:  */
 	snprintf(tmpstr, sizeof(tmpstr), "%s.cpu[%i].6",
 	    machine->path, machine->bootstrap_cpu);
-	bus_isa_init(machine, tmpstr, 0, 0x10000000, 0x14000000 /* TODO */);
+	bus_isa_init(machine, tmpstr, tmpstr, 0, 0x10000000, 0x14000000 /* TODO */);
 
 	snprintf(tmpstr, sizeof(tmpstr), "ns16550 irq=%s.cpu[%i].5"
 	    " addr=0x1c800000 name2=tty0 in_use=1",

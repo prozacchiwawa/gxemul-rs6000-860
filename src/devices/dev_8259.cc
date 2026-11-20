@@ -154,7 +154,7 @@ void dev_8259_recalc_interrupts(struct cpu *cpu, struct pic8259_data *d, uint8_t
     return;
   }
 
-  if (!(d->isr & ~d->ier)) {
+  if (!d->isr) {
 #ifdef DEV_8259_DEBUG
     L(fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled));
 #endif

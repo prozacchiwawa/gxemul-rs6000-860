@@ -42,32 +42,25 @@
 
 
 struct prep_data {
-	uint32_t		int_status;
 };
-
-void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr);
 
 DEVICE_ACCESS(prep)
 {
-	/*  struct prep_data *d = extra;  */
 	uint64_t idata = 0, odata = 0xff;
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
-		fatal("[ prep: write to interrupt register? ]\n");
+		// fatal("[ prep: write to interrupt register? ]\n");
   } else if (writeflag == MEM_READ) {
-    // fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", cpu->machine->isa_pic_data.last_int);
-    if (cpu->machine->isa_pic_data.last_int & 0x10000) {
-      cpu->machine->isa_pic_data.last_int &= 0xffff;
-      if (cpu->machine->isa_pic_data.last_int & 4) {
+    uint32_t last_int;
+    cpu->memory_rw(cpu, cpu->mem, I8259_PRIVATE, (uint8_t *)&last_int, sizeof(last_int), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+    fprintf(stderr, "[ prep: read 8259 residual from %02x ]\n", last_int);
+    if (last_int & 0x10000) {
+      last_int &= 0xffff;
+      if (last_int & 4) {
         for (int i = 8; i < 16; i++) {
-          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
-            if ((i == 13 || i == 12) && cpu->machine->isa_pic_data.pic2) {
-              // fprintf(stderr, "deassert int %d on pci ack\n", i);
-              dev_8259_deassert(cpu->machine->isa_pic_data.pic2, i - 8);
-              dev_8259_deassert(cpu->machine->isa_pic_data.pic1, 2);
-            }
-
+          if (last_int & (1 << i)) {
+            fprintf(stderr, "deassert int %d on pci ack\n", i);
             odata = i;
             break;
           }
@@ -78,12 +71,8 @@ DEVICE_ACCESS(prep)
             continue;
           }
 
-          if ((i == 4 || i == 1) && cpu->machine->isa_pic_data.pic1) {
-            // fprintf(stderr, "deassert int %d on pci ack\n", i);
-            dev_8259_deassert(cpu->machine->isa_pic_data.pic1, i);
-          }
-
-          if (cpu->machine->isa_pic_data.last_int & (1 << i)) {
+          fprintf(stderr, "deassert int %d on pci ack\n", i);
+          if (last_int & (1 << i)) {
             odata = i;
             break;
           }
@@ -91,14 +80,19 @@ DEVICE_ACCESS(prep)
       }
     }
 
-    cpu->cd.ppc.irq_asserted = false;
-    // fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    if (cpu->machine->show_trace_tree) {
+      fprintf(stderr, "[ int ack: %d ]\n", (int)odata);
+    }
+
+    uint8_t cmd = (3 << 5) | (odata & 7);
+
+    cpu->memory_rw(cpu, cpu->mem, I8259_PRIVATE + (odata & ~7), &cmd, sizeof(cmd), MEM_WRITE, PHYSICAL | NO_EXCEPTIONS);
+    
     memory_writemax64(cpu, data, len, odata);
 	}
 
 	return 1;
 }
-
 
 DEVINIT(prep)
 {

@@ -182,10 +182,8 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 		    interrupt_base_path, (long long)(isa_portbase + 0x20));
 		d->pic1 = machine->isa_pic_data.pic1 = (struct pic8259_data *)
 		    device_add(machine, tmpstr);
-    d->pic1->last_int = &machine->isa_pic_data.last_int;
 		d->ptr_to_pending_timer_interrupts =
 		    machine->isa_pic_data.pending_timer_interrupts;
-		d->ptr_to_last_int = &machine->isa_pic_data.last_int;
 
 		if (bus_isa_flags & BUS_ISA_NO_SECOND_PIC)
 			bus_isa_flags &= ~BUS_ISA_NO_SECOND_PIC;
@@ -195,7 +193,6 @@ struct bus_isa_data *bus_isa_init(struct machine *machine,
 			    interrupt_base_path,(long long)(isa_portbase+0xa0));
 			d->pic2 = machine->isa_pic_data.pic2 = (struct pic8259_data *)
 			    device_add(machine, tmpstr);
-      d->pic2->last_int = &machine->isa_pic_data.last_int;
       d->pic2->chained_to = d->pic1;
       d->pic2->chained_int_line = 2;
       fprintf(stderr, "set up chained 8259\n");

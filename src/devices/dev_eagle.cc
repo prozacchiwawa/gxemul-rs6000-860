@@ -966,6 +966,7 @@ DEVICE_ACCESS(eagle_private_dma) {
     } else {
       idata = d->dma_controller_1_scatter_gather;
     }
+    break;
   }
 
   if (writeflag == MEM_READ)
@@ -973,7 +974,6 @@ DEVICE_ACCESS(eagle_private_dma) {
 
   return 1;
 }
-
 
 DEVICE_TICK(eagle) {
   struct eagle_data *d = (struct eagle_data *) extra;

@@ -464,8 +464,7 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckeyboard_data *d, uint8_
 		break;
 
 	case KBC_GETID:
-		/*  Get keyboard ID.  NOTE/TODO: Ugly hardcoded answer.  */
-		// pckbc_add_code(cpu, d, KBR_ACK);
+    pckbc_add_code(cpu, d, KBR_ACK);
 		pckbc_add_code(cpu, d, 0xab);
 		pckbc_add_code(cpu, d, 0x83);
 		break;
@@ -493,6 +492,12 @@ static void dev_pckbc_command(struct cpu *cpu, struct pckeyboard_data *d, uint8_
     pckbc_add_code(cpu, d, 0xbf);
     break;
 
+    /*
+  case 0x9f:
+    pckbc_add_code(cpu, d, 0xfa);
+    break;
+    */
+    
 	case KBC_RESET:
     pckbc_reset_interface(cpu);
     pckbc_add_code(cpu, d, KBR_ACK);

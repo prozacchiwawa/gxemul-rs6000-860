@@ -25,11 +25,6 @@
  *
  *  phys_page points to translation cache physpages.
  *
- *  vaddr_to_tlbindex is a virtual address to tlb index hint table.
- *  The values in this array are the tlb index plus 1, so a value of, say,
- *  3 means tlb index 2. A value of 0 would mean a tlb index of -1, which
- *  is not a valid index. (I.e. no hit.)
- *
  *  The VPH32EXTENDED variant adds an additional postfix to the array
  *  names. Used so far only for usermode addresses in M88K emulation.
  */
@@ -136,7 +131,7 @@ protected:
     assert(index < 2 * N_VPH32_ENTRIES);
     pages[index] = host_load_store_t { };
     auto found = vaddr_to_tlbindex->find(index);
-    int result = 0;
+    int result = -1;
     if (found != vaddr_to_tlbindex->end()) {
       auto tlbi = found->second;
       vaddr_to_tlbindex->erase(index);
@@ -178,7 +173,7 @@ protected:
           (int)vaddr_page);  */
       auto found = vaddr_to_tlbindex->find(index);
       if (found != vaddr_to_tlbindex->end()) {
-        auto tlbi = found->second - 1;
+        auto tlbi = found->second;
         vph_tlb_entry[tlbi].writeflag = 0;
       }
       clear_writable(cpu, vaddr_page);
@@ -187,8 +182,8 @@ protected:
       for (auto i = 0; i < 2; i++) {
         auto real_index = i * N_VPH32_ENTRIES + index;
         int tlbi = clear_cache(real_index);
-        if (tlbi > 0) {
-          decomission_vph(cpu, tlbi - 1);
+        if (tlbi >= 0) {
+          decomission_vph(cpu, tlbi);
         }
       }
     }

@@ -42,7 +42,6 @@ struct bus_isa_data {
 	struct pic8259_data* pic1;
 	struct pic8259_data* pic2;
 	int		*ptr_to_pending_timer_interrupts;
-	int		*ptr_to_last_int;
 
 	uint64_t	isa_portbase;
 	uint64_t	isa_membase;

@@ -81,7 +81,7 @@ struct pic8259_data {
   // was masked before coming from that PIC.  Raise it if it becomes unblocked.
   struct pic8259_data *chained_to;
   int chained_int_line;
-  int *last_int;
+  uint32_t last_int;
 };
 
 void dev_8259_assert(struct pic8259_data *d, int line);
@@ -192,6 +192,8 @@ void dev_decxmi_init(struct memory *mem, uint64_t baseaddr);
 
 #define KEYBOARD_PRIVATE (I8042_PRIVATE + 16)
 #define MOUSE_PRIVATE (KEYBOARD_PRIVATE + 16)
+#define I8259_PRIVATE (MOUSE_PRIVATE + 16)
+#define I8259_PRIVATE_SIZE_EACH 8
 
 /* dev_pcic.cc */
 #define DEV_PCIC_PRIVATE_IO_AREA 0x2100000000ull

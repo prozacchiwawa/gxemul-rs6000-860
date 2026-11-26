@@ -185,18 +185,28 @@ DEVICE_ACCESS(footbridge_isa)
 {
 	/*  struct footbridge_data *d = extra;  */
 	uint64_t idata = 0, odata = 0;
-	int x;
 
 	if (writeflag == MEM_WRITE) {
 		idata = memory_readmax64(cpu, data, len);
 		fatal("[ footbridge_isa: WARNING/TODO: write! ]\n");
 	}
 
-	x = cpu->machine->isa_pic_data.last_int;
-	if (x < 8)
-		odata = cpu->machine->isa_pic_data.pic1->irq_base + x;
-	else
-		odata = cpu->machine->isa_pic_data.pic2->irq_base + x - 8;
+  uint32_t last_int;
+  cpu->memory_rw(cpu, cpu->mem, I8259_PRIVATE, (uint8_t *)&last_int, sizeof(last_int), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+  for (int i = 0; i < 16; i++) {
+    if (i == 2) {
+      continue;
+    }
+    
+    if (last_int & (1 << i)) {
+      if (i < 8) {
+        odata = cpu->machine->isa_pic_data.pic1->irq_base + i;
+      } else {
+        odata = cpu->machine->isa_pic_data.pic2->irq_base + i - 8;
+      }
+      break;
+    }
+  }
 
 	if (writeflag == MEM_READ)
 		memory_writemax64(cpu, data, len, odata);

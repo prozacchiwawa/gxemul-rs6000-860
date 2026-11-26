@@ -710,6 +710,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
     case 0x28:
     case 0x42:
     case 0x43:
+    case 0x44:
     case 0x51:
     case 0x52:
     case 0x56:
@@ -795,7 +796,7 @@ static int scsi_req_enqueue(struct cpu *cpu, SCSIRequest *req) {
 
     default:
       fprintf(stderr, "lsi: unknown opcode %02x\n", req->cmd.buf[0]);
-        ABORT();
+      ABORT();
     }
 }
 
@@ -948,7 +949,8 @@ static void scsi_req_continue(struct cpu *cpu, SCSIRequest *req) {
     case 0x25:
     case 0x28:
     case 0x42:
-    case 0x43: {
+    case 0x43:
+    case 0x44: {
       DEBUG("lsi: transferred %d (cmd %02x)\n", req->transferred, req->cmd.buf[0]);
         if (!req->transferred) {
             req->transferred++;

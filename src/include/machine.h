@@ -50,7 +50,6 @@ struct isa_pic_data {
 	struct pic8259_data	*pic2;
 
 	int			*pending_timer_interrupts;
-	int			last_int;
 };
 
 struct single_breakpoint {

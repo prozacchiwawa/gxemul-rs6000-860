@@ -152,7 +152,22 @@ DEVICE_ACCESS(gt)
 		break;
 
 	case GT_PCI0_INTR_ACK:
-		odata = cpu->machine->isa_pic_data.last_int;
+    uint32_t last_int;
+    cpu->memory_rw(cpu, cpu->mem, I8259_PRIVATE, (uint8_t *)&last_int, sizeof(last_int), MEM_READ, PHYSICAL | NO_EXCEPTIONS);
+    for (int i = 0; i < 16; i++) {
+      if (i == 2) {
+        continue;
+      }
+    
+      if (last_int & (1 << i)) {
+        if (i < 8) {
+          odata = cpu->machine->isa_pic_data.pic1->irq_base + i;
+        } else {
+          odata = cpu->machine->isa_pic_data.pic2->irq_base + i - 8;
+        }
+        break;
+      }
+    }
 		/*  TODO: Actually ack the interrupt?  */
 		break;
 

@@ -132,8 +132,9 @@ void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
 
     d->isr |= pri_mask;
 
-    *d->last_int &= ~(0xff << d->irq_base);
-    *d->last_int |= 0x10000 | (pri_mask << d->irq_base);
+    auto last_int = d->chained_to ? &d->chained_to->last_int : &d->last_int;
+    *last_int &= ~(0xff << d->irq_base);
+    *last_int |= 0x10000 | (pri_mask << (d->irq_base ? 8 : 0));
     // fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr);
 
     do_assert(d);
@@ -375,6 +376,22 @@ DEVICE_ACCESS(8259)
 	return 1;
 }
 
+DEVICE_ACCESS(8259_private) {
+	struct pic8259_data *d = (struct pic8259_data *) extra;
+
+  if (writeflag == MEM_WRITE) {
+    // Send ocw2 specific eoi.
+    struct pic8259_data *d = (struct pic8259_data *) extra;
+    int command = memory_readmax64(cpu, data, len);
+    write_ocw2(cpu, d, command);
+  } else {
+    auto last_int = d->chained_to ? &d->chained_to->last_int : &d->last_int;
+    fprintf(stderr, "[ 8259(%d) last int query %05x ]\n", d->irq_base, *last_int);
+    memcpy(data, last_int, std::min(len, sizeof(*last_int)));
+    *last_int &= 0xffff;
+  }
+  return 1;
+}
 
 /*
  *  devinit_8259():
@@ -393,6 +410,7 @@ DEVINIT(8259)
 {
 	struct pic8259_data *d;
 	char *name2;
+  char buf[300];
 	size_t nlen = strlen(devinit->name) + 20;
 
 	CHECK_ALLOCATION(d = (struct pic8259_data *) malloc(sizeof(struct pic8259_data)));
@@ -413,6 +431,13 @@ DEVINIT(8259)
 	memory_device_register(devinit->machine->memory, name2,
 	    devinit->addr, DEV_8259_LENGTH, dev_8259_access, d,
 	    DM_DEFAULT, NULL);
+
+  snprintf(buf, strlen(buf), "8259(%d) private", d->irq_base);
+  memory_device_register
+    (devinit->machine->memory, buf,
+     I8259_PRIVATE + d->irq_base, I8259_PRIVATE_SIZE_EACH, dev_8259_private_access, d,
+     DM_DEFAULT, NULL);
+     
 
 	devinit->return_ptr = d;
 	return 1;

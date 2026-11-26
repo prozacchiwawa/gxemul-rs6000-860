@@ -2479,6 +2479,14 @@ DEVICE_ACCESS(wd_graphics)
 
 	L(fprintf(stderr, "VGA: mode %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->graphcontr_reg[5], relative_addr, len));
 
+  if (relative_addr >= 0x3c0 && relative_addr < 0x3e0) {
+    // Hacky io?
+    fprintf(stderr, "VGA: io hole? %03x\n", (unsigned int)relative_addr);
+    cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr, data, len, writeflag, PHYSICAL | NO_EXCEPTIONS);
+
+    return 1;
+  }
+
   auto pr58a = d->sequencer_reg[VGA_WD_PR58A];
   if (pr58a & 1) {
     fprintf(stderr, "[ vga: pr58 (%02x) %s ]\n", d->sequencer_reg[VGA_WD_PR58A], writeflag == MEM_WRITE ? "write" : "read");
@@ -3130,13 +3138,16 @@ DEVICE_ACCESS(wd_ctrl)
 		case VGA_CRTC_DATA:			/*  0x15  */
 			if (writeflag == MEM_READ) {
         if ((d->crtc_reg[0x29] & 7) == 5) {
-          odata = wd90c_rev[(d->crtc_reg_select + 15) & 15];
+          auto select = (d->crtc_reg_select + 15) & 15;
+          odata = wd90c_rev[select];
+          fprintf(stderr, "[ wd read signature %02d: %c ]\n", select, odata);
         } else {
           odata = d->crtc_reg[d->crtc_reg_select];
         }
         fatal("[ vga_crtc_reg_read: regnr=0x%02x idata=0x%02x (%s) 29 = %02x ]\n",
               d->crtc_reg_select, (unsigned int)odata, vga_find_register_name(d, S_PRIMARY, relative_addr), d->crtc_reg[0x29]);
       } else {
+        d->crtc_reg[0x29] &= ~7;
         d->crtc_reg[d->crtc_reg_select] = idata;
 				vga_crtc_reg_write(cpu->machine, cpu, d,
 				    d->crtc_reg_select, idata);
@@ -3308,6 +3319,11 @@ void dev_wd90c00_init(struct machine *machine, struct memory *mem,
   memory_device_register(mem, "wd_bitblt", io_space | 0x23c0,
       8, dev_wd_bitblt_access, d, DM_DEFAULT, NULL);
 
+  d->crtc_reg[VGA_CRTC_HORIZONTAL_DISPLAY_END] = (800 - 1) / 8;
+  d->crtc_reg[VGA_CRTC_VERTICAL_DISPLAY_END] = 600 & 0xff;
+  auto vde8 = !!(600 & 0x100);
+  auto vde9 = !!(600 & 0x200);
+  d->crtc_reg[VGA_CRTC_OVERFLOW_REGISTER] = vde8 << 1 | vde9 << 5;
 	d->fb_size = d->fb_max_x * d->fb_max_y * 3;
 	d->fb = dev_fb_init(machine, mem, VGA_FB_ADDR, VFB_GENERIC,
 	    d->fb_max_x, d->fb_max_y, d->fb_max_x, d->fb_max_y, 24, "WD VGA");

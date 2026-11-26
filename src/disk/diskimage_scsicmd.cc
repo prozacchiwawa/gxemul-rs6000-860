@@ -609,11 +609,14 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 	case SCSICMD_MODE_SENSE:
 	case SCSICMD_MODE_SENSE10: {
-		debug("MODE_SENSE");
+    bool short_command = xferp->cmd[0] == SCSICMD_MODE_SENSE;
     int program_control = xferp->cmd[2] >> 6;
     int subpage_code = xferp->cmd[3];
 
 		q = 4; retlen = xferp->cmd[4];
+
+		debug("MODE_SENSE (retlen %x)\n", retlen);
+
 		switch (xferp->cmd_len) {
 		case 6:	break;
 		case 10:q = 8;
@@ -658,7 +661,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 
 		/*  4 bytes of header for 6-byte command,
 		    8 bytes of header for 10-byte command.  */
-		xferp->data_in[0] = retlen;	/*  0: mode data length  */
+		xferp->data_in[0] = retlen - 1;	/*  0: mode data length (default) */
 		xferp->data_in[1] = d->is_a_cdrom? 0x05 : 0x00;
 				/*  1: medium type  */
 		xferp->data_in[2] = 0x00;	/*  device specific
@@ -671,6 +674,7 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
     if (number_of_blocks >= 1 << 24) {
         number_of_blocks = 0;
     }
+
 		xferp->data_in[q+1] = number_of_blocks >> 16;	/*  nr of blocks, high  */
 		xferp->data_in[q+2] = number_of_blocks >> 8;	/*  nr of blocks, mid  */
 		xferp->data_in[q+3] = number_of_blocks;	/*  nr of blocks, low */
@@ -678,12 +682,13 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
 		xferp->data_in[q+5] = (d->logical_block_size >> 16) & 255;
 		xferp->data_in[q+6] = (d->logical_block_size >> 8) & 255;
 		xferp->data_in[q+7] = d->logical_block_size & 255;
-		q += 8;
+
+		q += short_command ? 4 : 8;
 
 		diskimage__return_default_status_and_message(xferp);
 
 		/*  descriptors, 8 bytes (each)  */
-    auto zero_page_code_data = [xferp](int old_q, int q) {
+    auto zero_page_code_data = [xferp, short_command](int old_q, int q) {
       auto first_zero_byte = (uint8_t *)&xferp->data_in[old_q+2];
       auto end_zero_byte = (uint8_t *)&xferp->data_in[q];
       memset(first_zero_byte, 0, end_zero_byte - first_zero_byte);
@@ -698,9 +703,10 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
       }
     } else {
       int old_q = q;
-        int end_q = append_scsi_mode_sense_page(cpu, d, q, pagecode, xferp);
-        if (program_control == 1) { zero_page_code_data(old_q, end_q); }
+      int end_q = append_scsi_mode_sense_page(cpu, d, q, pagecode, xferp);
+      if (program_control == 1) { zero_page_code_data(old_q, end_q); }
     }
+		debug("[ MODE SENSE %x result data ]\n", xferp->data_in_len);
   } break;
 
 	case SCSICMD_READ:
@@ -1279,6 +1285,20 @@ if (xferp->cmd_len > 7 && xferp->cmd[5] == 0x11)
   case SCSICMD_RELEASE_10:
     diskimage__return_default_status_and_message(xferp);
     break;
+
+  case 0x44: {
+    uint32_t allocation_len = 0;
+    if (xferp->cmd_len >= 10) {
+      allocation_len = (xferp->cmd[7] << 8) | xferp->cmd[8];
+    }
+		scsi_transfer_allocbuf(&xferp->data_in_len,
+                           &xferp->data_in, std::min(allocation_len, (uint32_t)4), 1);
+    memset(xferp->data_in, 0, 4);
+    if (xferp->data_in_len >= 2) {
+      xferp->data_in[1] = 2;
+    }
+		diskimage__return_default_status_and_message(xferp);
+  } break;
 
 	case 0xbd:
 		fatal("[ SCSI 0x%02x (len %i), TODO: ", xferp->cmd[0],

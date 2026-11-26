@@ -252,6 +252,22 @@ X(bclr_l)
 	if (ctr_ok && cond_ok) {
 		instr(update_pc_for_branch)(cpu, cpu->cd.ppc, NotReturn(), addr);
 	}
+
+  if (cpu->pc == 0xe012c8a8) {
+    // target pci::bus_pci_map (solaris)
+    // pci_bus_map(dev_info_t *dip, dev_info_t *rdip, ddi_map_req_t *mp,
+    //   off_t offset, off_t len, caddr_t *vaddrp)
+    //
+    // typedef struct {
+    //   ddi_map_op_t map_op;
+    //   ddi_map_type_t map_type;
+    //   ddi_map_obj_t map_obj;
+    //   uint_t map_flags; /* See below... */
+    //   int map_prot;	/* Prot bits (see sys/mman.h) */
+    //   ddi_acc_hdl_t *map_handlep;
+    //   int map_vers;
+    // } ddi_map_req_t;
+  }
 }
 
 

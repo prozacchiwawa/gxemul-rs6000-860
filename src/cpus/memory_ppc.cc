@@ -391,7 +391,16 @@ void access_log(struct cpu *cpu, int write, uint64_t addr, void *data, int size,
   }
 
   if (write) {
-    if ((addr >= 0xe71f1a00) && (addr <= 0xe71f1d00)) {
+    /*
+      if (addr >= 0xfe050000 && addr <= 0xfe100000) {
+      fprintf(stderr, "%" PRIx64 "@ %08x: %08x <=", cpu->ninstrs, (unsigned int)cpu->pc, (unsigned int)addr);
+      for (int i = 0; i < size; i++) {
+        fprintf(stderr, " %02x", ((uint8_t *)data)[i]);
+      }
+      fprintf(stderr, "\n");
+    } else
+    */
+    if ((addr >= 0xe71f1a00) && (addr < 0xe71f1d00)) {
       // Check for match on pc.
       int found = -1;
       bool pc_match = false;

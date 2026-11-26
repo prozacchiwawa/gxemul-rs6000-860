@@ -2479,6 +2479,14 @@ DEVICE_ACCESS(wd_graphics)
 
 	L(fprintf(stderr, "VGA: mode %d relative_addr %08" PRIx64" len %08" PRIx64"\n", d->graphcontr_reg[5], relative_addr, len));
 
+  if (relative_addr >= 0x3c0 && relative_addr < 0x3e0) {
+    // Hacky io?
+    fprintf(stderr, "VGA: io hole? %03x\n", (unsigned int)relative_addr);
+    cpu->memory_rw(cpu, cpu->mem, VIRTUAL_ISA_PORTBASE + 0x80000000 + relative_addr, data, len, writeflag, PHYSICAL | NO_EXCEPTIONS);
+    
+    return 1;
+  }
+
   auto pr58a = d->sequencer_reg[VGA_WD_PR58A];
   if (pr58a & 1) {
     fprintf(stderr, "[ vga: pr58 (%02x) %s ]\n", d->sequencer_reg[VGA_WD_PR58A], writeflag == MEM_WRITE ? "write" : "read");

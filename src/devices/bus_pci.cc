@@ -489,14 +489,14 @@ int s3_virge_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg, uint
 
   case 0x10: {
     fprintf(stderr, "vga: set BAR0 to %08x\n", value);
-    uint32_t mem_stride = 0xfc000000;
+    uint32_t mem_stride = 0xff000000;
     PCI_SET_DATA(reg, value & mem_stride);
     return 1;
   }
 
   case 0x14: {
     fprintf(stderr, "vga: set BAR1 to %08x\n", value);
-    uint32_t mem_stride = 0xffffff00;
+    uint32_t mem_stride = 0xfff00000;
     PCI_SET_DATA(reg, value & mem_stride);
     return 1;
   }
@@ -526,7 +526,7 @@ PCIINIT(s3_virge)
                PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
                               PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
 
-  PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
+  // PCI_SET_DATA(PCI_MAPREG_START, 0x04000000);
 	PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = s3_virge_cfg_reg_write;
@@ -566,15 +566,14 @@ int wd_90c00_cfg_reg_write(struct cpu *cpu, struct pci_device *pd, int reg, uint
 
   case 0x14: {
     fprintf(stderr, "vga: set BAR1 to %08x\n", value);
-    uint32_t io_stride = 0xffffff00;
-    PCI_SET_DATA(reg, value & io_stride);
+    uint32_t io_stride = 0xff000000;
+    PCI_SET_DATA(reg, (value & io_stride));
     return 1;
   }
 
   case 0x30:
     fprintf(stderr, "vga: set option rom address to %08x\n", value);
-    // PCI_SET_DATA(reg, value & 0xffff8000);
-    PCI_SET_DATA(reg, 0);
+    PCI_SET_DATA(reg, value & 0xffff8000);
     return 1;
 
   case 0x3c:
@@ -594,9 +593,8 @@ PCIINIT(wd90c00)
 
   PCI_SET_DATA(PCI_CLASS_REG,
                PCI_CLASS_CODE(PCI_CLASS_DISPLAY,
-                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 0x01);
+                              PCI_SUBCLASS_DISPLAY_VGA, 0) + 1);
 
-  PCI_SET_DATA(PCI_MAPREG_START, 0x00f00000);
   PCI_SET_DATA(PCI_INTERRUPT_REG, 0x00000100);	/*  interrupt pin D  */
 
 	pd->cfg_reg_write = wd_90c00_cfg_reg_write;
@@ -612,7 +610,7 @@ PCIINIT(wd90c00)
   assoc->io_space = 1;
   assoc->size = 0x20;
   assoc->id = id_code;
-  assoc->allocated_space = (long long)(VIRTUAL_ISA_PORTBASE + 0x3c0);
+  assoc->allocated_space = (long long)(VIRTUAL_ISA_PORTBASE + pd->pcibus->isa_portbase + 0x3c0);
 
   dev_wd90c00_init
     (machine, mem, gfx_space,

@@ -157,13 +157,6 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 	else
 		d->channels[port].tail = (d->channels[port].tail+1) % MAX_8042_QUEUELEN;
 
-  if (d->channels[port].tail == d->channels[port].head) {
-    INTERRUPT_DEASSERT(d->channels[port].irq);
-    d->channels[port].currently_asserted = false;
-  } else {
-    interrupt_check(d);
-  }
-
 	return d->channels[port].key_queue[d->channels[port].tail];
 }
 
@@ -261,26 +254,35 @@ DEVICE_ACCESS(pckbc)
 				break;
 
 			default: {
-        if (d->channels[0].head != d->channels[0].tail) {
-					odata = pckbc_get_code(d, 0);
-					d->last_byte = odata;
-				} else if (d->channels[1].head != d->channels[1].tail) {
-          odata = pckbc_get_code(d, 1);
-        } else {
-					odata = d->last_byte;
-					d->last_byte |= 0x80;
-				}
-				d->state = STATE_NORMAL;
+        bool found = false;
 
+        d->state = STATE_NORMAL;
         d->output_byte &= ~0x30;
-        if (d->channels[0].head != d->channels[0].tail) {
-          d->output_byte |= 0x10;
-        } else if (d->channels[1].head != d->channels[1].tail) {
-          d->output_byte |= 0x30;
+        for (int port = 0; port < 2; port++) {
+          if (d->channels[port].head != d->channels[port].tail) {
+            odata = pckbc_get_code(d, port);
+            d->last_byte = odata;
+            d->output_byte |= 0x10 | (1 << (port + 4));
+            
+            if (d->channels[port].tail == d->channels[port].head) {
+              INTERRUPT_DEASSERT(d->channels[port].irq);
+              d->channels[port].currently_asserted = false;
+            } else {
+              interrupt_check(d);
+            }
+
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          odata = d->last_byte;
+          d->last_byte |= 0x80;
         }
         break;
-      }
 			}
+      }
 
 			/*  debug("[ pckbc: read from DATA: 0x%02x ]\n",
 			    (int)odata);  */

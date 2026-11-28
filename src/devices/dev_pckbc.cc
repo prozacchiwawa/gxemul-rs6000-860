@@ -160,6 +160,16 @@ int pckbc_get_code(struct pckbc_data *d, int port)
   d->channels[port].tail = (d->channels[port].tail+1) % MAX_8042_QUEUELEN;
   int result = d->channels[port].key_queue[d->channels[port].tail];
 
+  d->last_byte = result;
+  d->output_byte |= 0x10 | (1 << (port + 4));
+            
+  if (d->channels[port].tail == d->channels[port].head) {
+    INTERRUPT_DEASSERT(d->channels[port].irq);
+    d->channels[port].currently_asserted = false;
+  } else {
+    interrupt_check(d);
+  }
+
   return result;
 }
 
@@ -264,18 +274,8 @@ DEVICE_ACCESS(pckbc)
         for (int port = 0; port < 2; port++) {
           int result = pckbc_get_code(d, port);
           if (result != -1) {
-            odata = result;
-            d->last_byte = odata;
-            d->output_byte |= 0x10 | (1 << (port + 4));
-            
-            if (d->channels[port].tail == d->channels[port].head) {
-              INTERRUPT_DEASSERT(d->channels[port].irq);
-              d->channels[port].currently_asserted = false;
-            } else {
-              interrupt_check(d);
-            }
-
             found = true;
+            odata = result;
             break;
           }
         }

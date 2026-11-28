@@ -123,6 +123,9 @@ static bool data_avail(struct channel *c) {
 }
 
 static void interrupt_check(struct pckbc_data *d) {
+  if (!port_enabled(1, d->cmdbyte)) {
+    d->channels[1].head = d->channels[1].tail = 0;
+  }
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) &&
         port_int_enabled(port, d->cmdbyte) &&
@@ -153,12 +156,8 @@ static void interrupt_check(struct pckbc_data *d) {
 void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int port) {
   /*  Add at the head, read at the tail:  */
   d->channels[port].head = (d->channels[port].head+1) % MAX_8042_QUEUELEN;
-  if (!data_avail(&d->channels[port])) {
-    fatal("[ pckbc: queue overrun, port %i! ]\n", port);
-  }
-
   d->channels[port].key_queue[d->channels[port].head] = code;
-  fprintf(stderr, "[ pckbc: %s output ring %d-%d ]\n", port ? "mouse" : "keyboard", d->channels[port].head, d->channels[port].tail);
+  fprintf(stderr, "[ pckbc: %s <- %02x output ring %d-%d ]\n", port ? "mouse" : "keyboard", code, d->channels[port].head, d->channels[port].tail);
 
   interrupt_check(d);
 }
@@ -290,7 +289,6 @@ DEVICE_ACCESS(pckbc)
         bool found = false;
 
         d->state = STATE_NORMAL;
-        d->output_byte &= ~0x30;
         for (int port = 0; port < 2; port++) {
           int result = pckbc_get_code(d, port);
           if (result != -1) {
@@ -346,7 +344,7 @@ DEVICE_ACCESS(pckbc)
 
       if (odata != 0) {
         debug("[ pckbc: read from CTL status port: "
-              "0x%02x (pc %08x) ]\n", (int)odata, (unsigned int)cpu->pc);
+              "0x%02x k %d m %d (pc %08x) ]\n", (int)odata, data_avail(&d->channels[0]), data_avail(&d->channels[1]), (unsigned int)cpu->pc);
       }
 		} else {
 			debug("[ pckbc: write to CTL:");

@@ -103,13 +103,10 @@ struct pckbc_data {
 	int		state;
 	int		cmdbyte;
 	int		output_byte;
+  int   status_byte;
   int   last_byte;
 
   struct channel channels[2];
-
-  int mouse_cmd;
-
-  int rst_order;
 };
 
 #define	STATE_NORMAL			0
@@ -120,28 +117,43 @@ struct pckbc_data {
 #define	STATE_LDOUTPUT			8
 #define	STATE_RDOUTPUT			9
 
+static bool data_avail(struct channel *c) {
+  return c->head != c->tail;
+}
+
 static void interrupt_check(struct pckbc_data *d) {
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) &&
         port_int_enabled(port, d->cmdbyte) &&
-        (d->channels[port].head != d->channels[port].tail) &&
+        data_avail(&d->channels[port]) &&
         !d->channels[port].currently_asserted) {
       //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
       INTERRUPT_ASSERT(d->channels[port].irq);
       d->channels[port].currently_asserted = true;
     }
   }
+
+  d->status_byte &= ~(KBS_DIB | 0x20);
+  if (data_avail(&d->channels[0]) ||
+      d->state == STATE_RDCMDBYTE ||
+      d->state == STATE_RDOUTPUT) {
+    d->status_byte |= KBS_DIB;
+  } else if (data_avail(&d->channels[1])) {
+    d->status_byte |= KBS_DIB | 0x20;
+  }
 }
 
 void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int port) {
   /*  Add at the head, read at the tail:  */
   d->channels[port].head = (d->channels[port].head+1) % MAX_8042_QUEUELEN;
-  if (d->channels[port].head == d->channels[port].tail) {
+  if (!data_avail(&d->channels[port])) {
     fatal("[ pckbc: queue overrun, port %i! ]\n", port);
   }
 
   d->channels[port].key_queue[d->channels[port].head] = code;
   d->output_byte = (d->output_byte & ~0x30) | (port ? 0x30 : 0x10);
+  fprintf(stderr, "[ pckbc: %s output ring %d-%d ]\n", port ? "mouse" : "keyboard", d->channels[port].head, d->channels[port].tail);
+
   interrupt_check(d);
 }
 
@@ -152,7 +164,7 @@ void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int por
  */
 int pckbc_get_code(struct pckbc_data *d, int port)
 {
-	if (d->channels[port].head == d->channels[port].tail) {
+	if (!data_avail(&d->channels[port])) {
 		fatal("[ pckbc: queue empty, port %i! ]\n", port);
     return -1;
 	}
@@ -163,7 +175,7 @@ int pckbc_get_code(struct pckbc_data *d, int port)
   d->last_byte = result;
   d->output_byte |= 0x10 | (1 << (port + 4));
             
-  if (d->channels[port].tail == d->channels[port].head) {
+  if (!data_avail(&d->channels[port])) {
     INTERRUPT_DEASSERT(d->channels[port].irq);
     d->channels[port].currently_asserted = false;
   } else {
@@ -321,18 +333,8 @@ DEVICE_ACCESS(pckbc)
 		break;
 	case 1:		/*  control  */
 		if (writeflag==MEM_READ) {
-			odata = 0;
-
 			/*  "Data in buffer" bit  */
-      if ((d->channels[0].head != d->channels[0].tail) ||
-          d->state == STATE_RDCMDBYTE ||
-          d->state == STATE_RDOUTPUT) {
-        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->channels[0].head, d->channels[0].tail);
-        odata |= KBS_DIB;
-      } else if (d->channels[1].head != d->channels[1].tail) {
-        fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->channels[1].head, d->channels[1].tail);
-        odata |= KBS_DIB | 0x20;
-      }
+      odata = d->status_byte;
 
       if (odata != 0) {
         debug("[ pckbc: read from CTL status port: "
@@ -428,8 +430,9 @@ DEVICE_ACCESS(pckbc)
 			/*  TODO: What should be returned if no data
 			    is available?  */
 			odata = random() & 0xff;
-			if (d->channels[port_nr].head != d->channels[port_nr].tail)
+			if (data_avail(&d->channels[port_nr])) {
 				odata = pckbc_get_code(d, port_nr);
+      }
 			debug("[ pckbc: read from port %i, PS2_RXBUF: "
 			    "0x%02x ]\n", port_nr, (int)odata);
 		} else {
@@ -453,7 +456,7 @@ DEVICE_ACCESS(pckbc)
 			/* 0x08 = transmit buffer empty  */
 			odata = port_enabled(0, d->cmdbyte) + 0x08;
 
-			if (d->channels[port_nr].head != d->channels[port_nr].tail) {
+			if (data_avail(&d->channels[port_nr])) {
 				/*  0x10 = receicer data available (?)  */
 				odata |= 0x10;
 			}

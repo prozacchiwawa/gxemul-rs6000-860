@@ -125,11 +125,12 @@ static void interrupt_check(struct pckbc_data *d) {
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) &&
         port_int_enabled(port, d->cmdbyte) &&
-        data_avail(&d->channels[port]) &&
-        !d->channels[port].currently_asserted) {
-      //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
-      INTERRUPT_ASSERT(d->channels[port].irq);
-      d->channels[port].currently_asserted = true;
+        data_avail(&d->channels[port])) {
+      if (!d->channels[port].currently_asserted) {
+        //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
+        INTERRUPT_ASSERT(d->channels[port].irq);
+        d->channels[port].currently_asserted = true;
+      }
     }
   }
 

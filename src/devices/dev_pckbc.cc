@@ -134,13 +134,18 @@ static void interrupt_check(struct pckbc_data *d) {
   }
 
   d->status_byte &= ~(KBS_DIB | 0x20);
+  d->output_byte &= ~0x30;
+  
   if (data_avail(&d->channels[0]) ||
       d->state == STATE_RDCMDBYTE ||
       d->state == STATE_RDOUTPUT) {
+    d->output_byte = (d->output_byte & ~0x30) | 0x10;
     d->status_byte |= KBS_DIB;
   } else if (data_avail(&d->channels[1])) {
+    d->output_byte = (d->output_byte & ~0x30) | 0x30;
     d->status_byte |= KBS_DIB | 0x20;
   }
+
 }
 
 void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int port) {
@@ -151,7 +156,6 @@ void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int por
   }
 
   d->channels[port].key_queue[d->channels[port].head] = code;
-  d->output_byte = (d->output_byte & ~0x30) | (port ? 0x30 : 0x10);
   fprintf(stderr, "[ pckbc: %s output ring %d-%d ]\n", port ? "mouse" : "keyboard", d->channels[port].head, d->channels[port].tail);
 
   interrupt_check(d);
@@ -173,7 +177,6 @@ int pckbc_get_code(struct pckbc_data *d, int port)
   int result = d->channels[port].key_queue[d->channels[port].tail];
 
   d->last_byte = result;
-  d->output_byte |= 0x10 | (1 << (port + 4));
             
   if (!data_avail(&d->channels[port])) {
     INTERRUPT_DEASSERT(d->channels[port].irq);

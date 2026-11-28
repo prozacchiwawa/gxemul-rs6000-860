@@ -91,6 +91,7 @@ struct channel {
   struct interrupt irq;
 	int		currently_asserted;
 	unsigned	key_queue[MAX_8042_QUEUELEN];
+  int   delay;
 	int		head, tail;
 };
 
@@ -118,7 +119,7 @@ struct pckbc_data {
 #define	STATE_RDOUTPUT			9
 
 static bool data_avail(struct channel *c) {
-  return c->head != c->tail;
+  return c->delay == 0 && c->head != c->tail;
 }
 
 static void interrupt_check(struct pckbc_data *d) {
@@ -179,12 +180,11 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 
   d->last_byte = result;
             
-  if (!data_avail(&d->channels[port])) {
-    INTERRUPT_DEASSERT(d->channels[port].irq);
-    d->channels[port].currently_asserted = false;
-  } else {
-    interrupt_check(d);
-  }
+  d->channels[port].delay = 1;
+  INTERRUPT_DEASSERT(d->channels[port].irq);
+  d->channels[port].currently_asserted = false;
+
+  interrupt_check(d);
 
   return result;
 }
@@ -204,8 +204,12 @@ static void dev_pckbc_send_command(struct cpu *cpu, struct pckbc_data *d, uint8_
 DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
+  for (int port = 0; port < 2; port++) {
+    if (d->channels[port].delay) {
+      d->channels[port].delay--;
+    }
+  }
   interrupt_check(d);
-  d->channels[0].currently_asserted = d->channels[1].currently_asserted = false;
 }
 
 

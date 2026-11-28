@@ -169,6 +169,7 @@
 #define	  PPC_31_LFDX		  599
 #define	  PPC_31_NEGO		  616
 #define	  PPC_31_DCLST		  630
+#define   PPC_31_LFDUX      631
 #define	  PPC_31_SUBFEO		  648
 #define	  PPC_31_ADDEO		  650
 #define	  PPC_31_MFSRIN		  659
@@ -230,7 +231,10 @@
 #define	  PPC_59_FSUBS		  20
 #define	  PPC_59_FADDS		  21
 #define	  PPC_59_FMULS		  25
+#define   PPC_59_FMSUBS     28
 #define	  PPC_59_FMADDS		  29
+#define   PPC_59_FNMSUBS    30
+#define   PPC_59_FNMADDS    31
 
 #define	PPC_HI6_STD		0x3e
 #define	PPC_HI6_63		0x3f

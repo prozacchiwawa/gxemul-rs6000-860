@@ -87,12 +87,16 @@ static inline bool port_int_enabled(int port, int cmdbyte) {
   }
 }
 
+struct channel {
+  struct interrupt irq;
+	int		currently_asserted;
+	unsigned	key_queue[MAX_8042_QUEUELEN];
+	int		head, tail;
+};
+
 struct pckbc_data {
 	int		reg[DEV_PCKBC_LENGTH];
 
-	struct interrupt irq_keyboard;
-	struct interrupt irq_mouse;
-	int		currently_asserted[2];
 	int		type;
 	int		pc_style_flag;
 
@@ -101,8 +105,7 @@ struct pckbc_data {
 	int		output_byte;
   int   last_byte;
 
-	unsigned	key_queue[2][MAX_8042_QUEUELEN];
-	int		head[2], tail[2];
+  struct channel channels[2];
 
   int mouse_cmd;
 
@@ -121,27 +124,23 @@ static void interrupt_check(struct pckbc_data *d) {
   for (int port = 0; port < 2; port++) {
     if (port_enabled(port, d->cmdbyte) &&
         port_int_enabled(port, d->cmdbyte) &&
-        (d->head[port] != d->tail[port]) &&
-        !d->currently_asserted[port]) {
+        (d->channels[port].head != d->channels[port].tail) &&
+        !d->channels[port].currently_asserted) {
       //fprintf(stderr, "[ pckbc: tick interrupt port %d ]\n", port);
-      if (port == 0) {
-        INTERRUPT_ASSERT(d->irq_keyboard);
-      } else {
-        INTERRUPT_ASSERT(d->irq_mouse);
-      }
-      d->currently_asserted[port] = true;
+      INTERRUPT_ASSERT(d->channels[port].irq);
+      d->channels[port].currently_asserted = true;
     }
   }
 }
 
 void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int port) {
   /*  Add at the head, read at the tail:  */
-  d->head[port] = (d->head[port]+1) % MAX_8042_QUEUELEN;
-  if (d->head[port] == d->tail[port]) {
+  d->channels[port].head = (d->channels[port].head+1) % MAX_8042_QUEUELEN;
+  if (d->channels[port].head == d->channels[port].tail) {
     fatal("[ pckbc: queue overrun, port %i! ]\n", port);
   }
 
-  d->key_queue[port][d->head[port]] = code;
+  d->channels[port].key_queue[d->channels[port].head] = code;
   d->output_byte = (d->output_byte & ~0x30) | (port ? 0x30 : 0x10);
   interrupt_check(d);
 }
@@ -153,23 +152,19 @@ void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int por
  */
 int pckbc_get_code(struct pckbc_data *d, int port)
 {
-	if (d->head[port] == d->tail[port])
+	if (d->channels[port].head == d->channels[port].tail)
 		fatal("[ pckbc: queue empty, port %i! ]\n", port);
 	else
-		d->tail[port] = (d->tail[port]+1) % MAX_8042_QUEUELEN;
+		d->channels[port].tail = (d->channels[port].tail+1) % MAX_8042_QUEUELEN;
 
-  if (d->tail[port] == d->head[port]) {
-    if (port) {
-      INTERRUPT_DEASSERT(d->irq_mouse);
-    } else {
-      INTERRUPT_DEASSERT(d->irq_keyboard);
-    }
-    d->currently_asserted[port] = false;
+  if (d->channels[port].tail == d->channels[port].head) {
+    INTERRUPT_DEASSERT(d->channels[port].irq);
+    d->channels[port].currently_asserted = false;
   } else {
     interrupt_check(d);
   }
 
-	return d->key_queue[port][d->tail[port]];
+	return d->channels[port].key_queue[d->channels[port].tail];
 }
 
 static void dev_pckbc_send_command(struct cpu *cpu, struct pckbc_data *d, uint8_t cmd, int port_nr) {
@@ -188,7 +183,7 @@ DEVICE_TICK(pckbc)
 {
 	struct pckbc_data *d = (struct pckbc_data *) extra;
   interrupt_check(d);
-  d->currently_asserted[0] = d->currently_asserted[1] = false;
+  d->channels[0].currently_asserted = d->channels[1].currently_asserted = false;
 }
 
 
@@ -266,10 +261,10 @@ DEVICE_ACCESS(pckbc)
 				break;
 
 			default: {
-        if (d->head[0] != d->tail[0]) {
+        if (d->channels[0].head != d->channels[0].tail) {
 					odata = pckbc_get_code(d, 0);
 					d->last_byte = odata;
-				} else if (d->head[1] != d->tail[1]) {
+				} else if (d->channels[1].head != d->channels[1].tail) {
           odata = pckbc_get_code(d, 1);
         } else {
 					odata = d->last_byte;
@@ -278,9 +273,9 @@ DEVICE_ACCESS(pckbc)
 				d->state = STATE_NORMAL;
 
         d->output_byte &= ~0x30;
-        if (d->head[0] != d->tail[0]) {
+        if (d->channels[0].head != d->channels[0].tail) {
           d->output_byte |= 0x10;
-        } else if (d->head[1] != d->tail[1]) {
+        } else if (d->channels[1].head != d->channels[1].tail) {
           d->output_byte |= 0x30;
         }
         break;
@@ -323,13 +318,13 @@ DEVICE_ACCESS(pckbc)
 			odata = 0;
 
 			/*  "Data in buffer" bit  */
-      if ((d->head[0] != d->tail[0]) ||
+      if ((d->channels[0].head != d->channels[0].tail) ||
           d->state == STATE_RDCMDBYTE ||
           d->state == STATE_RDOUTPUT) {
-        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->head[0], d->tail[0]);
+        fprintf(stderr, "[ pckbc: keyboard output ring %d-%d ]\n", d->channels[0].head, d->channels[0].tail);
         odata |= KBS_DIB;
-      } else if (d->head[1] != d->tail[1]) {
-        fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->head[1], d->tail[1]);
+      } else if (d->channels[1].head != d->channels[1].tail) {
+        fprintf(stderr, "[ pckbc: mouse output ring %d-%d ]\n", d->channels[1].head, d->channels[1].tail);
         odata |= KBS_DIB | 0x20;
       }
 
@@ -366,7 +361,7 @@ DEVICE_ACCESS(pckbc)
         pckbc_add_code(cpu, d, 0x00, 0);
 				break;
 			case 0xaa:	/*  keyboard self-test  */
-        d->head[0] = d->tail[0] = d->head[1] = d->tail[1] = 0;
+        d->channels[0].head = d->channels[0].tail = d->channels[1].head = d->channels[1].tail = 0;
 				pckbc_add_code(cpu, d, 0x55, port_nr);
 				break;
 			case 0xab:	/*  keyboard interface self-test  */
@@ -427,7 +422,7 @@ DEVICE_ACCESS(pckbc)
 			/*  TODO: What should be returned if no data
 			    is available?  */
 			odata = random() & 0xff;
-			if (d->head[port_nr] != d->tail[port_nr])
+			if (d->channels[port_nr].head != d->channels[port_nr].tail)
 				odata = pckbc_get_code(d, port_nr);
 			debug("[ pckbc: read from port %i, PS2_RXBUF: "
 			    "0x%02x ]\n", port_nr, (int)odata);
@@ -452,7 +447,7 @@ DEVICE_ACCESS(pckbc)
 			/* 0x08 = transmit buffer empty  */
 			odata = port_enabled(0, d->cmdbyte) + 0x08;
 
-			if (d->head[port_nr] != d->tail[port_nr]) {
+			if (d->channels[port_nr].head != d->channels[port_nr].tail) {
 				/*  0x10 = receicer data available (?)  */
 				odata |= 0x10;
 			}
@@ -504,10 +499,10 @@ DEVICE_ACCESS(pckbc_private)
     switch (relative_addr) {
     case I8042_ACTION:
       if (idata & I8042_ACTION_RESET_KBD) {
-        d->head[0] = d->tail[0] = 0;
+        d->channels[0].head = d->channels[0].tail = 0;
       }
       if (idata & I8042_ACTION_RESET_MOUSE) {
-        d->head[1] = d->tail[1] = 0;
+        d->channels[1].head = d->channels[1].tail = 0;
       }
       break;
     default:
@@ -545,8 +540,8 @@ int dev_pckbc_init(struct machine *machine, struct memory *mem,
 		len = DEV_PCKBC_LENGTH + 0x60;
 	}
 
-	INTERRUPT_CONNECT(keyboard_irqpath, d->irq_keyboard);
-	INTERRUPT_CONNECT(mouse_irqpath, d->irq_mouse);
+	INTERRUPT_CONNECT(keyboard_irqpath, d->channels[0].irq);
+	INTERRUPT_CONNECT(mouse_irqpath, d->channels[1].irq);
 
 	d->type              = type;
 	d->pc_style_flag     = pc_style_flag;

@@ -1120,6 +1120,58 @@ X(fmadd_dot)
   fpu_update_cr1(cpu);  
 }
 
+X(fnmadd)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+
+  float64_t fra, frb, frc, result;
+
+  fra.v = *((uint64_t *)ic->arg[1]);
+  uint32_t iw = ic->arg[2];
+
+	int b = (iw >> 11) & 31, c = (iw >> 6) & 31;
+	int nan = 0, cc;
+
+  frb.v = cpu->cd.ppc.fpr[b];
+  frc.v = cpu->cd.ppc.fpr[c];
+
+  float64_t mul_result;
+  base_fmul(cpu, ic, &mul_result.v, &fra.v, &frc.v);
+  base_fadd(cpu, ic, &result.v, &mul_result.v, &frb.v);
+
+  float64_t neg1 = i64_to_f64(-1ll);
+  float64_t final_result;
+  base_fmul(cpu, ic, &final_result.v, &mul_result.v, &neg1.v);
+  
+	(*(uint64_t *)ic->arg[0]) = final_result.v;
+}
+
+X(fnmadd_dot)
+{
+  instr(fnmadd)(cpu, ic);
+  fpu_update_cr1(cpu);  
+}
+
+X(fmadds)
+{
+  instr(fmadd)(cpu, ic);
+}
+
+X(fmadds_dot)
+{
+  instr(fmadd_dot)(cpu, ic);
+}
+
+X(fnmadds)
+{
+  instr(fnmadd)(cpu, ic);
+}
+
+X(fnmadds_dot)
+{
+  instr(fnmadd_dot)(cpu, ic);
+}
+
 /*
  *  fmsub:  Floating-point Multiply and Sub
  *
@@ -1163,6 +1215,65 @@ X(fmsub_dot)
 {
   instr(fmsub)(cpu, ic);
   fpu_update_cr1(cpu);
+}
+
+X(fmsubs)
+{
+  instr(fmsub)(cpu, ic);
+}
+
+X(fmsubs_dot)
+{
+  instr(fmsub_dot)(cpu, ic);
+}
+
+X(fnmsub)
+{
+	uint32_t iw = ic->arg[2];
+	int b = (iw >> 11) & 31, c = (iw >> 6) & 31;
+	int nan = 0, cc;
+  bool fnm = ((iw >> 1) & 0x1f) == PPC_63_FNMSUBX;
+
+	CHECK_FOR_FPU_EXCEPTION;
+
+  float64_t fra, frb, frc;
+  float64_t zero = i32_to_f64(0);
+  fra.v = *((uint64_t *)ic->arg[1]);
+  frb.v = cpu->cd.ppc.fpr[b];
+  frc.v = cpu->cd.ppc.fpr[c];
+  float64_t result;
+  float64_t final_result;
+
+	if (f64_isnan(fra) || f64_isnan(frb) || f64_isnan(frc)) {
+		nan = 1;
+  } else {
+    float64_t mul_result = { 0 };
+    base_fmul(cpu, ic, &mul_result.v, &fra.v, &frc.v);
+    base_fsub(cpu, ic, &result.v, &mul_result.v, &frb.v);
+
+    if (fnm) {
+      float64_t zero = { 0 };
+      base_fsub(cpu, ic, &result.v, &zero.v, &result.v);
+    }
+
+    float64_t neg1 = i64_to_f64(-1ll);
+    base_fmul(cpu, ic, &final_result.v, &mul_result.v, &neg1.v);
+  }
+  
+	(*(uint64_t *)ic->arg[0]) = final_result.v;
+}
+
+X(fnmsub_dot) {
+  instr(fnmsub)(cpu, ic);
+  fpu_update_cr1(cpu);
+}
+
+X(fnmsubs) {
+  instr(fnmsub)(cpu, ic);
+}
+
+X(fnmsubs_dot) {
+  instr(fnmsub_dot)(cpu, ic);
 }
 
 /*
@@ -2763,6 +2874,18 @@ X(lfdx)
 #endif
 	    [3 + 4 + 8](cpu, ic);
 }
+X(lfdux)
+{
+	CHECK_FOR_FPU_EXCEPTION;
+
+  /*  Perform a 64-bit load:  */
+#ifdef MODE32
+	ppc32_loadstore_indexed
+#else
+    ppc_loadstore_indexed
+#endif
+    [3 + 4 + 8 + 32](cpu, ic);
+}
 X(stfs)
 {
 	uint64_t *old_arg0 = (uint64_t *) ic->arg[0];
@@ -4100,6 +4223,7 @@ X(to_be_translated)
 		case PPC_31_LHBRX:
 		case PPC_31_LWBRX:
 		case PPC_31_LFDX:
+    case PPC_31_LFDUX:
 		case PPC_31_LFSX:
 		case PPC_31_STBX:
 		case PPC_31_STBUX:
@@ -4137,6 +4261,8 @@ X(to_be_translated)
 					   ic->f = instr(lwbrx); break;
 			case PPC_31_LFDX:  size=3; load=1; fp=1;
 					   ic->f = instr(lfdx); break;
+      case PPC_31_LFDUX: size=3; load=1; fp=1; update = 1; break;
+             ic->f = instr(lfdux); break;
 			case PPC_31_LFSX:  size=2; load=1; fp=1;
 					   ic->f = instr(lfsx); break;
 			case PPC_31_STBX:  break;
@@ -4393,19 +4519,19 @@ X(to_be_translated)
 		rs = (iword >>  6) & 31;	/*  actually frc  */
 		rc = iword & 1;
 
-		if (rc) {
-			if (!cpu->translation_readahead)
-				fatal("Floating point (59) "
-				    "with rc bit! TODO\n");
-			goto bad;
-		}
-
 		/*  NOTE: Some floating-point instructions are selected
 		    using only the lowest 5 bits, not all 10!  */
 		switch (xo & 31) {
 		case PPC_59_FDIVS:
 		case PPC_59_FSUBS:
 		case PPC_59_FADDS:
+    case PPC_59_FMSUBS:
+    case PPC_59_FMADDS:
+    case PPC_59_FNMSUBS:
+    case PPC_59_FNMADDS:
+			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
+			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			switch (xo & 31) {
 			case PPC_59_FDIVS:
         if (rc) {
@@ -4428,10 +4554,47 @@ X(to_be_translated)
           ic->f = instr(fadds);
         }
         break;
+      case PPC_59_FMSUBS:
+        if (rc) {
+          ic->f = instr(fmadds_dot);
+        } else {
+          ic->f = instr(fmadds);
+        }
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+        ic->arg[2] = iword;
+        break;
+      case PPC_59_FMADDS:
+        if (rc) {
+          ic->f = instr(fmadds_dot);
+        } else {
+          ic->f = instr(fmadds);
+        }
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+        ic->arg[2] = iword;
+        break;
+      case PPC_59_FNMSUBS:
+        if (rc) {
+          ic->f = instr(fnmsubs_dot);
+        } else {
+          ic->f = instr(fnmsubs);
+        }
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+        ic->arg[2] = iword;
+        break;
+      case PPC_59_FNMADDS:
+        if (rc) {
+          ic->f = instr(fnmadds_dot);
+        } else {
+          ic->f = instr(fnmadds);
+        }
+        ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[rt]);
+        ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
+        ic->arg[2] = iword;
+        break;
 			}
-			ic->arg[0] = (size_t)(&cpu->cd.ppc.fpr[ra]);
-			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[rb]);
-			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rt]);
 			break;
 		case PPC_59_FMULS:
       if (rc) {
@@ -4443,6 +4606,7 @@ X(to_be_translated)
 			ic->arg[1] = (size_t)(&cpu->cd.ppc.fpr[ra]);
 			ic->arg[2] = (size_t)(&cpu->cd.ppc.fpr[rs]);
 			break;
+
 		default:/*  Use all 10 bits of xo:  */
 			switch (xo) {
 			default:{

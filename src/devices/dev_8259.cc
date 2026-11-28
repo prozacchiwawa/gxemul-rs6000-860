@@ -120,9 +120,9 @@ void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
 
   uint8_t unmasked = d->irr & ~(d->ier | d->isr);
   int pri_enabled = get_best_interrupt(d->rotation_pri, unmasked);
-#ifdef DEV_8259_DEBUG
+  #ifdef DEV_8259_DEBUG
   fprintf(stderr, "8259(%d): new pri %d have irr %02x ier %02x isr %02x\n", d->irq_base, pri_enabled, d->irr, d->ier, d->isr);
-#endif
+  #endif
 
   if (pri_enabled >= 0 && !d->isr) {
     uint8_t pri_mask = 1 << pri_enabled;
@@ -135,18 +135,16 @@ void dev_8259_recalc_interrupts(struct pic8259_data *d, uint8_t old_isr) {
     auto last_int = d->chained_to ? &d->chained_to->last_int : &d->last_int;
     *last_int &= ~(0xff << d->irq_base);
     *last_int |= 0x10000 | (pri_mask << (d->irq_base ? 8 : 0));
-    // fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*d->last_int, d->isr);
+    //fprintf(stderr, "8259(%d): pri_mask %d last_int %x isr %02x\n", d->irq_base, pri_mask, (unsigned int)*last_int, d->isr);
 
     do_assert(d);
     return;
   }
 
-  if (!d->isr) {
 #ifdef DEV_8259_DEBUG
-    fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled);
+  fprintf(stderr, "8259(%d): dismissed %d\n", d->irq_base, pri_enabled);
 #endif
-    do_deassert(d);
-  }
+  do_deassert(d);
 }
 
 void dev_8259_assert(struct pic8259_data *d, int line) {
@@ -174,9 +172,9 @@ static void write_ocw2(struct cpu *cpu, struct pic8259_data *d, int idata) {
   int level = idata & 7;
   int to_ack, old_isr = d->isr;
 
-#ifdef DEV_8259_DEBUG
+  //#ifdef DEV_8259_DEBUG
   fprintf(stderr, "8259(%d): ocw2 rse %d level %d\n", d->irq_base, rse, level);
-#endif
+  //#endif
 
   switch (rse) {
   case 1: // Non specific eoi
@@ -241,6 +239,7 @@ static void write_ocw3(struct cpu *cpu, struct pic8259_data *d, int idata) {
       dev_8259_recalc_interrupts(d, d->isr);
     } else {
       do_deassert(d);
+      dev_8259_recalc_interrupts(d, d->isr);
     }
   }
 
@@ -383,10 +382,11 @@ DEVICE_ACCESS(8259_private) {
     // Send ocw2 specific eoi.
     struct pic8259_data *d = (struct pic8259_data *) extra;
     int command = memory_readmax64(cpu, data, len);
+    // fprintf(stderr, "[ 8259(%d) platform ocw2 command %02x ]\n", d->irq_base, command);
     write_ocw2(cpu, d, command);
   } else {
     auto last_int = d->chained_to ? &d->chained_to->last_int : &d->last_int;
-    fprintf(stderr, "[ 8259(%d) last int query %05x ]\n", d->irq_base, *last_int);
+    // fprintf(stderr, "[ 8259(%d) last int query %05x ]\n", d->irq_base, *last_int);
     memcpy(data, last_int, std::min(len, sizeof(*last_int)));
     *last_int &= 0xffff;
   }

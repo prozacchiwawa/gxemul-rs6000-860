@@ -152,12 +152,15 @@ void pckbc_add_code(struct cpu *cpu, struct pckbc_data *d, uint8_t code, int por
  */
 int pckbc_get_code(struct pckbc_data *d, int port)
 {
-	if (d->channels[port].head == d->channels[port].tail)
+	if (d->channels[port].head == d->channels[port].tail) {
 		fatal("[ pckbc: queue empty, port %i! ]\n", port);
-	else
-		d->channels[port].tail = (d->channels[port].tail+1) % MAX_8042_QUEUELEN;
+    return -1;
+	}
 
-	return d->channels[port].key_queue[d->channels[port].tail];
+  d->channels[port].tail = (d->channels[port].tail+1) % MAX_8042_QUEUELEN;
+  int result = d->channels[port].key_queue[d->channels[port].tail];
+
+  return result;
 }
 
 static void dev_pckbc_send_command(struct cpu *cpu, struct pckbc_data *d, uint8_t cmd, int port_nr) {
@@ -259,8 +262,9 @@ DEVICE_ACCESS(pckbc)
         d->state = STATE_NORMAL;
         d->output_byte &= ~0x30;
         for (int port = 0; port < 2; port++) {
-          if (d->channels[port].head != d->channels[port].tail) {
-            odata = pckbc_get_code(d, port);
+          int result = pckbc_get_code(d, port);
+          if (result != -1) {
+            odata = result;
             d->last_byte = odata;
             d->output_byte |= 0x10 | (1 << (port + 4));
             

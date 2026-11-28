@@ -117,6 +117,7 @@ struct pckbc_data {
 #define	STATE_WAITING_FOR_AUX_OUT	7
 #define	STATE_LDOUTPUT			8
 #define	STATE_RDOUTPUT			9
+#define STATE_AUX_LOOP      10
 
 static bool data_avail(struct channel *c) {
   return c->delay == 0 && c->head != c->tail;
@@ -328,7 +329,10 @@ DEVICE_ACCESS(pckbc)
         d->reg[relative_addr] = idata;
 				dev_pckbc_send_command(cpu, d, d->reg[relative_addr], 1);
         break;
-
+      case STATE_AUX_LOOP:
+        d->state = STATE_NORMAL;
+        pckbc_add_code(cpu, d, idata, 1);
+        break;
 			default:
         d->state = STATE_NORMAL;
         d->reg[relative_addr] = idata;
@@ -394,6 +398,9 @@ DEVICE_ACCESS(pckbc)
 			case 0xd1:
 				d->state = STATE_LDOUTPUT;
 				break;
+      case 0xd2:
+        d->state = STATE_AUX_LOOP;
+        break;
 			case 0xd3:	/*  write to auxiliary device
 					    output buffer  */
 				debug("[ pckbc: send data to kbd ]\n");

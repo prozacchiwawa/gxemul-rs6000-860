@@ -180,7 +180,7 @@ int pckbc_get_code(struct pckbc_data *d, int port)
 
   d->last_byte = result;
             
-  d->channels[port].delay = 1;
+  d->channels[port].delay = 2;
   INTERRUPT_DEASSERT(d->channels[port].irq);
   d->channels[port].currently_asserted = false;
 
